@@ -107,6 +107,14 @@ PASSED`. A green result is valid only when all blocks were attempted and
 passed. If the regression fails, the iteration is red and the next Worker
 retry gets that evidence; do not rerun the same baseline in Verifier.
 
+## Test integrity
+
+Agents must not remove tests, reorder tests, skip tests, weaken checks,
+relax expected values, or change timeouts/sentinels to hide failures.
+The goal is to make the existing ordered suite pass as written, then
+continue through later tests. Agents may add tests or diagnostics, but
+added tests must not replace, bypass, or defer existing required tests.
+
 ## Agents
 
 Each spawned `general-purpose` with `run_in_background: true`.
