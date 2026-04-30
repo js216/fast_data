@@ -1,0 +1,12 @@
+[submodule "fpga"]
+	path = fpga
+	url = git@github.com:js216/fpga.git
+[submodule "adsp2156"]
+	path = adsp2156
+	url = git@github.com:js216/adsp2156.git
+[submodule "selache"]
+	path = selache
+	url = git@github.com:js216/selache.git
+[submodule "stm32mp135_test_board"]
+	path = stm32mp135_test_board
+	url = git@github.com:js216/stm32mp135_test_board.git
