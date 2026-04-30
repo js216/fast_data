@@ -2,3 +2,6 @@
 
 .claude
 .codex
+__pycache__
+
+log.txt

@@ -41,6 +41,7 @@ atexit.register(lambda: shutil.rmtree(OUT, ignore_errors=True))
 
 CASES_DIR = os.path.expandvars(CASES)
 LEDGER = str(SCRIPT_DIR / "ledger.txt")
+LOG = SCRIPT_DIR / "log.txt"
 
 CFLAGS = (f"-proc ADSP-21569 -si-revision any -char-size-8 -swc -no-std-inc "
           f"-DBOARD_BAUD_DIV=814U -I{XTEST} -I{LIBSEL_INC}")
@@ -66,6 +67,41 @@ HOST_WRAP = """\
 extern int test_main(void);
 int main(void) { printf("got %x\\n", test_main()); return 0; }
 """
+
+
+class Tee:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, data):
+        for stream in self.streams:
+            stream.write(data)
+        return len(data)
+
+    def flush(self):
+        for stream in self.streams:
+            stream.flush()
+
+    def isatty(self):
+        return any(stream.isatty() for stream in self.streams)
+
+
+def install_log_tee():
+    orig_stdout = sys.stdout
+    orig_stderr = sys.stderr
+    log_fh = open(LOG, "w", buffering=1)
+    sys.stdout = Tee(orig_stdout, log_fh)
+    sys.stderr = Tee(orig_stderr, log_fh)
+
+    def close_log():
+        sys.stdout.flush()
+        sys.stderr.flush()
+        sys.stdout = orig_stdout
+        sys.stderr = orig_stderr
+        log_fh.close()
+
+    atexit.register(close_log)
+    print(f"log={LOG}", flush=True)
 
 
 def shell_path(path):
@@ -405,6 +441,7 @@ def ensure_selache_release_build(tools):
 
 
 def main():
+    install_log_tee()
     print(f"R={os.environ['R']}", flush=True)
     os.makedirs(OUT, exist_ok=True)
 
