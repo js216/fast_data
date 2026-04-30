@@ -1,178 +1,179 @@
 # Agentic pattern
 
-Pipeline of single-purpose agents. Orchestrator owns FSM, spawns each
-phase, relays artifacts.
+Small pipeline of fresh, short-lived agents. Orchestrator owns FSM,
+spawns managers/workers/verifiers, relays artifacts, and commits only
+after verification.
 
 ## Rig reset
 
-/loop 30m
-Hardware rig is down. Submit the FPGA `uart_echo` to reset
-rig, as follows: `cd build/uart && make test`. (If Makefile missing in
-build/uart, tangle it from uart.nw.)
+The planning Manager runs rig reset exactly once per FSM iteration,
+immediately before handing work to Worker. Review Managers never run rig
+reset. The reset submits the FPGA `uart_echo` and verifies that the rig
+is up. Run:
+
+    cd /home/agent2/fast_data/fpga
+    make build/uart/Makefile
+    make -C build/uart all
+    cd /home/agent2/fast_data/fpga/build/uart
+    python3 -u $TEST_SERV/run_md.py \
+      --ledger /home/agent2/fast_data/agent2/ledger.txt \
+      --module uart \
+      --log /home/agent2/fast_data/agent2/log.txt
+
+Rig reset is green only when the current `run_md.py` invocation exits 0,
+records a new `uart` ledger entry, attempts at least one block, and
+reports every attempted block passed with no `test_serv` errors. If the
+reset fails because `$TEST_SERV` is unset, use the default from "Test
+server" and retry once. If reset still fails, Manager records the blocker
+in `TODO.md` and returns BLOCKED instead of sending work to Worker.
+
+## Test server
+
+`$TEST_SERV` must point to the `test_serv` checkout containing
+`run_md.py`. If unset, use:
+
+    export TEST_SERV=/home/agent2/test_serv
+
+If `/home/agent2/test_serv/run_md.py` is missing, install `test_serv`
+before running hardware tests.
+
+## Test records
+
+All hardware test runs must pass `--ledger
+/home/agent2/fast_data/agent2/ledger.txt --module <ex> --log
+/home/agent2/fast_data/agent2/log.txt` to `run_md.py`. These files live
+beside this file and are the persistent record across agents. Do not
+write per-example ledgers or logs under `build/<ex>`.
 
 ## FSM
 
 Trigger: "read AGENTS.md and work on `<ex>`" → assistant = Orchestrator.
 Per `<ex>`, run:
 
-    TEST → red?  → DIAGNOSE → EDIT → BUILD → VERIFY → TEST → green? →
-    SCAN     → next issue → TEST  |  DONE
+    MANAGE(plan + one reset) -> WORK -> VERIFY
+                                | red or NEEDS_EVIDENCE
+                                v
+                               next iteration
 
-Orchestrator drives loop in foreground (state visible to user).  Each
-phase = one short-lived background agent. No heartbeats; exit = status.
-Caps: 8 iterations total, 3 same-issue retries.
+    VERIFY green -> MANAGE(review, no reset)
+                 -> COMMIT -> next iteration | DONE | BLOCKED
 
-## Phase agents
+    VERIFY red   -> next iteration
+
+Orchestrator drives loop in foreground (state visible to user). Each
+attempt gets fresh background agents; final checks use a separate
+Verifier. No heartbeats; exit = status. Caps: 8 iterations total, 3
+same-issue retries.
+
+At the start and end of each iteration, Orchestrator prints a compact
+progress update before any detailed phase output:
+
+    ex=<ex> iter=<n>/8 status=<planning|reset|work|verify|green|red|blocked>
+    goal=<current mission step>
+    progress=<what is newly proven or changed since prior iteration>
+    evidence=<latest command/result or missing evidence>
+    next=<next phase or stop reason>
+
+## Context discipline
+
+Managers and Workers are not reused. Each starts fresh and receives only
+the current task, `TODO.md`, relevant test output, target files, prior
+attempt summary, current diff if any, retry count, and stop condition.
+They must inspect the current filesystem before advising, diagnosing, or
+editing.
+
+## Regression discipline
+
+Run the full baseline regression set at most once per FSM iteration. The
+iteration's single baseline run may be used either for evidence-only
+collection or for post-edit regression, never both. After completing its
+edits to `<ex>.nw`, Worker runs the full regression set once for that
+example:
+
+    cd /home/agent2/fast_data/fpga
+    make -C build/<ex> sim
+    make -C build/<ex> bitstream
+    make -C build/<ex> all
+    cd /home/agent2/fast_data/fpga/build/<ex>
+    python3 -u $TEST_SERV/run_md.py \
+      --ledger /home/agent2/fast_data/agent2/ledger.txt \
+      --module <ex> \
+      --log /home/agent2/fast_data/agent2/log.txt
+
+`make test` aborts on the first failing block (no `--full`); blocks past
+the first failure are NOT executed. The summary `K/N BLOCKS FAILED`
+counts unattempted blocks as not-failed --- never read it as `N-K
+PASSED`. A green result is valid only when all blocks were attempted and
+passed. If the regression fails, the iteration is red and the next Worker
+retry gets that evidence; do not rerun the same baseline in Verifier.
+
+## Agents
 
 Each spawned `general-purpose` with `run_in_background: true`.
-Orchestrator does not poll; it waits for the completion notification,
-then prints the result before next phase.
+Orchestrator waits for completion notification, then prints the result
+before the next transition.
 
-- **Tester**: `cd build/<ex> && make test`. Returns PASS/FAIL + failing
-  block name + verbatim block tail. NOTE: runner aborts on first failing
-  block (no `--full`); blocks past the first failure are NOT executed.
-  The summary `K/N BLOCKS FAILED` counts unattempted blocks as
-  not-failed --- never read it as `N-K PASSED`. Only blocks before the
-  first failure are actually exercised.
-- **Diagnoser**: given red output + `<ex>.nw` path, returns fix spec
-  (root cause, target chunk name, proposed change). Read-only.
-- **Editor**: given spec, edits `<ex>.nw` (literate: named chunks +
-  prose, no comment-as-structure). Returns diff.
-- **Builder**: `make sim` (must PASS) + `make bitstream` (no new
-  warnings). Returns sim result, warning delta, artifact paths.
-- **Verifier**: `cd build/<ex> && make test` upload+verify. Same return
-  shape as Tester.
-- **Scanner**: greps `<ex>.nw` for TODO/FIXME/BUG, deferred blocks,
-  prose-flagged issues, recent-commit follow-ups. Returns next
-  actionable issue or "none".
+- **Manager**: reads `TODO.md`, latest Worker/Verifier results, current
+  diff, and test evidence. Reviews progress against Mission Target and
+  Next Steps. When the next step is WORK, Manager executes exactly one rig
+  reset flow from "Rig reset" for that FSM iteration and confirms the rig
+  is up from the `run_md.py` result before handing off to Worker. Manager
+  updates `TODO.md` when progress or blockers change, and returns exactly
+  one next step that moves toward mission completion, or BLOCKED if rig
+  reset cannot be made green. Manager does not edit source or accept
+  unverified progress.
+- **Worker**: diagnoses from the evidence it was given, edits only
+  relevant chunks in `<ex>.nw` (literate: named chunks + prose, no
+  comment-as-structure), then runs the one baseline regression for the
+  iteration: `make sim`, `make bitstream`, `make all`, and `run_md.py`
+  with the required agent ledger and log. Returns status, root cause,
+  changed chunks, diff, command results, warning delta, and any failing
+  block tail. If current failure evidence is missing or stale, Worker
+  reports NEEDS_EVIDENCE without editing. On the next iteration, Manager
+  may assign WORK(evidence-only). In WORK(evidence-only), Worker performs
+  no source edits and spends that iteration's single baseline run
+  collecting fresh evidence for the next Manager.
+- **Verifier**: independently reviews the Worker's regression evidence,
+  current diff, ledger, and log after Worker reports a green regression
+  with all blocks attempted. Verifier does not rerun the baseline suite in
+  the same FSM iteration. Returns PASS/FAIL, whether all blocks were
+  attempted, failing block name, and verbatim block tail from the Worker
+  evidence.
+
+If the first failure looks like rig-down, stale build, missing Makefile,
+or other infrastructure, Worker reports that instead of editing source.
 
 ## Orchestrator rules
 
-- One pipeline per `<ex>`, parallel across examples.
-- On VERIFY green: `git commit` (no Claude co-author, no test-result
-  chatter), then SCAN.
-- On Builder warning regression or sim FAIL: re-DIAGNOSE with new
-  evidence.
-- On 3 same-issue VERIFY reds: skip to SCAN.
-- Never run `make` or edit source itself; only spawns + commits +
-  relays.
-- On Diagnoser exit: print full diagnosis (root cause, target chunk,
-  proposed change) verbatim before spawning Editor.
+- One pipeline per `<ex>`, parallel across examples. Hardware access must
+  go through `run_md.py`; `test_serv` serializes jobs that require the
+  same device, so two FPGA jobs cannot interleave on the rig. Do not
+  bypass `run_md.py` for hardware tests.
+- Start with Manager to choose the next mission-relevant step from
+  `TODO.md`; if that step is WORK, Manager performs the single reset for
+  that FSM iteration before returning.
+- On VERIFY green: spawn Manager to review mission progress, update
+  `TODO.md`, and choose the next step, DONE, or BLOCKED. This review
+  Manager does not run rig reset; if another Worker step is needed, the
+  reset happens once at the start of the next FSM iteration.
+- Then `git commit` verified source and `TODO.md` updates (no Claude
+  co-author).
+- Commit only files relevant to `<ex>`; message names the example and
+  fixed issue.
+- On warning regression, sim FAIL, VERIFY red, or Worker NEEDS_EVIDENCE:
+  start the next iteration by spawning Manager with the new evidence.
+  Manager decides the next Worker step and performs the single reset for
+  that iteration before handing off.
+- On 3 same-issue reds, including regression red, VERIFY red, or repeated
+  NEEDS_EVIDENCE: spawn Manager to record the blocker in `TODO.md`, then
+  stop and report blocker. Do not commit source. Leave the blocker update
+  uncommitted unless the user explicitly asks for a blocker-only commit.
+- Orchestrator itself never runs `make` or edits source; only spawns,
+  commits, and relays. Spawned Manager/Worker agents may run the commands
+  assigned to their roles.
+- On Manager exit: print full review (mission progress, TODO.md changes,
+  next step, completion/blocker status) before next transition.
+- On Worker exit: print full result (root cause, changed chunks, command
+  results, warning delta, failing block/tail) before next transition.
 - On Verifier exit: print full result (PASS/FAIL, failing block name,
-  verbatim tail) verbatim before next FSM transition.
-  
-
-# TODO: QSPI FPGA-to-MPU Mission Handoff
-
-## Mission target
-
-Demonstrate bit-accurate sustained data transfer from FPGA to STM32MP135 MPU
-using the real QUADSPI peripheral:
-
-- Single-lane path: already demonstrated above 100 Mbps wall-rate with 512 MB
-  transfer.
-- Quad-lane path: still unfinished.
-- Final quad requirement: at least 200 Mbps, ideally higher, with no data
-  errors.
-
-## Current verified state
-
-Latest full-suite run:
-
-- Command: `cd /home/claude/SR835_firmware/fpga/build/spi && make test`
-- Result: 19 passing blocks, first failure at block 20/31.
-- First failing test: `Check quad peripheral read returns 1024-byte incrementing
-  pattern`
-- Failure symptom: `quad raw mismatch at 1: got 10, expected 01`
-- Quad throughput/rate tests were not reached.
-
-Passing before the failure:
-
-- 1-lane stream @ presc=5 wall rate >= 100 Mbps.
-- 1-lane 512 MB stream @ presc=5 within 45 s, correct CRC, wall rate about 109
-  Mbps.
-- Quad peripheral diagnostics:
-  - 0x6C one-hot returns `12 48 ...`
-  - 0x6E nibble-hold returns `00 11 22 ... ff`
-  - 0x6F nibble-ramp returns `01 23 45 67 89 ab cd ef`
-
-## Required working pattern
-
-- Read and follow `AGENTS.md`.
-- Use short-lived fresh agents for diagnoser/editor/verifier/review roles.
-- Close each agent after it finishes.
-- Do not run individual tests.
-- Always verify with full suite only: `cd
-  /home/claude/SR835_firmware/fpga/build/spi && make test`
-- Do not remove passing tests.
-- Keep monotonic progress: no change is acceptable if it regresses previously
-  passing blocks.
-
-## Immediate next tasks
-
-1. Stabilize the 0x6B quad peripheral read.
-   - Current blocker is byte assembly/cadence for `op=6b`.
-   - The passing 0x6F nibble-ramp proves the STM32 peripheral can capture
-     ordered quad nibbles correctly.
-   - The 0x6B stream still captures as `00 10 20 ...` or related byte-phase
-     variants depending on FPGA cadence changes.
-   - Future agents should avoid relying on GPIO bit-bang results as proof of
-     QUADSPI peripheral behavior.
-
-2. Add a low-cost 0x6B-specific diagnostic if needed.
-   - Avoid the previous synthesis-heavy q6b/q60/q61 debug RAM/printing; it
-     caused iCE40 placement failure.
-   - Prefer a small opcode or mode that emits a simple repeating 0x6B-compatible
-     byte pattern through the same peripheral framing.
-   - Keep diagnostics late or non-blocking only if they are not the mission
-     path; do not delete them.
-
-3. Once `q 0 1024` passes, continue through the existing quad sweep.
-   - Required next gates are quad pattern checks at presc=203, 63, 15, and 5.
-   - Then add/enable a real quad wall-rate floor of at least 200 Mbps.
-   - Use wall timing markers already defined by the test policy: before UART
-     start command, after firmware reports transfer completion/check.
-
-4. Make quad streaming use the proven DMA/CRC structure.
-   - Single-lane uses DDR ping-pong/auto-consume and hardware CRC path
-     successfully.
-   - Quad path should use the same sustained-transfer validation model once the
-     basic 0x6B peripheral read is bit-correct.
-   - Do not claim throughput success until a large transfer is checked for
-     correctness.
-
-5. Clean up before commit.
-   - Review dirty generated files and source noweb outputs carefully.
-   - Do not revert unrelated user changes.
-   - Commit only after the full suite reaches the intended green point or after
-     an explicitly agreed checkpoint.
-
-## Files most likely involved
-
-- FPGA source: `src/qspi.nw`
-- Test plan/checkers: `src/spi.nw`
-- Generated outputs may change after builds:
-  - `verilog/qspi.v`
-  - `tb/tb_qspi.sv`
-  - other generated Verilog/testbench files
-- Firmware QUADSPI driver:
-  `/home/claude/stm32mp135_test_board/baremetal/qspi/src/qspi.c`
-- Firmware CLI: `/home/claude/stm32mp135_test_board/baremetal/qspi/src/cli.c`
-
-## Known bad or inconclusive attempts
-
-- Requiring the old FPGA `q6b pn=... io=...` debug line is obsolete; that debug
-  path was removed to fit the FPGA.
-- The synthesis-heavy q6b/q60/q61 capture path caused `nextpnr-ice40` placement
-  failure.
-- `data_byte - 1` seeding made the first captured byte `f0`; it is not the right
-  fix.
-- A temporary first-byte hold improved the first bytes but failed at byte 7.
-- Low-nibble-first changes were influenced by GPIO bit-bang behavior and did not
-  solve the real QUADSPI peripheral path.
-
-## Current caution
-
-The current working tree is dirty and mid-investigation. Future agents should
-inspect the current diffs before editing and should treat the latest verified
-full-suite result as the only trusted hardware status.
+  all-blocks-attempted flag, verbatim tail) before next transition.
