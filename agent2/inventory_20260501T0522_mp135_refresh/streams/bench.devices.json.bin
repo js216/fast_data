@@ -1,0 +1,95 @@
+[
+  {
+    "id": "bench_mcu.0",
+    "plugin": "bench_mcu",
+    "spec": {
+      "baudrate": 115200,
+      "expected_identity": "STM32F405",
+      "id": "0",
+      "serial_port": "/dev/ttyACM0"
+    },
+    "status": "closed",
+    "verify": {
+      "err": null,
+      "latency_ms": 248.63090599683346,
+      "ok": true,
+      "t": 1777606685.6356714,
+      "verified": true
+    }
+  },
+  {
+    "id": "dsp.A",
+    "plugin": "dsp",
+    "spec": {
+      "baudrate": 115200,
+      "ft4222_desc": "FT4222 A",
+      "ft4222_serial": null,
+      "id": "A",
+      "serial_port": "/dev/ttyUSB0"
+    },
+    "status": "cached",
+    "verify": {
+      "err": null,
+      "latency_ms": 24.946804998762673,
+      "ok": true,
+      "t": 1777606685.884311,
+      "verified": true
+    }
+  },
+  {
+    "id": "fpga.0",
+    "plugin": "fpga",
+    "spec": {
+      "baudrate": 115200,
+      "ft2232h_desc": "Dual RS232-HS A",
+      "id": "0",
+      "serial_port": "/dev/ttyUSB1"
+    },
+    "status": "closed",
+    "verify": {
+      "err": null,
+      "latency_ms": 0.046597000618930906,
+      "ok": true,
+      "t": 1777606685.9092677,
+      "verified": false
+    }
+  },
+  {
+    "id": "mp135.0",
+    "plugin": "mp135",
+    "spec": {
+      "baudrate": 115200,
+      "expected_usb_interface": 1,
+      "expected_usb_pid": "0x3753",
+      "expected_usb_serial": "0044002F3132511838363431",
+      "expected_usb_vid": "0x0483",
+      "id": "0",
+      "serial_port": "/dev/ttyACM1"
+    },
+    "status": "closed",
+    "verify": {
+      "err": null,
+      "latency_ms": 8.717893000721233,
+      "ok": true,
+      "t": 1777606685.9093196,
+      "verified": true
+    }
+  },
+  {
+    "id": "scope.0",
+    "plugin": "scope",
+    "spec": {
+      "expected_idn": "Siglent Technologies,SDS2504X Plus",
+      "id": "0",
+      "resource": "USB0::62700::4113::SDS2PDDX6R1848::0::INSTR"
+    },
+    "status": "closed",
+    "verify": {
+      "err": null,
+      "latency_ms": 94.53387100074906,
+      "ok": true,
+      "t": 1777606685.9180396,
+      "verified": true
+    }
+  }
+]
