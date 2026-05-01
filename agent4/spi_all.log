@@ -1,0 +1,6 @@
+make: Entering directory '/home/agent4/fast_data/fpga/build/spi'
+tangle TEST.md < ../../src/spi.nw
+tangle verify.py < ../../src/spi.nw
+ln -sf /home/claude/stm32mp135_test_board/baremetal/qspi/flash.tsv flash.tsv
+ln -sf /home/claude/stm32mp135_test_board/baremetal/qspi/build/main.stm32 main.stm32
+make: Leaving directory '/home/agent4/fast_data/fpga/build/spi'
