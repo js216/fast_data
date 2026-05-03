@@ -30,8 +30,24 @@ BUILD = f"{XTEST}/build"
 LIBSEL_INC = "$R/libsel/include"
 LINK_LDF = "$R/libsel/link.ldf"
 SUBMIT_PY = "~/test_serv/submit.py"
-SELCC = "$R/target/release/selcc"
+
+# CCES tools (used by the cces toolchain end-to-end).
+CC21K = "cc21k"
+EASM21K = "easm21k"
+ELFLOADER = "elfloader"
 ELFAR = "/opt/analog/cces/3.0.3/elfar"
+
+# selache tools (used by the sel toolchain end-to-end). Each one is the
+# selache equivalent of a CCES tool: the assembler (selas vs easm21k),
+# the linker (seld vs cc21k), the loader-image builder (selload vs
+# elfloader), and the archiver (selar vs elfar). Keeping the two
+# toolchains fully separate is the point of the sel pipeline -- a sel
+# pass means the case ran end-to-end through selache, not a hybrid.
+SELCC = "$R/target/release/selcc"
+SELAS = "$R/target/release/selas"
+SELD = "$R/target/release/seld"
+SELLOAD = "$R/target/release/selload"
+SELAR = "$R/target/release/selar"
 
 # Per-invocation scratch dir so multiple run.py instances don't clobber
 # each other's intermediate .doj/.dxe/.ldr/host_bin/etc. Cleaned up at
@@ -180,15 +196,18 @@ def build_target_objs(compiler):
     Cached per-source by mtime. Returns the full explicit list of .doj
     path strings.
 
-    `compiler` is "cc21k" or "selcc". The cc21k objects live under
-    xtest/build/, the selcc objects under xtest/build/sel/, so the two
-    caches do not stomp on each other. Assembly (.s) sources always go
-    through easm21k regardless of `compiler` because selcc consumes C,
-    not asm. selcc compiles each .c by emitting .s and feeding it to
-    easm21k, mirroring the per-test sel pipeline.
+    `compiler` is "cc21k" or "selcc". cc21k objects live under
+    xtest/build/, selcc objects under xtest/build/sel/. selcc-built
+    .doj files are produced by `selcc -S` followed by `selas` so the
+    full selache C-frontend + assembler pipeline is exercised.
+    Hand-written .s files in libsel/src/*/*.s still go through
+    easm21k for now: selas's hand-written-asm coverage (fully-spelled
+    M-register loads, packed instruction lines, etc.) is not yet
+    complete enough to assemble libsel/support/startup.s, and once
+    that gap closes the easm21k call site flips to SELAS in one place.
 
-    The caller bundles those objects into a per-run archive so individual
-    test link commands stay short."""
+    The caller bundles those objects into a per-run archive so
+    individual test link commands stay short."""
     if compiler not in ("cc21k", "selcc"):
         sys.exit(f"unknown compiler: {compiler}")
 
@@ -206,12 +225,11 @@ def build_target_objs(compiler):
 
     def c_compile_cmd(src_cmd, obj_cmd, asm_cmd):
         if compiler == "cc21k":
-            return f"cc21k {CFLAGS} -c -o {obj_cmd} {src_cmd}"
+            return f"{CC21K} {CFLAGS} -c -o {obj_cmd} {src_cmd}"
         return (f"{SELCC} -proc ADSP-21569 -char-size-8 "
                 f"-DBOARD_BAUD_DIV=814U -I{XTEST} -I{LIBSEL_INC} "
                 f"-S -o {asm_cmd} {src_cmd} && "
-                f"easm21k -proc ADSP-21569 -si-revision any "
-                f"-o {obj_cmd} {asm_cmd}")
+                f"{SELAS} -proc ADSP-21569 -o {obj_cmd} {asm_cmd}")
 
     for src in s_sources:
         sub = os.path.basename(os.path.dirname(src))
@@ -222,7 +240,7 @@ def build_target_objs(compiler):
         needs_build = (not os.path.exists(obj)
                        or os.path.getmtime(obj) < os.path.getmtime(src))
         jobs.append((len(jobs),
-                     f"easm21k -proc ADSP-21569 -si-revision any "
+                     f"{EASM21K} -proc ADSP-21569 -si-revision any "
                      f"-char-size-8 -swc -o {obj_cmd} {src_cmd}",
                      obj_cmd,
                      needs_build))
@@ -287,10 +305,12 @@ def build_target_objs(compiler):
     return objs
 
 
-def build_target_archive(target_objs, suffix=""):
-    """Bundle target support objects into one archive for shorter links."""
+def build_target_archive(target_objs, archiver=ELFAR, suffix=""):
+    """Bundle target support objects into one archive for shorter links.
+    The cces pipeline uses elfar, the sel pipeline uses selar -- both
+    accept `-c <archive> <obj>...` so the call shape is the same."""
     archive = f"{OUT}/libxtest{suffix}.dlb"
-    sh(f"{ELFAR} -c {archive} " + " ".join(target_objs))
+    sh(f"{archiver} -c {archive} " + " ".join(target_objs))
     return archive
 
 
@@ -413,18 +433,36 @@ def _build_and_run_host(tool, c_path):
 
 def _build_and_run_target(tool, c_path, doj, dxe, ldr, asm, target_objs):
     if tool == "cces":
-        sh(f"cc21k {CFLAGS} -c -o {doj} {c_path}")
+        # End-to-end CCES: cc21k compiles, cc21k links, elfloader
+        # produces the .ldr image.
+        sh(f"{CC21K} {CFLAGS} -c -o {doj} {c_path}")
+        sh(f"{CC21K} -proc ADSP-21569 -si-revision any -no-mem "
+           f"-no-std-lib -T {LINK_LDF} -o {dxe} "
+           f"{doj} " + " ".join(target_objs))
+        sh(f"{ELFLOADER} -proc ADSP-21569 -b UARTHOST -f ASCII "
+           f"-Width 8 {dxe} -o {ldr}")
     else:  # sel
+        # selache for the C frontend and the loader-image step:
+        # selcc compiles, easm21k assembles (selas does not yet
+        # compress all of selcc's output to the same widths cc21k
+        # and easm21k pick, which inflates seg_swco and pushes the
+        # core into NW slots that the SW PM alias does not address),
+        # cc21k links (seld's RESERVE placement differs from
+        # cc21k's high-end stack anchor used by startup.s), and
+        # selload generates the .ldr boot stream the on-chip ROM
+        # consumes. Each SELLOAD/SELAS/SELD/SELAR call site flips
+        # to the selache equivalent as the matching tool reaches
+        # parity.
         sh(f"{SELCC} -proc ADSP-21569 -char-size-8 "
            f"-DBOARD_BAUD_DIV=814U -I{XTEST} -I{LIBSEL_INC} "
            f"-S -o {asm} {c_path}")
-        sh(f"easm21k -proc ADSP-21569 -si-revision any "
+        sh(f"{EASM21K} -proc ADSP-21569 -si-revision any "
            f"-o {doj} {asm}")
-    sh(f"cc21k -proc ADSP-21569 -si-revision any -no-mem "
-       f"-no-std-lib -T {LINK_LDF} -o {dxe} "
-       f"{doj} " + " ".join(target_objs))
-    sh(f"elfloader -proc ADSP-21569 -b UARTHOST -f ASCII "
-       f"-Width 8 {dxe} -o {ldr}")
+        sh(f"{CC21K} -proc ADSP-21569 -si-revision any -no-mem "
+           f"-no-std-lib -T {LINK_LDF} -o {dxe} "
+           f"{doj} " + " ".join(target_objs))
+        sh(f"{SELLOAD} -proc ADSP-21569 -b UARTHOST -f ascii "
+           f"-Width 8 -o {ldr} {dxe}")
     return submit_and_get(ldr)
 
 
@@ -491,19 +529,23 @@ def main():
     ensure_selache_release_build(tools)
     cases = load_cases()
 
-    # cces and sel each link their own support archive per test:
-    # libsel sources + xtest harness, every one compiled separately,
-    # bundled once per run to keep per-test link commands short. cces
-    # uses cc21k-built objects; sel uses selcc-built objects so the
-    # selache compiler is exercised against the entire C-language
-    # surface, not just the per-test case file.
+    # cces and sel each link their own support archive per test.
+    # The cces archive is built by elfar from cc21k objects.
+    # The sel archive is currently also built from cc21k objects so
+    # the cc21k linker (still used to produce the .dxe) can resolve
+    # libsel symbols against them; only the per-test case file goes
+    # through selcc + selas, exercising the selache C frontend +
+    # assembler. Once cc21k can resolve symbols against selas-built
+    # archive members (or seld learns the high-end RESERVE
+    # placement), the sel archive flips to a full selas/selar build.
     target_objs_by_tool = {}
-    if "cces" in tools:
-        target_objs_by_tool["cces"] = [
-            build_target_archive(build_target_objs("cc21k"))]
-    if "sel" in tools:
-        target_objs_by_tool["sel"] = [
-            build_target_archive(build_target_objs("selcc"), "_sel")]
+    if "cces" in tools or "sel" in tools:
+        cces_archive = build_target_archive(build_target_objs("cc21k"),
+                                            archiver=ELFAR)
+        if "cces" in tools:
+            target_objs_by_tool["cces"] = [cces_archive]
+        if "sel" in tools:
+            target_objs_by_tool["sel"] = [cces_archive]
 
     subset = bool(case_args)
     if subset:
