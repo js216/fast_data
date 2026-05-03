@@ -442,21 +442,17 @@ def _build_and_run_target(tool, c_path, doj, dxe, ldr, asm, target_objs):
         sh(f"{ELFLOADER} -proc ADSP-21569 -b UARTHOST -f ASCII "
            f"-Width 8 {dxe} -o {ldr}")
     else:  # sel
-        # selache for the C frontend, archiver, linker, and loader-
-        # image step. easm21k still assembles selcc's output: even
-        # selas's 48-bit NW encoding for selcc's stack-frame setup
-        # (`I7=MODIFY(I7,-N)(NW); DM(-N,I6)=Rx;`) executes
-        # differently on real silicon from cc21k/easm21k's choice,
-        # so a 2-D-array stack-frame test reads garbage on the
-        # first reload. Once selas's MODIFY/UregMemAccess
-        # encodings round-trip against the SHARC+ silicon model
-        # this swaps to SELAS in one place. seld + selar + selload
-        # already drive every other piece of the per-test path.
+        # selache for the C frontend, assembler, archiver, linker,
+        # and loader-image step. selas now matches easm21k byte-for-
+        # byte on selcc's emitted asm (the Type-5b VISA `Ureg=Ureg`
+        # encoding was missing the W32 width marker in p2[5:0]; the
+        # bug masqueraded as a one-byte diff that decoded on hardware
+        # as a 48-bit Type 5a parallel compute, clobbering an
+        # adjacent dreg).
         sh(f"{SELCC} -proc ADSP-21569 -char-size-8 "
            f"-DBOARD_BAUD_DIV=814U -I{XTEST} -I{LIBSEL_INC} "
            f"-S -o {asm} {c_path}")
-        sh(f"{EASM21K} -proc ADSP-21569 -si-revision any "
-           f"-o {doj} {asm}")
+        sh(f"{SELAS} -proc ADSP-21569 -o {doj} {asm}")
         sh(f"{SELD} -proc ADSP-21569 -T {LINK_LDF} -o {dxe} "
            f"{doj} " + " ".join(target_objs))
         sh(f"{SELLOAD} -proc ADSP-21569 -b UARTHOST -f ascii "
