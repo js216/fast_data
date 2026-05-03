@@ -442,24 +442,21 @@ def _build_and_run_target(tool, c_path, doj, dxe, ldr, asm, target_objs):
         sh(f"{ELFLOADER} -proc ADSP-21569 -b UARTHOST -f ASCII "
            f"-Width 8 {dxe} -o {ldr}")
     else:  # sel
-        # selache for the C frontend and the loader-image step:
-        # selcc compiles, easm21k assembles (selas does not yet
-        # compress all of selcc's output to the same widths cc21k
-        # and easm21k pick, which inflates seg_swco and pushes the
-        # core into NW slots that the SW PM alias does not address),
-        # cc21k links (seld's RESERVE placement differs from
-        # cc21k's high-end stack anchor used by startup.s), and
-        # selload generates the .ldr boot stream the on-chip ROM
-        # consumes. Each SELLOAD/SELAS/SELD/SELAR call site flips
-        # to the selache equivalent as the matching tool reaches
-        # parity.
+        # selache C frontend, archiver, linker, and loader-image
+        # step. easm21k still assembles selcc's output because
+        # selas's Type 4b VISA encoding for compact `DM(N,Ii)=Rx`
+        # spill stores sets the BW/SW width bit incorrectly,
+        # which causes a 2-D-array stack-frame test to read back
+        # the wrong byte even though the symbol map and section
+        # layout match cc21k's. Once that encoding is corrected
+        # this swaps to SELAS in one place. seld + selar + selload
+        # already drive every other piece of the per-test path.
         sh(f"{SELCC} -proc ADSP-21569 -char-size-8 "
            f"-DBOARD_BAUD_DIV=814U -I{XTEST} -I{LIBSEL_INC} "
            f"-S -o {asm} {c_path}")
         sh(f"{EASM21K} -proc ADSP-21569 -si-revision any "
            f"-o {doj} {asm}")
-        sh(f"{CC21K} -proc ADSP-21569 -si-revision any -no-mem "
-           f"-no-std-lib -T {LINK_LDF} -o {dxe} "
+        sh(f"{SELD} -proc ADSP-21569 -T {LINK_LDF} -o {dxe} "
            f"{doj} " + " ".join(target_objs))
         sh(f"{SELLOAD} -proc ADSP-21569 -b UARTHOST -f ascii "
            f"-Width 8 -o {ldr} {dxe}")
@@ -540,12 +537,14 @@ def main():
     # placement), the sel archive flips to a full selas/selar build.
     target_objs_by_tool = {}
     if "cces" in tools or "sel" in tools:
-        cces_archive = build_target_archive(build_target_objs("cc21k"),
-                                            archiver=ELFAR)
+        cc21k_objs = build_target_objs("cc21k")
         if "cces" in tools:
-            target_objs_by_tool["cces"] = [cces_archive]
+            target_objs_by_tool["cces"] = [
+                build_target_archive(cc21k_objs, archiver=ELFAR)]
         if "sel" in tools:
-            target_objs_by_tool["sel"] = [cces_archive]
+            target_objs_by_tool["sel"] = [
+                build_target_archive(cc21k_objs, archiver=SELAR,
+                                     suffix="_sel")]
 
     subset = bool(case_args)
     if subset:
