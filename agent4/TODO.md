@@ -1,5 +1,235 @@
 # TODO: QSPI FPGA-to-MPU Fast Data Transfer
 
+### Active FSM: mmap_spi -- iter 2 -- copy-loop variant sweep (2026-05-02)
+
+Status: PLANNING iter 2. Iter 1 RED -- baseline byte-loop measured at
+36.63 Mbps (1 MiB in 229 ms, presc=3 sshift=0, qspi_hz=656000000),
+well below the >337 Mbps gate. Bottleneck: single-byte CPU AHB reads
+across the QSPI memory-mapped window. Each `dst[i] = src[i]` pays an
+AHB transaction round-trip per byte, dominating the wall time.
+
+#### Iter 1 outcome (verbatim)
+
+```
+[1/1 FAIL] Check mmap quad presc=3 sshift=0 wall_rate > 337 Mbps
+  (mmap quad presc=3 bytes=1048576 dt=229ms mbps=36.63
+   qspi_hz=656000000)
+```
+
+Ledger row: `2026-05-02T19:43:51 mmap_spi 0`. The mmap path itself
+works (FMODE=11 + slave responds correctly + no errors); only the CPU
+copy mechanism is too slow. This is good news: the QSPI peripheral and
+slave RTL are both proven on this rig at FMODE=11, presc=3.
+
+#### Iter 2 rig reset evidence (planning Manager)
+
+- Command: `cd /home/agent4/fast_data/fpga/build/uart && python3 -u
+  $TEST_SERV/run_md.py --ledger /home/agent4/fast_data/agent4/ledger.txt
+  --module uart --log /home/agent4/fast_data/agent4/log.txt`.
+- Exit code: 0. Result: `1 BLOCK PASSED`, sub-checks 3/3 PASS.
+  Sentinel `n_ops=10, n_errors=0, early_done=false`.
+- New ledger row: `2026-05-02T19:46:34 uart 3`. Rig is up: yes.
+
+#### Iter 2 plan -- parameterised `H <len> <variant>` sweep
+
+Worker iter 2 instructions:
+
+1. Modify `cmd_mmap_bench()` in `/home/agent4/fast_data/stm32mp135_test_board/baremetal/qspi/src/cli.c`
+   to accept a second argument `variant` (default 0 if absent so the
+   existing single-arg invocations keep working). Implement four copy
+   variants, all reading from `QSPI_MM_BASE + 0` into `DEF_DDR_BASE`,
+   selected by argv[1]:
+
+   - **variant 0**: byte loop (existing baseline `dst[i]=src[i]`).
+   - **variant 1**: 32-bit word loop. `volatile uint32_t *s32 = ...; volatile uint32_t *d32 = ...; for (i=0; i<len/4; i++) d32[i]=s32[i];`. ~4x speedup.
+   - **variant 2**: `memcpy(dst, src, len)` -- gcc lowers to LDM/STM. Worker noted ~8x.
+   - **variant 3**: MDMA mem-to-mem from `QSPI_MM_BASE` to DDR. Most likely to clear 337 Mbps.
+
+   The summary line stays one fixed format so the verifier can match
+   it for every variant: `mmap %u B quad in %u ms, %u.%02u Mbps,
+   presc=%u, qspi_hz=%u, variant=%u\r\n` (note added `, variant=%u`
+   suffix). Variant prints AFTER qspi_hz so the existing prefix
+   regex still matches; verifier will key off variant separately.
+
+2. For variant 3 (MDMA mem-to-mem), set up MDMA channel 0:
+   - SINC=2, DINC=2 (both increment), SSIZE=2, DSIZE=2 (32-bit each).
+   - Source address = `QSPI_MM_BASE` (0x70000000), dest = DDR base.
+   - SBURST=4 (16-beat reads), DBURST=4 (16-beat writes), TLEN=64-1.
+   - SWRM=1 (software request) and CCR_SWRQ kick after channel enable
+     -- this is mem-to-mem, no hardware QSPI FIFO trigger involved.
+   - BWM=1 OK; CTBR.SBUS=0, DBUS=0 (both AXI).
+   - Use the same block-repeat scheme as `qspi_mdma_start` for
+     len > 0x1FFFF (split into 64 KB blocks via BRC).
+   - Do clean+invalidate of dest cache region before kick, then poll
+     CISR.CTCIF (or BTIF on every block) until done, then disable.
+   - Reuse helpers if possible -- but a self-contained `static
+     HAL_StatusTypeDef mdma_mm_to_ddr(...)` inside cli.c is fine and
+     keeps the diff scoped to firmware that the existing chapter
+     already deliberately points to (do NOT touch /home/claude/...
+     paths; agent4/qspi tree is correct per chapter symlinks).
+   - If MDMA cannot use 0x70000000 as a source (RM0475 says all AXI
+     masters CAN access the QSPI mm window), fall back to a
+     mem-to-mem DMA1 read; document which path actually worked.
+
+3. Modify `/home/agent4/fast_data/fpga/src/mmap_spi.nw` to add THREE
+   new blocks in TEST.md, ORDERED MDMA-FIRST so we see the most
+   informative result before any abort:
+
+   - Block 1 (mission target): `H 1048576 3` -- variant 3 MDMA,
+     gate `wall_rate > 337 Mbps`.
+   - Block 2: `H 1048576 2` -- variant 2 memcpy, gate
+     `wall_rate > 100 Mbps` (ambitious but within ldm/stm reach;
+     we want a real signal here).
+   - Block 3: `H 1048576 1` -- variant 1 word loop, gate
+     `wall_rate > 75 Mbps` (4x the 36.63 baseline -> 146 expected;
+     keep the gate conservative so it passes if the model is right).
+   - Keep the existing block (`H 1048576` with implicit variant 0)
+     as block 4, but RELAX its gate to `wall_rate > 30 Mbps` --
+     it is now a regression check on the byte-loop baseline, not a
+     mission target. Since `make test` aborts on first failure,
+     putting the byte-loop block LAST means we see all variant
+     results when the variants pass. If MDMA fails, blocks 2/3/4
+     are skipped per AGENTS.md regression discipline -- that is
+     ACCEPTABLE: variant 3 failing is the iteration's primary
+     evidence and we do not need the slower variants to repeat
+     iter 1's already-known number.
+
+4. Update `verify.py` in `mmap_spi.nw`:
+   - Loosen the regex to also accept the optional `, variant=<N>`
+     suffix and capture it.
+   - Add a `check_mmap_<v>(...)` per block with the matching gate.
+   - The dispatch maps each TEST.md sentinel to its check; tag the
+     UART parse to find the LAST matching summary for the variant
+     in question (uart capture spans all four `H` invocations).
+
+5. Single full-regression run per iteration discipline applies. Run:
+   ```
+   cd /home/agent4/fast_data/stm32mp135_test_board/baremetal/qspi
+   make           # rebuild main.stm32 with new cli.c
+   cd /home/agent4/fast_data/fpga
+   make -C build/mmap_spi all
+   make -C build/mmap_spi sim       # no-op
+   make -C build/mmap_spi bitstream # links qspi.bin
+   cd /home/agent4/fast_data/fpga/build/mmap_spi
+   python3 -u $TEST_SERV/run_md.py \
+     --ledger /home/agent4/fast_data/agent4/ledger.txt \
+     --module mmap_spi \
+     --log /home/agent4/fast_data/agent4/log.txt
+   ```
+
+#### Why parameterised command, not three new chapters
+
+Single chapter keeps the chapter symlink scope unchanged and means we
+re-flash main.stm32 ONCE (saving ~3-5 s of bench reset per variant).
+The four `H` calls within ONE block sequence share the same JEDEC ID
+preamble, prescaler set, and bench_start mark; all four variants run
+back-to-back inside one MP135 power-on. This is more iteration-
+efficient than four-chapter setups.
+
+#### Why MDMA mem-to-mem first
+
+MDMA mem-to-mem from QSPI_MM_BASE pulls the QSPI peripheral's
+prefetch buffer through MDMA's 16-beat AHB bursts. Two prior wins
+combine: (a) MDMA's burst-AHB (16-beat) instead of CPU single-AHB
+(1-beat) per access, (b) FMODE=11 prefetch hides QSPI command
+re-issue. If this clears the gate, mission step is done in one
+iteration. memcpy and word-loop are kept as fallback evidence to
+characterise where the bottleneck actually sat.
+
+#### Files involved (Worker iter 2)
+
+- EDIT: `/home/agent4/fast_data/stm32mp135_test_board/baremetal/qspi/src/cli.c` (cmd_mmap_bench parameterisation + MDMA mem-to-mem helper).
+- EDIT: `/home/agent4/fast_data/fpga/src/mmap_spi.nw` (TEST.md gains 3 blocks; verify.py gains 3 dispatch entries; prose updated).
+- UNCHANGED: spi.nw, spi_simple.nw, spi_quad.nw, qspi.nw (Manager
+  forbids these per task constraints).
+- UNCHANGED: `/home/claude/...` firmware paths (chapter symlinks
+  deliberately point to `/home/agent4/...` and stay there).
+
+#### Open questions / risks for Worker
+
+- MDMA mem-to-mem from QSPI_MM_BASE has not been done in this
+  codebase. RM0475 documents the QSPI mm window as AXI-mappable
+  for all masters including MDMA. If MDMA refuses (e.g. transfer
+  error flag), Worker should: (a) capture the CISR/CESR error
+  bits in the firmware error message, (b) try DMA1/DMA2 channel
+  mem-to-mem as a fallback. Either way, REPORT the actual mechanism
+  used so the next iteration can reason about it.
+- Variant 2 memcpy: gcc may NOT lower to LDM/STM if the source/dest
+  pointers are `volatile`. Use a non-volatile alias (the access
+  ordering is irrelevant for memcpy of a pre-warm buffer). If gcc
+  still emits a byte loop, replace with a hand-coded LDMIA/STMIA
+  inline asm sequence -- BUT only after the MDMA variant is
+  measured, since MDMA is the gate-clearing path.
+- Variant 1 word loop: keep `volatile` on the QSPI src pointer so
+  the compiler does not coalesce or reorder the QSPI window reads
+  (FMODE=11 prefetch is sequential and must see in-order
+  word-aligned accesses).
+- Cache: `DEF_DDR_BASE` is normal cacheable. For variants 0/1/2
+  (CPU writes), the writeback to DDR happens on cache eviction
+  which is asynchronous; for variant 3 (MDMA writes DDR), Worker
+  must clean+invalidate before kick (see existing
+  `qspi_mdma_start`).
+
+#### Iter 2 budget
+
+mmap_spi: 1/8 consumed (iter 1). Iter 2 starts now. 6 iterations
+remain in budget after iter 2.
+
+### Memory-mapped mode results (2026-05-02)
+
+**MISSION COMPLETE.** Target was >337 Mbps mmap quad (i.e. clear
+the indirect-read baseline). Achieved **645.27 Mbps** with
+MDMA mem-to-mem from the QSPI memory-mapped window
+(0x70000000) to DDR -- 1.9x the 337 Mbps indirect-read baseline
+and 1.6x the 400 Mbps original stretch target. Single-pass,
+1 MiB, presc=3, qspi_hz=656 MHz, opcode 0x6B (single-lane
+inst+addr, **quad-lane data**, 9 dummy). Ledger row
+`2026-05-02T20:00:06 mmap_spi 4` (4/4 PASS); ground-truth UART:
+`mmap 1048576 B quad in 13 ms, 645.27 Mbps, presc=3,
+qspi_hz=656000000, variant=3, cisr=0000001e, cesr=00000000`.
+Math check: 1 MiB x 8 / 0.013 s = 645.28 Mbps ~= 645.27.
+
+Variant table (all four measured this iter, all gated, presc=3
+quad, opcode 0x6B, len=1 MiB):
+
+  | variant | mechanism | Mbps |
+  |---------|-----------|------|
+  | 0 | byte CPU loop (`*(volatile u8*)`) | 36.63 |
+  | 1 | word CPU loop (`*(volatile u32*)`) | 209.71 |
+  | 2 | memcpy (LDM/STM bursts) | 226.71 |
+  | **3** | **MDMA mem-to-mem** (16-beat AHB) | **645.27** |
+
+Mechanism: MDMA-over-mmap combines the QSPI prefetch buffer
+(driven by FMODE=11, which streams from the slave continuously
+once SCLK is running) with MDMA's 16-beat AHB bursts on the
+master side. The CPU never touches `QUADSPI->DR`, so the
+per-word AXI handshake that capped indirect-read mode at
+~3 cyc/byte (see "Root cause of quad is only ~2.5x single, not
+4x" below) is bypassed entirely -- MDMA pulls 16 words per
+arbitration round from the prefetch FIFO directly.
+
+Cross-reference: the AXI per-word handshake bottleneck
+documented in the next section is exactly what mmap mode
+escapes. Of the three "untested" paths listed there
+(DTR/DDR, memory-mapped, faster AXI), path 2 is now PROVEN
+and required no FPGA HDL change -- the existing slave already
+responds to opcode + address (LANES=1 inst/addr framing,
+LANES=4 data, 9 dummy cycles).
+
+Open future questions (separate sub-missions, not blocking):
+
+  - Does mmap quad scale further at longer transfers? Tested
+    only at 1 MiB; 16 MiB and 64 MiB may show different
+    saturation behavior (DDR write-back, MDMA arbitration).
+  - Can DTR (CCR.DDRM=1) be layered on top of mmap for
+    additional 2x? Would require FPGA HDL change to drive
+    DDR data, but the firmware-side mechanism stacks cleanly.
+  - Data-integrity story: throughput was measured at 1 MiB
+    but we did NOT do a twin-pass byte-compare of two
+    consecutive mmap reads. Pattern-CRC at this rate is
+    unverified. Recommended sub-mission: twin-DDR-buffer
+    integrity check at 1 MiB and 16 MiB.
+
 ### Root cause of "quad is only ~2.5x single, not 4x" (2026-05-02)
 
 **FOUND**: The QSPI peripheral's per-byte indirect-read overhead is
