@@ -1,5 +1,274 @@
 # TODO: QSPI FPGA-to-MPU Fast Data Transfer
 
+### Active FSM: mmap_slave -- iter 5 -- SB_GB_IO sclk + data-phase enable gate (2026-05-03)
+
+Status: PLANNING iter 5 (5/8). Iter 1-4 all RED with the same
+single-bit-flip fingerprint at byte 8 of the second mmap-MDMA read of
+the same flash address. Iter 5 is the LAST attempt before pivot per
+3-same-issue retry cap (iter 1, 2, 4 are the three same-issue reds;
+iter 3 was a different multi-bit regression from registered-SB_IO).
+
+#### Iter 4 outcome (red, recap)
+
+At presc=4 (SCLK=131 MHz, plenty of timing margin vs PnR Fmax=154 MHz):
+single bit IO[2] flip (XOR=0x40) at byte 8 of byte-stream when reading
+flash addr 0 twice via MDMA. Pattern persists across SCLK margins so
+not a pure-timing issue. Most likely metastability race between CS-fall
+(asynchronous to sclk) and the FIRST sclk edge of the new transaction
+sampling IO[0] for the opcode shift-in.
+
+#### Iter 5 rig reset evidence (planning Manager)
+
+- Command: `cd /home/agent4/fast_data/fpga/build/uart && python3 -u
+  $TEST_SERV/run_md.py --ledger /home/agent4/fast_data/agent4/ledger.txt
+  --module uart --log /home/agent4/fast_data/agent4/log.txt`.
+- Exit code: 0. Result: `1 BLOCK PASSED`, sub-checks 3/3 PASS.
+  Sentinel `n_ops=10, n_errors=0, early_done=false`.
+- New ledger row: `2026-05-03T07:59:11 uart 3`. Rig is up: yes.
+
+#### Iter 5 plan -- SB_GB_IO promotion of sclk + data-phase enable gate
+
+Caveat for Worker: the Manager prompt asserted that qspi.nw uses
+`SB_GB_IO` and "elaborate enable gating" -- this is FALSE. A grep of
+`src/qspi.nw` for `SB_GB` returns 0 matches. qspi.nw uses the same
+explicit-`SB_IO` PIN_TYPE 6'b101001 cells that mmap_slave.nw already
+uses (qspi.nw lines 880-916), and its CDC chain is byte-for-byte
+identical to mmap_slave.nw's chain (qspi.nw lines 634-654 vs
+mmap_slave.nw lines 147-166). The "borrow proven pattern from qspi.nw"
+framing therefore does not apply -- this iter introduces a NEW pattern
+on the iCEstick that no other example in this tree has needed. The
+SB_GB_IO primitive itself IS valid for iCE40 (defined in
+`/usr/share/yosys/ice40/cells_sim.v` line 123).
+
+Two changes, both confined to mmap_slave.nw:
+
+1. Promote sclk to a global clock net via SB_GB_IO. Currently the
+   `sclk` pin is declared as a plain `input` (mmap_slave.nw line 56)
+   and arrives via a regular `set_io sclk 45` constraint
+   (line 404). nextpnr's router places per-IO delay variation on
+   the fabric route to the four io_pad_out flops and the FSM
+   flops, so different sinks see SCLK with different delays.
+   Replacing the plain input with an `SB_GB_IO` cell promotes
+   sclk onto a global clock net with low-skew distribution.
+
+2. Add a one-fclk-cycle data-phase enable gate on the FSM's
+   shift-in arm. After CS falls, the FSM currently begins
+   shifting `cmd_sr <= {cmd_sr[30:0], io_d_in_0}` on the very
+   first posedge sclk -- if that edge arrives within 1-2 ns of
+   `cs_async_rst` deasserting, the shift flop and `io_d_in_0` may
+   still be in metastability resolution. Gate the shift-in arm
+   on a "settled" qualifier that asserts only after one fclk
+   cycle has elapsed since `cs_async_rst` fell.
+
+Reference patterns -- Worker should consult these directly
+(verbatim Verilog + line numbers below in the WORK_HANDOFF):
+
+- iCE40 SB_GB_IO primitive declaration:
+  `/usr/share/yosys/ice40/cells_sim.v` line 123 (params PIN_TYPE,
+  PULLUP, NEG_TRIGGER, IO_STANDARD; ports include
+  PACKAGE_PIN inout, GLOBAL_BUFFER_OUTPUT output, INPUT_CLK,
+  OUTPUT_CLK, OUTPUT_ENABLE, D_OUT_0/1, D_IN_0/1).
+
+#### Iter 5 cap rule
+
+Per AGENTS.md "3 same-issue reds": iter 1, 2, 4 are red with the
+same single-bit-flip fingerprint. Iter 5 is the LAST attempt
+before pivot. If iter 5 still shows the same fingerprint
+(single-bit XOR, ~byte 8, second read), Orchestrator MUST stop
+and report BLOCKED. No iter 6 work on this hypothesis.
+
+#### Iter 5 budget
+
+mmap_slave: 4/8 consumed (iter 1 RED, iter 2 RED, iter 3 RED
+multi-bit, iter 4 RED). Iter 5 starting => 5/8 after iter 5.
+3 iterations remain (6, 7, 8) but per cap rule above they will
+go to a pivoted hypothesis if iter 5 still red.
+
+---
+
+### Active FSM: mmap_spi -- iter 4 -- bit-integrity Phase 1 (2026-05-02)
+
+Status: PLANNING iter 4. Iter 2 closed the throughput mission at
+645.27 Mbps (variant=3 MDMA mem-to-mem, presc=3 quad, 1 MiB
+single-pass). User escalated 2026-05-02: new mission is "400+ Mbps
+with PERFECT BIT INTEGRITY for arbitrary data". Phase 1 (this iter)
+verifies the existing incrementing pattern at >=1 GiB with bit-perfect
+integrity over multi-chunk ping-pong DDR slots. Phase 2 (later iters)
+will add a PRBS slave + XOR checksum on MP135.
+
+#### Iter 4 rig reset evidence (planning Manager)
+
+- Command: `cd /home/agent4/fast_data/fpga/build/uart && python3 -u
+  $TEST_SERV/run_md.py --ledger /home/agent4/fast_data/agent4/ledger.txt
+  --module uart --log /home/agent4/fast_data/agent4/log.txt`.
+- Exit code: 0. Result: `1 BLOCK PASSED`, sub-checks 3/3 PASS.
+  Sentinel `n_ops=10, n_errors=0, early_done=false`.
+- New ledger row: `2026-05-02T21:08:24 uart 3`. Rig is up: yes.
+
+#### Iter 4 plan -- new `I` command + integrity TEST.md block
+
+Worker iter 4 instructions:
+
+1. EXTEND `cli.c` with a new top-level letter `I` and a new
+   handler `cmd_mmap_int(int argc, char **argv)`. The dispatch
+   case should read `case 'I': cmd_mmap_int(argc, argv); break;`
+   and be inserted after the existing `case 'H'`.
+
+2. `cmd_mmap_int` design:
+   - Parse: `total_bytes = arg_u32(argv[0], 16777216U)` (default 16 MiB,
+     cap at 4 GiB-1 to stay within uint32_t); ensure 64 KiB-multiple
+     (round down). Bail with `ERR mmap_int` if `total_bytes < 65536`.
+   - Constants: `CHUNK = 16U * 1024U * 1024U` (16 MiB, == slave's
+     24-bit address wrap), `slot0 = DEF_DDR_BASE`,
+     `slot1 = DEF_DDR_BASE + CHUNK`. Two ping-pong DDR buffers.
+   - `qspi_mm_enable` once with the same recipe currently used by
+     variant=3 (opcode 0x6B, addr 3 B, dummy 9, inst+addr LANES=1,
+     data LANES=4). DO NOT re-enable per chunk -- the FMODE=11
+     mapping is sticky and the MDMA reads are pure AXI from
+     QSPI_MM_BASE.
+   - Loop `nchunks = total_bytes / CHUNK` (if remainder, treat as a
+     short final chunk -- but for Phase 1 just round down to
+     CHUNK-multiple; user said `>=1 GiB`, 64 chunks is fine).
+   - For each chunk i in [0, nchunks):
+       a. `dst = (i & 1) ? slot1 : slot0` (ping-pong).
+       b. Re-use the existing `mmap_bench_mdma`-style MDMA setup
+          but parameterise destination and CHUNK length. Cleanest:
+          factor the MDMA setup body into a helper
+          `static uint32_t mdma_mm_to_dst(uint32_t dst, uint32_t len,
+          uint32_t *cisr_out, uint32_t *cesr_out)` and call it from
+          both `mmap_bench_mdma` (which becomes a thin wrapper passing
+          `DEF_DDR_BASE`) and the new chunk loop. Source ALWAYS
+          `QSPI_MM_BASE + 0U` -- the slave wraps at 16 MiB so
+          reading offset 0 into a 16 MiB window emits the same
+          pattern every chunk (`i & 0xFF`).
+       c. Accumulate `pass1_ms += dt_chunk` (MDMA transfer time only).
+       d. After MDMA completes, do per-chunk integrity check:
+          byte-compare `((volatile uint8_t *)dst)[k]` vs `(uint8_t)k`
+          for k in [0, CHUNK). On first mismatch (and only first),
+          set `firsterr = i*CHUNK + k` if firsterr is still
+          `0xFFFFFFFFUL`. Accumulate `validate_ms` separately.
+       e. Track `cisr` / `cesr` (last value seen, OR-accumulated
+          across chunks).
+   - Cap total_bytes at `0xFFF00000U` (just under 4 GiB) so
+     `i*CHUNK + k` arithmetic never overflows uint32_t in firsterr.
+   - Final summary line:
+     `mmap_int %u B in %u ms, %u.%02u Mbps, firsterr=%ld, chunks=%u, validate=%u ms, presc=%u, qspi_hz=%u, cisr=%08lx, cesr=%08lx\r\n`
+     where Mbps is computed from `pass1_ms` only (the headline
+     streaming rate). Sentinel for verifier: `mmap_int <total> B`.
+
+3. PERF NOTE -- validate hot loop:
+   - Naive byte loop at ~100 MB/s validate ~= 160 ms / 16 MiB chunk
+     -> 64 chunks * 160 ms = ~10 s validate for 1 GiB. That does NOT
+     hurt streaming Mbps (parsed from pass1_ms only), but it eats
+     wall time. Worker should write the validate as a 32-bit word
+     compare against an inline-computed expected word
+     (`expected_word = 0x03020100 + 0x04040404 * (k/4)`) -- this is
+     ~4x faster than byte-by-byte and avoids any DDR-resident
+     expected buffer (which would itself need ~16 MiB DDR and
+     building it once at startup adds complexity). Word-compare
+     gives ~400 MB/s validate, so 1 GiB validates in ~2.5 s. If
+     worker prefers to keep it as a byte loop, that's still
+     acceptable -- 60 s timeout absorbs it.
+   - DO NOT compare against a memcpy'd expected buffer -- building
+     a 16 MiB pattern buffer in DDR once at startup is fine but
+     adds another step; word-compare-against-computed-constant is
+     simpler.
+
+4. ADD a NEW TEST.md block to `mmap_spi.nw` AFTER the existing
+   4-variant H block (do NOT modify or remove existing blocks).
+   - Title: `mmap MDMA integrity check 1 GiB ping-pong at presc=3 quad expecting bit-perfect transport >400 Mbps.`
+   - Bringup matches existing block: `p 3 0\r` then `I 1073741824\r`.
+   - Sentinel: `mmap_int 1073741824 B` with `timeout_ms=60000`.
+   - One verifier check: `Check mmap_int firsterr=-1 AND mbps > 400`.
+
+5. EXTEND `verify.py` in `mmap_spi.nw`:
+   - Add a new regex `MMAP_INT_RE` matching the new line shape.
+   - Add `check_mmap_integrity()` that reads UART, finds last
+     `mmap_int` line, requires `firsterr == -1` AND `mbps > 400`.
+     Print full parsed summary to stdout for evidence even on
+     failure.
+   - Append the new sentinel string to DISPATCH.
+
+6. Worker MUST NOT touch: spi.nw, spi_simple.nw, spi_quad.nw,
+   qspi.nw, uart.nw, spi_1lane_stream.nw. Worker MUST NOT touch
+   the existing 4-variant H block in mmap_spi.nw or remove any of
+   its checks. New block + new dispatch entries only.
+
+7. After edits, run the full regression for mmap_spi:
+
+   ```
+   cd /home/agent4/fast_data/stm32mp135_test_board/baremetal/qspi
+   make           # rebuild main.stm32 with new I command
+   cd /home/agent4/fast_data/fpga
+   make -C build/mmap_spi all
+   make -C build/mmap_spi sim       # no-op
+   make -C build/mmap_spi bitstream # links qspi.bin
+   cd /home/agent4/fast_data/fpga/build/mmap_spi
+   python3 -u $TEST_SERV/run_md.py \
+     --ledger /home/agent4/fast_data/agent4/ledger.txt \
+     --module mmap_spi \
+     --log /home/agent4/fast_data/agent4/log.txt
+   ```
+
+#### Files Worker iter 4 will touch
+
+- EDIT: `/home/agent4/fast_data/stm32mp135_test_board/baremetal/qspi/src/cli.c`
+  -- add `static uint32_t mdma_mm_to_dst(...)` helper (refactor of
+  body of `mmap_bench_mdma`), add `cmd_mmap_int(...)`, add
+  `case 'I': cmd_mmap_int(...)` dispatch entry, optionally extend
+  `cmd_help` text.
+- EDIT: `/home/agent4/fast_data/fpga/src/mmap_spi.nw` -- one new
+  TEST.md block AFTER the existing 4-variant H block, one new
+  verifier helper, one new DISPATCH entry, brief prose update in
+  the chapter intro noting Phase 1 of bit-integrity sub-mission.
+- UNCHANGED: every other file.
+
+#### Iter 4 design concerns / risks for Worker
+
+- Total wall time at 1 GiB:
+  pass1 ~= 1 GiB * 8 / 645 Mbps = 12.7 s + validate ~=2-10 s + UART
+  spew ~=100 ms = ~25 s. The 60 s expect timeout has 2x headroom.
+- 1 GiB at the DDR base: DEF_DDR_BASE is 0xC0000000. Two slots of
+  16 MiB = 32 MiB total -- well within DDR. Re-used per chunk.
+- Cache discipline: each MDMA destination MUST be cleaned+
+  invalidated before the kick (existing `mmap_bench_mdma` already
+  does this for slot 0; the new helper must do it for whichever
+  slot is the destination). The CPU validate then reads via
+  cacheable mappings -- the L1 invalidate ensures fresh DDR
+  contents are seen.
+- Ping-pong is for FUTURE pipelined overlap (kick chunk N+1 MDMA
+  while CPU validates chunk N). For Phase 1 the loop is sequential
+  (kick -> wait -> validate -> next), but using two slots is
+  required because: (i) it lets us add overlap later without
+  changing the integrity contract, (ii) it exercises the same
+  buffer-rotation pattern the eventual production driver will use.
+  If Worker has time/budget, attempt the overlapped version: kick
+  MDMA into slot1, validate slot0 in parallel, swap. But the
+  primary goal is correctness + 400 Mbps; sequential is fine.
+- MDMA block-repeat: 16 MiB fits the existing
+  `len > 0x1FFFFU` path (256 blocks of 64 KiB, BRSUM/BRDUM=1).
+  No new MDMA setup work needed beyond destination parameter.
+- Slave 24-bit wrap: the FPGA slave's address wraps at 16 MiB,
+  so reading from QSPI_MM_BASE+0 always emits the same 16 MiB
+  pattern (0x00, 0x01, ... 0xFF, 0x00, 0x01, ...). Each chunk
+  is a fresh transaction starting at flash addr 0. Expected
+  pattern: `expected[k] = (uint8_t)k` for k in [0, 16 MiB).
+- The 4-variant H block stays first; integrity block stays second.
+  If the H block fails (it shouldn't -- it just passed at iter 2),
+  the integrity block is skipped per regression discipline. That
+  is acceptable: H failing is itself the primary evidence.
+- We are NOT touching qspi.bin or the FPGA HDL. Phase 2 (later
+  iters) will need new HDL for PRBS.
+
+#### Iter 4 budget
+
+mmap_spi: 3/8 consumed (iter 1 red, iter 2 green @645 Mbps, iter
+3 closed throughput chapter). Iter 4 is the first iter of the
+bit-integrity sub-mission. After iter 4, 4 iterations remain
+(plenty for Phase 2).
+
+---
+
 ### Active FSM: mmap_spi -- iter 2 -- copy-loop variant sweep (2026-05-02)
 
 Status: PLANNING iter 2. Iter 1 RED -- baseline byte-loop measured at
