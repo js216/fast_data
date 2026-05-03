@@ -442,13 +442,14 @@ def _build_and_run_target(tool, c_path, doj, dxe, ldr, asm, target_objs):
         sh(f"{ELFLOADER} -proc ADSP-21569 -b UARTHOST -f ASCII "
            f"-Width 8 {dxe} -o {ldr}")
     else:  # sel
-        # selache C frontend, archiver, linker, and loader-image
-        # step. easm21k still assembles selcc's output because
-        # selas's Type 4b VISA encoding for compact `DM(N,Ii)=Rx`
-        # spill stores sets the BW/SW width bit incorrectly,
-        # which causes a 2-D-array stack-frame test to read back
-        # the wrong byte even though the symbol map and section
-        # layout match cc21k's. Once that encoding is corrected
+        # selache for the C frontend, archiver, linker, and loader-
+        # image step. easm21k still assembles selcc's output: even
+        # selas's 48-bit NW encoding for selcc's stack-frame setup
+        # (`I7=MODIFY(I7,-N)(NW); DM(-N,I6)=Rx;`) executes
+        # differently on real silicon from cc21k/easm21k's choice,
+        # so a 2-D-array stack-frame test reads garbage on the
+        # first reload. Once selas's MODIFY/UregMemAccess
+        # encodings round-trip against the SHARC+ silicon model
         # this swaps to SELAS in one place. seld + selar + selload
         # already drive every other piece of the per-test path.
         sh(f"{SELCC} -proc ADSP-21569 -char-size-8 "
