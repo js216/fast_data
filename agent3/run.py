@@ -318,6 +318,13 @@ class Runner:
             skipped = 0
             for i, (title, build, artifacts_text, test, verify) in enumerate(
                     sections, 1):
+                # Release the suite-wide lease before the final test so the
+                # flagship runs lease-less and re-acquires every device from
+                # cold (proves the no-context recovery path).
+                if i == total and lease_token:
+                    self.release_lease(lease_token)
+                    self._log(f'  lease released before flagship: {lease_token}')
+                    lease_token = None
                 slug = re.sub(r'[^a-z0-9]+', '_', title.lower()).strip('_')
                 section_dir = self.workdir / slug
                 section_dir.mkdir()

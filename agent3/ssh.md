@@ -245,6 +245,38 @@ def check(extract_dir):
     return 'login:' in uart and 'STM32MP135' in uart
 ```
 
+### SSH smoke (no reload)
+
+Inherits the running Linux from the previous test --- no DFU, no MSC,
+no boot. Waits a few seconds for DHCP, registers the dropbear host
+key, and runs `ssh:exec` for IP + uname. Quick check that the bench
+SSH path reaches the live system.
+
+Build: nothing required.
+
+Test:
+
+```
+delay ms=8000
+ssh:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq2/Qf4lNrw/weZ9Aod1VTCvett2F/iNjzDBuA/gKe/ stm32mp135-evb-recovery"
+ssh:exec command="ip -4 -o addr show dev eth0; uname -a"
+mark tag=ssh_smoke
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    out = Verification.load_stream(
+        extract_dir, 'ssh.exec').decode('utf-8', 'replace')
+    return (bool(re.search(r'eth0\s+inet \d+\.\d+\.\d+\.\d+/\d+', out))
+            and 'Linux' in out and 'armv7l' in out)
+```
+
 ### Full end-to-end: DFU -> write+verify golden -> boot Linux -> SSH IP
 
 Flagship: exercises every link. Resets, DFU-loads the bootloader,
