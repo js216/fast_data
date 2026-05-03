@@ -174,16 +174,27 @@ def _compile_job(idx, cmd, obj_cmd, needs_build):
     return idx, obj_cmd, cmd, out, True
 
 
-def build_target_objs():
+def build_target_objs(compiler):
     """Compile every libsel/src/*/*.c, every libsel/src/*/*.s, and the
-    xtest harness sources (uart.c, main.c) to per-source .doj files
-    under xtest/build/. Cached per-source by mtime. Returns the full
-    explicit list of .doj path strings.
+    xtest harness sources (uart.c, main.c) to per-source .doj files.
+    Cached per-source by mtime. Returns the full explicit list of .doj
+    path strings.
+
+    `compiler` is "cc21k" or "selcc". The cc21k objects live under
+    xtest/build/, the selcc objects under xtest/build/sel/, so the two
+    caches do not stomp on each other. Assembly (.s) sources always go
+    through easm21k regardless of `compiler` because selcc consumes C,
+    not asm. selcc compiles each .c by emitting .s and feeding it to
+    easm21k, mirroring the per-test sel pipeline.
 
     The caller bundles those objects into a per-run archive so individual
     test link commands stay short."""
+    if compiler not in ("cc21k", "selcc"):
+        sys.exit(f"unknown compiler: {compiler}")
+
     src_dir = os.path.expandvars(LIBSEL_SRC)
-    obj_dir = os.path.expandvars(BUILD)
+    obj_root = os.path.expandvars(BUILD)
+    obj_dir = obj_root if compiler == "cc21k" else f"{obj_root}/sel"
 
     c_sources = sorted(glob.glob(f"{src_dir}/*/*.c"))
     s_sources = sorted(glob.glob(f"{src_dir}/*/*.s"))
@@ -192,6 +203,15 @@ def build_target_objs():
 
     os.makedirs(obj_dir, exist_ok=True)
     jobs = []
+
+    def c_compile_cmd(src_cmd, obj_cmd, asm_cmd):
+        if compiler == "cc21k":
+            return f"cc21k {CFLAGS} -c -o {obj_cmd} {src_cmd}"
+        return (f"{SELCC} -proc ADSP-21569 -char-size-8 "
+                f"-DBOARD_BAUD_DIV=814U -I{XTEST} -I{LIBSEL_INC} "
+                f"-S -o {asm_cmd} {src_cmd} && "
+                f"easm21k -proc ADSP-21569 -si-revision any "
+                f"-o {obj_cmd} {asm_cmd}")
 
     for src in s_sources:
         sub = os.path.basename(os.path.dirname(src))
@@ -211,12 +231,14 @@ def build_target_objs():
         sub = os.path.basename(os.path.dirname(src))
         bn = os.path.splitext(os.path.basename(src))[0]
         obj = f"{obj_dir}/lib_{sub}_{bn}.doj"
+        asm = f"{obj_dir}/lib_{sub}_{bn}.s"
         obj_cmd = shell_path(obj)
+        asm_cmd = shell_path(asm)
         src_cmd = shell_path(src)
         needs_build = (not os.path.exists(obj)
                        or os.path.getmtime(obj) < os.path.getmtime(src))
         jobs.append((len(jobs),
-                     f"cc21k {CFLAGS} -c -o {obj_cmd} {src_cmd}",
+                     c_compile_cmd(src_cmd, obj_cmd, asm_cmd),
                      obj_cmd,
                      needs_build))
 
@@ -224,11 +246,13 @@ def build_target_objs():
         src = os.path.expandvars(src_cmd)
         bn = os.path.splitext(os.path.basename(src))[0]
         obj = f"{obj_dir}/xtest_{bn}.doj"
+        asm = f"{obj_dir}/xtest_{bn}.s"
         obj_cmd = shell_path(obj)
+        asm_cmd = shell_path(asm)
         needs_build = (not os.path.exists(obj)
                        or os.path.getmtime(obj) < os.path.getmtime(src))
         jobs.append((len(jobs),
-                     f"cc21k {CFLAGS} -c -o {obj_cmd} {src_cmd}",
+                     c_compile_cmd(src_cmd, obj_cmd, asm_cmd),
                      obj_cmd,
                      needs_build))
 
@@ -237,7 +261,7 @@ def build_target_objs():
     if build_count:
         workers = os.cpu_count() or 1
         print(f"building {build_count} target support objects "
-              f"with {workers} workers")
+              f"with {workers} workers ({compiler})")
         with concurrent.futures.ThreadPoolExecutor(
                 max_workers=workers) as executor:
             futures = [executor.submit(_compile_job, *job) for job in jobs]
@@ -263,9 +287,9 @@ def build_target_objs():
     return objs
 
 
-def build_target_archive(target_objs):
+def build_target_archive(target_objs, suffix=""):
     """Bundle target support objects into one archive for shorter links."""
-    archive = f"{OUT}/libxtest.dlb"
+    archive = f"{OUT}/libxtest{suffix}.dlb"
     sh(f"{ELFAR} -c {archive} " + " ".join(target_objs))
     return archive
 
@@ -467,12 +491,19 @@ def main():
     ensure_selache_release_build(tools)
     cases = load_cases()
 
-    # cces and sel both link the same support archive per test:
+    # cces and sel each link their own support archive per test:
     # libsel sources + xtest harness, every one compiled separately,
-    # then bundled once per run to keep per-test link commands short.
-    target_objs = []
-    if "cces" in tools or "sel" in tools:
-        target_objs = [build_target_archive(build_target_objs())]
+    # bundled once per run to keep per-test link commands short. cces
+    # uses cc21k-built objects; sel uses selcc-built objects so the
+    # selache compiler is exercised against the entire C-language
+    # surface, not just the per-test case file.
+    target_objs_by_tool = {}
+    if "cces" in tools:
+        target_objs_by_tool["cces"] = [
+            build_target_archive(build_target_objs("cc21k"))]
+    if "sel" in tools:
+        target_objs_by_tool["sel"] = [
+            build_target_archive(build_target_objs("selcc"), "_sel")]
 
     subset = bool(case_args)
     if subset:
@@ -506,9 +537,10 @@ def main():
             build_failed = False
             got = None
             n_errors = 0
+            tool_objs = target_objs_by_tool.get(tool, [])
             try:
                 out, n_errors = _build_and_run(
-                    tool, c_path, doj, dxe, ldr, asm, target_objs)
+                    tool, c_path, doj, dxe, ldr, asm, tool_objs)
                 m = re.search(r"got\s+([0-9a-fA-F]+)", out)
                 got = int(m.group(1), 16) if m else None
             except subprocess.CalledProcessError as e:
