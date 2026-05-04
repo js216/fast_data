@@ -7,7 +7,7 @@ at **≥400 Mbps wall rate with ZERO bit errors verified end-to-end over
 ≥1 GiB**. Final state of the repo must be a SINGLE canonical chapter
 (`src/quadspi.nw`) that reproduces the result; all exploratory chapters
 (`mmap_slave.nw`, `mmap_prbs.nw`, `mmap_spi.nw`, `spi_quad.nw`,
-`spi_simple.nw`, `spi_1lane_stream.nw`, optionally `spi.nw`/`qspi.nw`)
+`spi_simple.nw`, `spi_1lane_stream.nw`, optionally `spi.nw`/`jedec.nw`)
 must be deletable by a human reviewer when their milestone is fulfilled
 by `quadspi.nw`.
 
@@ -22,9 +22,9 @@ deliberately poisoning a buffer in DDR and confirming the count matches.
 No HDL changes; firmware-only. After this step, the existing `c`/`A`
 reports become trustworthy.
 
-## Step 2 — Find the highest presc that gives BER=0 at 1 GiB on qspi.bin
+## Step 2 — Find the highest presc that gives BER=0 at 1 GiB on jedec.bin
 
-Using the Step-1 firmware and the existing `qspi.bin` slave (untouched),
+Using the Step-1 firmware and the existing `jedec.bin` slave (untouched),
 sweep presc 15→3 with `c 1073741824 65536 9 107` per presc. Identify the
 highest presc (lowest SCLK) where `total_errors=0` over a full 1 GiB.
 Capture wall rate. This is today's true ground-truth ceiling — likely
@@ -39,19 +39,19 @@ vary across boots → SI metastability (attack via Step 5/6); (b)
 deterministic-across-boots → master sampling timing (attack via Step 7);
 (c) random → likely cabling. Decision matrix recorded in this file.
 
-## Step 4 — Slave HDL fix candidate A: registered IOB output in qspi.nw
+## Step 4 — Slave HDL fix candidate A: registered IOB output in jedec.nw
 
-Modify `src/qspi.nw`'s four quad-output `SB_IO` cells from `PIN_TYPE =
+Modify `src/jedec.nw`'s four quad-output `SB_IO` cells from `PIN_TYPE =
 6'b101001` to `6'b100101` with `NEG_TRIGGER(1'b1)` and
 `OUTPUT_CLK(sclk)`, mirroring `src/spi.nw`'s 645 Mbps streaming pattern.
 Remove the now-redundant fabric `io_pad_out` register. Rebuild
-`qspi.bin`, re-run Step 2's full sweep. If the BER=0 ceiling moves up by
+`jedec.bin`, re-run Step 2's full sweep. If the BER=0 ceiling moves up by
 ≥1 presc step, keep the change; otherwise revert. No new chapter —
-modify `qspi.nw` in place.
+modify `jedec.nw` in place.
 
-## Step 5 — Slave HDL fix candidate B: SB_GB_IO + settle gate in qspi.nw
+## Step 5 — Slave HDL fix candidate B: SB_GB_IO + settle gate in jedec.nw
 
-If Step 4 didn't move the ceiling: in `src/qspi.nw`, promote `sclk` to a
+If Step 4 didn't move the ceiling: in `src/jedec.nw`, promote `sclk` to a
 global clock net via `SB_GB_IO` AND add a one-`clk`-cycle "settled"
 qualifier that gates the `cmd_sr` shift-in arm so the FSM ignores any
 sclk edge arriving within 1 fclk cycle of `cs_async_rst` deasserting.
@@ -66,16 +66,16 @@ At one presc step faster than the post-Step-5 ceiling, sweep DLYB tap ∈
 this presc. Record the winning combo in `firmware/cli.c` defaults so
 subsequent steps inherit it. Firmware-only changes.
 
-## Step 7 — Demonstrate provisional mission target on `qspi.bin` +
+## Step 7 — Demonstrate provisional mission target on `jedec.bin` +
 winning combo
 
-Combine the post-Step-5 `qspi.nw` HDL with the post-Step-6 master
+Combine the post-Step-5 `jedec.nw` HDL with the post-Step-6 master
 settings and run `c 1073741824 65536 9 107`. Mission gate:
 `total_errors=0` AND wall rate ≥400 Mbps in a single run. If this
 passes, the channel itself is mission-capable; the remaining work is
 just consolidation.
 
-## Step 8 — Fork the canonical `src/quadspi.nw` from `qspi.nw`
+## Step 8 — Fork the canonical `src/quadspi.nw` from `jedec.nw`
 
 Create `src/quadspi.nw`. Copy ONLY the slave logic needed for the
 mission: the post-Step-5 cs-sync chain, the FSM that decodes opcode 0x6B
@@ -114,7 +114,7 @@ anymore — just CRC equality), wall rate ≥400 Mbps, single run. Once
 green: delete `src/mmap_slave.nw`, `src/mmap_prbs.nw`,
 `src/mmap_spi.nw`, `src/spi_quad.nw`, `src/spi_simple.nw`,
 `src/spi_1lane_stream.nw` (and corresponding `verilog/*.v`,
-`verilog/*.pcf`, `build/*` dirs). Trim `src/qspi.nw` and `src/spi.nw` to
+`verilog/*.pcf`, `build/*` dirs). Trim `src/jedec.nw` and `src/spi.nw` to
 whatever bring-up history is still load-bearing for the
 SFDP/flash-emulation use cases (or delete if not). Final repo state: one
 canonical `src/quadspi.nw` plus whatever non-QSPI chapters remain
