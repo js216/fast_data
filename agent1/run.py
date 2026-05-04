@@ -231,6 +231,17 @@ def build_target_objs(compiler):
                 f"-S -o {asm_cmd} {src_cmd} && "
                 f"{SELAS} -proc ADSP-21569 -o {obj_cmd} {asm_cmd}")
 
+    def s_assemble_cmd(src_cmd, obj_cmd):
+        # selas (sel) and easm21k (cces) accept the same SHARC+ asm
+        # dialect for the libsel hand-written sources (startup.s,
+        # runtime.s), so the per-toolchain selection mirrors
+        # `c_compile_cmd` above and keeps a `--sel` build entirely
+        # CCES-free.
+        if compiler == "cc21k":
+            return (f"{EASM21K} -proc ADSP-21569 -si-revision any "
+                    f"-char-size-8 -swc -o {obj_cmd} {src_cmd}")
+        return f"{SELAS} -proc ADSP-21569 -o {obj_cmd} {src_cmd}"
+
     for src in s_sources:
         sub = os.path.basename(os.path.dirname(src))
         bn = os.path.splitext(os.path.basename(src))[0]
@@ -240,8 +251,7 @@ def build_target_objs(compiler):
         needs_build = (not os.path.exists(obj)
                        or os.path.getmtime(obj) < os.path.getmtime(src))
         jobs.append((len(jobs),
-                     f"{EASM21K} -proc ADSP-21569 -si-revision any "
-                     f"-char-size-8 -swc -o {obj_cmd} {src_cmd}",
+                     s_assemble_cmd(src_cmd, obj_cmd),
                      obj_cmd,
                      needs_build))
 
@@ -524,24 +534,22 @@ def main():
     cases = load_cases()
 
     # cces and sel each link their own support archive per test.
-    # The cces archive is built by elfar from cc21k objects.
-    # The sel archive is currently also built from cc21k objects so
-    # the cc21k linker (still used to produce the .dxe) can resolve
-    # libsel symbols against them; only the per-test case file goes
-    # through selcc + selas, exercising the selache C frontend +
-    # assembler. Once cc21k can resolve symbols against selas-built
-    # archive members (or seld learns the high-end RESERVE
-    # placement), the sel archive flips to a full selas/selar build.
+    # The cces archive is built by elfar from cc21k objects. The sel
+    # archive is built by selar from selcc / selas objects so that a
+    # `--sel` run never invokes any CCES tool: the C frontend, the
+    # assembler, the archiver, the linker, and the loader-image step
+    # are all selache. The two pipelines stay fully separate so a
+    # `--sel` pass attests to the selache toolchain end-to-end, not
+    # to a hybrid build.
     target_objs_by_tool = {}
-    if "cces" in tools or "sel" in tools:
-        cc21k_objs = build_target_objs("cc21k")
-        if "cces" in tools:
-            target_objs_by_tool["cces"] = [
-                build_target_archive(cc21k_objs, archiver=ELFAR)]
-        if "sel" in tools:
-            target_objs_by_tool["sel"] = [
-                build_target_archive(cc21k_objs, archiver=SELAR,
-                                     suffix="_sel")]
+    if "cces" in tools:
+        target_objs_by_tool["cces"] = [
+            build_target_archive(build_target_objs("cc21k"),
+                                 archiver=ELFAR)]
+    if "sel" in tools:
+        target_objs_by_tool["sel"] = [
+            build_target_archive(build_target_objs("selcc"),
+                                 archiver=SELAR, suffix="_sel")]
 
     subset = bool(case_args)
     if subset:
