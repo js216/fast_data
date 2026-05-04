@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install duty-cycle measurement on this user account.
 #
-# Prerequisites: jq, uuidgen (uuid-runtime on Debian), python3, sh.
+# Prerequisites: jq, uuidgen (uuid-runtime on Debian), python3, sh, flock.
 # This script must live next to the canonical files; it derives the
 # canonical dir from its own path. Installs into ~/.claude/settings.json
 # for whichever user runs the script. The canonical dir and $HOME must
@@ -19,7 +19,7 @@ CANON="$DC/claude_settings.json"
 
 # ---- prereq checks (no side effects past this block) ----
 
-for cmd in jq uuidgen python3 sh; do
+for cmd in jq uuidgen python3 sh flock; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "missing: $cmd" >&2; exit 1; }
 done
 

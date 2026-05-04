@@ -6,7 +6,7 @@ working / command / idle split across rolling windows.
 
 ## Install
 
-Prereqs: `jq`, `uuidgen` (`uuid-runtime` on Debian), `python3`, `sh`.
+Prereqs: `jq`, `uuidgen` (`uuid-runtime` on Debian), `python3`, `sh`, `flock`.
 The repo must live under `$HOME` so the install hard-link has a partner
 on the same filesystem.
 
