@@ -49,6 +49,11 @@ class Verification:
         """Raw bytes of streams/<stream_name>.bin (e.g. 'msc.read')."""
         return Path(extract_dir, f'streams/{stream_name}.bin').read_bytes()
 
+    def load_stream_text(extract_dir, stream_name, encoding='ascii'):
+        """Decoded text of streams/<stream_name>.bin (errors='replace')."""
+        return Verification.load_stream(extract_dir, stream_name).decode(
+            encoding, 'replace')
+
     def op_succeeded(ops, device, verb):
         """True iff `device:verb` appears in `ops` with status='ok'."""
         return any(o.get('device') == device and o.get('verb') == verb
@@ -96,9 +101,11 @@ class Runner:
         return float(m.group(1)) * cls.UNITS[m.group(2)]
 
     def parse_md(self):
-        """Yield (title, build, artifacts, test, verify, test_max_s) per
-        '### ' section. ``test_max_s`` is set from a per-block specifier
-        like ``Test (max 5 min):``; None when omitted."""
+        """Yield (title, build, artifacts, test, verify, test_max_s,
+        foreach) per '### ' section. ``test_max_s`` is set from a
+        per-block specifier like ``Test (max 5 min):``; None when
+        omitted. ``foreach`` is the raw text of an optional Foreach
+        block (parsed lazily by ``parse_foreach``)."""
         text = self.md_path.read_text()
         parts = re.split(r'^### (.+)$', text, flags=re.M)
         for i in range(1, len(parts), 2):
@@ -106,7 +113,8 @@ class Runner:
             body = parts[i + 1]
             blocks = {}
             specs = {}
-            for label in ('Build', 'Artifacts', 'Test', 'Verify'):
+            for label in ('Build', 'Artifacts', 'Test', 'Verify',
+                          'Foreach'):
                 m = re.search(
                     rf'^{label}\s*(?:\(([^)]+)\))?\s*:\s*\n+```\n(.*?)\n```',
                     body, re.M | re.S)
@@ -114,7 +122,19 @@ class Runner:
                 specs[label.lower()] = m.group(1) if m else None
             yield (title, blocks['build'], blocks['artifacts'],
                    blocks['test'], blocks['verify'],
-                   self.parse_max(specs['test']))
+                   self.parse_max(specs['test']),
+                   blocks['foreach'])
+
+    @staticmethod
+    def parse_foreach(text):
+        """Parse a Foreach block ('<var> in <glob-pattern>') into
+        (var_name, pattern). Returns None when the block is absent."""
+        if text is None:
+            return None
+        m = re.match(r'\s*(\w+)\s+in\s+(.+?)\s*$', text.strip())
+        if not m:
+            raise RuntimeError(f'invalid Foreach block: {text!r}')
+        return m.group(1), m.group(2)
 
     def parse_artifacts(self, text):
         """Parse Artifacts block into {basename: relative_path}."""
@@ -220,18 +240,25 @@ class Runner:
                 digest = tars[0].stem
         return rc, digest
 
-    def run_verify(self, verify_text, artifacts, extract_dir):
-        """Exec the verify block (with Verification + abs-path artifacts
-        pre-injected) and return its check(extract_dir) bool."""
+    def run_verify(self, verify_text, artifacts, extract_dir, item=None):
+        """Exec the verify block (with Verification, abs-path artifacts,
+        and `re` pre-injected) and return its check() bool. When
+        ``item`` is provided (Foreach iteration) and the block's
+        ``check`` accepts two args, it is called as
+        ``check(extract_dir, item)``."""
         if verify_text is None:
             return True
         abs_artifacts = {n: str(self.FAST_DATA / r)
                          for n, r in artifacts.items()}
-        ns = {'Verification': Verification, 'artifacts': abs_artifacts}
+        ns = {'Verification': Verification, 'artifacts': abs_artifacts,
+              're': re}
         exec(verify_text, ns)
         if 'check' not in ns:
             raise RuntimeError("verify block defines no check()")
-        return bool(ns['check'](str(extract_dir)))
+        fn = ns['check']
+        if fn.__code__.co_argcount >= 2:
+            return bool(fn(str(extract_dir), item))
+        return bool(fn(str(extract_dir)))
 
     def _watch_submit(self, proc, log_fh, description, max_s, line_prefix):
         """Block until ``proc`` exits, polling ``GET /jobs`` once a
@@ -318,6 +345,71 @@ class Runner:
         except Exception:
             pass
 
+    def _run_foreach(self, foreach, title, test, verify, artifacts,
+                     section_dir, test_max_s, colored, dump):
+        """Glob the Foreach pattern (relative to FAST_DATA), then for
+        each match run submit_plan + run_verify and print one indented
+        sub-row. The loop variable is registered as a blob, so the
+        plan can reference it as `@<var>`. Stops on first failure
+        and returns False; True iff every iteration passed (vacuously
+        true on zero matches, mirroring `for x in []:` semantics)."""
+        var_name, pattern = foreach
+        matches = sorted(self.FAST_DATA.glob(pattern))
+        sub_total = len(matches)
+        sys.stdout.write(f'{sub_total} items:\n')
+        sys.stdout.flush()
+        if not matches:
+            return True
+        sub_w = len(str(sub_total))
+        for j, path in enumerate(matches, 1):
+            label = path.name
+            sub_artifacts = dict(artifacts)
+            sub_artifacts[var_name] = str(path.relative_to(self.FAST_DATA))
+            sub_dir = section_dir / f'item_{j:0{sub_w}d}'
+            sub_dir.mkdir()
+            sub_extract = sub_dir / 'artefact'
+            sub_log = sub_dir / 'run.log'
+            sub_started = datetime.datetime.now().strftime('%H:%M:%S')
+            sub_t0 = time.monotonic()
+            sys.stdout.write(
+                f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
+                f'{label} ... ')
+            sys.stdout.flush()
+
+            def emit(verdict, extra_dump=None, extra_msg=None):
+                el = time.monotonic() - sub_t0
+                sys.stdout.write(
+                    f'{colored(verdict)} (+{el:.1f}s)\n')
+                sys.stdout.flush()
+                self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
+                          f'{verdict} {label} (+{el:.1f}s)')
+                if extra_msg:
+                    print(extra_msg); self._log(extra_msg)
+                if extra_dump is not None:
+                    dump(sub_log, extra_dump)
+
+            rc, digest = self.submit_plan(
+                test, sub_artifacts, sub_extract, sub_log,
+                f'{title} :: {label}', test_max_s)
+            if rc != 0:
+                emit('FAIL')
+                dump(sub_log)
+                return False
+            try:
+                ok = self.run_verify(verify, sub_artifacts, sub_extract,
+                                     str(path))
+            except Exception as e:
+                emit('FAIL', sub_extract,
+                     f'   verify {type(e).__name__}: {e}')
+                return False
+            if not ok:
+                emit('FAIL', sub_extract,
+                     '   verify check() returned False')
+                return False
+            self.delete_job(digest)
+            emit('PASS')
+        return True
+
     def run_all(self):
         """Iterate sections in order. Per test prints
         `[i/N] [HH:MM:SS] title (<=Bs) ... build ... run ... check ... PASS|FAIL|SKIP (+Ts)`
@@ -368,7 +460,7 @@ class Runner:
         try:
             skipped = 0
             for i, (title, build, artifacts_text, test, verify,
-                    test_max_s) in enumerate(sections, 1):
+                    test_max_s, foreach_text) in enumerate(sections, 1):
                 slug = re.sub(r'[^a-z0-9]+', '_', title.lower()).strip('_')
                 section_dir = self.workdir / slug
                 section_dir.mkdir()
@@ -393,6 +485,20 @@ class Runner:
                         result(i, 'FAIL', title, el(), started, budget)
                         dump(log)
                         return 1
+                foreach = self.parse_foreach(foreach_text)
+                if foreach is not None:
+                    if test is None:
+                        result(i, 'FAIL', title, el(), started, budget)
+                        msg = '   Foreach requires a Test block'
+                        print(msg); self._log(msg)
+                        return 1
+                    if not self._run_foreach(
+                            foreach, title, test, verify, artifacts,
+                            section_dir, test_max_s, colored, dump):
+                        result(i, 'FAIL', title, el(), started, budget)
+                        return 1
+                    result(i, 'PASS', title, el(), started, budget)
+                    continue
                 if test is None:
                     result(i, 'SKIP', title, el(), started, budget)
                     skipped += 1
