@@ -1,0 +1,85 @@
+{
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "dark",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r --arg ts \"$(date +%s.%N)\" '\"\\($ts)\\tstart\\t\\(.session_id // \"?\")\\tmain\"' >> $HOME/fast_data/duty_cycle/claude_duty_cycle.log"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r --arg ts \"$(date +%s.%N)\" '\"\\($ts)\\tstop\\t\\(.session_id // \"?\")\\tmain\"' >> $HOME/fast_data/duty_cycle/claude_duty_cycle.log"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r --arg ts \"$(date +%s.%N)\" '\"\\($ts)\\tstart\\t\\(.session_id // \"?\")\\tsubagent:\\((.subagent_type // .agent_type // .tool_input.subagent_type // \"unknown\"))\"' >> $HOME/fast_data/duty_cycle/claude_duty_cycle.log"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r --arg ts \"$(date +%s.%N)\" '\"\\($ts)\\tstop\\t\\(.session_id // \"?\")\\tsubagent:\\((.subagent_type // .agent_type // \"unknown\"))\"' >> $HOME/fast_data/duty_cycle/claude_duty_cycle.log"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r --arg ts \"$(date +%s.%N)\" '\"\\($ts)\\ttool_pre\\t\\(.session_id // \"?\")\\t\\(.tool_name // \"?\")\"' >> $HOME/fast_data/duty_cycle/claude_duty_cycle.log"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/fast_data/duty_cycle/hooks/bg_bash_wrap.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r --arg ts \"$(date +%s.%N)\" '\"\\($ts)\\ttool_post\\t\\(.session_id // \"?\")\\t\\(.tool_name // \"?\")\"' >> $HOME/fast_data/duty_cycle/claude_duty_cycle.log"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r --arg ts \"$(date +%s.%N)\" '\"\\($ts)\\ttool_post\\t\\(.session_id // \"?\")\\t\\(.tool_name // \"?\")\"' >> $HOME/fast_data/duty_cycle/claude_duty_cycle.log"
+          }
+        ]
+      }
+    ]
+  }
+}
