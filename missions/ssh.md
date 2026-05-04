@@ -1,10 +1,12 @@
 # Remote provisioning checks for the STM32MP135 EVB
 
-Drive an STM32MP135 EVB through the remote-provisioning chain
-test_serv exposes: DFU-load the bootloader, interrupt autoload,
+Drive an STM32MP135 board through the remote-provisioning chain
+`test_serv` exposes: DFU-load the bootloader, interrupt autoload,
 write+verify an SD image via MSC, boot Linux via UART, reach it over
-SSH. Plans escalate from a poller-alive probe to a full reset ->
-flash -> boot -> SSH round trip.
+SSH. Plans escalate from a poller-alive probe to a full reset -> flash
+-> boot -> SSH round trip.
+
+## WIP
 
 ### Inventory smoke
 
@@ -47,7 +49,7 @@ make -C stm32mp135_test_board/bootloader -j$(nproc)
 Artifacts:
 
 ```
-agent3/flash.tsv
+stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
 ```
 
@@ -89,7 +91,7 @@ make -C stm32mp135_test_board/bootloader -j$(nproc)
 Artifacts:
 
 ```
-agent3/flash.tsv
+stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
 ```
 
@@ -132,11 +134,8 @@ Confirms the build instructions actually produce a usable SD image.
 Builds a fresh `sdcard.img`, writes it to the card via MSC, has the
 bench bit-perfect-`verify` it, reads back the leading bytes, and the
 verifier diffs the captured stream against the source file
-**offline**. Does **not** touch the golden recovery image
-(`agent3/sdcard.img` symlink stays intact). The next test (Boot Linux
-from SD) then boots whatever this test left on the card --- if the
-fresh build is functionally equivalent to the golden, that boot
-succeeds.
+**offline**. The next test (Boot Linux from SD) then boots whatever
+this test left on the card.
 
 Build (apply `config/patch.linux` if not already in the tree ---
 without it the kernel boots silently and never reaches userspace ---
@@ -158,7 +157,7 @@ make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
 Artifacts:
 
 ```
-agent3/flash.tsv
+stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
@@ -207,7 +206,7 @@ make -C stm32mp135_test_board/bootloader -j$(nproc)
 Artifacts:
 
 ```
-agent3/flash.tsv
+stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
 ```
 
@@ -295,18 +294,14 @@ make -C stm32mp135_test_board/bootloader -j$(nproc)
 Artifacts:
 
 ```
-agent3/flash.tsv
+stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
-agent3/sdcard.img
+stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
-`agent3/sdcard.img` is a symlink to the known-bootable recovery image
-(`stm32mp135_test_board/.scratch/recovery/sdcard-oldkernel-evbdtb.img`);
-swap it for the fresh build (`buildroot/output/images/sdcard.img`)
-once that's proven to boot. The plan's `ssh-ed25519` key is the
-public half of `config/overlay/etc/dropbear/dropbear_ed25519_host_key`;
-rebuild with a different private key and `ssh:trust_host_key` must be
-regenerated.
+The plan's `ssh-ed25519` key is the public half of
+`config/overlay/etc/dropbear/dropbear_ed25519_host_key`; rebuild with
+a different private key and `ssh:trust_host_key` must be regenerated.
 
 Test:
 

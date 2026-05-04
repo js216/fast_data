@@ -62,8 +62,7 @@ class Runner:
     in a single bench-wide lease so no other agent can perturb the
     rig between tests."""
 
-    AGENT_DIR = Path(__file__).resolve().parent
-    FAST_DATA = AGENT_DIR.parent
+    FAST_DATA = Path(__file__).resolve().parent
     SUBMIT_PY = FAST_DATA / 'test_serv' / 'submit.py'
     SERVER = 'http://localhost:8080'
     WAIT_S = 600                     # generous upper bound
@@ -72,7 +71,7 @@ class Runner:
     LEASE_DURATION_S = 3600          # bench MAX_SESSION_S cap
     # Persists the active lease token across run.py invocations so a
     # crashed/killed run cannot leave a ghost lease on the bench.
-    LEASE_STATE_FILE = AGENT_DIR / '.runpy_lease'
+    LEASE_STATE_FILE = FAST_DATA / '.runpy_lease'
 
     def __init__(self, md_path):
         self.md_path = Path(md_path)
@@ -166,6 +165,7 @@ class Runner:
                '--server', self.SERVER,
                '--wait', str(self.WAIT_S),
                '--extract', str(extract_dir),
+               '--meta', f'description={description}',
                *blob_args,
                str(plan_path)]
         with log.open('ab') as f:
@@ -209,6 +209,7 @@ class Runner:
                '--server', self.SERVER,
                '--wait', '60',
                '--extract', str(extract),
+               '--meta', 'description=lease setup',
                str(plan_path)]
         with log.open('wb') as f:
             rc = subprocess.run(cmd, cwd=self.FAST_DATA,
@@ -245,6 +246,7 @@ class Runner:
                '--server', self.SERVER,
                '--wait', '60',
                '--extract', str(extract),
+               '--meta', 'description=lease teardown',
                str(plan_path)]
         with log.open('wb') as f:
             subprocess.run(cmd, cwd=self.FAST_DATA,
