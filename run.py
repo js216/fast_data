@@ -262,15 +262,18 @@ class Runner:
 
     def _watch_submit(self, proc, log_fh, description, max_s, line_prefix):
         """Block until ``proc`` exits, polling ``GET /jobs`` once a
-        second to find our submission (matched by description) and
-        repaint ``line_prefix`` + a queued/running status with a
-        countdown when ``max_s`` is known. Enforces an agent-side
-        watchdog at ``max_s + 30`` so a stuck submit.py can't outlive
-        its budget. Returns the subprocess return code."""
+        second to find our submission (matched by description). When
+        stdout is a TTY, render a queued/running countdown on the line
+        BELOW the head so the head never wraps; the countdown line is
+        cleared and the cursor restored to end-of-head before
+        returning. Enforces an agent-side watchdog at ``max_s + 30``
+        so a stuck submit.py can't outlive its budget. Returns the
+        subprocess return code."""
         live = (line_prefix is not None and sys.stdout.isatty())
         started_at = time.monotonic()
         deadline = (max_s + 30) if max_s else None
         running_since = None
+        countdown_open = False
         rc = None
         while True:
             rc = proc.poll()
@@ -300,24 +303,30 @@ class Runner:
                     None)
                 if hit and hit['status'] == 'queued':
                     elapsed = int(time.monotonic() - started_at)
-                    msg = f'queued ({elapsed}s)'
+                    msg = f'\033[33mqueued ({elapsed}s)\033[0m'
                 elif hit and hit['status'] == 'running':
                     if running_since is None:
                         running_since = hit.get('picked_up_at') or time.time()
                     elapsed = time.time() - running_since
                     if max_s:
                         remaining = max(0.0, max_s - elapsed)
-                        msg = f'running ({remaining:.0f}s left)'
+                        msg = f'\033[36mrunning ({remaining:.0f}s left)\033[0m'
                     else:
-                        msg = f'running ({elapsed:.0f}s)'
+                        msg = f'\033[36mrunning ({elapsed:.0f}s)\033[0m'
                 else:
                     msg = None
                 if msg is not None:
-                    sys.stdout.write(f'\r{line_prefix}{msg}\033[K')
+                    if not countdown_open:
+                        sys.stdout.write('\n')
+                        countdown_open = True
+                    sys.stdout.write(f'\r\033[K{msg}')
                     sys.stdout.flush()
             time.sleep(1)
-        if live:
-            sys.stdout.write(f'\r{line_prefix}\033[K')
+        if live and countdown_open:
+            # Clear countdown line, move up to head, snap cursor back
+            # to end-of-head so the verdict from result() appends.
+            col = len(line_prefix) + 1
+            sys.stdout.write(f'\r\033[K\033[A\033[{col}G')
             sys.stdout.flush()
         return rc
 
@@ -371,15 +380,17 @@ class Runner:
             sub_log = sub_dir / 'run.log'
             sub_started = datetime.datetime.now().strftime('%H:%M:%S')
             sub_t0 = time.monotonic()
-            sys.stdout.write(
-                f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
-                f'{label} ... ')
+            sub_head = (f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
+                        f'{label} ')
+            sys.stdout.write(sub_head)
             sys.stdout.flush()
 
             def emit(verdict, extra_dump=None, extra_msg=None):
                 el = time.monotonic() - sub_t0
-                sys.stdout.write(
-                    f'{colored(verdict)} (+{el:.1f}s)\n')
+                if verdict == 'PASS':
+                    sys.stdout.write(f'(+{el:.1f}s)\n')
+                else:
+                    sys.stdout.write(f'{colored(verdict)} (+{el:.1f}s)\n')
                 sys.stdout.flush()
                 self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
                           f'{verdict} {label} (+{el:.1f}s)')
@@ -412,9 +423,10 @@ class Runner:
 
     def run_all(self):
         """Iterate sections in order. Per test prints
-        `[i/N] [HH:MM:SS] title (<=Bs) ... build ... run ... check ... PASS|FAIL|SKIP (+Ts)`
-        where B is the sum of timeout_ms in the plan (the upper bound
-        on in-plan waits) and T is the actual elapsed. Halts on first
+        `[i/N] [HH:MM:SS] title (+Ts)` on success, or
+        `[i/N] [HH:MM:SS] title FAIL|SKIP (+Ts)` otherwise. T is the
+        actual elapsed. A green `PASS` is printed once at the very end
+        when no section failed. Halts on first
         FAIL after dumping the per-test log + any errors.log. Lease
         lifecycle is the mission's responsibility (sections write their
         own lease:claim / lease:resume / lease:release ops); run.py
@@ -437,12 +449,11 @@ class Runner:
             code = {'PASS': '32', 'FAIL': '31', 'SKIP': '33'}[label]
             return f'\033[{code}m{label}\033[0m'
 
-        def stage(word):
-            sys.stdout.write(f'{word} ... ')
-            sys.stdout.flush()
-
         def result(i, label, title, elapsed, started, budget):
-            sys.stdout.write(f'{colored(label)} (+{elapsed:.1f}s)\n')
+            if label == 'PASS':
+                sys.stdout.write(f'(+{elapsed:.1f}s)\n')
+            else:
+                sys.stdout.write(f'{colored(label)} (+{elapsed:.1f}s)\n')
             sys.stdout.flush()
             self._log(f'[{i:>{w}}/{total}] [{started}] {label} {title} '
                       f'(<={budget:.0f}s budget, +{elapsed:.1f}s actual)')
@@ -472,15 +483,12 @@ class Runner:
                 started = datetime.datetime.now().strftime('%H:%M:%S')
                 t0 = time.monotonic()
                 el = lambda: time.monotonic() - t0
-                head = (f'[{i:>{w}}/{total}] [{started}] {title} '
-                        f'(<={budget:.0f}s) ... ')
+                head = f'[{i:>{w}}/{total}] [{started}] {title} '
                 sys.stdout.write(head)
                 sys.stdout.flush()
 
                 if build is not None and not build.strip().lower().startswith(
                         'nothing'):
-                    stage('build')
-                    head += 'build ... '
                     if not self.run_build(build, log):
                         result(i, 'FAIL', title, el(), started, budget)
                         dump(log)
@@ -503,8 +511,6 @@ class Runner:
                     result(i, 'SKIP', title, el(), started, budget)
                     skipped += 1
                     continue
-                stage('run')
-                head += 'run ... '
                 rc, digest = self.submit_plan(test, artifacts, extract_dir,
                                               log, title, test_max_s,
                                               line_prefix=head)
@@ -513,7 +519,6 @@ class Runner:
                     dump(log)
                     return 1
                 self.capture_lease_token(extract_dir, test)
-                stage('check')
                 try:
                     ok = self.run_verify(verify, artifacts, extract_dir)
                 except Exception as e:
@@ -531,8 +536,8 @@ class Runner:
                 self.delete_job(digest)
                 result(i, 'PASS', title, el(), started, budget)
 
-            summary = f'-- {total - skipped}/{total} passed --'
-            print(summary); self._log(summary)
+            print(colored('PASS'))
+            self._log(f'PASS {total - skipped}/{total}')
             return 0
         finally:
             self.log_fh.close()
