@@ -56,7 +56,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/fast_data/duty_cycle/hooks/bg_bash_wrap.sh"
+            "command": "sh $HOME/fast_data/duty_cycle/bg_bash_wrap.sh"
           }
         ]
       }

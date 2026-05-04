@@ -1,6 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # PreToolUse(Bash) hook: if run_in_background=true, log a bg_spawn line and
 # rewrite the command to append a bg_done marker on subprocess exit.
+# bg_done fires on normal exit, error exit, or catchable signals (INT,
+# TERM, HUP). Signals reach the wrapped process promptly because we run
+# it in the background and block on `wait`. bg_done cannot fire on
+# SIGKILL (uncatchable) or if the wrapper sh is itself crashed.
 # No-op for foreground bash.
 LOG="$HOME/fast_data/duty_cycle/claude_duty_cycle.log"
 INPUT=$(cat)
@@ -12,5 +16,12 @@ SID=$(echo "$INPUT"  | jq -r '.session_id // "?"')
 ID=$(uuidgen)
 TS=$(date +%s.%N)
 printf '%s\tbg_spawn\t%s\tBash\t%s\n' "$TS" "$SID" "$ID" >> "$LOG"
-WRAPPED="( $ORIG ); rc=\$?; printf '%s\tbg_done\t%s\tBash\t%s\t%s\n' \"\$(date +%s.%N)\" '$SID' '$ID' \"\$rc\" >> $LOG; exit \$rc"
+WRAPPED="log_bg_done() { printf '%s\tbg_done\t%s\tBash\t%s\t%s\n' \"\$(date +%s.%N)\" '$SID' '$ID' \"\$1\" >> $LOG; }
+trap 'log_bg_done \$?' EXIT
+trap 'kill \"\$_pid\" 2>/dev/null; exit 130' INT
+trap 'kill \"\$_pid\" 2>/dev/null; exit 143' TERM
+trap 'kill \"\$_pid\" 2>/dev/null; exit 129' HUP
+( $ORIG ) &
+_pid=\$!
+wait \"\$_pid\""
 jq -n --arg cmd "$WRAPPED" '{hookSpecificOutput:{hookEventName:"PreToolUse",updatedInput:{command:$cmd,run_in_background:true}}}'
