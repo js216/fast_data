@@ -30,7 +30,7 @@ Verify:
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    needed = {'mp135.evb', 'bench_mcu.0', 'ssh.target', 'lease.manager'}
+    needed = {'mp135.evb', 'bench_mcu.0', 'ssh.target', 'lease._default'}
     devs = Verification.load_devices(extract_dir)
     return needed.issubset({d['id'] for d in devs})
 ```

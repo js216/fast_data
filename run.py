@@ -35,9 +35,9 @@ class Verification:
         return Verification.load_manifest(extract_dir).get('n_errors', 1) == 0
 
     def load_devices(extract_dir):
-        """Parse the bench.devices.json stream (list of device dicts)."""
+        """Parse the bench.devices.json artefact (list of device dicts)."""
         return json.loads(
-            Path(extract_dir, 'streams/bench.devices.json.bin').read_bytes())
+            Path(extract_dir, 'bench.devices.json').read_bytes())
 
     def load_ops(extract_dir):
         """Parse ops.jsonl (one JSON record per executed op)."""
@@ -66,8 +66,7 @@ class Runner:
     SUBMIT_PY = FAST_DATA / 'test_serv' / 'submit.py'
     SERVER = 'http://localhost:8080'
     WAIT_S = 600                     # generous upper bound
-    LEASE_DEVICES = ('bench_mcu', 'dfu.evb', 'mp135.evb',
-                     'msc.evb', 'ssh.target')
+    LEASE_DEVICES = ('bench_mcu', 'dfu.evb', 'mp135.evb', 'ssh.target')
     LEASE_DURATION_S = 3600          # bench MAX_SESSION_S cap
     # Persists the active lease token across run.py invocations so a
     # crashed/killed run cannot leave a ghost lease on the bench.
@@ -86,20 +85,39 @@ class Runner:
                 print(f'released ghost lease {ghost}')
             self.LEASE_STATE_FILE.unlink()
 
+    UNITS = {'s': 1, 'sec': 1, 'min': 60, 'm': 60, 'h': 3600}
+
+    @classmethod
+    def parse_max(cls, spec):
+        """Parse 'max N <unit>' (s/sec/min/m/h) into seconds. None on miss."""
+        if spec is None:
+            return None
+        m = re.match(r'max\s+(\d+(?:\.\d+)?)\s*(s|sec|min|m|h)\b',
+                     spec.strip())
+        if not m:
+            return None
+        return float(m.group(1)) * cls.UNITS[m.group(2)]
+
     def parse_md(self):
-        """Yield (title, build, artifacts, test, verify) per '### ' section."""
+        """Yield (title, build, artifacts, test, verify, test_max_s) per
+        '### ' section. ``test_max_s`` is set from a per-block specifier
+        like ``Test (max 5 min):``; None when omitted."""
         text = self.md_path.read_text()
         parts = re.split(r'^### (.+)$', text, flags=re.M)
         for i in range(1, len(parts), 2):
             title = parts[i].strip()
             body = parts[i + 1]
             blocks = {}
+            specs = {}
             for label in ('Build', 'Artifacts', 'Test', 'Verify'):
-                m = re.search(rf'^{label}:\s*\n+```\n(.*?)\n```',
-                              body, re.M | re.S)
-                blocks[label.lower()] = m.group(1) if m else None
+                m = re.search(
+                    rf'^{label}\s*(?:\(([^)]+)\))?\s*:\s*\n+```\n(.*?)\n```',
+                    body, re.M | re.S)
+                blocks[label.lower()] = m.group(2) if m else None
+                specs[label.lower()] = m.group(1) if m else None
             yield (title, blocks['build'], blocks['artifacts'],
-                   blocks['test'], blocks['verify'])
+                   blocks['test'], blocks['verify'],
+                   self.parse_max(specs['test']))
 
     def parse_artifacts(self, text):
         """Parse Artifacts block into {basename: relative_path}."""
@@ -147,14 +165,17 @@ class Runner:
         return True
 
     def submit_plan(self, plan_text, artifacts, extract_dir, log,
-                    description, lease_token=None):
+                    description, lease_token=None, max_s=None):
         """Resolve @blob refs from per-test Artifacts, submit. Prepends a
         `lease:resume` (when active), `description "..."`, and unique
-        runpy comment to the plan. Returns (rc, digest)."""
+        runpy comment to the plan. Returns (rc, digest). When ``max_s``
+        is set, X-Test-Runtime caps the bench session at that budget;
+        the agent backstops with a slightly larger subprocess timeout in
+        case the bench fails to enforce."""
         plan_path = extract_dir.parent / 'plan.txt'
         pre = []
         if lease_token:
-            pre.append(f'lease:resume token={lease_token}')
+            pre.append(f'lease:resume token="{lease_token}"')
         pre.append(f'description "{description}"')
         pre.append(f'# runpy {time.time_ns()}')
         plan_path.write_text('\n'.join(pre) + '\n' + plan_text + '\n')
@@ -164,15 +185,22 @@ class Runner:
         cmd = ['python3', str(self.SUBMIT_PY),
                '--server', self.SERVER,
                '--wait', str(self.WAIT_S),
-               '--extract', str(extract_dir),
-               '--meta', f'description={description}',
-               *blob_args,
-               str(plan_path)]
+               '--extract', str(extract_dir)]
+        if max_s is not None:
+            cmd += ['--runtime', str(int(max_s))]
+        cmd += [*blob_args, str(plan_path)]
         with log.open('ab') as f:
             f.write(f'$ {" ".join(cmd)}\n'.encode())
-            rc = subprocess.run(cmd, cwd=self.FAST_DATA,
-                                stdout=f,
-                                stderr=subprocess.STDOUT).returncode
+            try:
+                rc = subprocess.run(
+                    cmd, cwd=self.FAST_DATA, stdout=f,
+                    stderr=subprocess.STDOUT,
+                    timeout=(max_s + 30) if max_s else None,
+                ).returncode
+            except subprocess.TimeoutExpired:
+                f.write(b'  (agent watchdog: submit.py exceeded '
+                        b'budget; killed)\n')
+                rc = 1
         digest = None
         if extract_dir.exists():
             tars = list(extract_dir.glob('*.tar'))
@@ -196,9 +224,11 @@ class Runner:
     def claim_lease(self):
         """Submit a tiny plan that claims every bench device for the
         suite. Returns the token, or None on failure."""
-        plan = '\n'.join(
-            f'lease:claim device={d} duration_s={self.LEASE_DURATION_S}'
-            for d in self.LEASE_DEVICES) + '\nmark tag=lease_setup\n'
+        devs = ','.join(self.LEASE_DEVICES)
+        plan = (f'description "lease setup"\n'
+                f'lease:claim devices="{devs}" '
+                f'duration_s={self.LEASE_DURATION_S}\n'
+                f'mark tag=lease_setup\n')
         section = self.workdir / '_lease_setup'
         section.mkdir()
         extract = section / 'artefact'
@@ -209,7 +239,6 @@ class Runner:
                '--server', self.SERVER,
                '--wait', '60',
                '--extract', str(extract),
-               '--meta', 'description=lease setup',
                str(plan_path)]
         with log.open('wb') as f:
             rc = subprocess.run(cmd, cwd=self.FAST_DATA,
@@ -217,17 +246,14 @@ class Runner:
                                 stderr=subprocess.STDOUT).returncode
         if rc != 0:
             return None
-        stream = extract / 'streams' / 'lease.claim.bin'
+        stream = extract / 'streams' / 'lease.token.bin'
         if not stream.exists():
             return None
-        # The stream is N appended JSON objects (one per claim op),
-        # not a single doc. All share the same session token; pluck
-        # any. Persist immediately so a crash before `finally`-release
-        # is recoverable on next run.
-        m = re.search(rb'"token":\s*"([^"]+)"', stream.read_bytes())
-        if not m:
+        token = stream.read_text().strip()
+        if not token:
             return None
-        token = m.group(1).decode()
+        # Persist immediately so a crash before `finally`-release is
+        # recoverable on next run.
         self.LEASE_STATE_FILE.write_text(token)
         return token
 
@@ -235,7 +261,10 @@ class Runner:
         """Submit a tiny plan that releases `token`. Best-effort.
         Always clears the persisted state file on the way out, so a
         retry-loop on a long-dead token doesn't keep firing forever."""
-        plan = f'lease:release token={token}\nmark tag=lease_teardown\n'
+        plan = (f'lease:resume token="{token}"\n'
+                f'description "lease teardown"\n'
+                f'lease:release token="{token}"\n'
+                f'mark tag=lease_teardown\n')
         section = self.workdir / f'_lease_teardown_{int(time.time()*1000)}'
         section.mkdir()
         extract = section / 'artefact'
@@ -246,7 +275,6 @@ class Runner:
                '--server', self.SERVER,
                '--wait', '60',
                '--extract', str(extract),
-               '--meta', 'description=lease teardown',
                str(plan_path)]
         with log.open('wb') as f:
             subprocess.run(cmd, cwd=self.FAST_DATA,
@@ -318,8 +346,8 @@ class Runner:
                 self._log('  lease claim FAILED; running without lease')
 
             skipped = 0
-            for i, (title, build, artifacts_text, test, verify) in enumerate(
-                    sections, 1):
+            for i, (title, build, artifacts_text, test, verify,
+                    test_max_s) in enumerate(sections, 1):
                 # Release the suite-wide lease before the final test so the
                 # flagship runs lease-less and re-acquires every device from
                 # cold (proves the no-context recovery path).
@@ -356,7 +384,8 @@ class Runner:
                     continue
                 stage('run')
                 rc, digest = self.submit_plan(test, artifacts, extract_dir,
-                                              log, title, lease_token)
+                                              log, title, lease_token,
+                                              test_max_s)
                 if rc != 0:
                     result(i, 'FAIL', title, el(), started, budget)
                     dump(log)
