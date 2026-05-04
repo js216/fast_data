@@ -1,1 +1,10 @@
 *.swp
+
+.claude
+.codex
+__pycache__
+
+log.txt
+platform.info
+
+duty_cycle/claude_duty_cycle.log
