@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh $HOME/fast_data/duty_cycle/log_event.sh '\"\\($ts)\\tstart\\t\\(.session_id // \"?\")\\tmain\"'"
+            "command": "sh $HOME/fast_data/duty_cycle/log_start_main.sh"
           }
         ]
       }
