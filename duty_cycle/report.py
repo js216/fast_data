@@ -10,6 +10,7 @@ line, non-monotonic timestamp, unmatched start/stop or pre/post or
 spawn/done, duplicate uuid, unknown event), prints a red ERROR: line
 to stderr and exits with status 1.
 """
+import argparse
 import os
 import sys
 import time
@@ -193,7 +194,97 @@ def aggregate(rows, t_start, t_end):
     return merged, main_command
 
 
+# 7-row block letters, 12 cols each. Concatenated they're ~48 cols
+# wide for "STOP", ~36 for "RUN" -- both fit under the 58-col table.
+GLYPHS = {
+    'R': ['##########  ',
+          '##      ##  ',
+          '##      ##  ',
+          '##########  ',
+          '## ##       ',
+          '##  ##      ',
+          '##   ##     '],
+    'U': ['##      ##  ',
+          '##      ##  ',
+          '##      ##  ',
+          '##      ##  ',
+          '##      ##  ',
+          '##      ##  ',
+          ' ########   '],
+    'N': ['##      ##  ',
+          '###     ##  ',
+          '####    ##  ',
+          '## ##   ##  ',
+          '##  ##  ##  ',
+          '##   ## ##  ',
+          '##    ####  '],
+    'S': [' ########   ',
+          '##      ##  ',
+          '##          ',
+          ' ########   ',
+          '        ##  ',
+          '##      ##  ',
+          ' ########   '],
+    'T': ['##########  ',
+          '    ##      ',
+          '    ##      ',
+          '    ##      ',
+          '    ##      ',
+          '    ##      ',
+          '    ##      '],
+    'O': [' ########   ',
+          '##      ##  ',
+          '##      ##  ',
+          '##      ##  ',
+          '##      ##  ',
+          '##      ##  ',
+          ' ########   '],
+    'P': ['##########  ',
+          '##      ##  ',
+          '##      ##  ',
+          '##########  ',
+          '##          ',
+          '##          ',
+          '##          '],
+}
+
+
+def render_word(word):
+    """Return a list of 7 strings, one per row, with the glyphs for
+    the letters in ``word`` laid out side by side."""
+    return [''.join(GLYPHS[c][r] for c in word) for r in range(7)]
+
+
+def is_active(rows):
+    """True iff at least one main session is currently open (last
+    main event was a start with no matching stop). Subagent events
+    don't count -- the parent session bracket is the source of truth."""
+    open_main = 0
+    for _ts, event, _sid, detail, _extra in rows:
+        if detail != "main":
+            continue
+        if event == "start":
+            open_main += 1
+        elif event == "stop":
+            open_main = max(0, open_main - 1)
+    return open_main > 0
+
+
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--color", choices=("auto", "always", "never"),
+                    default="auto",
+                    help="ANSI color in the status line "
+                         "(default: auto, ANSI when stdout is a TTY)")
+    args = ap.parse_args()
+
+    if args.color == "always":
+        use_color = True
+    elif args.color == "never":
+        use_color = False
+    else:
+        use_color = sys.stdout.isatty()
+
     if not os.path.exists(LOG):
         print(f"no log at {LOG}")
         return
@@ -220,6 +311,19 @@ def main():
         idle = max(0.0, wall - busy)
         pct = (busy / wall * 100) if wall > 0 else 0.0
         print(f"{label:<12}  {fmt(working)}  {fmt(command)}  {fmt(idle)}    {pct:>5.1f}%")
+
+    if is_active(rows):
+        word, code = "RUN", "32"   # green
+    else:
+        word, code = "STOP", "31"  # red
+    # `watch` (ncurses) collapses fully-empty lines on some terms;
+    # a single space renders as a blank line but isn't dropped.
+    print(" ")
+    for line in render_word(word):
+        if use_color:
+            print(f"\033[1;{code}m{line}\033[0m")
+        else:
+            print(line)
 
 
 if __name__ == "__main__":
