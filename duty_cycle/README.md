@@ -25,12 +25,12 @@ python3 $HOME/fast_data/duty_cycle/report.py
 prints:
 
 ```
-window            working    command       idle  busy%
-------------------------------------------------------
-last hour           6m41s         1s     53m18s  11.2%
-last 24h         7h11m02s      1m11s  16h47m47s  30.0%
-last 7 days      7h11m02s      1m11s 160h47m47s   4.3%
-all time         7h11m02s      1m11s  13h16m18s  35.2%
+window           working     command        idle     busy%
+----------------------------------------------------------
+last hour          6m41s          1s      53m18s     11.2%
+last 24h        7h11m02s       1m11s   16h47m47s     30.0%
+last 7 days     7h11m02s       1m11s    6d23h47m      4.3%
+all time        7h11m02s       1m11s    6d23h47m     35.2%
 ```
 
 `busy%` is the fraction of the window during which a session was actively

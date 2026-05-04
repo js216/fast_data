@@ -15,7 +15,7 @@ import sys
 import time
 from collections import defaultdict
 
-LOG = os.path.expanduser("~/fast_data/duty_cycle/claude_duty_cycle.log")
+LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "claude_duty_cycle.log")
 WINDOWS = [
     ("last hour",     3600),
     ("last 24h",      86400),
@@ -63,19 +63,25 @@ def validate(rows):
     bg_spawn without bg_done) are NOT errors -- they represent the
     currently running session, whose closes haven't fired yet.
     """
+    # Main and subagent events share session_id (Claude Code reports the
+    # parent's session_id for subagent hooks), so key sessions on
+    # (session_id, kind) where kind is "main" or "subagent:...".
     open_starts = {}
     open_tools = defaultdict(list)
     open_bg = {}
     for ts, event, sid, detail, extra in rows:
         if event == "start":
-            if sid in open_starts:
-                die(f"duplicate start for session {sid} at ts={ts} "
-                    f"(previous start at ts={open_starts[sid]} never closed)")
-            open_starts[sid] = ts
+            key = (sid, detail)
+            if key in open_starts:
+                die(f"duplicate start for session {sid} kind={detail} at ts={ts} "
+                    f"(previous start at ts={open_starts[key]} never closed)")
+            open_starts[key] = ts
         elif event == "stop":
-            if sid not in open_starts:
-                die(f"stop for session {sid} at ts={ts} with no matching start")
-            del open_starts[sid]
+            key = (sid, detail)
+            if key not in open_starts:
+                die(f"stop for session {sid} kind={detail} at ts={ts} "
+                    f"with no matching start")
+            del open_starts[key]
         elif event == "tool_pre":
             open_tools[(sid, detail)].append(ts)
         elif event == "tool_post":
@@ -103,13 +109,18 @@ def validate(rows):
 
 def fmt(s):
     s = max(0, int(s))
+    d, s = divmod(s, 86400)
     h, s = divmod(s, 3600)
     m, s = divmod(s, 60)
-    if h:
-        return f"{h:>3d}h{m:02d}m{s:02d}s"
-    if m:
-        return f"    {m:>2d}m{s:02d}s"
-    return f"        {s:>2d}s"
+    if d:
+        body = f"{d}d{h:02d}h{m:02d}m"
+    elif h:
+        body = f"{h}h{m:02d}m{s:02d}s"
+    elif m:
+        body = f"{m}m{s:02d}s"
+    else:
+        body = f"{s}s"
+    return f"{body:>10}"
 
 
 def aggregate(rows, t_start, t_end):
@@ -121,8 +132,8 @@ def aggregate(rows, t_start, t_end):
       main_busy_intervals: list of (start, end) for parent (main) turns
       command_seconds_in_main: tool time inside main sessions only
     """
-    open_starts = {}
-    session_kind = {}
+    open_main = {}        # sid -> ts (main sessions only)
+    open_other = {}       # (sid, detail) -> ts (subagents; not counted)
     open_tools = defaultdict(list)
     open_bg = {}
     main_busy = []
@@ -135,30 +146,35 @@ def aggregate(rows, t_start, t_end):
 
     for ts, event, sid, detail, extra in rows:
         if event == "start":
-            session_kind[sid] = detail
-            open_starts[sid] = ts
+            if detail == "main":
+                open_main[sid] = ts
+            else:
+                open_other[(sid, detail)] = ts
         elif event == "stop":
-            t0 = open_starts.pop(sid)
-            if session_kind.get(sid) == "main":
-                main_busy.append((t0, ts))
+            if detail == "main":
+                if sid in open_main:
+                    t0 = open_main.pop(sid)
+                    main_busy.append((t0, ts))
+            else:
+                open_other.pop((sid, detail), None)
         elif event == "tool_pre":
             open_tools[(sid, detail)].append(ts)
         elif event == "tool_post":
-            t0 = open_tools[(sid, detail)].pop()
-            dt = clip(t0, ts)
-            if session_kind.get(sid) == "main":
-                main_command += dt
+            if open_tools[(sid, detail)]:
+                t0 = open_tools[(sid, detail)].pop()
+                dt = clip(t0, ts)
+                if sid in open_main:
+                    main_command += dt
         elif event == "bg_spawn":
             open_bg[extra[0]] = (sid, ts, detail)
         elif event == "bg_done":
             bsid, t0, _ = open_bg.pop(extra[0])
             dt = clip(t0, ts)
-            if session_kind.get(bsid) == "main":
+            if bsid in open_main:
                 main_command += dt
 
-    for sid, t0 in open_starts.items():
-        if session_kind.get(sid) == "main":
-            main_busy.append((t0, t_end))
+    for sid, t0 in open_main.items():
+        main_busy.append((t0, t_end))
 
     clipped = []
     for a, b in main_busy:
@@ -190,8 +206,8 @@ def main():
     now = time.time()
     first_ts = rows[0][0]
 
-    print(f"{'window':<14}  {'working':>9}  {'command':>9}  {'idle':>9}  busy%")
-    print("-" * 54)
+    print(f"{'window':<12}  {'working':>10}  {'command':>10}  {'idle':>10}    {'busy%':>6}")
+    print("-" * 58)
     for label, span in WINDOWS:
         t_start = (now - span) if span else first_ts
         t_end = now
@@ -203,7 +219,7 @@ def main():
         working = max(0.0, busy - command)
         idle = max(0.0, wall - busy)
         pct = (busy / wall * 100) if wall > 0 else 0.0
-        print(f"{label:<14}  {fmt(working)}  {fmt(command)}  {fmt(idle)}  {pct:>4.1f}%")
+        print(f"{label:<12}  {fmt(working)}  {fmt(command)}  {fmt(idle)}    {pct:>5.1f}%")
 
 
 if __name__ == "__main__":

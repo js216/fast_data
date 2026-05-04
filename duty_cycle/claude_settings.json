@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r --arg ts \"$(date +%s.%N)\" '\"\\($ts)\\tstart\\t\\(.session_id // \"?\")\\tsubagent:\\((.subagent_type // .agent_type // .tool_input.subagent_type // \"unknown\"))\"' >> $HOME/fast_data/duty_cycle/claude_duty_cycle.log"
+            "command": "jq -r --arg ts \"$(date +%s.%N)\" 'select((.subagent_type // .agent_type // .tool_input.subagent_type // \"\") != \"\") | \"\\($ts)\\tstart\\t\\(.session_id // \"?\")\\tsubagent:\\(.subagent_type // .agent_type // .tool_input.subagent_type)\"' >> $HOME/fast_data/duty_cycle/claude_duty_cycle.log"
           }
         ]
       }
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r --arg ts \"$(date +%s.%N)\" '\"\\($ts)\\tstop\\t\\(.session_id // \"?\")\\tsubagent:\\((.subagent_type // .agent_type // \"unknown\"))\"' >> $HOME/fast_data/duty_cycle/claude_duty_cycle.log"
+            "command": "jq -r --arg ts \"$(date +%s.%N)\" 'select((.subagent_type // .agent_type // \"\") != \"\") | \"\\($ts)\\tstop\\t\\(.session_id // \"?\")\\tsubagent:\\(.subagent_type // .agent_type)\"' >> $HOME/fast_data/duty_cycle/claude_duty_cycle.log"
           }
         ]
       }
