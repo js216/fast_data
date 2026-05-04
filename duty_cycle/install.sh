@@ -2,15 +2,17 @@
 # Install duty-cycle measurement on this user account.
 #
 # Prerequisites: jq, uuidgen (uuid-runtime on Debian), python3, sh.
-# Assumes this repo is checked out at $HOME/fast_data and you're running
-# as the user that will run Claude Code.
+# This script must live next to the canonical files; it derives the
+# canonical dir from its own path. Installs into ~/.claude/settings.json
+# for whichever user runs the script. The canonical dir and $HOME must
+# be on the same filesystem (hard-link constraint).
 #
 # Re-running is idempotent. If an existing ~/.claude/settings.json is
 # found, prompts for confirmation before replacing it (requires a TTY).
 
 set -eu
 
-DC="$HOME/fast_data/duty_cycle"
+DC=$(cd "$(dirname "$0")" 2>/dev/null && pwd -P) || { echo "cannot resolve script dir" >&2; exit 1; }
 CLAUDE_DIR="$HOME/.claude"
 LIVE="$CLAUDE_DIR/settings.json"
 CANON="$DC/claude_settings.json"
@@ -21,15 +23,14 @@ for cmd in jq uuidgen python3 sh; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "missing: $cmd" >&2; exit 1; }
 done
 
-[ -d "$DC" ] || { echo "expected $DC to exist (this dir contains the canonical files)" >&2; exit 1; }
-[ -f "$CANON" ] || { echo "missing $CANON" >&2; exit 1; }
+[ -f "$CANON" ] || { echo "missing $CANON (script must live next to claude_settings.json)" >&2; exit 1; }
 
 # Hard link requires $HOME and $DC on the same filesystem.
 HOME_DEV=$(stat -c %d "$HOME")
 DC_DEV=$(stat -c %d "$DC")
 if [ "$HOME_DEV" != "$DC_DEV" ]; then
-  echo "\$HOME and $DC are on different filesystems -- hard link impossible." >&2
-  echo "place fast_data inside \$HOME, or change to a symlink (loses single-inode guarantee)." >&2
+  echo "\$HOME ($HOME) and $DC are on different filesystems -- hard link impossible." >&2
+  echo "either move the canonical files onto \$HOME's filesystem, or change to a symlink (loses single-inode guarantee)." >&2
   exit 1
 fi
 
