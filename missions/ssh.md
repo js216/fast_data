@@ -6,6 +6,18 @@ write+verify an SD image via MSC, boot Linux via UART, reach it over
 SSH. Plans escalate from a poller-alive probe to a full reset -> flash
 -> boot -> SSH round trip.
 
+Sections that need device state to survive across submissions claim
+a test_serv lease and pass the issued token to the next plan. The
+mission file spells the lifecycle out: the first lease-using section
+runs `lease:claim devices="..." duration_s=N`, every subsequent
+section starts with `lease:resume token="{{LEASE_TOKEN}}"`, and the
+last section before the flagship ends with `lease:release token=...`.
+The runner (`run.py`) substitutes `{{LEASE_TOKEN}}` from the prior
+section's `streams/lease.token.bin` and does no other lease plumbing.
+The flagship runs lease-less on purpose -- it proves the cold path
+(reset -> DFU -> write -> boot -> SSH) still works end-to-end without
+inheriting any state.
+
 ## WIP
 
 ### Inventory smoke
@@ -17,7 +29,7 @@ beyond the verify sweep.
 
 Build: nothing required.
 
-Test:
+Test (max 30 s):
 
 ```
 inventory refresh=true verify=true
@@ -35,52 +47,13 @@ def check(extract_dir):
     return needed.issubset({d['id'] for d in devs})
 ```
 
-### Qualified UART syntax smoke
+### Bootloader hold via DFU + UART
 
-Smallest test that exercises DFU + UART routing. Resets, DFU-loads
-the bootloader, opens/closes the EVB UART.
-
-Build:
-
-```
-make -C stm32mp135_test_board/bootloader -j$(nproc)
-```
-
-Artifacts:
-
-```
-stm32mp135_test_board/bootloader/scripts/flash.tsv
-stm32mp135_test_board/bootloader/build/main.stm32
-```
-
-Test:
-
-```
-bench_mcu:reset_dut
-delay ms=2000
-dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
-delay ms=400
-mp135.evb:uart_open
-delay ms=200
-mp135.evb:uart_close
-mark tag=qualified_uart_smoke
-```
-
-Verify:
-
-```
-def check(extract_dir):
-    ops = Verification.load_ops(extract_dir)
-    return (Verification.op_succeeded(ops, 'mp135.evb', 'uart_open') and
-            Verification.op_succeeded(ops, 'mp135.evb', 'uart_close'))
-```
-
-### Bootloader hold + MSC enumeration smoke
-
-Adds autoload-stop and MSC enumeration. Sends three blind `x` bytes
-during the dot-only autoload countdown (~5 s window), waits for `> `,
-then reads 1 MiB from the card via MSC. Read-only. Verifier checks
-for a valid MBR signature in the `msc.read` stream.
+DFU + UART end-to-end with autoload-stop. Resets, DFU-loads the
+bootloader, opens UART, sends three blind `x` bytes during the
+dot-only autoload countdown (~5 s window), waits for `> `, kicks `\r`
+to reconfirm the prompt, closes UART. Leaves the board parked at the
+bootloader so the next section can use MSC immediately.
 
 Build:
 
@@ -95,9 +68,10 @@ stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
 ```
 
-Test:
+Test (max 30 s):
 
 ```
+lease:claim devices="bench_mcu,dfu.evb,mp135.evb,ssh.target" duration_s=3600
 bench_mcu:reset_dut
 delay ms=2000
 dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
@@ -112,8 +86,35 @@ mp135.evb:uart_expect sentinel="> " timeout_ms=8000
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="> " timeout_ms=3000
 mp135.evb:uart_close
-delay ms=5000
-inventory refresh=true verify=false
+mark tag=bootloader_hold
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return (Verification.op_succeeded(ops, 'dfu.evb', 'flash_layout') and
+            Verification.op_succeeded(ops, 'mp135.evb', 'uart_expect'))
+```
+
+### MSC enumeration smoke
+
+Inherits the bootloader-at-`> ` state from the previous test --- no
+reset, no DFU, no autoload-stop preamble. Refreshes inventory so
+`msc.evb` shows up after the bootloader exposed the MSC interface,
+then reads 1 MiB from the card. Read-only. Verifier checks for a
+valid MBR signature in the `msc.read` stream.
+
+Build: nothing required.
+
+Test (max 30 s):
+
+```
+lease:resume token="{{LEASE_TOKEN}}"
+inventory
 msc.evb:read n=1048576 offset_lba=0
 mark tag=msc_read_smoke
 ```
@@ -165,9 +166,10 @@ stm32mp135_test_board/buildroot/output/images/sdcard.img
 Test (inherits the bootloader-at-`> ` state from the previous test ---
 no reset/DFU/autoload-stop preamble):
 
-Test:
+Test (max 10 min):
 
 ```
+lease:resume token="{{LEASE_TOKEN}}"
 msc.evb:write data=@sdcard.img offset_lba=0
 msc.evb:verify data=@sdcard.img offset_lba=0
 msc.evb:read n=36700160 offset_lba=0
@@ -214,9 +216,10 @@ Test (inherits the bootloader-at-`> ` state from the previous test ---
 no reset/DFU/autoload-stop, just open UART, kick the prompt, `two`,
 `jump`):
 
-Test:
+Test (max 1 min):
 
 ```
+lease:resume token="{{LEASE_TOKEN}}"
 mp135.evb:uart_open
 delay ms=300
 mp135.evb:uart_write data="\r"
@@ -253,12 +256,14 @@ SSH path reaches the live system.
 
 Build: nothing required.
 
-Test:
+Test (max 1 min):
 
 ```
+lease:resume token="{{LEASE_TOKEN}}"
 delay ms=8000
 ssh:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq2/Qf4lNrw/weZ9Aod1VTCvett2F/iNjzDBuA/gKe/ stm32mp135-evb-recovery"
 ssh:exec command="ip -4 -o addr show dev eth0; uname -a"
+lease:release token="{{LEASE_TOKEN}}"
 mark tag=ssh_smoke
 ```
 
@@ -303,7 +308,7 @@ The plan's `ssh-ed25519` key is the public half of
 `config/overlay/etc/dropbear/dropbear_ed25519_host_key`; rebuild with
 a different private key and `ssh:trust_host_key` must be regenerated.
 
-Test:
+Test (max 10 min):
 
 ```
 bench_mcu:reset_dut

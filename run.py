@@ -58,32 +58,29 @@ class Verification:
 class Runner:
     """Parses a regression-plan .md file and drives Build (shell
     commands), Test (submit a plan via test_serv), and Verify (exec
-    the inline check) for each `### ` section. Wraps the whole suite
-    in a single bench-wide lease so no other agent can perturb the
-    rig between tests."""
+    the inline check) for each `### ` section. Cross-section lease
+    plumbing: any `{{LEASE_TOKEN}}` placeholder in a section's plan is
+    substituted with the token produced by the most recent prior
+    section that ran `lease:claim`; sections that want device hold
+    across submissions must spell out `lease:claim` / `lease:resume` /
+    `lease:release` in the mission file."""
 
     FAST_DATA = Path(__file__).resolve().parent
     SUBMIT_PY = FAST_DATA / 'test_serv' / 'submit.py'
     SERVER = 'http://localhost:8080'
     WAIT_S = 600                     # generous upper bound
-    LEASE_DEVICES = ('bench_mcu', 'dfu.evb', 'mp135.evb', 'ssh.target')
-    LEASE_DURATION_S = 3600          # bench MAX_SESSION_S cap
-    # Persists the active lease token across run.py invocations so a
-    # crashed/killed run cannot leave a ghost lease on the bench.
-    LEASE_STATE_FILE = FAST_DATA / '.runpy_lease'
+    LEASE_PLACEHOLDER = '{{LEASE_TOKEN}}'
 
     def __init__(self, md_path):
         self.md_path = Path(md_path)
         self.workdir = Path(tempfile.mkdtemp(prefix='runpy-'))
         self.log_path = Path.cwd() / 'log.txt'
         self.log_fh = None
-        # Defensive: release any leftover lease from a prior crashed run.
-        if self.LEASE_STATE_FILE.exists():
-            ghost = self.LEASE_STATE_FILE.read_text().strip()
-            if ghost:
-                self.release_lease(ghost)
-                print(f'released ghost lease {ghost}')
-            self.LEASE_STATE_FILE.unlink()
+        # Most recent lease token captured from a section's
+        # streams/lease.token.bin, used to substitute {{LEASE_TOKEN}}
+        # in subsequent sections. Cleared when a section's plan
+        # contains lease:release.
+        self.lease_token = None
 
     UNITS = {'s': 1, 'sec': 1, 'min': 60, 'm': 60, 'h': 3600}
 
@@ -165,20 +162,39 @@ class Runner:
         return True
 
     def submit_plan(self, plan_text, artifacts, extract_dir, log,
-                    description, lease_token=None, max_s=None):
-        """Resolve @blob refs from per-test Artifacts, submit. Prepends a
-        `lease:resume` (when active), `description "..."`, and unique
-        runpy comment to the plan. Returns (rc, digest). When ``max_s``
-        is set, X-Test-Runtime caps the bench session at that budget;
-        the agent backstops with a slightly larger subprocess timeout in
-        case the bench fails to enforce."""
+                    description, max_s=None, line_prefix=None):
+        """Resolve @blob refs from per-test Artifacts, substitute the
+        `{{LEASE_TOKEN}}` placeholder against ``self.lease_token``, and
+        submit. Inserts `description "..."` and a unique runpy comment;
+        if the plan body's first op is `lease:resume`, description goes
+        AFTER that op so prescan still binds the token. Returns
+        ``(rc, digest)``. When ``max_s`` is set, X-Test-Runtime caps the
+        bench session at that budget; the agent backstops with a
+        slightly larger subprocess timeout in case the bench fails to
+        enforce. When ``line_prefix`` is given and stdout is a TTY,
+        in-place \\r updates show queued/running status with a
+        countdown against ``max_s`` while submit.py runs."""
+        if self.LEASE_PLACEHOLDER in plan_text:
+            if not self.lease_token:
+                raise RuntimeError(
+                    f'plan references {self.LEASE_PLACEHOLDER} but no '
+                    f'lease has been claimed yet')
+            plan_text = plan_text.replace(
+                self.LEASE_PLACEHOLDER, self.lease_token)
         plan_path = extract_dir.parent / 'plan.txt'
-        pre = []
-        if lease_token:
-            pre.append(f'lease:resume token="{lease_token}"')
-        pre.append(f'description "{description}"')
-        pre.append(f'# runpy {time.time_ns()}')
-        plan_path.write_text('\n'.join(pre) + '\n' + plan_text + '\n')
+        lines = plan_text.splitlines()
+        i = 0
+        while i < len(lines) and (
+                not lines[i].strip() or lines[i].lstrip().startswith('#')):
+            i += 1
+        if i < len(lines) and lines[i].lstrip().startswith('lease:resume'):
+            head = lines[:i + 1]
+            tail = lines[i + 1:]
+        else:
+            head, tail = [], lines
+        body = (head + [f'description "{description}"',
+                        f'# runpy {time.time_ns()}'] + tail)
+        plan_path.write_text('\n'.join(body) + '\n')
         blob_args = []
         for name in sorted(artifacts):
             blob_args += ['--blob', f'{name}={artifacts[name]}']
@@ -189,18 +205,14 @@ class Runner:
         if max_s is not None:
             cmd += ['--runtime', str(int(max_s))]
         cmd += [*blob_args, str(plan_path)]
-        with log.open('ab') as f:
-            f.write(f'$ {" ".join(cmd)}\n'.encode())
-            try:
-                rc = subprocess.run(
-                    cmd, cwd=self.FAST_DATA, stdout=f,
-                    stderr=subprocess.STDOUT,
-                    timeout=(max_s + 30) if max_s else None,
-                ).returncode
-            except subprocess.TimeoutExpired:
-                f.write(b'  (agent watchdog: submit.py exceeded '
-                        b'budget; killed)\n')
-                rc = 1
+        log_fh = log.open('ab')
+        log_fh.write(f'$ {" ".join(cmd)}\n'.encode())
+        proc = subprocess.Popen(
+            cmd, cwd=self.FAST_DATA, stdout=log_fh,
+            stderr=subprocess.STDOUT)
+        rc = self._watch_submit(proc, log_fh, description, max_s,
+                                line_prefix)
+        log_fh.close()
         digest = None
         if extract_dir.exists():
             tars = list(extract_dir.glob('*.tar'))
@@ -221,66 +233,80 @@ class Runner:
             raise RuntimeError("verify block defines no check()")
         return bool(ns['check'](str(extract_dir)))
 
-    def claim_lease(self):
-        """Submit a tiny plan that claims every bench device for the
-        suite. Returns the token, or None on failure."""
-        devs = ','.join(self.LEASE_DEVICES)
-        plan = (f'description "lease setup"\n'
-                f'lease:claim devices="{devs}" '
-                f'duration_s={self.LEASE_DURATION_S}\n'
-                f'mark tag=lease_setup\n')
-        section = self.workdir / '_lease_setup'
-        section.mkdir()
-        extract = section / 'artefact'
-        plan_path = section / 'plan.txt'
-        plan_path.write_text(f'# runpy {time.time_ns()}\n' + plan)
-        log = section / 'run.log'
-        cmd = ['python3', str(self.SUBMIT_PY),
-               '--server', self.SERVER,
-               '--wait', '60',
-               '--extract', str(extract),
-               str(plan_path)]
-        with log.open('wb') as f:
-            rc = subprocess.run(cmd, cwd=self.FAST_DATA,
-                                stdout=f,
-                                stderr=subprocess.STDOUT).returncode
-        if rc != 0:
-            return None
-        stream = extract / 'streams' / 'lease.token.bin'
-        if not stream.exists():
-            return None
-        token = stream.read_text().strip()
-        if not token:
-            return None
-        # Persist immediately so a crash before `finally`-release is
-        # recoverable on next run.
-        self.LEASE_STATE_FILE.write_text(token)
-        return token
+    def _watch_submit(self, proc, log_fh, description, max_s, line_prefix):
+        """Block until ``proc`` exits, polling ``GET /jobs`` once a
+        second to find our submission (matched by description) and
+        repaint ``line_prefix`` + a queued/running status with a
+        countdown when ``max_s`` is known. Enforces an agent-side
+        watchdog at ``max_s + 30`` so a stuck submit.py can't outlive
+        its budget. Returns the subprocess return code."""
+        live = (line_prefix is not None and sys.stdout.isatty())
+        started_at = time.monotonic()
+        deadline = (max_s + 30) if max_s else None
+        running_since = None
+        rc = None
+        while True:
+            rc = proc.poll()
+            if rc is not None:
+                break
+            if deadline and (time.monotonic() - started_at) > deadline:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                log_fh.write(b'  (agent watchdog: submit.py exceeded '
+                             b'budget; killed)\n')
+                rc = proc.poll() or 1
+                break
+            if live:
+                try:
+                    with urllib.request.urlopen(
+                            f'{self.SERVER}/jobs', timeout=2) as r:
+                        jobs = json.load(r)
+                except Exception:
+                    jobs = []
+                hit = next(
+                    (j for j in jobs
+                     if j.get('meta', {}).get('description') == description
+                     and j.get('status') in ('queued', 'running')),
+                    None)
+                if hit and hit['status'] == 'queued':
+                    elapsed = int(time.monotonic() - started_at)
+                    msg = f'queued ({elapsed}s)'
+                elif hit and hit['status'] == 'running':
+                    if running_since is None:
+                        running_since = hit.get('picked_up_at') or time.time()
+                    elapsed = time.time() - running_since
+                    if max_s:
+                        remaining = max(0.0, max_s - elapsed)
+                        msg = f'running ({remaining:.0f}s left)'
+                    else:
+                        msg = f'running ({elapsed:.0f}s)'
+                else:
+                    msg = None
+                if msg is not None:
+                    sys.stdout.write(f'\r{line_prefix}{msg}\033[K')
+                    sys.stdout.flush()
+            time.sleep(1)
+        if live:
+            sys.stdout.write(f'\r{line_prefix}\033[K')
+            sys.stdout.flush()
+        return rc
 
-    def release_lease(self, token):
-        """Submit a tiny plan that releases `token`. Best-effort.
-        Always clears the persisted state file on the way out, so a
-        retry-loop on a long-dead token doesn't keep firing forever."""
-        plan = (f'lease:resume token="{token}"\n'
-                f'description "lease teardown"\n'
-                f'lease:release token="{token}"\n'
-                f'mark tag=lease_teardown\n')
-        section = self.workdir / f'_lease_teardown_{int(time.time()*1000)}'
-        section.mkdir()
-        extract = section / 'artefact'
-        plan_path = section / 'plan.txt'
-        plan_path.write_text(f'# runpy {time.time_ns()}\n' + plan)
-        log = section / 'run.log'
-        cmd = ['python3', str(self.SUBMIT_PY),
-               '--server', self.SERVER,
-               '--wait', '60',
-               '--extract', str(extract),
-               str(plan_path)]
-        with log.open('wb') as f:
-            subprocess.run(cmd, cwd=self.FAST_DATA,
-                           stdout=f, stderr=subprocess.STDOUT)
-        if self.LEASE_STATE_FILE.exists():
-            self.LEASE_STATE_FILE.unlink()
+    def capture_lease_token(self, extract_dir, plan_text):
+        """Refresh ``self.lease_token`` from this section's artefact:
+        if a `lease.token` stream exists, the section ran a fresh
+        ``lease:claim`` and we adopt the new token. If the section's
+        plan body contains ``lease:release``, drop the captured token
+        regardless -- it's no longer usable."""
+        stream = extract_dir / 'streams' / 'lease.token.bin'
+        if stream.exists():
+            tok = stream.read_text().strip()
+            if tok:
+                self.lease_token = tok
+        if 'lease:release' in plan_text:
+            self.lease_token = None
 
     def delete_job(self, digest):
         if not digest:
@@ -297,10 +323,12 @@ class Runner:
         `[i/N] [HH:MM:SS] title (<=Bs) ... build ... run ... check ... PASS|FAIL|SKIP (+Ts)`
         where B is the sum of timeout_ms in the plan (the upper bound
         on in-plan waits) and T is the actual elapsed. Halts on first
-        FAIL after dumping the per-test log + any errors.log. Wraps
-        the whole suite in a single bench-wide lease (released in
-        finally). Sends DELETE /outputs/<digest> on PASS to cleanup
-        the dashboard. Returns 0 on full pass."""
+        FAIL after dumping the per-test log + any errors.log. Lease
+        lifecycle is the mission's responsibility (sections write their
+        own lease:claim / lease:resume / lease:release ops); run.py
+        only threads the issued token through `{{LEASE_TOKEN}}`. Sends
+        DELETE /outputs/<digest> on PASS to cleanup the dashboard.
+        Returns 0 on full pass."""
         print(f'workdir: {self.workdir}')
         sections = list(self.parse_md())
         total = len(sections)
@@ -337,24 +365,10 @@ class Runner:
                 for ln in src.read_text(errors='replace').splitlines():
                     print(f'   {ln}'); self._log(f'   {ln}')
 
-        lease_token = None
         try:
-            lease_token = self.claim_lease()
-            if lease_token:
-                self._log(f'  lease claimed: {lease_token}')
-            else:
-                self._log('  lease claim FAILED; running without lease')
-
             skipped = 0
             for i, (title, build, artifacts_text, test, verify,
                     test_max_s) in enumerate(sections, 1):
-                # Release the suite-wide lease before the final test so the
-                # flagship runs lease-less and re-acquires every device from
-                # cold (proves the no-context recovery path).
-                if i == total and lease_token:
-                    self.release_lease(lease_token)
-                    self._log(f'  lease released before flagship: {lease_token}')
-                    lease_token = None
                 slug = re.sub(r'[^a-z0-9]+', '_', title.lower()).strip('_')
                 section_dir = self.workdir / slug
                 section_dir.mkdir()
@@ -366,14 +380,15 @@ class Runner:
                 started = datetime.datetime.now().strftime('%H:%M:%S')
                 t0 = time.monotonic()
                 el = lambda: time.monotonic() - t0
-                sys.stdout.write(
-                    f'[{i:>{w}}/{total}] [{started}] {title} '
-                    f'(<={budget:.0f}s) ... ')
+                head = (f'[{i:>{w}}/{total}] [{started}] {title} '
+                        f'(<={budget:.0f}s) ... ')
+                sys.stdout.write(head)
                 sys.stdout.flush()
 
                 if build is not None and not build.strip().lower().startswith(
                         'nothing'):
                     stage('build')
+                    head += 'build ... '
                     if not self.run_build(build, log):
                         result(i, 'FAIL', title, el(), started, budget)
                         dump(log)
@@ -383,13 +398,15 @@ class Runner:
                     skipped += 1
                     continue
                 stage('run')
+                head += 'run ... '
                 rc, digest = self.submit_plan(test, artifacts, extract_dir,
-                                              log, title, lease_token,
-                                              test_max_s)
+                                              log, title, test_max_s,
+                                              line_prefix=head)
                 if rc != 0:
                     result(i, 'FAIL', title, el(), started, budget)
                     dump(log)
                     return 1
+                self.capture_lease_token(extract_dir, test)
                 stage('check')
                 try:
                     ok = self.run_verify(verify, artifacts, extract_dir)
@@ -412,9 +429,6 @@ class Runner:
             print(summary); self._log(summary)
             return 0
         finally:
-            if lease_token:
-                self.release_lease(lease_token)
-                self._log(f'  lease released: {lease_token}')
             self.log_fh.close()
             self.log_fh = None
 
