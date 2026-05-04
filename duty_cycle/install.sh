@@ -16,6 +16,7 @@ DC=$(cd "$(dirname "$0")" 2>/dev/null && pwd -P) || { echo "cannot resolve scrip
 CLAUDE_DIR="$HOME/.claude"
 LIVE="$CLAUDE_DIR/settings.json"
 CANON="$DC/claude_settings.json"
+LOG="$DC/claude_duty_cycle.log"
 
 # ---- prereq checks (no side effects past this block) ----
 
@@ -47,6 +48,16 @@ if [ -e "$LIVE" ] && [ "$(stat -c %i "$LIVE")" = "$(stat -c %i "$CANON")" ]; the
   exit 0
 fi
 
+# Bail if a Claude Code session for this user is already running. Hooks
+# going live mid-session leaves orphan tool_post / stop events at the
+# head of the log (the matching tool_pre / start fired before the hook
+# was registered), which the strict reporter rightly rejects.
+if pgrep -u "$(id -u)" -x claude >/dev/null 2>&1; then
+  echo "claude is currently running for this user; refusing to install." >&2
+  echo "exit all claude sessions first, then re-run install.sh." >&2
+  exit 1
+fi
+
 # Confirm before replacing an existing settings.json.
 if [ -e "$LIVE" ]; then
   if [ ! -t 0 ]; then
@@ -65,10 +76,22 @@ fi
 
 mkdir -p "$CLAUDE_DIR"
 
+STAMP=$(date +%Y%m%dT%H%M%S)
+
 if [ -e "$LIVE" ]; then
-  BACKUP="$LIVE.preinstall-$(date +%Y%m%dT%H%M%S)"
+  BACKUP="$LIVE.preinstall-$STAMP"
   echo "existing $LIVE found; backing up to $BACKUP"
   mv "$LIVE" "$BACKUP"
+fi
+
+# Rotate any pre-existing log out of the way so the new install starts
+# from a known-empty state. Otherwise events from the about-to-restart
+# Claude session would append to a log whose prior tail was written
+# under a different (or absent) hook config.
+if [ -s "$LOG" ]; then
+  LOG_BACKUP="$LOG.preinstall-$STAMP"
+  echo "existing $LOG found; rotating to $LOG_BACKUP"
+  mv "$LOG" "$LOG_BACKUP"
 fi
 
 ln "$CANON" "$LIVE"
