@@ -59,6 +59,8 @@ firmware repos.
 When doing commits, Worker must leave repo and parent repo in clean
 state on branch main without detached heads.
 
+Do not add "Co-Author" lines to the commit messages.
+
 ### Author
 
 Jakob Kastelic (Stanford Research Systems, Inc.)
