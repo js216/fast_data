@@ -10,8 +10,8 @@ set -eu
 ROOT=$(git rev-parse --show-toplevel)
 SRC="$ROOT/hooks"
 
-# List of hooks to install (file names in $SRC, excluding install.sh and README*).
-HOOKS="commit-msg pre-commit pre-push"
+# List of hook entrypoints and shared helpers to install.
+HOOKS="check-terms commit-msg pre-commit pre-push"
 
 link_one() {
   hooks_dir=$1
