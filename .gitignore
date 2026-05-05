@@ -5,6 +5,6 @@
 __pycache__
 
 log.txt
+ledger.txt
 platform.info
-
-duty_cycle/claude_duty_cycle.log
+claude_duty_cycle.log
