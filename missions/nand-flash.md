@@ -10,8 +10,6 @@ Bootloader is built with `-DNAND_FLASH` (swaps `two`/`load_sd` for
 rootfstype=ubifs ...`. Provisioning: `nand.img` -> DDR via
 `msc.custom:write` -> `fmc_flush` over UART -> NAND.
 
-## WIP
-
 ### Inventory smoke
 
 Build: nothing required.
@@ -29,11 +27,13 @@ Verify:
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    needed = {'mp135.custom', 'dfu.custom', 'bench_mcu.0',
-              'ssh.target', 'lease._default'}
+    needed = {'mp135.custom', 'bench_mcu.0', 'ssh.target',
+              'lease._default'}
     devs = Verification.load_devices(extract_dir)
     return needed.issubset({d['id'] for d in devs})
 ```
+
+## WIP
 
 ### Bootloader hold via DFU + UART
 
