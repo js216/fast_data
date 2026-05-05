@@ -76,6 +76,10 @@ class Runner:
     SERVER = 'http://localhost:8080'
     WAIT_S = 600                     # generous upper bound
     LEASE_PLACEHOLDER = '{{LEASE_TOKEN}}'
+    # Persists the most recent captured lease token across run.py
+    # invocations so a crashed run that never reached its mission's
+    # `lease:release` can be cleaned up on the next startup.
+    LEASE_STATE_FILE = FAST_DATA / '.runpy_lease'
     # Bounded retries with backoff for transient bench failures
     # (USB device dropouts, busy queues, FT4222 not-found). The
     # retry sequence is the wait BEFORE the i-th attempt; the first
@@ -90,10 +94,40 @@ class Runner:
         self.log_fh = None
         self.user = getpass.getuser()
         # Most recent lease token captured from a section's
-        # streams/lease.token.bin, used to substitute {{LEASE_TOKEN}}
-        # in subsequent sections. Cleared when a section's plan
-        # contains lease:release.
+        # manifest.json, used to substitute {{LEASE_TOKEN}} in
+        # subsequent sections. Cleared when a section's plan contains
+        # lease:release.
         self.lease_token = None
+        # Defensive ghost-lease cleanup: a prior run that crashed
+        # before its mission's lease:release fired would leave the
+        # bench locked for the full duration_s. Best-effort release.
+        if self.LEASE_STATE_FILE.exists():
+            ghost = self.LEASE_STATE_FILE.read_text().strip()
+            if ghost:
+                print(f'releasing ghost lease {ghost} from prior run')
+                self._release_ghost(ghost)
+            self.LEASE_STATE_FILE.unlink()
+
+    def _release_ghost(self, token):
+        """Best-effort release of a stale lease token left over from a
+        prior run. Submits the canonical resume+release pair; failures
+        are swallowed (the lease may have already expired)."""
+        section = self.workdir / '_ghost_release'
+        section.mkdir()
+        plan_path = section / 'plan.txt'
+        plan_path.write_text(
+            f'# runpy {time.time_ns()}\n'
+            f'lease:resume token="{token}"\n'
+            f'description "ghost lease cleanup"\n'
+            f'lease:release token="{token}"\n')
+        log = section / 'run.log'
+        cmd = ['python3', str(self.SUBMIT_PY),
+               '--server', self.SERVER,
+               '--wait', '30',
+               str(plan_path)]
+        with log.open('wb') as f:
+            subprocess.run(cmd, cwd=self.FAST_DATA, stdout=f,
+                           stderr=subprocess.STDOUT)
 
     UNITS = {'s': 1, 'sec': 1, 'min': 60, 'm': 60, 'h': 3600}
 
@@ -344,14 +378,19 @@ class Runner:
         if ``manifest.json`` carries a ``lease_token`` field, the
         section ran a fresh ``lease:claim`` and we adopt the new
         token. If the section's plan body contains ``lease:release``,
-        drop the captured token regardless -- it's no longer usable."""
+        drop the captured token regardless -- it's no longer usable.
+        Mirror the active token into ``LEASE_STATE_FILE`` so a crashed
+        next-section can be recovered on the following startup."""
         manifest = extract_dir / 'manifest.json'
         if manifest.exists():
             tok = json.loads(manifest.read_text()).get('lease_token')
             if tok:
                 self.lease_token = tok
+                self.LEASE_STATE_FILE.write_text(tok)
         if 'lease:release' in plan_text:
             self.lease_token = None
+            if self.LEASE_STATE_FILE.exists():
+                self.LEASE_STATE_FILE.unlink()
 
     def delete_job(self, digest):
         if not digest:

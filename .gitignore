@@ -8,3 +8,6 @@ log.txt
 ledger.txt
 platform.info
 claude_duty_cycle.log
+
+duty_cycle/claude_duty_cycle.log
+.runpy_lease

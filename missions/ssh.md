@@ -71,7 +71,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 30 s):
 
 ```
-lease:claim devices="bench_mcu,dfu.evb,mp135.evb,ssh.target" duration_s=3600
+lease:claim devices="bench_mcu.0,mp135.evb,ssh.target" duration_s=3600
 bench_mcu:reset_dut
 delay ms=2000
 dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
@@ -172,7 +172,7 @@ Test (max 10 min):
 lease:resume token="{{LEASE_TOKEN}}"
 msc.evb:write data=@sdcard.img offset_lba=0
 msc.evb:verify data=@sdcard.img offset_lba=0
-msc.evb:read n=36700160 offset_lba=0
+msc.evb:read n=41943040 offset_lba=0
 mark tag=sd_round_trip
 ```
 
@@ -261,8 +261,8 @@ Test (max 1 min):
 ```
 lease:resume token="{{LEASE_TOKEN}}"
 delay ms=8000
-ssh:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq2/Qf4lNrw/weZ9Aod1VTCvett2F/iNjzDBuA/gKe/ stm32mp135-evb-recovery"
-ssh:exec command="ip -4 -o addr show dev eth0; uname -a"
+ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq2/Qf4lNrw/weZ9Aod1VTCvett2F/iNjzDBuA/gKe/ stm32mp135-evb-recovery"
+ssh.target:exec command="ip -4 -o addr show dev eth0; uname -a"
 lease:release token="{{LEASE_TOKEN}}"
 mark tag=ssh_smoke
 ```
@@ -344,8 +344,8 @@ mp135.evb:uart_expect sentinel="Welcome to STM32MP135 EVB" timeout_ms=10000
 mp135.evb:uart_expect sentinel="login:" timeout_ms=15000
 mp135.evb:uart_close
 delay ms=8000
-ssh:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq2/Qf4lNrw/weZ9Aod1VTCvett2F/iNjzDBuA/gKe/ stm32mp135-evb-recovery"
-ssh:exec command="ip -4 -o addr show dev eth0; uname -a; cat /etc/os-release | head -3"
+ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq2/Qf4lNrw/weZ9Aod1VTCvett2F/iNjzDBuA/gKe/ stm32mp135-evb-recovery"
+ssh.target:exec command="ip -4 -o addr show dev eth0; uname -a; cat /etc/os-release | head -3"
 mark tag=full_end_to_end
 ```
 
