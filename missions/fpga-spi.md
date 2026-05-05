@@ -72,7 +72,9 @@ def check(extract_dir):
     return firsterr == -1 and mbps >= 100.0
 ```
 
-### Raw 4-lane stream, 16 MiB twin-DDR, >=200 Mbps
+## WIP
+
+### Raw 4-lane stream, 16 MiB twin-DDR, >=400 Mbps
 
 Steps up from 1-lane to bit-perfect 4-lane streaming before adding the
 memory-mapped wrapper. Programs `spi_quad.bin` (LANES=4, no flash
@@ -86,7 +88,7 @@ first-sample alignment relative to the slave's output presenter.
 Verifier parses the firmware's `twin <bytes> B quad raw pass1=<ms> ms
 ... firsterr=<n>` summary, computes pass1 rate from pass1_ms (less
 noisy than wall-clock which includes the validate scan), and asserts
-firsterr=-1 plus pass1_rate >= 200 Mbps.
+firsterr=-1 plus pass1_rate >= 400 Mbps.
 
 Build:
 
@@ -139,10 +141,8 @@ def check(extract_dir):
     if pass1_ms <= 0:
         return False
     pass1_rate = (16777216 * 8.0) / (pass1_ms * 1000.0)
-    return firsterr == -1 and pass1_rate >= 200.0
+    return firsterr == -1 and pass1_rate >= 400.0
 ```
-
-## WIP
 
 ### Quad memory-mapped, ~4 GiB, >=400 Mbps
 
