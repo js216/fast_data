@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# bg_bash_wrap.sh --- TODO: description
+# Copyright (c) 2026 Jakob Kastelic
 # PreToolUse(Bash) hook: if run_in_background=true, log a bg_spawn line and
 # rewrite the command to append a bg_done marker on subprocess exit.
 # bg_done fires on normal exit, error exit, or catchable signals (INT,

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// reset.ino --- TODO: description
+// Copyright (c) 2026 Jakob Kastelic
   // STM32F405 Thing Plus bench helper.
   // D13 idle HIGH (LED on); 'r' pulses D13 LOW for 100 ms to reset DUT.
   // All other pins configured INPUT_PULLDOWN so disconnected == 0.

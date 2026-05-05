@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# run.py --- TODO: description
+# Copyright (c) 2026 Jakob Kastelic
 """Walk a regression-plan .md file, run Build -> Test -> Verify per
 section, print a PASS/FAIL line for each.
 

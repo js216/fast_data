@@ -1,0 +1,46 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# commit-msg --- enforce the 50/72 git commit message convention
+# Copyright (c) 2026 Jakob Kastelic
+#
+#   Subject line (first line):  max 50 chars
+#   Body lines (after blank):   max 72 chars
+#   Subject and body separated by one blank line
+#
+# Auto-generated merge and revert messages are exempt.
+
+set -eu
+MSG_FILE="$1"
+
+content=$(grep -v '^#' "$MSG_FILE")
+subject=$(printf '%s\n' "$content" | head -n1)
+
+case "$subject" in
+  "Merge "*|"Revert "*) exit 0 ;;
+esac
+
+sublen=${#subject}
+if [ "$sublen" -gt 50 ]; then
+  printf 'commit-msg: subject is %d chars, limit is 50\n' "$sublen" >&2
+  printf '  %s\n' "$subject" >&2
+  exit 1
+fi
+
+body=$(printf '%s\n' "$content" | tail -n +2)
+if [ -n "$body" ]; then
+  sep=$(printf '%s\n' "$body" | head -n1)
+  if [ -n "$sep" ]; then
+    echo 'commit-msg: line 2 must be blank (separate subject and body)' >&2
+    exit 1
+  fi
+  while IFS= read -r line; do
+    len=${#line}
+    if [ "$len" -gt 72 ]; then
+      printf 'commit-msg: body line is %d chars, limit is 72\n' "$len" >&2
+      printf '  %s\n' "$line" >&2
+      exit 1
+    fi
+  done <<EOF
+$(printf '%s\n' "$body" | tail -n +2)
+EOF
+fi

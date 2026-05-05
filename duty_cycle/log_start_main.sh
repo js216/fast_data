@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# log_start_main.sh --- TODO: description
+# Copyright (c) 2026 Jakob Kastelic
 # UserPromptSubmit hook. Three jobs in order:
 #
 #   1. Sweep the log for orphaned `start` events whose Claude PID is

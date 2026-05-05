@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# report.py --- TODO: description
+# Copyright (c) 2026 Jakob Kastelic
 """
 report.py: read the duty-cycle log and print how busy Claude has been.
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# sweep_dead.py --- TODO: description
+# Copyright (c) 2026 Jakob Kastelic
 """
 Scan claude_duty_cycle.log for `start` events whose Claude PID is dead
 (terminal closed, claude crashed, SIGKILL) or whose PID has been reused

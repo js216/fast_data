@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# sync.sh --- TODO: description
+# Copyright (c) 2026 Jakob Kastelic
 # Pull latest, push local work, across parent + submodules.
 # Errors abort the script — fix the cause and re-run.
 set -eu

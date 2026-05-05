@@ -1,0 +1,110 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# pre-commit --- enforce .nw header rules + SPDX header presence
+# Copyright (c) 2026 Jakob Kastelic
+#   1. line 1 must be `== <text>` (level 2, non-empty title)
+#   2. no other line may start with `== ` (only one level-2 per file)
+#   3. no skipped levels (e.g. `==` -> `====` jumps from 2 to 4)
+#
+# No-op when no *.nw files are staged.
+
+set -e
+
+files=$(git diff --cached --name-only --diff-filter=ACM -- '*.nw' || true)
+
+fail=0
+for f in $files; do
+    [ -f "$f" ] || continue
+    msg=$(python3 - "$f" <<'PY'
+import sys, re
+path = sys.argv[1]
+errs = []
+prev = 0
+with open(path) as fh:
+    for i, line in enumerate(fh, 1):
+        m = re.match(r'^(=+)(\s|$)', line)
+        if not m:
+            continue
+        lvl = len(m.group(1))
+        text = line[lvl:].strip()
+        if i == 1:
+            if lvl != 2:
+                errs.append(f"{path}:1: line 1 must be level-2 header (==), got level {lvl}")
+            if not text:
+                errs.append(f"{path}:1: header has no title text")
+        else:
+            if lvl == 2:
+                errs.append(f"{path}:{i}: only line 1 may use level-2 (==); demote to ===")
+            if not text:
+                errs.append(f"{path}:{i}: header has no title text")
+        if prev and lvl > prev + 1:
+            errs.append(f"{path}:{i}: header level jumped {prev} -> {lvl} (skipped {prev+1})")
+        prev = lvl
+for e in errs:
+    print(e)
+sys.exit(1 if errs else 0)
+PY
+) || { echo "$msg"; fail=1; }
+done
+
+[ $fail -ne 0 ] && { echo "pre-commit: .nw header check failed" >&2; exit 1; }
+
+# ── SPDX header check ───────────────────────────────────────────────
+#
+# Each non-excluded source file must contain in its first 30 lines:
+#   1. SPDX-License-Identifier: <id>
+#   2. Copyright ...
+# Filename declaration is encouraged but not enforced (varies across
+# Doxygen, custom, and script conventions).
+#
+# Filter is --diff-filter=ACMR: enforces on added, copied, modified,
+# and renamed files. (Was --diff-filter=A during initial backfill.)
+
+is_spdx_excluded() {
+    case "$1" in
+        # vendored trees (match both repo-root-relative and nested paths)
+        buildroot/*|*/buildroot/*) return 0 ;;
+        linux/*|*/linux/*) return 0 ;;
+        STM32DDRFW-UTIL/*|*/STM32DDRFW-UTIL/*) return 0 ;;
+        drivers/*|*/drivers/*) return 0 ;;
+        # vendored 3rd-party printf (mpaland)
+        utils/printf.c|utils/printf.h|*/utils/printf.c|*/utils/printf.h) return 0 ;;
+        # fpga build-output (canonical sources are .nw, exempt)
+        fpga/verilog/*|fpga/tb/*) return 0 ;;
+        # CAD project trees
+        */kicad/*) return 0 ;;
+        # license / readme / changelog
+        README*|LICENSE*|CHANGELOG*|NOTICE*|AUTHORS*|CONTRIBUTORS*) return 0 ;;
+        */README*|*/LICENSE*|*/CHANGELOG*|*/NOTICE*|*/AUTHORS*|*/CONTRIBUTORS*) return 0 ;;
+        # docs / data / config
+        *.md|*.txt|*.json|*.lock|*.toml|*.nw) return 0 ;;
+        *.tsv|*.csv|*.stm32|*.linux|*.ldr|*.plan|*.conf|*.dts|*.dtsi|*.patch) return 0 ;;
+        # tool config dotfiles
+        .gitignore|.gitmodules|.gitattributes|.codex|.clang-format|.clang-tidy) return 0 ;;
+        */.gitignore|*/.gitmodules|*/.gitattributes|*/.codex|*/.clang-format|*/.clang-tidy) return 0 ;;
+        # binary / archive / CAD output
+        *.png|*.jpg|*.jpeg|*.gif|*.ico|*.pdf|*.bin|*.hex|*.raw|*.out|*.elf|*.o|*.so|*.a|*.wasm|*.svg|*.gbr) return 0 ;;
+        *.kicad_sch|*.kicad_pro|*.kicad_prl|*.kicad_pcb|*.drl|*.gbrjob|*.ioc|*.ddw|*.zip|*.tgz) return 0 ;;
+    esac
+    return 1
+}
+
+spdx_errors=0
+added=$(git diff --cached --name-only --diff-filter=ACMR || true)
+for f in $added; do
+    is_spdx_excluded "$f" && continue
+    [ -f "$f" ] || continue
+    head=$(head -30 "$f" 2>/dev/null || true)
+    base=$(basename "$f")
+    if ! printf '%s\n' "$head" | grep -q 'SPDX-License-Identifier:'; then
+        echo "pre-commit: $f: missing 'SPDX-License-Identifier:' in first 30 lines" >&2
+        spdx_errors=1
+    fi
+    if ! printf '%s\n' "$head" | grep -qi 'copyright'; then
+        echo "pre-commit: $f: missing Copyright line in first 30 lines" >&2
+        spdx_errors=1
+    fi
+done
+
+[ $spdx_errors -ne 0 ] && { echo "pre-commit: SPDX header check failed" >&2; exit 1; }
+exit 0

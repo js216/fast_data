@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# install.sh --- TODO: description
+# Copyright (c) 2026 Jakob Kastelic
 # Install duty-cycle measurement on this user account.
 #
 # Prerequisites: jq, uuidgen (uuid-runtime on Debian), python3, sh, flock.
