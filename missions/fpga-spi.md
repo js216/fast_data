@@ -94,6 +94,18 @@ covered by a repo test.
 
 ## WIP
 
+### Generate GPIO connectivity replay fixtures
+
+! Add a deterministic, repo-tested fixture generator for the first
+`gpio_test` connectivity replay. It consumes
+`stm32mp135_test_board/baremetal/gpio_test/connectivity_mpu.jsonl` and
+`stm32mp135_test_board/baremetal/gpio_test/connectivity_fpga.jsonl` and
+writes C header data that the MPU bare-metal `gpio_test` and FPGA
+`gpio.nw` harness can replay later. The generated fixtures must preserve
+controller, signal name, vector index, command kind, drive value, and
+expected value, and a repo test must fail if the fixtures are stale or
+contain commands not present in the JSONL scripts.
+
 ### Verify Connecticity
 
 ! make use of gpio.nw and stm32mp135_test_board/baremetal/gpio_test (not
