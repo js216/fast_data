@@ -122,12 +122,45 @@ python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest
 python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_scripts.py --check
 python3 stm32mp135_test_board/baremetal/gpio_test/dry_run_connectivity.py
 python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_fixtures.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
 ```
 
 Test (max 1 min):
 
 ```
 mark tag=gpio_connectivity_host_checks
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    return Verification.manifest_clean(extract_dir)
+```
+
+### Define GPIO replay interface contract
+
+! Add a host-testable interface contract for the first hardware
+connectivity replay between `fpga/src/gpio.nw` and
+`stm32mp135_test_board/baremetal/gpio_test`. The contract must document
+the generated replay header fields, the exact controller/signal/vector
+semantics consumed by each side, and the minimal GPIO operation names
+that later firmware must implement for drive and sample commands. Add a
+repo test that fails if the contract's listed replay fields or operation
+names drift from the generated `connectivity_mpu_replay.h` and
+`connectivity_fpga_replay.h` fixtures. Do not toggle hardware GPIOs in
+this step.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_replay_contract
 ```
 
 Verify:
