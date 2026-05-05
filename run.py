@@ -377,7 +377,11 @@ class Runner:
             return True
         sub_w = len(str(sub_total))
         for j, path in enumerate(matches, 1):
-            label = path.name
+            # Include the immediate parent dir in the label so a sweep
+            # like build/{cces,sel}/cctest_*.ldr surfaces which
+            # toolchain each iteration is hitting; bare filename is
+            # ambiguous when the same stem exists in multiple subdirs.
+            label = f'{path.parent.name}/{path.name}'
             sub_artifacts = dict(artifacts)
             sub_artifacts[var_name] = str(path.relative_to(self.FAST_DATA))
             sub_dir = section_dir / f'item_{j:0{sub_w}d}'
