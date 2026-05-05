@@ -107,6 +107,17 @@ checkout is not a reason to stop continuous work.
 
 NEVER STOP WORK UNTIL MISSION ACCOMPLISHED NO MATTER WHAT.
 
+Operator requests for a status update, a command rerun, or the result of
+one bench attempt are not permission to end the iteration. After
+answering the immediate request, Orchestrator must continue the active
+mission loop from the current repo state unless the operator explicitly
+uses words such as "stop", "pause", or "do not continue".
+
+Orchestrator must not end a response with touched repos dirty unless the
+operator explicitly asked to pause before cleanup. A mission is not clean
+just because the latest command result was reported; if the mission is
+incomplete, continue by spawning/fixing/verifying as appropriate.
+
 If work nonetheless stops, this is considered a bug in AGENTS.md. The
 Orchestrator must diagnose the bug and present a suggested improvement.
 
