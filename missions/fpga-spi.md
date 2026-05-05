@@ -420,9 +420,100 @@ def check(extract_dir):
     return 'gpio_replay_bench_lease_probe' in plan_text
 ```
 
+### Program FPGA GPIO image under lease
+
+With the bench lease held, build and program the FPGA `gpio.nw` image
+used by the later replay. This confirms the first reversible hardware
+setup action without opening UARTs or driving GPIO test vectors.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_scripts.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/dry_run_connectivity.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_fixtures.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C fpga build/gpio/gpio.bin
+```
+
+Artifacts:
+
+```
+fpga/build/gpio/gpio.bin
+```
+
+Test (max 5 min):
+
+```
+lease:claim devices="fpga.hx1k,mp135.evb,bench_mcu.0" duration_s=30
+inventory
+fpga.hx1k:program bin=@gpio.bin
+mark tag=gpio_replay_fpga_program
+lease:release
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+ALLOWED_OPS = {
+    (None, 'description'),
+    ('lease', 'claim'),
+    (None, 'inventory'),
+    ('fpga.hx1k', 'program'),
+    (None, 'mark'),
+    ('lease', 'release'),
+}
+DISALLOWED_VERBS = {
+    'uart_open', 'uart_write', 'uart_expect', 'uart_close',
+    'reset', 'reset_dut', 'reset_dut2', 'send', 'flash',
+    'flash_layout', 'list', 'capture', 'open', 'close',
+    'drive', 'sample', 'expect', 'gpio_write', 'gpio_read',
+}
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        manifest = Verification.load_manifest(extract_dir)
+        ops = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+    lease_token = manifest.get('lease_token')
+    if not isinstance(lease_token, str) or not lease_token:
+        return False
+    saw = set()
+    saw_program = False
+    saw_mark = False
+    for record in ops:
+        if not isinstance(record, dict) or record.get('status') != 'ok':
+            return False
+        key = (record.get('device'), record.get('verb'))
+        if key not in ALLOWED_OPS:
+            return False
+        if record.get('verb') in DISALLOWED_VERBS:
+            return False
+        if key == ('fpga.hx1k', 'program'):
+            saw_program = True
+        if key == (None, 'mark'):
+            saw_mark = True
+        saw.add(key)
+    plan_text = Path(extract_dir, 'plan.txt').read_text()
+    return (
+        ALLOWED_OPS <= saw and
+        saw_program and
+        saw_mark and
+        'gpio_replay_fpga_program' in plan_text
+    )
+```
+
 ## WIP
 
-### Verify Connecticity
+### Verify physical connectivity
 
 Use `gpio.nw` and the MP135 `gpio_test` harness to verify the physical
 connections in the assumed jumper table.
