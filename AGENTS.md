@@ -78,8 +78,11 @@ touched.
 ### Logging
 
 The `run.py` appends all output to the `log.txt` file. This file must
-never be deleted. In addition, all agents must append one line to the
-`ledger.txt` file each iteration, in the form:
+never be deleted. Before any other work, Orchestrator must verify the
+repo-root `ledger.txt`: if missing, create an empty file; if present,
+verify that every non-empty existing line uses the required format. In
+addition, all agents must append one line to the `ledger.txt` file each
+iteration, in the form:
 
     YYYY-MM-DDTHH:MM:SS <mission> <agent_name> <pass/fail> <extra_info>
 
