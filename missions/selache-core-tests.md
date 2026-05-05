@@ -12,6 +12,31 @@ companion mission `selache-csmith-tests.md`.
 
 ## WIP
 
+### selache core gcc host sweep
+
+Compile and run every promoted core cctest through host `gcc`, using the
+existing xtest target to compare each program's `got NN` output against
+its source `@expect` value.
+
+Build:
+
+```
+make -C selache/xtest gcc -j$(nproc)
+```
+
+Test (max 10 s):
+
+```
+mark tag=selache_core_gcc_host
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    return Verification.manifest_clean(extract_dir)
+```
+
 ### selache cctest sweep
 
 Compile every cctest case through all four toolchains, run the host
