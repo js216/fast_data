@@ -13,6 +13,25 @@ must pass on all four toolchains before any of them get promoted.
 
 ## WIP
 
+### temporary: recover stopped sel fault debug
+
+Remove this temporary task once the underlying sel fault is reduced and
+fixed. The prior iteration stopped after confirming a real hardware
+fault instead of continuing to reduction/fix, which is a process bug.
+Known evidence:
+
+- `selache/xtest/build/drafts/sel/cctest_csmith_0e13b955.0x66e2d201.ldr`
+  boots with empty UART and `C2 DSP_FAULT` duty cycle `100.0%`.
+- The same source built by CCES,
+  `selache/xtest/build/drafts/cces/cctest_csmith_0e13b955.0x66e2d201.ldr`,
+  prints `got 66e2d201` and measures `C2 DSP_FAULT` duty cycle `0.0%`.
+- No leases are currently held.
+
+Next worker should reduce `draft_cases/cctest_csmith_0e13b955.c` to the
+smallest sel-built program that still faults, fix the sel compiler or
+runtime bug, then delete this temporary task and rerun the full draft
+sweep below.
+
 ### selache cctest drafts
 
 Build:
