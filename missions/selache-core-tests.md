@@ -1,10 +1,13 @@
 # Selache core toolchain regression sweep
 
-Compile every `selache/xtest/cases/cctest_*.c` through gcc, clang, cces,
-and sel; verify host toolchains (gcc/clang) at build time and target
-toolchains (cces/sel) by booting each `.ldr` image on the SHARC+ board
-and matching the UART `got NN` against the expected value encoded in the
-loader filename.
+Compile every `selache/xtest/cases/cctest_*.c` through gcc, clang, and
+the selache target toolchain. Verify host toolchains (gcc/clang) at
+build time and verify the selache-built target artifacts by booting each
+`.ldr` image on the SHARC+ board and matching the UART `got NN` against
+the expected value encoded in the filename.
+
+The companion `selache-cces-tests.md` mission covers the same target
+cases built by the CCES toolchain.
 
 `cases/` is the locked, hand-promoted core suite. Candidates that
 haven't been promoted yet live in `draft_cases/` and run via the
@@ -37,12 +40,12 @@ def check(extract_dir):
     return Verification.manifest_clean(extract_dir)
 ```
 
-### selache cctest sweep
+### selache-built target cctest sweep
 
-Compile every cctest case through all four toolchains, run the host
-(gcc/clang) cases at build time and fail the build on any mismatch,
-emit cces/sel loader images named `cctest_<case>.<expect>.ldr`, then
-boot each loader on the SHARC+ board and compare its UART output
+Compile every cctest case through the selache target toolchain, run the
+host (gcc/clang) cases at build time and fail the build on any mismatch,
+emit selache-built target images named `cctest_<case>.<expect>.ldr`,
+then boot each image on the SHARC+ board and compare its UART output
 against the expected value parsed from the filename.
 
 Build:
@@ -53,14 +56,13 @@ cd selache && cargo test --all-targets
 cd selache && cargo clippy --all-targets --release -- -D warnings
 make -C selache/xtest gcc -j$(nproc)
 make -C selache/xtest clang -j$(nproc)
-make -C selache/xtest cces -j$(nproc)
 make -C selache/xtest sel -j$(nproc)
 ```
 
 Foreach:
 
 ```
-ldr in selache/xtest/build/*/cctest_*.0x*.ldr
+ldr in selache/xtest/build/sel/cctest_*.0x*.ldr
 ```
 
 Test (max 1 min):
