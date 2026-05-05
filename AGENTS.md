@@ -30,9 +30,13 @@ ask the human operator for one.
 
 - **Verifier** checks that the Worker did not stop halfway, that its
   work did not break something else, and that all other tests still
-  work. When Verifier has approved, run Tester. If Verifier rejects,
-  spawn a fresh Worker to continue from the state left over by the
-  previous agent and do the necessary fix.
+  work. Verifier also checks mission descriptions touched in the
+  iteration: operator notes such as lines starting with `!` must be
+  removed or rephrased into concise, human-readable mission
+  descriptions that include the essential intent without duplicating
+  the test job plan. When Verifier has approved, run Tester. If
+  Verifier rejects, spawn a fresh Worker to continue from the state left
+  over by the previous agent and do the necessary fix.
 
 - **Tester** uses `run.py` with the mission file as an argument. The
   test is run as a foreground task, not background bash. If tester
@@ -117,6 +121,12 @@ Orchestrator must not end a response with touched repos dirty unless the
 operator explicitly asked to pause before cleanup. A mission is not clean
 just because the latest command result was reported; if the mission is
 incomplete, continue by spawning/fixing/verifying as appropriate.
+
+Orchestrator may start a new iteration only after the parent repo and
+all touched nested repos are clean and committed on `main`. If any repo
+is dirty after Tester or commit work, Orchestrator must keep dispatching
+Workers until the repos are clean and committed; it must not advance to
+the next Manager pass.
 
 If work nonetheless stops, this is considered a bug in AGENTS.md. The
 Orchestrator must diagnose the bug and present a suggested improvement.

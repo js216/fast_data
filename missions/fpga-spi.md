@@ -8,10 +8,9 @@ Build steps tangle the `noweb` (`.nw`) source files into Verilog and
 related files, run formal verification and simulation checks, and
 prepare the bitstream.
 
-! fpga/to_be_replaced_by_cleaner_code/ code is there for inspiration
-only. Do not tangle it directly! At the end of this mission I expect a
-single spi.nw file that cleanly implements whatever is needed in this
-mission.
+The legacy `fpga/to_be_replaced_by_cleaner_code/` sources are reference
+material only. The finished SPI implementation should live in a clean
+`spi.nw` rather than tangling those legacy files directly.
 
 Assumed hardware connections are documented in a Markdown table with
 one row per jumper. The table includes MPU signal/pin, FPGA signal/pin,
@@ -36,42 +35,24 @@ Assumed hardware connections:
 
 ### Define GPIO connectivity test manifest
 
-! Add a machine-readable connectivity manifest for the first
-`gpio_test` bring-up pass. It lists every jumper row from the assumed
-hardware connection table with stable signal names, direction, and
-whether `gpio.nw` or `stm32mp135_test_board/baremetal/gpio_test` is
-responsible for driving or sampling it. A repo test must fail if any
-table row is missing from the manifest or if the manifest mentions a
-signal not in the table.
+The first `gpio_test` bring-up uses a machine-readable connectivity
+manifest. It mirrors the assumed jumper table with stable signal names,
+directions, and MPU/FPGA drive or sample roles.
 
   - Manifest: `stm32mp135_test_board/baremetal/gpio_test/connectivity_manifest.json`.
   - Focused validation: `stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py`.
 
 ### Define GPIO connectivity test vectors
 
-! Extend the existing GPIO connectivity manifest and validator with a
-machine-readable first-pass test plan. For every manifest jumper, the
-plan must describe the controller that drives the line, the controller
-that samples it, and two static test vectors: drive 0 and expect 0, then
-drive 1 and expect 1. Bidirectional jumpers must have one low/high pair
-in each direction. A repo test must fail if any manifest jumper lacks
-the required vectors, if a vector uses a controller not allowed by that
-jumper's drive/sample roles, or if any vector references a signal not in
-the manifest.
+The manifest includes a first-pass static test plan. Each jumper has
+low/high drive-and-sample vectors for every allowed direction, with
+bidirectional lanes covered both ways.
 
 ### Generate GPIO connectivity command scripts
 
-! Add a deterministic, repo-tested script generator for the first
-connectivity run. It reads
-`stm32mp135_test_board/baremetal/gpio_test/connectivity_manifest.json`
-and writes one machine-readable command script for the MPU controller
-and one for the FPGA controller. Every `first_pass_test_plan` vector
-must produce exactly one drive command for the vector's driver and one
-sample/expect command for the vector's sampler, preserving manifest
-order and carrying signal name, vector index, drive value, and expected
-value. A repo test must fail if either generated script is stale, omits
-a vector, references a signal/controller not allowed by the manifest, or
-contains extra commands not implied by the test plan.
+The first connectivity run is generated from the manifest into separate
+MPU and FPGA JSONL command scripts. Each plan vector contributes one
+drive command and one sample/expect command in manifest order.
 
   - Generator:
     `stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_scripts.py`.
@@ -82,38 +63,22 @@ contains extra commands not implied by the test plan.
 
 ### Add GPIO JSONL dry-run executor
 
-! Add a host-side dry-run executor for the first `gpio_test`
-connectivity pass. It consumes the generated
-`stm32mp135_test_board/baremetal/gpio_test/connectivity_mpu.jsonl` and
-`stm32mp135_test_board/baremetal/gpio_test/connectivity_fpga.jsonl`
-scripts, merges commands by `vector_index`, simulates each signal's
-driven value, and fails if a sample is missing, occurs before its drive,
-expects the wrong value, references an unknown signal, or leaves any
-generated command unused. This must be runnable without hardware and
-covered by a repo test.
+A host dry-run checks the generated MPU and FPGA JSONL scripts without
+hardware. It pairs commands by vector, simulates driven signal values,
+and rejects missing, stale, unknown, out-of-order, or unused commands.
 
 ### Generate GPIO connectivity replay fixtures
 
-! Add a deterministic, repo-tested fixture generator for the first
-`gpio_test` connectivity replay. It consumes
-`stm32mp135_test_board/baremetal/gpio_test/connectivity_mpu.jsonl` and
-`stm32mp135_test_board/baremetal/gpio_test/connectivity_fpga.jsonl` and
-writes C header data that the MPU bare-metal `gpio_test` and FPGA
-`gpio.nw` harness can replay later. The generated fixtures must preserve
-controller, signal name, vector index, command kind, drive value, and
-expected value, and a repo test must fail if the fixtures are stale or
-contain commands not present in the JSONL scripts.
+The JSONL scripts are converted into deterministic C replay headers for
+the MPU `gpio_test` and FPGA `gpio.nw` harness. The fixtures preserve
+controller, signal, vector, command kind, drive value, and expected
+value.
 
 ### Add executable GPIO connectivity host checks
 
-! Add the smallest run.py-recognized mission section that exercises the
-already implemented host-side GPIO connectivity checks without hardware.
-It must run the manifest validator, JSONL script freshness check,
-dry-run executor, and replay-fixture freshness check from a mission
-Build block, and include whatever minimal Test/Verify structure `run.py`
-requires so `python3 run.py missions/fpga-spi.md` reports at least one
-passed executable section instead of `PASS` with zero executable
-sections. Do not implement hardware GPIO toggling in this step.
+The host-only GPIO checks run as an executable mission gate. This keeps
+manifest validation, script freshness, dry-run replay, and fixture
+freshness under `run.py` before any hardware line is touched.
 
 Build:
 
@@ -140,16 +105,9 @@ def check(extract_dir):
 
 ### Define GPIO replay interface contract
 
-! Add a host-testable interface contract for the first hardware
-connectivity replay between `fpga/src/gpio.nw` and
-`stm32mp135_test_board/baremetal/gpio_test`. The contract must document
-the generated replay header fields, the exact controller/signal/vector
-semantics consumed by each side, and the minimal GPIO operation names
-that later firmware must implement for drive and sample commands. Add a
-repo test that fails if the contract's listed replay fields or operation
-names drift from the generated `connectivity_mpu_replay.h` and
-`connectivity_fpga_replay.h` fixtures. Do not toggle hardware GPIOs in
-this step.
+The MPU and FPGA replay consumers share a documented host-testable
+contract. It defines the replay fields, controller and vector semantics,
+and the `drive` / `sample_expect` operations used by later firmware.
 
 Build:
 
@@ -172,19 +130,10 @@ def check(extract_dir):
 
 ### Add GPIO replay build stubs
 
-! Add the smallest build-only integration step proving that both sides
-of the first connectivity replay can consume the generated fixtures.
-`stm32mp135_test_board/baremetal/gpio_test` must gain a minimal C
-translation unit that includes `connectivity_mpu_replay.h`, iterates the
-replay array, and dispatches every command through stubbed
-`drive`/`sample_expect` operations without touching hardware.
-`fpga/src/gpio.nw` must gain an equivalent host/simulation-only replay
-stub, or a generated/tangled companion used by the GPIO build, that
-includes `connectivity_fpga_replay.h` and proves the FPGA-side replay
-commands map onto the existing GPIO UART drive/sample command surface.
-Add a repo test/build check that compiles or otherwise validates both
-stubs against the generated headers and fails if either side stops
-including its replay fixture. Do not toggle hardware GPIOs in this step.
+Build-only replay stubs prove that both sides consume their generated
+fixtures. The MPU stub dispatches replay commands through host stubs,
+and the FPGA stub maps replay commands onto the existing GPIO UART
+command surface without touching hardware.
 
 Build:
 
@@ -210,15 +159,10 @@ def check(extract_dir):
 
 ### Add GPIO connectivity inventory plan skeleton
 
-! Add the smallest hardware-facing `test_serv` skeleton for the first
-connectivity verification pass. The section must keep the existing
-host-side replay/build checks in Build, then submit a no-op hardware
-plan that runs `inventory` and marks
-`gpio_connectivity_inventory`. Verify must require a clean manifest and
-the emitted `bench.devices.json`/`bench.ops.json` inventory artefacts so
-later steps can gate the MPU/FPGA replay on concrete bench capability.
-Do not claim leases, program the FPGA, open UART, drive/sample GPIO, or
-toggle any physical line in this step.
+The first hardware-facing gate is an inventory-only `test_serv` plan.
+It keeps the host checks in front, records the inventory result, and
+requires the devices and operation metadata needed by later replay
+steps.
 
 Build:
 
@@ -254,68 +198,159 @@ def check(extract_dir):
     return isinstance(devices, list) and isinstance(ops, dict)
 ```
 
+### Gate GPIO replay inventory capabilities
+
+The inventory gate now checks concrete replay prerequisites without
+touching the DUT. It requires inventoried FPGA, MP135, and bench MCU
+devices plus the advertised programming, UART, reset, and DFU layout
+operations needed by later GPIO replay steps.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_fixtures.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+```
+
+Test (max 1 min):
+
+```
+inventory
+mark tag=gpio_replay_inventory_caps
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+REQUIRED_DEVICES = {'fpga', 'mp135', 'bench_mcu'}
+REQUIRED_OPS = {
+    'fpga': {'program', 'uart_open', 'uart_write', 'uart_expect', 'uart_close'},
+    'mp135': {'uart_open', 'uart_write', 'uart_expect', 'uart_close'},
+    'bench_mcu': {'reset_dut'},
+    'dfu': {'flash_layout'},
+}
+ALLOWED_METADATA_VERBS = {'description', 'inventory', 'mark'}
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    devices_path = Path(extract_dir, 'bench.devices.json')
+    ops_path = Path(extract_dir, 'bench.ops.json')
+    if not devices_path.is_file() or not ops_path.is_file():
+        return False
+    try:
+        devices = json.loads(devices_path.read_text())
+        ops = json.loads(ops_path.read_text())
+        op_log = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+    if (
+        not isinstance(devices, list)
+        or not isinstance(ops, dict)
+        or not isinstance(op_log, list)
+    ):
+        return False
+    for record in op_log:
+        if not isinstance(record, dict):
+            return False
+        if record.get('device') is not None:
+            return False
+        if record.get('verb') not in ALLOWED_METADATA_VERBS:
+            return False
+        if record.get('status') != 'ok':
+            return False
+    if not any(r.get('verb') == 'inventory' for r in op_log):
+        return False
+    if not any(
+        r.get('verb') == 'mark'
+        and 'gpio_replay_inventory_caps' in Path(extract_dir, 'plan.txt').read_text()
+        for r in op_log
+    ):
+        return False
+    plugins = set()
+    for device in devices:
+        if not isinstance(device, dict):
+            return False
+        if not isinstance(device.get('id'), str):
+            return False
+        plugin = device.get('plugin')
+        if not isinstance(plugin, str):
+            return False
+        plugins.add(plugin)
+    if not REQUIRED_DEVICES <= plugins:
+        return False
+    for plugin, required in REQUIRED_OPS.items():
+        advertised = set()
+        for name, entry in ops.items():
+            if name != plugin and not name.startswith(plugin + '.'):
+                continue
+            if not isinstance(entry, dict):
+                return False
+            entry_ops = entry.get('ops')
+            if not isinstance(entry_ops, dict):
+                return False
+            advertised.update(entry_ops)
+        if not required <= set(advertised):
+            return False
+    return True
+```
+
 ## WIP
 
 ### Verify Connecticity
 
-! make use of gpio.nw and stm32mp135_test_board/baremetal/gpio_test (not
-yet implemented) to verify connections are good as per table above.
+Use `gpio.nw` and the MP135 `gpio_test` harness to verify the physical
+connections in the assumed jumper table.
 
 ### PRBS, UART, Checksum
 
-! write prbs_xor.nw that implements a simple LFSR prbs generator and a
-super basic XOR-based checksum. prbs_xor.nw should make use of relevant
-modules from uart.nw to implement a very simple command language: `r`
-over UART resets the PRBS generator to seed 1 and the checksum to 0, `s`
-causes it to stream a single word into the checksum engine, and `S`
-causes it to stream `2**16` words into the checksum engine, and `p`
-prints out the current checksum.
+Add `prbs_xor.nw`, combining an LFSR PRBS generator, an XOR checksum,
+and a small UART command interface. Commands reset state, stream one
+word, stream `2**16` words, and print the checksum.
 
-! write stm32mp135_test_board/baremetal/prbs_test (new file) that
-implements exactly the same logic, but running on the MPU.
+Add the same PRBS/checksum behavior to
+`stm32mp135_test_board/baremetal/prbs_test`.
 
-! write tests that compare the outputs of FPGA and MPU streams, for an
-interesting range of single-word `s` steps (1,2, 5, ... ?) and big `S`
-steps.
+Compare FPGA and MPU checksum streams across short single-step runs and
+larger burst runs.
 
 ### Bit Bang 1-lane Raw SPI
 
-! make spi.nw (new file) that makes use of modules from prbs_xor.nw
-where, in addition to streaming the prbs into xor, it streams into SPI
-as a slave device. the fpga in this module responds only to the `r`
-and `p` commands: the `s` and `S` commands are not needed since the data
-streaming is driven by the SPI protocol.
+Add `spi.nw` as a one-lane SPI slave that streams PRBS data into the
+checksum path. UART commands still reset and print the checksum; SPI
+traffic drives the data stream.
 
-! make a stm32mp135_test_board/baremetal/spi_bitbang (new project) which
-acts as an SPI master, but using GPIO to bit bang the data out of the
-FPGA. keep also the mpu-based prbs and checksum logic to compare
+Add an MP135 `spi_bitbang` test that acts as a GPIO bit-banged SPI
+master and keeps an independent PRBS/checksum reference.
 
-! verify that no matter how little or how much data is transferred, the
-fpga and mpu always report the same checksum.
+Verify matching FPGA and MPU checksums for both short and long
+transfers.
 
 ### Bit Bang 4-lane Raw SPI
 
-! add quad-lane support to spi.nw and
-stm32mp135_test_board/baremetal/spi_bitbang but otherwise keep the logic
-very similar to the 1-lane case
+Extend `spi.nw` and `spi_bitbang` to transfer PRBS data over four SPI
+lanes while preserving the one-lane checksum model.
 
 ### 1-Lane Raw SPI, 4 GiB, >=100 Mbps
 
-! make stm32mp135_test_board/baremetal/spi (new project) which does the
-same thing as spi_bitbang except it uses the real SPI peripheral
+Add an MP135 `spi` test using the real SPI peripheral instead of GPIO
+bit-banging.
 
-! verify perfect data integrity at 100 Mbps or faster, but careful to
-NOT drive SPI clock faster than 133 MHz since that's the limit for the
-wiring.
+Verify bit-perfect one-lane transfers at 100 Mbps or faster while
+keeping the SPI clock at or below 133 MHz.
 
 ### 4-Lane Raw SPI, 4 GiB, >=400 Mbps
 
-! same thing but using all 4 lanes. Again: DO NOT DRIVE SPI CLOCK FASTER
-THAN 133 MHz! most likely 400 Mbps will be hard to achieve because of
-per-word or similar DMA overhead --- make sure to minimize all this
-overhead as much as possible
+Verify bit-perfect quad-lane transfers at 400 Mbps or faster while
+keeping the SPI clock at or below 133 MHz and minimizing per-transfer
+software overhead.
 
 ### Memory-Mapped Quad SPI, >= 400 Mbps
 
-! Same thing, but implement enough of the JEDEC flash commands so that
-the quadspi peripheral can be used in the memory-mapped mode.
+Implement enough JEDEC flash behavior for the MP135 QuadSPI peripheral
+to use the FPGA stream in memory-mapped mode at 400 Mbps or faster.
