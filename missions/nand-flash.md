@@ -10,6 +10,11 @@ Bootloader is built with `-DNAND_FLASH` (swaps `two`/`load_sd` for
 rootfstype=ubifs ...`. Provisioning: `nand.img` -> DDR via
 `msc.custom:write` -> `fmc_flush` over UART -> NAND.
 
+The 3 MB/s MSC floor is a hard boot/provisioning correctness
+requirement. Do not lower any `min_rate_Bps=3000000` threshold to pass
+the mission. A sub-3 MB/s MSC read or write means the NAND boot path is
+broken and the code must be fixed.
+
 ### Inventory smoke
 
 Build: nothing required.
@@ -145,7 +150,10 @@ def check(extract_dir):
 
 Inherits the bootloader-at-`> ` state. Refresh inventory so
 `msc.custom` shows up, read 1 MiB from the DDR window, and run
-`fmc_test_boot` to confirm the FMC controller is initialised.
+`fmc_test_boot` to confirm the FMC controller is initialised. The
+3 MB/s MSC read floor is a hard requirement; failing it means the
+bootloader path is broken, not that the test threshold should be
+reduced.
 
 Build: nothing required.
 
@@ -185,7 +193,9 @@ Write `nand.img` to DDR via MSC, `fmc_flush` to NAND, `fmc_load` back
 into DDR, MSC-read and offline-diff the leading bytes. The image build
 can outlive an in-memory bench lease if the poller restarts, so this
 step claims a fresh lease after the build and re-enters the bootloader
-state it needs.
+state it needs. The 3 MB/s MSC write and read floors are hard
+requirements for NAND provisioning; sub-3 MB/s results are code
+failures.
 
 Build:
 
@@ -401,7 +411,8 @@ def check(extract_dir):
 ### Full end-to-end: DFU -> NAND write+commit -> boot Linux -> SSH IP
 
 Cold path. Reset, DFU NAND bootloader, stop autoload, write+commit
-`nand.img`, `fmc_bload` + `jump`, SSH.
+`nand.img`, `fmc_bload` + `jump`, SSH. The 3 MB/s MSC write floor is a
+hard requirement; lowering it hides a broken NAND boot path.
 
 Build:
 

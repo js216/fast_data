@@ -561,19 +561,44 @@ class Runner:
             if rc != 0:
                 last_reason = f'   submit.py rc={rc}'
                 self._release_failed_attempt_lease(extract, test)
+                if self._lease_released_in_attempt(extract):
+                    break
                 continue
             try:
                 ok = self.run_verify(verify, artifacts, extract, item)
             except Exception as e:
                 last_reason = f'   verify {type(e).__name__}: {e}'
                 self._release_failed_attempt_lease(extract, test)
+                if self._lease_released_in_attempt(extract):
+                    break
                 continue
             if not ok:
                 last_reason = '   verify check() returned False'
                 self._release_failed_attempt_lease(extract, test)
+                if self._lease_released_in_attempt(extract):
+                    break
                 continue
             return True, digest, None, extract, log
         return False, digest, last_reason, last_extract, last_log
+
+    def _lease_released_in_attempt(self, extract_dir):
+        """Return True if the attempt consumed its lease token."""
+        ops = extract_dir / 'ops.jsonl'
+        if not ops.exists():
+            return False
+        try:
+            for line in ops.read_text(errors='replace').splitlines():
+                op = json.loads(line)
+                if (op.get('device') == 'lease'
+                        and op.get('verb') == 'release'
+                        and op.get('status') == 'ok'):
+                    self.lease_token = None
+                    if self.LEASE_STATE_FILE.exists():
+                        self.LEASE_STATE_FILE.unlink()
+                    return True
+        except Exception:
+            return False
+        return False
 
     def _release_failed_attempt_lease(self, extract_dir, plan_text):
         """Release a freshly claimed lease from a failed retry attempt."""
