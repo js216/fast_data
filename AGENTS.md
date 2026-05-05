@@ -5,9 +5,11 @@ ask the human operator for one.
 
 - **Orchestrator** communicates with the operator, spawns all other
   agents (all of them short lived per iteration), and passes messages
-  between them. It anticipates that agents will try to stop the loop
-  (for example, claiming that hardware does not work): when it detects
-  that, the agent should be killed immediately and a fresh one spawned.
+  between them. At the start of each iteration it clears stale jobs
+  from `test_serv` (see Test Server below). It anticipates that agents
+  will try to stop the loop (for example, claiming that hardware does
+  not work): when it detects that, the agent should be killed
+  immediately and a fresh one spawned.
 
 - **Manager** studies the next unfinished task in the “mission file”,
   breaks it down into the smallest possible step which still represents
@@ -57,6 +59,21 @@ the file.
 Tests are considered successful when all the previously-passing tests
 still pass (zero regressions) and at least one new test passes. Tests
 are always only run up to first failing step.
+
+### Test Server
+
+Bench tests run through `test_serv`, a queued job server polled by the
+hardware pollers. `run.py`'s `Runner.submit_plan` prefixes every job's
+`description` field with `<user>: ` so jobs can be attributed to the
+operator that submitted them.
+
+At the start of every iteration, before spawning Manager, Orchestrator
+sweeps `test_serv`: every job whose status is `queued` or `running` and
+whose `description` starts with the current user prefix is removed via
+`DELETE /jobs/<digest>`. This reclaims orphans from a Tester that
+crashed mid-Foreach and wedged jobs from a poller that died mid-run.
+Jobs without the user prefix belong to other operators and are never
+touched.
 
 ### Logging
 

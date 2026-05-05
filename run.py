@@ -6,6 +6,7 @@ Usage: python3 run.py ssh.md
 """
 import argparse
 import datetime
+import getpass
 import json
 import re
 import subprocess
@@ -87,6 +88,7 @@ class Runner:
         self.workdir = Path(tempfile.mkdtemp(prefix='runpy-'))
         self.log_path = Path.cwd() / 'log.txt'
         self.log_fh = None
+        self.user = getpass.getuser()
         # Most recent lease token captured from a section's
         # streams/lease.token.bin, used to substitute {{LEASE_TOKEN}}
         # in subsequent sections. Cleared when a section's plan
@@ -200,6 +202,7 @@ class Runner:
         enforce. When ``line_prefix`` is given and stdout is a TTY,
         in-place \\r updates show queued/running status with a
         countdown against ``max_s`` while submit.py runs."""
+        description = f'{self.user}: {description}'
         if self.LEASE_PLACEHOLDER in plan_text:
             if not self.lease_token:
                 raise RuntimeError(
