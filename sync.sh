@@ -1,6 +1,4 @@
 #!/bin/sh
-# SPDX-License-Identifier: MIT
-# Copyright (c) 2026 Jakob Kastelic
 set -e
 
 git -C adsp2156 pull && git -C adsp2156 push

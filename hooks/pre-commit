@@ -91,7 +91,7 @@ is_spdx_excluded() {
         README*|LICENSE*|CHANGELOG*|NOTICE*|AUTHORS*|CONTRIBUTORS*) return 0 ;;
         */README*|*/LICENSE*|*/CHANGELOG*|*/NOTICE*|*/AUTHORS*|*/CONTRIBUTORS*) return 0 ;;
         # docs / data / config
-        *.md|*.txt|*.json|*.lock|*.toml|*.nw) return 0 ;;
+        *.md|*.txt|*.json|*.lock|*.toml|*.nw|*.sh) return 0 ;;
         *.tsv|*.csv|*.stm32|*.linux|*.ldr|*.plan|*.conf|*.dts|*.dtsi|*.patch) return 0 ;;
         # tool config dotfiles
         .gitignore|.gitmodules|.gitattributes|.codex|.clang-format|.clang-tidy) return 0 ;;
