@@ -300,6 +300,126 @@ def check(extract_dir):
     return True
 ```
 
+### Acquire GPIO replay bench lease
+
+Run a no-toggle hardware readiness probe before GPIO replay. The plan
+holds the required FPGA, MP135, and bench MCU resources, records the
+lease/probe result, and confirms that replay-capable UART, programming,
+reset, and DFU operations remain available without driving DUT GPIOs.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_scripts.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/dry_run_connectivity.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_fixtures.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+```
+
+Test (max 1 min):
+
+```
+lease:claim devices="fpga.hx1k,mp135.evb,bench_mcu.0" duration_s=30
+inventory
+mark tag=gpio_replay_bench_lease_probe
+lease:release
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+REQUIRED_IDS = {'fpga.hx1k', 'mp135.evb', 'bench_mcu.0'}
+REQUIRED_PLUGINS = {'fpga', 'mp135', 'bench_mcu'}
+REQUIRED_OPS = {
+    'fpga': {'program', 'uart_open', 'uart_write', 'uart_expect', 'uart_close'},
+    'mp135': {'uart_open', 'uart_write', 'uart_expect', 'uart_close'},
+    'bench_mcu': {'reset_dut'},
+    'dfu': {'flash_layout'},
+}
+ALLOWED_OPS = {
+    (None, 'description'),
+    ('lease', 'claim'),
+    (None, 'inventory'),
+    (None, 'mark'),
+    ('lease', 'release'),
+}
+DISALLOWED_VERBS = {
+    'program', 'uart_open', 'uart_write', 'uart_expect', 'uart_close',
+    'reset', 'reset_dut', 'reset_dut2', 'send', 'flash',
+    'flash_layout', 'list', 'capture', 'open', 'close',
+}
+
+def _plugin_ops(ops, plugin):
+    advertised = set()
+    for name, entry in ops.items():
+        if name != plugin and not name.startswith(plugin + '.'):
+            continue
+        if not isinstance(entry, dict):
+            return None
+        entry_ops = entry.get('ops')
+        if not isinstance(entry_ops, dict):
+            return None
+        advertised.update(entry_ops)
+    return advertised
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        manifest = Verification.load_manifest(extract_dir)
+        devices = json.loads(Path(extract_dir, 'bench.devices.json').read_text())
+        ops = json.loads(Path(extract_dir, 'bench.ops.json').read_text())
+        op_log = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(manifest.get('lease_token'), str):
+        return False
+    if not isinstance(devices, list) or not isinstance(ops, dict):
+        return False
+    seen_ids = set()
+    seen_plugins = set()
+    for device in devices:
+        if not isinstance(device, dict):
+            return False
+        device_id = device.get('id')
+        plugin = device.get('plugin')
+        if not isinstance(device_id, str) or not isinstance(plugin, str):
+            return False
+        seen_ids.add(device_id)
+        seen_plugins.add(plugin)
+        if device_id in REQUIRED_IDS:
+            verify = device.get('verify')
+            if not isinstance(verify, dict) or verify.get('ok') is not True:
+                return False
+    if not REQUIRED_IDS <= seen_ids or not REQUIRED_PLUGINS <= seen_plugins:
+        return False
+    for plugin, required in REQUIRED_OPS.items():
+        advertised = _plugin_ops(ops, plugin)
+        if advertised is None or not required <= advertised:
+            return False
+    if not isinstance(op_log, list):
+        return False
+    saw = set()
+    for record in op_log:
+        if not isinstance(record, dict) or record.get('status') != 'ok':
+            return False
+        key = (record.get('device'), record.get('verb'))
+        if key not in ALLOWED_OPS:
+            return False
+        if record.get('verb') in DISALLOWED_VERBS and record.get('device') != 'lease':
+            return False
+        saw.add(key)
+    if not ALLOWED_OPS <= saw:
+        return False
+    plan_text = Path(extract_dir, 'plan.txt').read_text()
+    return 'gpio_replay_bench_lease_probe' in plan_text
+```
+
 ## WIP
 
 ### Verify Connecticity
