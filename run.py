@@ -75,6 +75,12 @@ class Runner:
     SERVER = 'http://localhost:8080'
     WAIT_S = 600                     # generous upper bound
     LEASE_PLACEHOLDER = '{{LEASE_TOKEN}}'
+    # Bounded retries with backoff for transient bench failures
+    # (USB device dropouts, busy queues, FT4222 not-found). The
+    # retry sequence is the wait BEFORE the i-th attempt; the first
+    # attempt has no wait. Total worst-case extra wait per FAIL is
+    # the sum of the non-zero entries.
+    RETRY_BACKOFF_S = (0, 3, 10, 30)
 
     def __init__(self, md_path):
         self.md_path = Path(md_path)
@@ -371,13 +377,15 @@ class Runner:
             return True
         sub_w = len(str(sub_total))
         for j, path in enumerate(matches, 1):
-            label = path.name
+            # Include the immediate parent dir in the label so a sweep
+            # like build/{cces,sel}/cctest_*.ldr surfaces which
+            # toolchain each iteration is hitting; bare filename is
+            # ambiguous when the same stem exists in multiple subdirs.
+            label = f'{path.parent.name}/{path.name}'
             sub_artifacts = dict(artifacts)
             sub_artifacts[var_name] = str(path.relative_to(self.FAST_DATA))
             sub_dir = section_dir / f'item_{j:0{sub_w}d}'
             sub_dir.mkdir()
-            sub_extract = sub_dir / 'artefact'
-            sub_log = sub_dir / 'run.log'
             sub_started = datetime.datetime.now().strftime('%H:%M:%S')
             sub_t0 = time.monotonic()
             sub_head = (f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
@@ -385,41 +393,71 @@ class Runner:
             sys.stdout.write(sub_head)
             sys.stdout.flush()
 
-            def emit(verdict, extra_dump=None, extra_msg=None):
-                el = time.monotonic() - sub_t0
-                if verdict == 'PASS':
-                    sys.stdout.write(f'(+{el:.1f}s)\n')
-                else:
-                    sys.stdout.write(f'{colored(verdict)} (+{el:.1f}s)\n')
+            ok, digest, fail_reason, fail_extract, fail_log = (
+                self._submit_with_retries(
+                    test, sub_artifacts, sub_dir,
+                    f'{title} :: {label}', test_max_s,
+                    str(path), verify))
+            el = time.monotonic() - sub_t0
+            if ok:
+                sys.stdout.write(f'(+{el:.1f}s)\n')
                 sys.stdout.flush()
                 self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
-                          f'{verdict} {label} (+{el:.1f}s)')
-                if extra_msg:
-                    print(extra_msg); self._log(extra_msg)
-                if extra_dump is not None:
-                    dump(sub_log, extra_dump)
-
-            rc, digest = self.submit_plan(
-                test, sub_artifacts, sub_extract, sub_log,
-                f'{title} :: {label}', test_max_s)
-            if rc != 0:
-                emit('FAIL')
-                dump(sub_log)
-                return False
-            try:
-                ok = self.run_verify(verify, sub_artifacts, sub_extract,
-                                     str(path))
-            except Exception as e:
-                emit('FAIL', sub_extract,
-                     f'   verify {type(e).__name__}: {e}')
-                return False
-            if not ok:
-                emit('FAIL', sub_extract,
-                     '   verify check() returned False')
-                return False
-            self.delete_job(digest)
-            emit('PASS')
+                          f'PASS {label} (+{el:.1f}s)')
+                self.delete_job(digest)
+                continue
+            sys.stdout.write(f'{colored("FAIL")} (+{el:.1f}s)\n')
+            sys.stdout.flush()
+            self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
+                      f'FAIL {label} (+{el:.1f}s)')
+            if fail_reason:
+                print(fail_reason); self._log(fail_reason)
+            if fail_log is not None:
+                dump(fail_log, fail_extract)
+            return False
         return True
+
+    def _submit_with_retries(self, test, artifacts, work_dir, description,
+                             max_s, item, verify):
+        """Submit + verify with bounded retries on transient failures.
+        Each attempt uses a fresh ``work_dir/attempt_<n>/artefact`` so
+        stale tarballs don't interfere; submit_plan auto-stamps a fresh
+        nonce per call so the bench gives us a fresh digest. Retries
+        are uniform across submit-rc != 0, run_verify exceptions, and
+        verify-check() returning False -- transient bench failures
+        (FT4222 dropouts, queue contention, USB glitches) often mark
+        the manifest with op-level errors which fail manifest_clean().
+        For deterministic mismatches the cost is the cumulative
+        backoff before we conclude. Returns (ok, digest, reason,
+        extract, log) -- extract/log point at the LAST attempt's
+        artefact directory and run log for dump()."""
+        last_reason = None
+        last_extract = None
+        last_log = None
+        digest = None
+        for attempt, backoff in enumerate(self.RETRY_BACKOFF_S):
+            if backoff:
+                time.sleep(backoff)
+            attempt_dir = work_dir / f'attempt_{attempt}'
+            attempt_dir.mkdir()
+            extract = attempt_dir / 'artefact'
+            log = attempt_dir / 'run.log'
+            last_extract, last_log = extract, log
+            rc, digest = self.submit_plan(
+                test, artifacts, extract, log, description, max_s)
+            if rc != 0:
+                last_reason = f'   submit.py rc={rc}'
+                continue
+            try:
+                ok = self.run_verify(verify, artifacts, extract, item)
+            except Exception as e:
+                last_reason = f'   verify {type(e).__name__}: {e}'
+                continue
+            if not ok:
+                last_reason = '   verify check() returned False'
+                continue
+            return True, digest, None, extract, log
+        return False, digest, last_reason, last_extract, last_log
 
     def run_all(self):
         """Iterate sections in order. Per test prints

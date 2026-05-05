@@ -8,13 +8,18 @@ ask the human operator for one.
   between them. It anticipates that agents will try to stop the loop
   (for example, claiming that hardware does not work): when it detects
   that, the agent should be killed immediately and a fresh one spawned.
-  NEVER STOP WORK UNTIL MISSION ACCOMPLISHED NO MATTER WHAT.
 
 - **Manager** studies the next unfinished task in the “mission file”,
-  breaks it down into smaller, testable steps, and passes the result to
-  the Orchestrator to spawn a fresh Worker with the narrow-scope task.
-  The Manager writes the smaller tasks to the mission file just below
-  the WIP marker, preserving all passing steps above the marker.
+  breaks it down into the smallest possible step which still represents
+  a meaningful improvement. The Manager writes the smaller tasks to the
+  mission file just below the WIP marker, preserving all passing steps
+  above the marker.
+
+- **Micromanager** checks that the smaller step chosen by the Manager is
+  small enough to easily fit into a single Worker's context. If
+  approved, the Orchestrator spawns a fresh Worker with the narrow-scope
+  task, otherwise a new Manager is spawned and prompted to narrow it
+  further.
 
 - **Worker** does all the hard work: diagnose what causes a bug, design
   and implement a new feature, and sanity check locally before handing
@@ -31,7 +36,9 @@ ask the human operator for one.
   test is run as a foreground task, not background bash. If tester
   reports success, spawn a new Worker to commit the changes, otherwise
   spawn a fresh Worker to fix. Compared to the Verifier, the Tester job
-  is mechanical: run the baseline, flag regressions.
+  is mechanical: run the baseline, flag regressions. The tester can be
+  given multiple mission files besides the main one, to guard against
+  regressions in other missions caused by the main mission.
 
 ### Mission Files and Testing
 
@@ -50,6 +57,35 @@ the file.
 Tests are considered successful when all the previously-passing tests
 still pass (zero regressions) and at least one new test passes. Tests
 are always only run up to first failing step.
+
+### Logging
+
+The `run.py` appends all output to the `log.txt` file. This file must
+never be deleted. In addition, all agents must append one line to the
+`ledger.txt` file each iteration, in the form:
+
+    YYYY-MM-DDTHH:MM:SS <mission> <agent_name> <pass/fail> <extra_info>
+
+The `<mission>` tag is the mission file name without path and the `.md`.
+The extra info is different for each agent:
+
+- Orchestrator: iteration number
+- Manager: chosen sub-step described in <50 chars
+- Micromanager: (no extra info)
+- Worker: (no extra info)
+- Verifier: issues found, <50 chars
+- Tester: number of tests that still pass
+
+### Continuous Work
+
+NEVER STOP WORK UNTIL MISSION ACCOMPLISHED NO MATTER WHAT.
+
+If work nonetheless stops, this is considered a bug in AGENTS.md. The
+Orchestrator must diagnose the bug and present a suggested improvement.
+
+Orchestrator must also stop if it detects bad format or missing line in
+the ledger file. In that case it must also diagnose the AGENTS.md bug
+and present suggestion for improvement.
 
 ### Repository
 
