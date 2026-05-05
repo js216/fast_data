@@ -130,6 +130,15 @@ cleaned before commit by reversing the tracked patch and removing or
 restoring generated copies. Do not commit those generated Linux
 workspace changes unless the mission explicitly asks for a Linux commit.
 
+Git hooks are mandatory security and policy gates. Agents must never
+bypass, disable, rename, edit, mask, skip, or work around any hook by
+using options such as `--no-verify`, changing hook files, changing hook
+paths, changing Git configuration, invoking plumbing commands to avoid
+hooks, pushing from another clone, or using any equivalent technique. If
+a hook blocks a commit or push, stop that operation and fix the
+underlying content, environment, or repository state so the hook passes
+normally.
+
 Do not add "Co-Author" lines to the commit messages. All commits must be
 made by "Jakob Kastelic", "kastelic.jakob@gmail.com".
 
