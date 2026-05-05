@@ -626,6 +626,104 @@ def check(extract_dir):
     )
 ```
 
+### Query FPGA GPIO UART under lease
+
+With the FPGA lease held, program the FPGA `gpio.nw` image, open the
+FPGA UART, and issue a read-only query that proves the programmed GPIO
+image responds over the debug path. This keeps the scope limited to
+FPGA reachability and still avoids MPU GPIO lines or replay vectors.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_scripts.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/dry_run_connectivity.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_fixtures.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C fpga build/gpio/gpio.bin
+```
+
+Artifacts:
+
+```
+fpga/build/gpio/gpio.bin
+```
+
+Test (max 5 min):
+
+```
+lease:claim devices="fpga.hx1k" duration_s=30
+inventory
+fpga.hx1k:program bin=@gpio.bin
+fpga.hx1k:uart_open
+delay ms=300
+fpga.hx1k:uart_write data="?"
+fpga.hx1k:uart_expect sentinel="OK\r\n" timeout_ms=3000
+fpga.hx1k:uart_close
+mark tag=gpio_replay_fpga_uart_query
+lease:release
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+ALLOWED_OPS = {
+    (None, 'description'),
+    ('lease', 'claim'),
+    (None, 'inventory'),
+    ('fpga.hx1k', 'program'),
+    ('fpga.hx1k', 'uart_open'),
+    (None, 'delay'),
+    ('fpga.hx1k', 'uart_write'),
+    ('fpga.hx1k', 'uart_expect'),
+    ('fpga.hx1k', 'uart_close'),
+    (None, 'mark'),
+    ('lease', 'release'),
+}
+DISALLOWED_VERBS = {
+    'reset', 'reset_dut', 'reset_dut2', 'send', 'flash',
+    'flash_layout', 'list', 'capture', 'open', 'close',
+    'drive', 'sample', 'expect', 'gpio_write', 'gpio_read',
+}
+DISALLOWED_DEVICES = {'mp135.evb', 'bench_mcu.0'}
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        manifest = Verification.load_manifest(extract_dir)
+        ops = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+    lease_token = manifest.get('lease_token')
+    if not isinstance(lease_token, str) or not lease_token:
+        return False
+    plan_text = Path(extract_dir, 'plan.txt').read_text()
+    if 'mp135.evb' in plan_text or 'bench_mcu.0' in plan_text:
+        return False
+    saw = set()
+    for record in ops:
+        if not isinstance(record, dict) or record.get('status') != 'ok':
+            return False
+        if record.get('device') in DISALLOWED_DEVICES:
+            return False
+        key = (record.get('device'), record.get('verb'))
+        if key not in ALLOWED_OPS:
+            return False
+        if record.get('verb') in DISALLOWED_VERBS:
+            return False
+        saw.add(key)
+    return (
+        ALLOWED_OPS <= saw and
+        'gpio_replay_fpga_uart_query' in plan_text
+    )
+```
+
 ## WIP
 
 ### Verify physical connectivity
