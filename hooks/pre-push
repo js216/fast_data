@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# pre-push --- selache-only prohibited term checks for refs and tag messages
+# Copyright (c) 2026 Jakob Kastelic
+
+set -uo pipefail
+
+ROOT=$(git rev-parse --show-toplevel)
+REPO=$(basename "$ROOT")
+HOOK_DIR=$(cd "$(dirname "$0")" && pwd)
+
+if [ "$REPO" != "selache" ]; then
+    exit 0
+fi
+
+errors=0
+while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
+    name=${local_ref#refs/heads/}
+    name=${name#refs/tags/}
+    if ! printf '%s\n' "$name" | "$HOOK_DIR/check-terms"; then
+        echo "push rejected: ref name '$name' contains prohibited terms"
+        errors=1
+    fi
+
+    if [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+        obj_type=$(git cat-file -t "$local_sha" 2>/dev/null || true)
+        if [ "$obj_type" = "tag" ]; then
+            msg=$(git cat-file tag "$local_sha" | sed -e '1,/^$/d')
+            if ! printf '%s\n' "$msg" | "$HOOK_DIR/check-terms"; then
+                echo "push rejected: tag message for '$name' contains prohibited terms"
+                errors=1
+            fi
+        fi
+    fi
+done
+
+exit $errors

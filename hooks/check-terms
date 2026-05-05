@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# check-terms --- scan text on stdin for prohibited terms
+# Copyright (c) 2026 Jakob Kastelic
+#
+# Returns 0 if clean, 1 if violations found.
+# Used by pre-commit (on staged diff) and commit-msg (on message).
+
+set -uo pipefail
+
+errors=0
+input=$(cat)
+
+check() {
+    local label="$1"
+    local pattern="$2"
+    local matches
+    matches=$(echo "$input" | grep -Pn "$pattern" || true)
+    if [ -n "$matches" ]; then
+        echo "ERROR: prohibited term: $label"
+        echo "$matches"
+        echo ""
+        errors=1
+    fi
+}
+
+# Proprietary toolchain names
+check "CCES"             '\b[Cc][Cc][Ee][Ss]\b'
+check "CrossCore"        '\b[Cc]ross[Cc]ore\b'
+check "VisualDSP"        '\b[Vv]isual[Dd][Ss][Pp]\b'
+
+# Vendor names and abbreviations
+check "Analog Devices"    '\b[Aa]nalog\s+[Dd]evices\b'
+check "ADI (standalone)"  '(?<![.\w])ADI(?![.\w_])'
+check "vendor"            '\b[Vv]endor\b'
+
+# No implication that selache was derived from a reference product.
+# The whole project is a clean rewrite; phrasing like "external C
+# compiler" or "externally-compiled" would suggest the existence of
+# another implementation we are being compared against.
+check "external C compiler" '\b[Ee]xternal\s+C\s+compiler\b'
+check "externally-compiled" '\b[Ee]xternally[-\s]compiled\b'
+
+# Proprietary tool names
+check "elfar"            '\belfar\b'
+check "elfdump"          '\belfdump\b'
+check "elfloader"        '\belfloader\b'
+check "elfpatch"         '\belfpatch\b'
+check "elfsyms"          '\belfsyms\b'
+check "sharcelf"         '\bsharcelf\b'
+check "cc21k"            '\bcc21k\b'
+check "easm21k"          '\beasm21k\b'
+check "mem21k"           '\bmem21k\b'
+check "meminit"          '\bmeminit\b'
+
+# Compiler identity impersonation
+check "_ADI_COMPILER"    '\b_ADI_COMPILER\b'
+check "__ECC__"          '\b__ECC__\b'
+
+# Reverse engineering provenance
+check "empirical"        '\b[Ee]mpirical(ly)?\b'
+check "golden reference" '\bgolden\s+reference\b'
+check "Table 18-"        '\bTable 18-'
+check "byte-for-byte"    '\bbyte[-\s]for[-\s]byte\b'
+
+# Cleanroom process language
+check "cleanroom"        '\b[Cc]lean[\s-]*[Rr]oom\b'
+check "proprietary"      '\b[Pp]roprietary\b'
+check "from scratch"     '\bfrom\s+scratch\b'
+check "encumbered"       '\b[Ee]ncumbered\b'
+check "closed-source"    '\b[Cc]losed[-\s]source\b'
+check "observed"         '\bobserved\b'
+check "reference tool"   '\breference\s+(assembler|compiler|linker|preprocessor|toolchain|tool|output|implementation)\b'
+
+# Derived-work implications: any phrasing that hints selache is
+# parallel to, replacing, or a substitute for another runtime / binary.
+check "stock"            '\b[Ss]tock\b'
+check "vendor runtime"   '\b[Vv]endor\s+runtime\b'
+check "vendor-supplied"  '\b[Vv]endor[-\s]supplied\b'
+check "default runtime"  '\b[Dd]efault\s+runtime\b'
+
+exit $errors

@@ -11,6 +11,16 @@
 
 set -eu
 MSG_FILE="$1"
+ROOT=$(git rev-parse --show-toplevel)
+REPO=$(basename "$ROOT")
+HOOK_DIR=$(cd "$(dirname "$0")" && pwd)
+
+if [ "$REPO" = "selache" ]; then
+  if ! "$HOOK_DIR/check-terms" < "$MSG_FILE"; then
+    echo "Commit rejected. Remove prohibited terms from commit message."
+    exit 1
+  fi
+fi
 
 content=$(grep -v '^#' "$MSG_FILE")
 subject=$(printf '%s\n' "$content" | head -n1)

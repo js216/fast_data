@@ -10,6 +10,20 @@
 
 set -e
 
+ROOT=$(git rev-parse --show-toplevel)
+REPO=$(basename "$ROOT")
+HOOK_DIR=$(cd "$(dirname "$0")" && pwd)
+
+if [ "$REPO" = "selache" ]; then
+    added_lines=$(git diff --cached --diff-filter=ACMR -U0 -- ':!README.md' ':!LICENSE' | grep -P '^\+(?!\+\+)' || true)
+    if [ -n "$added_lines" ]; then
+        if ! printf '%s\n' "$added_lines" | "$HOOK_DIR/check-terms"; then
+            echo "Commit rejected. Remove prohibited terms before committing."
+            exit 1
+        fi
+    fi
+fi
+
 files=$(git diff --cached --name-only --diff-filter=ACM -- '*.nw' || true)
 
 fail=0
