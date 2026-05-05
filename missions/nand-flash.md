@@ -33,8 +33,6 @@ def check(extract_dir):
     return needed.issubset({d['id'] for d in devs})
 ```
 
-## WIP
-
 ### DFU bootloader artifact preflight
 
 Build the NAND-flash bootloader and verify the DFU layout names the
@@ -69,6 +67,8 @@ def check(_extract_dir):
     text = tsv.read_text(encoding='utf-8', errors='replace')
     return 'main.stm32' in text and 'P' in text
 ```
+
+## WIP
 
 ### Bootloader hold via DFU + UART
 
@@ -142,6 +142,7 @@ mp135.custom:uart_write data="fmc_test_boot\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
 mark tag=msc_nand_smoke
+lease:release token="{{LEASE_TOKEN}}"
 ```
 
 Verify:
@@ -160,7 +161,10 @@ def check(extract_dir):
 ### NAND image round-trip: write -> fmc_flush -> fmc_load -> diff
 
 Write `nand.img` to DDR via MSC, `fmc_flush` to NAND, `fmc_load` back
-into DDR, MSC-read and offline-diff the leading bytes.
+into DDR, MSC-read and offline-diff the leading bytes. The image build
+can outlive an in-memory bench lease if the poller restarts, so this
+step claims a fresh lease after the build and re-enters the bootloader
+state it needs.
 
 Build:
 
@@ -184,7 +188,22 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 15 min):
 
 ```
-lease:resume token="{{LEASE_TOKEN}}"
+lease:claim devices="bench_mcu.0,mp135.custom,ssh.target" duration_s=3600
+bench_mcu:reset_dut2
+delay ms=2000
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_close
+inventory
 msc.custom:write data=@nand.img offset_lba=0
 mp135.custom:uart_open
 delay ms=300
