@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # sync.sh --- TODO: description
 # Copyright (c) 2026 Jakob Kastelic
-# Pull latest across parent + submodules.
+# Pull latest, push local work, across parent + submodules.
 # Errors abort the script — fix the cause and re-run.
 set -eu
 cd "$(git rev-parse --show-toplevel)"
@@ -33,6 +33,10 @@ git submodule foreach --quiet --recursive 'pwd' |
                 echo "$moved" | xargs git add
                 git commit -m "submodules: bump after sync"
             fi
+            if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1 &&
+               git rev-list @{u}..HEAD | grep -q .; then
+                git push origin main
+            fi
         fi
         )
     done
@@ -41,4 +45,7 @@ moved=$(git submodule status | awk '/^\+/{print $2}')
 if [ -n "$moved" ]; then
     echo "$moved" | xargs git add
     git commit -m "submodules: bump after sync"
+fi
+if git rev-list '@{u}..HEAD' | grep -q .; then
+    git push
 fi
