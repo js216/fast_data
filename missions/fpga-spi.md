@@ -80,6 +80,18 @@ contains extra commands not implied by the test plan.
     and
     `stm32mp135_test_board/baremetal/gpio_test/connectivity_fpga.jsonl`.
 
+### Add GPIO JSONL dry-run executor
+
+! Add a host-side dry-run executor for the first `gpio_test`
+connectivity pass. It consumes the generated
+`stm32mp135_test_board/baremetal/gpio_test/connectivity_mpu.jsonl` and
+`stm32mp135_test_board/baremetal/gpio_test/connectivity_fpga.jsonl`
+scripts, merges commands by `vector_index`, simulates each signal's
+driven value, and fails if a sample is missing, occurs before its drive,
+expects the wrong value, references an unknown signal, or leaves any
+generated command unused. This must be runnable without hardware and
+covered by a repo test.
+
 ## WIP
 
 ### Verify Connecticity
