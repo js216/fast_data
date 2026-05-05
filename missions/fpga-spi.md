@@ -726,6 +726,99 @@ def check(extract_dir):
 
 ## WIP
 
+### Bring up MP135 GPIO test UART
+
+Build and flash a minimal MP135 `gpio_test` image, then confirm its UART
+prompt is reachable. This proves the MPU-side GPIO harness can run
+before any FPGA image, jumper line, or replay vector is driven.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_scripts.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/dry_run_connectivity.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_fixtures.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test (max 5 min):
+
+```
+lease:claim devices="mp135.evb,dfu.evb,bench_mcu.0" duration_s=60
+inventory
+bench_mcu.0:reset_dut
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
+mp135.evb:uart_close
+mark tag=gpio_replay_mp135_uart_probe
+lease:release
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+ALLOWED_OPS = {
+    (None, 'description'),
+    ('lease', 'claim'),
+    (None, 'inventory'),
+    ('bench_mcu.0', 'reset_dut'),
+    ('dfu.evb', 'flash_layout'),
+    ('mp135.evb', 'uart_open'),
+    ('mp135.evb', 'uart_expect'),
+    ('mp135.evb', 'uart_close'),
+    (None, 'mark'),
+    ('lease', 'release'),
+}
+DISALLOWED_VERBS = {
+    'program', 'uart_write',
+    'drive', 'sample', 'expect', 'gpio_write', 'gpio_read',
+}
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        manifest = Verification.load_manifest(extract_dir)
+        ops = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(manifest.get('lease_token'), str):
+        return False
+    plan_text = Path(extract_dir, 'plan.txt').read_text()
+    if 'fpga.hx1k' in plan_text:
+        return False
+    if 'mp135.evb,dfu.evb,bench_mcu.0' not in plan_text:
+        return False
+    saw = set()
+    for record in ops:
+        if not isinstance(record, dict) or record.get('status') != 'ok':
+            return False
+        key = (record.get('device'), record.get('verb'))
+        if key not in ALLOWED_OPS:
+            return False
+        if record.get('verb') in DISALLOWED_VERBS:
+            return False
+        saw.add(key)
+    return (
+        ALLOWED_OPS <= saw and
+        'gpio_replay_mp135_uart_probe' in plan_text
+    )
+```
+
 ### Verify physical connectivity
 
 Use `gpio.nw` and the MP135 `gpio_test` harness to verify the physical
