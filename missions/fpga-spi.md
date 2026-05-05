@@ -34,6 +34,19 @@ Assumed hardware connections:
 | MP135 QUADSPI `IO2` on CN8, exact CN8 pin TBD | `io[2]`, iCEstick pin 60 | Bidirectional | Assumed 3.3 V LVCMOS QSPI bank | Quad data lane 2; exact MP135 connector pin remains TBD. |
 | MP135 QUADSPI `IO3` on CN8, exact CN8 pin TBD | `io[3]`, iCEstick pin 48 | Bidirectional | Assumed 3.3 V LVCMOS QSPI bank | Quad data lane 3; exact MP135 connector pin remains TBD. |
 
+### Define GPIO connectivity test manifest
+
+! Add a machine-readable connectivity manifest for the first
+`gpio_test` bring-up pass. It lists every jumper row from the assumed
+hardware connection table with stable signal names, direction, and
+whether `gpio.nw` or `stm32mp135_test_board/baremetal/gpio_test` is
+responsible for driving or sampling it. A repo test must fail if any
+table row is missing from the manifest or if the manifest mentions a
+signal not in the table.
+
+  - Manifest: `stm32mp135_test_board/baremetal/gpio_test/connectivity_manifest.json`.
+  - Focused validation: `stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py`.
+
 ## WIP
 
 ### Verify Connecticity
