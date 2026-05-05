@@ -170,6 +170,44 @@ def check(extract_dir):
     return Verification.manifest_clean(extract_dir)
 ```
 
+### Add GPIO replay build stubs
+
+! Add the smallest build-only integration step proving that both sides
+of the first connectivity replay can consume the generated fixtures.
+`stm32mp135_test_board/baremetal/gpio_test` must gain a minimal C
+translation unit that includes `connectivity_mpu_replay.h`, iterates the
+replay array, and dispatches every command through stubbed
+`drive`/`sample_expect` operations without touching hardware.
+`fpga/src/gpio.nw` must gain an equivalent host/simulation-only replay
+stub, or a generated/tangled companion used by the GPIO build, that
+includes `connectivity_fpga_replay.h` and proves the FPGA-side replay
+commands map onto the existing GPIO UART drive/sample command surface.
+Add a repo test/build check that compiles or otherwise validates both
+stubs against the generated headers and fails if either side stops
+including its replay fixture. Do not toggle hardware GPIOs in this step.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_fixtures.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_replay_build_stubs
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    return Verification.manifest_clean(extract_dir)
+```
+
 ## WIP
 
 ### Verify Connecticity
