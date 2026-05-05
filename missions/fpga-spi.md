@@ -208,6 +208,52 @@ def check(extract_dir):
     return Verification.manifest_clean(extract_dir)
 ```
 
+### Add GPIO connectivity inventory plan skeleton
+
+! Add the smallest hardware-facing `test_serv` skeleton for the first
+connectivity verification pass. The section must keep the existing
+host-side replay/build checks in Build, then submit a no-op hardware
+plan that runs `inventory` and marks
+`gpio_connectivity_inventory`. Verify must require a clean manifest and
+the emitted `bench.devices.json`/`bench.ops.json` inventory artefacts so
+later steps can gate the MPU/FPGA replay on concrete bench capability.
+Do not claim leases, program the FPGA, open UART, drive/sample GPIO, or
+toggle any physical line in this step.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_fixtures.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+```
+
+Test (max 1 min):
+
+```
+inventory
+mark tag=gpio_connectivity_inventory
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    devices_path = Path(extract_dir, 'bench.devices.json')
+    ops_path = Path(extract_dir, 'bench.ops.json')
+    if not devices_path.is_file() or not ops_path.is_file():
+        return False
+    devices = json.loads(devices_path.read_text())
+    ops = json.loads(ops_path.read_text())
+    return isinstance(devices, list) and isinstance(ops, dict)
+```
+
 ## WIP
 
 ### Verify Connecticity
