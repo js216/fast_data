@@ -341,13 +341,13 @@ class Runner:
 
     def capture_lease_token(self, extract_dir, plan_text):
         """Refresh ``self.lease_token`` from this section's artefact:
-        if a `lease.token` stream exists, the section ran a fresh
-        ``lease:claim`` and we adopt the new token. If the section's
-        plan body contains ``lease:release``, drop the captured token
-        regardless -- it's no longer usable."""
-        stream = extract_dir / 'streams' / 'lease.token.bin'
-        if stream.exists():
-            tok = stream.read_text().strip()
+        if ``manifest.json`` carries a ``lease_token`` field, the
+        section ran a fresh ``lease:claim`` and we adopt the new
+        token. If the section's plan body contains ``lease:release``,
+        drop the captured token regardless -- it's no longer usable."""
+        manifest = extract_dir / 'manifest.json'
+        if manifest.exists():
+            tok = json.loads(manifest.read_text()).get('lease_token')
             if tok:
                 self.lease_token = tok
         if 'lease:release' in plan_text:
