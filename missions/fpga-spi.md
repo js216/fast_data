@@ -9,8 +9,6 @@ Each section streams ~4 GiB (0xFF000000 = 4,278,190,080 B, the
 firmware's uint32-aligned cap). Runtime: 5:42 at 100 Mbps, 1:26 at 400
 Mbps; budgets add ~60 s for reset+DFU+boot plus ~20% headroom.
 
-## WIP
-
 ### 1-lane stream, ~4 GiB, >=100 Mbps
 
 Run `A 4278190080 0 1` against `spi_1lane.bin` at presc=5 sshift=1
@@ -73,6 +71,8 @@ def check(extract_dir):
     firsterr = int(last.group(2))
     return firsterr == -1 and mbps >= 100.0
 ```
+
+## WIP
 
 ### Quad memory-mapped, ~4 GiB, >=400 Mbps
 
