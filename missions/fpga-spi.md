@@ -72,8 +72,6 @@ def check(extract_dir):
     return firsterr == -1 and mbps >= 100.0
 ```
 
-## WIP
-
 ### Raw 4-lane stream, 16 MiB twin-DDR, >=200 Mbps
 
 Steps up from 1-lane to bit-perfect 4-lane streaming before adding the
@@ -143,6 +141,8 @@ def check(extract_dir):
     pass1_rate = (16777216 * 8.0) / (pass1_ms * 1000.0)
     return firsterr == -1 and pass1_rate >= 200.0
 ```
+
+## WIP
 
 ### Quad memory-mapped, ~4 GiB, >=400 Mbps
 
