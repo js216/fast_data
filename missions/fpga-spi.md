@@ -59,6 +59,27 @@ the required vectors, if a vector uses a controller not allowed by that
 jumper's drive/sample roles, or if any vector references a signal not in
 the manifest.
 
+### Generate GPIO connectivity command scripts
+
+! Add a deterministic, repo-tested script generator for the first
+connectivity run. It reads
+`stm32mp135_test_board/baremetal/gpio_test/connectivity_manifest.json`
+and writes one machine-readable command script for the MPU controller
+and one for the FPGA controller. Every `first_pass_test_plan` vector
+must produce exactly one drive command for the vector's driver and one
+sample/expect command for the vector's sampler, preserving manifest
+order and carrying signal name, vector index, drive value, and expected
+value. A repo test must fail if either generated script is stale, omits
+a vector, references a signal/controller not allowed by the manifest, or
+contains extra commands not implied by the test plan.
+
+  - Generator:
+    `stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_scripts.py`.
+  - Generated scripts:
+    `stm32mp135_test_board/baremetal/gpio_test/connectivity_mpu.jsonl`
+    and
+    `stm32mp135_test_board/baremetal/gpio_test/connectivity_fpga.jsonl`.
+
 ## WIP
 
 ### Verify Connecticity
