@@ -256,18 +256,29 @@ def render_word(word):
 
 
 def is_active(rows):
-    """True iff at least one main session is currently open (last
-    main event was a start with no matching stop). Subagent events
-    don't count -- the parent session bracket is the source of truth."""
+    """True iff there's an open `main` session start without a
+    matching stop, OR an open `bg_spawn` without a matching `bg_done`.
+    Either condition means the agent is doing work right now -- a model
+    turn is in progress, or a background bash task it kicked off is
+    still running independently of whether the model itself is idle
+    between turns. Subagent events don't count -- the parent session
+    bracket is the source of truth."""
     open_main = 0
-    for _ts, event, _sid, detail, _extra in rows:
-        if detail != "main":
-            continue
-        if event == "start":
+    open_bg = set()
+    for _ts, event, _sid, detail, extra in rows:
+        if event == "start" and detail == "main":
             open_main += 1
-        elif event == "stop":
+        elif event == "stop" and detail == "main":
             open_main = max(0, open_main - 1)
-    return open_main > 0
+        elif event == "bg_spawn":
+            uuid = extra[0] if extra else None
+            if uuid:
+                open_bg.add(uuid)
+        elif event == "bg_done":
+            uuid = extra[0] if extra else None
+            if uuid:
+                open_bg.discard(uuid)
+    return open_main > 0 or len(open_bg) > 0
 
 
 def main():
