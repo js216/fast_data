@@ -448,13 +448,13 @@ class Runner:
                 sys.stdout.write(f'(+{el:.1f}s)\n')
                 sys.stdout.flush()
                 self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
-                          f'PASS {label} (+{el:.1f}s)')
+                          f'{colored("PASS")} {label} (+{el:.1f}s)')
                 self.delete_job(digest)
                 continue
             sys.stdout.write(f'{colored("FAIL")} (+{el:.1f}s)\n')
             sys.stdout.flush()
             self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
-                      f'FAIL {label} (+{el:.1f}s)')
+                      f'{colored("FAIL")} {label} (+{el:.1f}s)')
             if fail_reason:
                 print(fail_reason); self._log(fail_reason)
             if fail_log is not None:
@@ -520,7 +520,7 @@ class Runner:
         sections = list(self.parse_md())
         total = len(sections)
         w = len(str(total))
-        use_color = sys.stdout.isatty()
+        use_color = True
 
         self.log_fh = self.log_path.open('a')
         ts = datetime.datetime.now().isoformat(timespec='seconds')
@@ -538,7 +538,7 @@ class Runner:
             else:
                 sys.stdout.write(f'{colored(label)} (+{elapsed:.1f}s)\n')
             sys.stdout.flush()
-            self._log(f'[{i:>{w}}/{total}] [{started}] {label} {title} '
+            self._log(f'[{i:>{w}}/{total}] [{started}] {colored(label)} {title} '
                       f'(<={budget:.0f}s budget, +{elapsed:.1f}s actual)')
 
         def dump(log, extract_dir=None):
@@ -620,7 +620,7 @@ class Runner:
                 result(i, 'PASS', title, el(), started, budget)
 
             print(colored('PASS'))
-            self._log(f'PASS {total - skipped}/{total}')
+            self._log(f'{colored("PASS")} {total - skipped}/{total}')
             return 0
         finally:
             self.log_fh.close()

@@ -53,8 +53,10 @@ indicator. No regressions are allowed. Tester is only allowed to move
 the WIP marker forward in the mission file. At all commits, the tests
 above the WIP marker must pass. The Manager takes the next step
 immediately following the WIP marker. If there's no WIP marker, the
-mission is accomplished. New missions have the WIP marker at the top of
-the file.
+mission is functionally complete. The mission is accomplished only after
+Tester reports success and a Worker commits the mission changes, leaving
+the parent repo and touched child repos clean. New missions have the WIP
+marker at the top of the file.
 
 Tests are considered successful when all the previously-passing tests
 still pass (zero regressions) and at least one new test passes. Tests
@@ -117,8 +119,16 @@ AGENTS.md bug and present suggestion for improvement.
 Work is done in the `fast_data` "parent repo" that collocates several
 firmware repos.
 
-When doing commits, Worker must leave repo and parent repo in clean
-state on branch main without detached heads.
+When doing commits, Worker must leave every repo it commits, and the
+parent repo, in clean state on branch main without detached heads.
+Pinned submodules that are not committed may remain detached at their
+recorded commit, but they must be clean.
+
+Subrepos that are modified by tracked patch/build workflows, such as
+`stm32mp135_test_board/linux` after `make patch` or `make dtb`, must be
+cleaned before commit by reversing the tracked patch and removing or
+restoring generated copies. Do not commit those generated Linux
+workspace changes unless the mission explicitly asks for a Linux commit.
 
 Do not add "Co-Author" lines to the commit messages. All commits must be
 made by "Jakob Kastelic", "kastelic.jakob@gmail.com".
