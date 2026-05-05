@@ -18,8 +18,6 @@ The flagship runs lease-less on purpose -- it proves the cold path
 (reset -> DFU -> write -> boot -> SSH) still works end-to-end without
 inheriting any state.
 
-## WIP
-
 ### Inventory smoke
 
 Confirms the poller is up and every configured device probes and
