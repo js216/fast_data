@@ -35,6 +35,41 @@ def check(extract_dir):
 
 ## WIP
 
+### DFU bootloader artifact preflight
+
+Build the NAND-flash bootloader and verify the DFU layout names the
+expected bootloader image before touching hardware. This is a cheap
+gate for the following DFU + UART hold step.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    tsv = Path('stm32mp135_test_board/bootloader/scripts/flash.tsv')
+    image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
+    if not tsv.is_file() or not image.is_file() or image.stat().st_size == 0:
+        return False
+    text = tsv.read_text(encoding='utf-8', errors='replace')
+    return 'main.stm32' in text and 'P' in text
+```
+
 ### Bootloader hold via DFU + UART
 
 Reset (D12 via `reset_dut2`), DFU-load NAND bootloader, stop autoload,
@@ -134,6 +169,7 @@ make -C stm32mp135_test_board patch
 make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
 make -C stm32mp135_test_board kernel
 make -C stm32mp135_test_board DTS=custom-nand dtb
+make -C stm32mp135_test_board br
 make -C stm32mp135_test_board DTS=custom-nand nand
 ```
 

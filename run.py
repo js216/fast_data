@@ -15,6 +15,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -89,6 +90,7 @@ class Runner:
     # attempt has no wait. Total worst-case extra wait per FAIL is
     # the sum of the non-zero entries.
     RETRY_BACKOFF_S = (0, 3, 10, 30)
+    NO_HARDWARE_TEST = '__NO_HARDWARE__'
 
     def __init__(self, md_path):
         self.md_path = Path(md_path)
@@ -165,10 +167,18 @@ class Runner:
                     body, re.M | re.S)
                 blocks[label.lower()] = m.group(2) if m else None
                 specs[label.lower()] = m.group(1) if m else None
+            if blocks['test'] is None and re.search(
+                    r'^Test:\s*no hardware\.?\s*$',
+                    body, re.M | re.I):
+                blocks['test'] = self.NO_HARDWARE_TEST
             yield (title, blocks['build'], blocks['artifacts'],
                    blocks['test'], blocks['verify'],
                    self.parse_max(specs['test']),
                    blocks['foreach'])
+
+    @staticmethod
+    def is_no_hardware_test(test):
+        return test == Runner.NO_HARDWARE_TEST
 
     @staticmethod
     def parse_foreach(text):
@@ -214,17 +224,26 @@ class Runner:
                 continue
             self._log(f'$ {line}')
             with log.open('ab') as f:
-                f.write(f'$ {line}\n'.encode())
-                proc = subprocess.run(line, shell=True, cwd=self.FAST_DATA,
-                                      stdout=subprocess.PIPE,
-                                      stderr=subprocess.STDOUT)
-                f.write(proc.stdout)
-            for ln in proc.stdout.decode('utf-8', 'replace').splitlines():
-                self._log(ln)
+                cmd_line = f'$ {line}\n'.encode()
+                f.write(cmd_line)
+                f.flush()
+                proc = subprocess.Popen(
+                    line, shell=True, cwd=self.FAST_DATA,
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                assert proc.stdout is not None
+                self._tee_pipe_to_logs(proc.stdout, f)
+                proc.wait()
             if proc.returncode != 0:
                 self._log(f'  (build line returned rc={proc.returncode})')
                 return False
         return True
+
+    def _tee_pipe_to_logs(self, pipe, log_fh):
+        """Copy a subprocess byte stream to the section log and log.txt live."""
+        for chunk in iter(pipe.readline, b''):
+            log_fh.write(chunk)
+            log_fh.flush()
+            self._log(chunk.decode('utf-8', 'replace').rstrip('\r\n'))
 
     def submit_plan(self, plan_text, artifacts, extract_dir, log,
                     description, max_s=None, line_prefix=None):
@@ -272,12 +291,24 @@ class Runner:
             cmd += ['--runtime', str(int(max_s))]
         cmd += [*blob_args, str(plan_path)]
         log_fh = log.open('ab')
-        log_fh.write(f'$ {" ".join(cmd)}\n'.encode())
+        cmd_line = f'$ {" ".join(cmd)}'
+        self._log(cmd_line)
+        log_fh.write(f'{cmd_line}\n'.encode())
+        log_fh.flush()
         proc = subprocess.Popen(
-            cmd, cwd=self.FAST_DATA, stdout=log_fh,
+            cmd, cwd=self.FAST_DATA, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT)
+        tee_thread = None
+        if proc.stdout is not None:
+            tee_thread = threading.Thread(
+                target=self._tee_pipe_to_logs,
+                args=(proc.stdout, log_fh),
+                daemon=True)
+            tee_thread.start()
         rc = self._watch_submit(proc, log_fh, description, max_s,
                                 line_prefix)
+        if tee_thread is not None:
+            tee_thread.join()
         log_fh.close()
         digest = None
         if extract_dir.exists():
@@ -333,6 +364,8 @@ class Runner:
                     proc.kill()
                 log_fh.write(b'  (agent watchdog: submit.py exceeded '
                              b'budget; killed)\n')
+                self._log('  (agent watchdog: submit.py exceeded '
+                          'budget; killed)')
                 rc = proc.poll() or 1
                 break
             if live:
@@ -587,6 +620,24 @@ class Runner:
                             foreach, title, test, verify, artifacts,
                             section_dir, test_max_s, colored, dump):
                         result(i, 'FAIL', title, el(), started, budget)
+                        return 1
+                    result(i, 'PASS', title, el(), started, budget)
+                    continue
+                if self.is_no_hardware_test(test):
+                    extract_dir.mkdir()
+                    try:
+                        ok = self.run_verify(verify, artifacts, extract_dir)
+                    except Exception as e:
+                        result(i, 'FAIL', title, el(), started, budget)
+                        msg = f'   verify {type(e).__name__}: {e}'
+                        print(msg); self._log(msg)
+                        dump(log, extract_dir)
+                        return 1
+                    if not ok:
+                        result(i, 'FAIL', title, el(), started, budget)
+                        msg = '   verify check() returned False'
+                        print(msg); self._log(msg)
+                        dump(log, extract_dir)
                         return 1
                     result(i, 'PASS', title, el(), started, budget)
                     continue
