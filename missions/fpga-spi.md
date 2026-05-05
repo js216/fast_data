@@ -92,8 +92,6 @@ expects the wrong value, references an unknown signal, or leaves any
 generated command unused. This must be runnable without hardware and
 covered by a repo test.
 
-## WIP
-
 ### Generate GPIO connectivity replay fixtures
 
 ! Add a deterministic, repo-tested fixture generator for the first
@@ -105,6 +103,41 @@ writes C header data that the MPU bare-metal `gpio_test` and FPGA
 controller, signal name, vector index, command kind, drive value, and
 expected value, and a repo test must fail if the fixtures are stale or
 contain commands not present in the JSONL scripts.
+
+### Add executable GPIO connectivity host checks
+
+! Add the smallest run.py-recognized mission section that exercises the
+already implemented host-side GPIO connectivity checks without hardware.
+It must run the manifest validator, JSONL script freshness check,
+dry-run executor, and replay-fixture freshness check from a mission
+Build block, and include whatever minimal Test/Verify structure `run.py`
+requires so `python3 run.py missions/fpga-spi.md` reports at least one
+passed executable section instead of `PASS` with zero executable
+sections. Do not implement hardware GPIO toggling in this step.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_scripts.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/dry_run_connectivity.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_fixtures.py --check
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_connectivity_host_checks
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    return Verification.manifest_clean(extract_dir)
+```
+
+## WIP
 
 ### Verify Connecticity
 
