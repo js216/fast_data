@@ -41,10 +41,18 @@ ask the human operator for one.
 - **Tester** uses `run.py` with the mission file as an argument. The
   test is run as a foreground task, not background bash. If tester
   reports success, spawn a new Worker to commit the changes, otherwise
-  spawn a fresh Worker to fix. Compared to the Verifier, the Tester job
-  is mechanical: run the baseline, flag regressions. The tester can be
-  given multiple mission files besides the main one, to guard against
-  regressions in other missions caused by the main mission.
+  spawn a fresh Worker to fix. A failed Tester result is not a stopping
+  point and must not be returned to the operator as the final outcome
+  unless the operator explicitly asked to run only once or to stop. The
+  Orchestrator must extract the first failing section, the concrete
+  failing operation, and the relevant artefact path from `run.py`
+  output, append a Tester fail line to `ledger.txt`, clear any stale
+  jobs for the current user prefix, and immediately continue with a
+  fresh Worker scoped to that failure. Compared to the Verifier, the
+  Tester job is mechanical: run the baseline, flag regressions. The
+  tester can be given multiple mission files besides the main one, to
+  guard against regressions in other missions caused by the main
+  mission.
 
 ### Mission Files and Testing
 
@@ -129,7 +137,16 @@ Workers until the repos are clean and committed; it must not advance to
 the next Manager pass.
 
 If work nonetheless stops, this is considered a bug in AGENTS.md. The
-Orchestrator must diagnose the bug and present a suggested improvement.
+Orchestrator must diagnose the bug, present a suggested improvement to
+the operator, and then resume the mission loop under the existing
+instructions. Merely reporting a failed hardware or software test is
+not sufficient. The only allowed stop conditions are: the operator
+explicitly asks to stop or run a single test only; the mission file has
+no WIP marker after a successful Tester run and commit; or AGENTS.md
+requires stopping for bad existing ledger format. Hardware symptoms
+such as missing UART bytes, a wedged job, timeout, failed verification,
+or a bench device not responding are ordinary Worker inputs, not stop
+conditions.
 
 Orchestrator must also stop if it detects bad format or a missing line
 in an existing ledger file. In that case it must also diagnose the
