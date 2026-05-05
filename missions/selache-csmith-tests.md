@@ -36,7 +36,7 @@ Test (max 1 min):
 ```
 dsp:reset
 dsp:uart_open
-dsp:boot ldr=@ldr
+dsp:boot ldr=@ldr timeout_ms=2500
 delay ms=2500
 dsp:uart_close
 mark tag=cctest_run
