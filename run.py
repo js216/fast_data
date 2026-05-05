@@ -258,7 +258,8 @@ class Runner:
         enforce. When ``line_prefix`` is given and stdout is a TTY,
         in-place \\r updates show queued/running status with a
         countdown against ``max_s`` while submit.py runs."""
-        description = f'{self.user}: {description}'
+        nonce = time.time_ns()
+        description = f'{self.user}: {description} [{nonce}]'
         if self.LEASE_PLACEHOLDER in plan_text:
             if not self.lease_token:
                 raise RuntimeError(
@@ -278,14 +279,17 @@ class Runner:
         else:
             head, tail = [], lines
         body = (head + [f'description "{description}"',
-                        f'# runpy {time.time_ns()}'] + tail)
+                        f'# runpy {nonce}'] + tail)
         plan_path.write_text('\n'.join(body) + '\n')
         blob_args = []
         for name in sorted(artifacts):
             blob_args += ['--blob', f'{name}={artifacts[name]}']
+        wait_s = self.WAIT_S
+        if max_s is not None:
+            wait_s = max(wait_s, int(max_s) + 60)
         cmd = ['python3', str(self.SUBMIT_PY),
                '--server', self.SERVER,
-               '--wait', str(self.WAIT_S),
+               '--wait', str(wait_s),
                '--extract', str(extract_dir)]
         if max_s is not None:
             cmd += ['--runtime', str(int(max_s))]
@@ -348,7 +352,7 @@ class Runner:
         subprocess return code."""
         live = (line_prefix is not None and sys.stdout.isatty())
         started_at = time.monotonic()
-        deadline = (max_s + 30) if max_s else None
+        run_deadline = (max_s + 60) if max_s else None
         running_since = None
         countdown_open = False
         rc = None
@@ -356,7 +360,23 @@ class Runner:
             rc = proc.poll()
             if rc is not None:
                 break
-            if deadline and (time.monotonic() - started_at) > deadline:
+            try:
+                with urllib.request.urlopen(f'{self.SERVER}/jobs',
+                                            timeout=2) as r:
+                    jobs = json.load(r)
+            except Exception:
+                jobs = []
+            hit = next(
+                (j for j in jobs
+                 if j.get('meta', {}).get('description') == description
+                 and j.get('status') in ('queued', 'running')),
+                None)
+            if hit and hit['status'] == 'running' and running_since is None:
+                running_since = hit.get('picked_up_at') or time.time()
+            if (run_deadline and running_since is not None
+                    and (time.time() - running_since) > run_deadline):
+                digest = self._find_active_job_digest(description)
+                self.cancel_job(digest)
                 proc.terminate()
                 try:
                     proc.wait(timeout=5)
@@ -369,23 +389,10 @@ class Runner:
                 rc = proc.poll() or 1
                 break
             if live:
-                try:
-                    with urllib.request.urlopen(
-                            f'{self.SERVER}/jobs', timeout=2) as r:
-                        jobs = json.load(r)
-                except Exception:
-                    jobs = []
-                hit = next(
-                    (j for j in jobs
-                     if j.get('meta', {}).get('description') == description
-                     and j.get('status') in ('queued', 'running')),
-                    None)
                 if hit and hit['status'] == 'queued':
                     elapsed = int(time.monotonic() - started_at)
                     msg = f'\033[33mqueued ({elapsed}s)\033[0m'
                 elif hit and hit['status'] == 'running':
-                    if running_since is None:
-                        running_since = hit.get('picked_up_at') or time.time()
                     elapsed = time.time() - running_since
                     if max_s:
                         remaining = max(0.0, max_s - elapsed)
@@ -407,6 +414,9 @@ class Runner:
             col = len(line_prefix) + 1
             sys.stdout.write(f'\r\033[K\033[A\033[{col}G')
             sys.stdout.flush()
+        if rc != 0:
+            digest = self._find_active_job_digest(description)
+            self.cancel_job(digest)
         return rc
 
     def capture_lease_token(self, extract_dir, plan_text):
@@ -428,7 +438,32 @@ class Runner:
             if self.LEASE_STATE_FILE.exists():
                 self.LEASE_STATE_FILE.unlink()
 
-    def delete_job(self, digest):
+    def _find_active_job_digest(self, description):
+        """Return the queued/running job digest matching a description."""
+        try:
+            with urllib.request.urlopen(f'{self.SERVER}/jobs',
+                                        timeout=5) as r:
+                jobs = json.load(r)
+        except Exception:
+            return None
+        hit = next(
+            (j for j in jobs
+             if j.get('meta', {}).get('description') == description
+             and j.get('status') in ('queued', 'running')),
+            None)
+        return hit.get('digest') if hit else None
+
+    def cancel_job(self, digest):
+        if not digest:
+            return
+        req = urllib.request.Request(
+            f'{self.SERVER}/jobs/{digest}', method='DELETE')
+        try:
+            urllib.request.urlopen(req, timeout=5).read()
+        except Exception:
+            pass
+
+    def delete_outputs(self, digest):
         if not digest:
             return
         req = urllib.request.Request(
@@ -482,7 +517,7 @@ class Runner:
                 sys.stdout.flush()
                 self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
                           f'{colored("PASS")} {label} (+{el:.1f}s)')
-                self.delete_job(digest)
+                self.delete_outputs(digest)
                 continue
             sys.stdout.write(f'{colored("FAIL")} (+{el:.1f}s)\n')
             sys.stdout.flush()
@@ -525,17 +560,34 @@ class Runner:
                 test, artifacts, extract, log, description, max_s)
             if rc != 0:
                 last_reason = f'   submit.py rc={rc}'
+                self._release_failed_attempt_lease(extract, test)
                 continue
             try:
                 ok = self.run_verify(verify, artifacts, extract, item)
             except Exception as e:
                 last_reason = f'   verify {type(e).__name__}: {e}'
+                self._release_failed_attempt_lease(extract, test)
                 continue
             if not ok:
                 last_reason = '   verify check() returned False'
+                self._release_failed_attempt_lease(extract, test)
                 continue
             return True, digest, None, extract, log
         return False, digest, last_reason, last_extract, last_log
+
+    def _release_failed_attempt_lease(self, extract_dir, plan_text):
+        """Release a freshly claimed lease from a failed retry attempt."""
+        if 'lease:claim' not in plan_text or 'lease:release' in plan_text:
+            return
+        manifest = extract_dir / 'manifest.json'
+        if not manifest.exists():
+            return
+        try:
+            token = json.loads(manifest.read_text()).get('lease_token')
+        except Exception:
+            return
+        if token:
+            self._release_ghost(token)
 
     def run_all(self):
         """Iterate sections in order. Per test prints
@@ -645,29 +697,19 @@ class Runner:
                     result(i, 'SKIP', title, el(), started, budget)
                     skipped += 1
                     continue
-                rc, digest = self.submit_plan(test, artifacts, extract_dir,
-                                              log, title, test_max_s,
-                                              line_prefix=head)
-                if rc != 0:
-                    result(i, 'FAIL', title, el(), started, budget)
-                    dump(log)
-                    return 1
-                self.capture_lease_token(extract_dir, test)
-                try:
-                    ok = self.run_verify(verify, artifacts, extract_dir)
-                except Exception as e:
-                    result(i, 'FAIL', title, el(), started, budget)
-                    msg = f'   verify {type(e).__name__}: {e}'
-                    print(msg); self._log(msg)
-                    dump(log, extract_dir)
-                    return 1
+                ok, digest, fail_reason, fail_extract, fail_log = (
+                    self._submit_with_retries(
+                        test, artifacts, section_dir, title, test_max_s,
+                        None, verify))
                 if not ok:
                     result(i, 'FAIL', title, el(), started, budget)
-                    msg = '   verify check() returned False'
-                    print(msg); self._log(msg)
-                    dump(log, extract_dir)
+                    if fail_reason:
+                        print(fail_reason); self._log(fail_reason)
+                    if fail_log is not None:
+                        dump(fail_log, fail_extract)
                     return 1
-                self.delete_job(digest)
+                self.capture_lease_token(fail_extract, test)
+                self.delete_outputs(digest)
                 result(i, 'PASS', title, el(), started, budget)
 
             print(colored('PASS'))

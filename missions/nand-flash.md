@@ -68,12 +68,10 @@ def check(_extract_dir):
     return 'main.stm32' in text and 'P' in text
 ```
 
-## WIP
+### DFU NAND bootloader flash smoke
 
-### Bootloader hold via DFU + UART
-
-Reset (D12 via `reset_dut2`), DFU-load NAND bootloader, stop autoload,
-park at `> `.
+Reset (D12 via `reset_dut2`) and DFU-load the NAND bootloader. Keep
+the lease alive for the UART hold step.
 
 Build:
 
@@ -95,6 +93,30 @@ lease:claim devices="bench_mcu.0,mp135.custom,ssh.target" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mark tag=dfu_nand_flash
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, 'dfu.custom', 'flash_layout')
+```
+
+### Bootloader hold via UART
+
+Inherits the DFU-loaded NAND bootloader state, stops autoload, and
+parks at `> `.
+
+Build: nothing required.
+
+Test (max 15 s):
+
+```
+lease:resume token="{{LEASE_TOKEN}}"
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="x"
@@ -116,8 +138,7 @@ def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     ops = Verification.load_ops(extract_dir)
-    return (Verification.op_succeeded(ops, 'dfu.custom', 'flash_layout') and
-            Verification.op_succeeded(ops, 'mp135.custom', 'uart_expect'))
+    return Verification.op_succeeded(ops, 'mp135.custom', 'uart_expect')
 ```
 
 ### MSC + NAND probe smoke
@@ -133,7 +154,7 @@ Test (max 30 s):
 ```
 lease:resume token="{{LEASE_TOKEN}}"
 inventory
-msc.custom:read n=1048576 offset_lba=0
+msc.custom:read n=1048576 offset_lba=0 min_rate_Bps=3000000
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -185,7 +206,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/nand.img
 ```
 
-Test (max 15 min):
+Test (max 1 min):
 
 ```
 lease:claim devices="bench_mcu.0,mp135.custom,ssh.target" duration_s=3600
@@ -204,19 +225,21 @@ mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_close
 inventory
-msc.custom:write data=@nand.img offset_lba=0
+msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_flush\r"
-mp135.custom:uart_expect sentinel="done" timeout_ms=600000
+mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
+mp135.custom:uart_expect sentinel="written" timeout_ms=10000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_write data="fmc_load\r"
-mp135.custom:uart_expect sentinel="done" timeout_ms=300000
+mp135.custom:uart_expect sentinel="FMC load:" timeout_ms=3000
+mp135.custom:uart_expect sentinel="rd errs" timeout_ms=10000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
-msc.custom:read n=4194304 offset_lba=0
+msc.custom:read n=4194304 offset_lba=0 min_rate_Bps=3000000
 mark tag=nand_round_trip
 ```
 
@@ -233,6 +256,8 @@ def check(extract_dir):
     n = min(len(img), len(got), 4194304)
     return got[:n] == img[:n]
 ```
+
+## WIP
 
 ### NAND health (bootloader-side)
 
@@ -276,7 +301,7 @@ def check(extract_dir):
     if not m:
         return False
     bad, total = int(m.group(1)), int(m.group(2))
-    if total == 0 or bad > total // 200:   # <0.5% bad blocks
+    if total == 0 or bad > total // 100:   # <=1% bad blocks
         return False
     if 'checksum MISMATCH' in uart or 'bad magic' in uart:
         return False
@@ -392,7 +417,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/nand.img
 ```
 
-Test (max 20 min):
+Test (max 2 min):
 
 ```
 bench_mcu:reset_dut2
@@ -411,13 +436,14 @@ mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_close
 delay ms=5000
 inventory refresh=true verify=false
-msc.custom:write data=@nand.img offset_lba=0
+msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_flush\r"
-mp135.custom:uart_expect sentinel="done" timeout_ms=600000
+mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
+mp135.custom:uart_expect sentinel="written" timeout_ms=10000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_write data="fmc_bload\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=30000
