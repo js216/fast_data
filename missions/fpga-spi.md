@@ -47,6 +47,18 @@ signal not in the table.
   - Manifest: `stm32mp135_test_board/baremetal/gpio_test/connectivity_manifest.json`.
   - Focused validation: `stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py`.
 
+### Define GPIO connectivity test vectors
+
+! Extend the existing GPIO connectivity manifest and validator with a
+machine-readable first-pass test plan. For every manifest jumper, the
+plan must describe the controller that drives the line, the controller
+that samples it, and two static test vectors: drive 0 and expect 0, then
+drive 1 and expect 1. Bidirectional jumpers must have one low/high pair
+in each direction. A repo test must fail if any manifest jumper lacks
+the required vectors, if a vector uses a controller not allowed by that
+jumper's drive/sample roles, or if any vector references a signal not in
+the manifest.
+
 ## WIP
 
 ### Verify Connecticity
