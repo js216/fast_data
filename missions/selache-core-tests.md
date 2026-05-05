@@ -65,7 +65,7 @@ Foreach:
 ldr in selache/xtest/build/sel/cctest_*.0x*.ldr
 ```
 
-Test (max 1 min):
+Test (max 10 min):
 
 ```
 dsp:reset

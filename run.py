@@ -671,7 +671,8 @@ class Runner:
                 extract_dir = section_dir / 'artefact'
                 log = section_dir / 'run.log'
                 artifacts = self.parse_artifacts(artifacts_text)
-                budget = self.budget_seconds(test)
+                budget = (test_max_s if test_max_s is not None
+                          else self.budget_seconds(test))
 
                 started = datetime.datetime.now().strftime('%H:%M:%S')
                 t0 = time.monotonic()
