@@ -2,7 +2,7 @@
 
 .claude
 .codex
-__pycache__
+__pycache__/
 
 log.txt
 ledger.txt
