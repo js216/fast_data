@@ -16,7 +16,7 @@ git submodule foreach '
     fi
 '
 
-git pull --rebase
+git -c submodule.recurse=false pull --rebase
 moved=$(git submodule status | awk '/^\+/{print $2}')
 if [ -n "$moved" ]; then
     echo "$moved" | xargs git add
