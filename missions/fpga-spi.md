@@ -13,11 +13,28 @@ only. Do not tangle it directly! At the end of this mission I expect a
 single spi.nw file that cleanly implements whatever is needed in this
 mission.
 
-## WIP
+Assumed hardware connections are documented in a Markdown table with
+one row per jumper. The table includes MPU signal/pin, FPGA signal/pin,
+direction, voltage/domain, and notes, and it covers at least UART,
+reset/control GPIOs, SPI clock, chip select, and four data lanes.
 
 Assumed hardware connections:
 
-! [insert markdown table of MPU <-> FPGA jumpers needed]
+| MPU signal/pin | FPGA signal/pin | Direction | Voltage/domain | Notes |
+| --- | --- | --- | --- | --- |
+| MP135 UART TX, exact MPU pin TBD | `rx`, iCEstick pin 9 | MPU -> FPGA | Assumed 3.3 V LVCMOS, verify MPU UART bank | FPGA UART RX pin is documented for iCEstick; MPU UART instance/header pin is not documented here. |
+| MP135 UART RX, exact MPU pin TBD | `tx`, iCEstick pin 8 | FPGA -> MPU | Assumed 3.3 V LVCMOS, verify MPU UART bank | FPGA UART TX pin is documented for iCEstick; MPU UART instance/header pin is not documented here. |
+| MP135 GPIO reset output, exact MPU pin TBD | FPGA `reset_n`, exact FPGA pin TBD | MPU -> FPGA | Assumed 3.3 V LVCMOS control GPIO | Active-low FPGA logic reset/control jumper; no committed FPGA package pin found yet. |
+| MP135 GPIO control output, exact MPU pin TBD | FPGA `ctrl`/`start`, exact FPGA pin TBD | MPU -> FPGA | Assumed 3.3 V LVCMOS control GPIO | Optional bring-up control GPIO for connection tests; exact signal name and pin remain TBD. |
+| MP135 GPIO status input, exact MPU pin TBD | FPGA `ready`/`status`, exact FPGA pin TBD | FPGA -> MPU | Assumed 3.3 V LVCMOS control GPIO | Optional FPGA-to-MPU status GPIO for connection tests; exact signal name and pin remain TBD. |
+| MP135 QUADSPI `CLK` on CN8, exact CN8 pin TBD | `sclk`, iCEstick pin 45 | MPU -> FPGA | Assumed 3.3 V LVCMOS QSPI bank | Repository notes place QSPI on MP135 CN8 and use SPI mode 0; exact CN8 pin is not documented here. |
+| MP135 QUADSPI `NCS` on CN8, exact CN8 pin TBD | `cs_n`, iCEstick pin 56 | MPU -> FPGA | Assumed 3.3 V LVCMOS QSPI bank | Active-low chip select; FPGA source uses `cs_n`. |
+| MP135 QUADSPI `IO0` on CN8, exact CN8 pin TBD | `io[0]`, iCEstick pin 47 | Bidirectional | Assumed 3.3 V LVCMOS QSPI bank | Single-lane MOSI during command/address phases; bidirectional for quad data phases. |
+| MP135 QUADSPI `IO1` on CN8, exact CN8 pin TBD | `io[1]`, iCEstick pin 44 | Bidirectional | Assumed 3.3 V LVCMOS QSPI bank | Single-lane MISO during data phases; bidirectional for quad data phases. |
+| MP135 QUADSPI `IO2` on CN8, exact CN8 pin TBD | `io[2]`, iCEstick pin 60 | Bidirectional | Assumed 3.3 V LVCMOS QSPI bank | Quad data lane 2; exact MP135 connector pin remains TBD. |
+| MP135 QUADSPI `IO3` on CN8, exact CN8 pin TBD | `io[3]`, iCEstick pin 48 | Bidirectional | Assumed 3.3 V LVCMOS QSPI bank | Quad data lane 3; exact MP135 connector pin remains TBD. |
+
+## WIP
 
 ### Verify Connecticity
 

@@ -96,6 +96,11 @@ The extra info is different for each agent:
 - Verifier: issues found, <50 chars
 - Tester: number of tests that still pass
 
+If `ledger.txt` does not exist at the start of an iteration,
+Orchestrator must create it before spawning Manager and append a normal
+Orchestrator line for that iteration. A missing ledger file in a fresh
+checkout is not a reason to stop continuous work.
+
 ### Continuous Work
 
 NEVER STOP WORK UNTIL MISSION ACCOMPLISHED NO MATTER WHAT.
@@ -103,9 +108,9 @@ NEVER STOP WORK UNTIL MISSION ACCOMPLISHED NO MATTER WHAT.
 If work nonetheless stops, this is considered a bug in AGENTS.md. The
 Orchestrator must diagnose the bug and present a suggested improvement.
 
-Orchestrator must also stop if it detects bad format or missing line in
-the ledger file. In that case it must also diagnose the AGENTS.md bug
-and present suggestion for improvement.
+Orchestrator must also stop if it detects bad format or a missing line
+in an existing ledger file. In that case it must also diagnose the
+AGENTS.md bug and present suggestion for improvement.
 
 ### Repository
 
