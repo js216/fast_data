@@ -56,7 +56,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 30 s):
 
 ```
-lease:claim devices="bench_mcu,dfu.custom,mp135.custom,msc.custom,ssh.target" duration_s=3600
+lease:claim devices="bench_mcu.0,mp135.custom,ssh.target" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
