@@ -44,6 +44,11 @@ running (generating tokens or running a tool). Everything else is `idle`
 - `bg_bash_wrap.sh` -- `PreToolUse` hook that catches
   `run_in_background=true` bashes and rewrites the command to echo a `bg_done`
   marker on subprocess exit
+- `log_start_main.sh` -- `UserPromptSubmit` hook; sweeps dead orphans,
+  self-heals interrupted turns, then emits the new `start main`
+- `sweep_dead.py` -- finds `start main` events whose stamped PID is
+  gone (or has been reused) and emits synthetic close events for that
+  sid's open tools, bg jobs, subagents, and main itself
 - `report.py` -- the reporter. no flags, just run it
 - `install.sh` -- one-shot installer; idempotent
 - `claude_duty_cycle.log` -- the log (gitignored)
@@ -53,8 +58,17 @@ running (generating tokens or running a tool). Everything else is `idle`
 Tab-separated, one event per line:
 `<unix_ts> <event> <session_id> <detail> [<extra>...]`
 
-| event                    | detail                      | extra                             |
-|--------------------------|-----------------------------|-----------------------------------|
-| `start` / `stop`         | `main` or `subagent:<type>` | --                                |
-| `tool_pre` / `tool_post` | tool name                   | --                                |
-| `bg_spawn` / `bg_done`   | `Bash`                      | uuid (and exit code on `bg_done`) |
+| event                    | detail                      | extra                                   |
+|--------------------------|-----------------------------|-----------------------------------------|
+| `start` (main)           | `main`                      | claude pid, procfs starttime (jiffies)  |
+| `start` (subagent)       | `subagent:<type>`           | --                                      |
+| `stop`                   | `main` or `subagent:<type>` | --                                      |
+| `tool_pre` / `tool_post` | tool name                   | --                                      |
+| `bg_spawn`               | `Bash`                      | uuid                                    |
+| `bg_done`                | `Bash`                      | uuid, exit code (`?` if synthesised)    |
+
+The pid + starttime on `start main` let `sweep_dead.py` detect dirty
+exits (terminal closed, claude crashed) and emit synthetic close
+events on the next `UserPromptSubmit` from any session, so the strict
+parser stays happy. Legacy `start` lines without a stamped pid are
+left alone -- delete or hand-patch them once after upgrading.
