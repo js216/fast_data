@@ -9,12 +9,11 @@ cd "$(git rev-parse --show-toplevel)"
 
 git submodule foreach --recursive '
     git fetch origin
-    if git show-ref --verify --quiet refs/remotes/origin/main ||
-       git show-ref --verify --quiet refs/heads/main; then
+    if git show-ref --verify --quiet refs/remotes/origin/main; then
         git checkout main
         git rebase origin/main
     else
-        echo "skipping $name: no main branch"
+        echo "skipping $name: no origin/main branch"
     fi
 '
 
