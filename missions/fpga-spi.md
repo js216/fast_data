@@ -969,6 +969,62 @@ def check(extract_dir):
     )
 ```
 
+### Add MP135 GPIO sample output for IO1
+
+Teach the MP135 `gpio_test` firmware to map one sampled signal,
+`mpu_qspi_io1_to_fpga_io1`, to a HAL GPIO input and print per-signal
+sample results for low and high expectations. This is build-only support
+for the later physical line test and does not lease or use
+`bench_mcu.0`.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    stub = Path('stm32mp135_test_board/baremetal/gpio_test/gpio_replay_mpu_stub.c')
+    main = Path('stm32mp135_test_board/baremetal/gpio_test/src/main.c')
+    image = Path(artifacts['main.stm32'])
+
+    stub_text = stub.read_text(encoding='utf-8', errors='replace')
+    main_text = main.read_text(encoding='utf-8', errors='replace')
+
+    required_stub = [
+        'mpu_qspi_io1_to_fpga_io1',
+        'HAL_GPIO_ReadPin',
+        'GPIO_TypeDef',
+        'GPIO_PinState',
+        'gpio_test mpu_qspi_io1_to_fpga_io1 low ok',
+        'gpio_test mpu_qspi_io1_to_fpga_io1 high ok',
+    ]
+    if not all(token in stub_text for token in required_stub):
+        return False
+    if 'gpio_connectivity_mpu_replay_stub_run' not in main_text:
+        return False
+    if not image.is_file() or image.stat().st_size == 0:
+        return False
+
+    latest_dep = max(stub.stat().st_mtime, main.stat().st_mtime)
+    return image.stat().st_mtime >= latest_dep
+```
+
 ## WIP
 
 ### Verify physical connectivity
