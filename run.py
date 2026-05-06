@@ -182,11 +182,22 @@ class Runner:
 
     @staticmethod
     def parse_foreach(text):
-        """Parse a Foreach block ('<var> in <glob-pattern>') into
-        (var_name, pattern). Returns None when the block is absent."""
+        """Parse a Foreach block. Two forms:
+            <var> in <glob-pattern>   - iterate over matching files
+            <var> in count(<int>)     - iterate <int> times, var bound
+                                        to '1'..'<int>' as a string
+        Returns (var_name, pattern) or None when the block is absent.
+        For the count form, ``pattern`` is the tuple ('count', N)."""
         if text is None:
             return None
-        m = re.match(r'\s*(\w+)\s+in\s+(.+?)\s*$', text.strip())
+        s = text.strip()
+        m = re.match(r'(\w+)\s+in\s+count\(\s*(\d+)\s*\)\s*$', s)
+        if m:
+            n = int(m.group(2))
+            if n <= 0:
+                raise RuntimeError(f'Foreach count must be positive: {text!r}')
+            return m.group(1), ('count', n)
+        m = re.match(r'(\w+)\s+in\s+(.+?)\s*$', s)
         if not m:
             raise RuntimeError(f'invalid Foreach block: {text!r}')
         return m.group(1), m.group(2)
@@ -483,21 +494,35 @@ class Runner:
         and returns False; True iff every iteration passed (vacuously
         true on zero matches, mirroring `for x in []:` semantics)."""
         var_name, pattern = foreach
-        matches = sorted(self.FAST_DATA.glob(pattern))
-        sub_total = len(matches)
-        sys.stdout.write(f'{sub_total} items:\n')
-        sys.stdout.flush()
-        if not matches:
-            return True
-        sub_w = len(str(sub_total))
-        for j, path in enumerate(matches, 1):
+        is_count = isinstance(pattern, tuple) and pattern[0] == 'count'
+        if is_count:
+            n = pattern[1]
+            # (label, blob_path-or-None, item_arg-for-verify)
+            items = [(f'iter_{j:0{len(str(n))}d}', None, str(j))
+                     for j in range(1, n + 1)]
+        else:
+            matches = sorted(self.FAST_DATA.glob(pattern))
             # Include the immediate parent dir in the label so a sweep
             # like build/{cces,sel}/cctest_*.ldr surfaces which
             # toolchain each iteration is hitting; bare filename is
             # ambiguous when the same stem exists in multiple subdirs.
-            label = f'{path.parent.name}/{path.name}'
+            items = [(f'{p.parent.name}/{p.name}',
+                      str(p.relative_to(self.FAST_DATA)),
+                      str(p)) for p in matches]
+        sub_total = len(items)
+        sys.stdout.write(f'{sub_total} items:\n')
+        sys.stdout.flush()
+        if not items:
+            return True
+        sub_w = len(str(sub_total))
+        for j, (label, blob_path, item_arg) in enumerate(items, 1):
             sub_artifacts = dict(artifacts)
-            sub_artifacts[var_name] = str(path.relative_to(self.FAST_DATA))
+            # Glob form binds @<var> to the iteration's file blob. The
+            # count form has no file, so we skip the blob registration
+            # entirely; verify's check() still receives the counter via
+            # ``item_arg``.
+            if blob_path is not None:
+                sub_artifacts[var_name] = blob_path
             sub_dir = section_dir / f'item_{j:0{sub_w}d}'
             sub_dir.mkdir()
             sub_started = datetime.datetime.now().strftime('%H:%M:%S')
@@ -511,7 +536,7 @@ class Runner:
                 self._submit_with_retries(
                     test, sub_artifacts, sub_dir,
                     f'{title} :: {label}', test_max_s,
-                    str(path), verify))
+                    item_arg, verify))
             el = time.monotonic() - sub_t0
             if ok:
                 sys.stdout.write(f'(+{el:.1f}s)\n')

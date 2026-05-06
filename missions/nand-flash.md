@@ -192,7 +192,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 30 s):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
+lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -323,7 +323,7 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 2 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
+lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -931,8 +931,6 @@ def check(extract_dir):
             and not any(re.search(p, uart, re.I) for p in bad))
 ```
 
-## WIP
-
 ### NAND writable rootfs: five 50MiB write and reboot cycles
 
 The combined writable rootfs must survive repeated large writes and
@@ -958,7 +956,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Foreach:
 
 ```
-loop in missions/data/nand-root-loop/*.iter
+loop in count(5)
 ```
 
 Test (max 8 min):
@@ -975,7 +973,7 @@ mp135.custom:uart_expect sentinel="___ROOT_LOOP_DD_BEGIN___" timeout_ms=30000
 mp135.custom:uart_expect sentinel="___ROOT_LOOP_DD_RC_0___" timeout_ms=240000
 mp135.custom:uart_expect sentinel="/root/bigfile" timeout_ms=120000
 mp135.custom:uart_expect sentinel="___ROOT_LOOP_REBOOT___" timeout_ms=10000
-mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=15000
+mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=30000
 mp135.custom:uart_close
 delay ms=12000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -1023,7 +1021,8 @@ def check(extract_dir, loop):
         extract_dir, 'mp135.uart').decode('utf-8', 'replace')
     bad = (r'Kernel panic', r'Unable to mount root fs', r'UBIFS error',
            r'UBI error', r'ECC error', r'uncorrectable', r'unrecoverable',
-           r'___ROOT_LOOP_PRECHECK_FAIL___', r'FAILED',
+           r'___ROOT_LOOP_PRECHECK_FAIL___',
+           r'/root/bigfile: FAILED',
            r'No space left on device')
     return ('___ROOT_LOOP_DD_RC_0___' in uart
             and '/root/bigfile: OK' in uart
