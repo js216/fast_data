@@ -4302,9 +4302,11 @@ the gate unobservable, so zero progress.
 
 ### Add prbs_xor_top wrapper with reset command
 
-Introduce a thin top-level wrapper, `prbs_xor_top`, that lives in its
-own `fpga/src/prbs_xor_top.nw` chapter. The wrapper instantiates the
-existing `uart_rx` and `prbs_xor` modules and decodes a single UART
+Introduce a thin top-level wrapper, `prbs_xor_top`, that lives in
+the `fpga/src/prbs_xor.nw` chapter alongside the reusable module
+itself (see "Merge prbs_xor.nw and prbs_xor_top.nw" below). The
+wrapper instantiates the existing `uart_rx` and `prbs_xor` modules
+and decodes a single UART
 command: byte `'r'` (`8'h72`) drives the `prbs_xor` reset
 (`rst_n`) low for exactly one clock cycle and high otherwise. The
 `clear` and `clk_en` inputs of `prbs_xor` are tied low for now, and
@@ -4333,7 +4335,7 @@ Verify:
 from pathlib import Path
 
 def check(_extract_dir):
-    nw = Path('fpga/src/prbs_xor_top.nw')
+    nw = Path('fpga/src/prbs_xor.nw')
     v  = Path('fpga/build/prbs_xor_top/prbs_xor_top.v')
     if not (nw.is_file() and nw.stat().st_size > 0):
         return False
@@ -4400,7 +4402,7 @@ Verify:
 from pathlib import Path
 
 def check(_extract_dir):
-    nw = Path('fpga/src/prbs_xor_top.nw')
+    nw = Path('fpga/src/prbs_xor.nw')
     v  = Path('fpga/build/prbs_xor_top/prbs_xor_top.v')
     if not (nw.is_file() and nw.stat().st_size > 0):
         return False
@@ -4474,7 +4476,7 @@ Verify:
 from pathlib import Path
 
 def check(_extract_dir):
-    nw = Path('fpga/src/prbs_xor_top.nw')
+    nw = Path('fpga/src/prbs_xor.nw')
     v  = Path('fpga/build/prbs_xor_top/prbs_xor_top.v')
     if not (nw.is_file() and nw.stat().st_size > 0):
         return False
@@ -4555,7 +4557,7 @@ Verify:
 from pathlib import Path
 
 def check(_extract_dir):
-    nw = Path('fpga/src/prbs_xor_top.nw')
+    nw = Path('fpga/src/prbs_xor.nw')
     v  = Path('fpga/build/prbs_xor_top/prbs_xor_top.v')
     if not (nw.is_file() and nw.stat().st_size > 0):
         return False
@@ -4700,6 +4702,88 @@ smaller (struct alone with no XOR, or XOR without the struct that pairs
 state with checksum) would leave the checksum unobservable to later
 UART steps, so zero progress.
 
+### Merge prbs_xor.nw and prbs_xor_top.nw
+
+Consolidate the two FPGA noweb chapters that grew up side by side
+into a single `fpga/src/prbs_xor.nw`. The merged chapter still
+tangles to two Verilog modules: `prbs_xor` (the reusable LFSR +
+checksum core) and `prbs_xor_top` (the example UART command
+wrapper), plus a small Makefile fragment that keeps both build paths
+working. The standalone `fpga/src/prbs_xor_top.nw` is removed; every
+prior step that built `fpga/build/prbs_xor_top/prbs_xor_top.v` keeps
+finding it because the new `prbs_xor.mk` chunk emits a grouped-target
+tangle rule and an explicit copy into `build/prbs_xor_top/`.
+
+The merge is purely a refactor: no Verilog logic changes, no new
+ports, no new commands. The reusable module and the example top
+instantiation simply live in one chapter so a reader sees both at
+once.
+
+Build:
+
+```
+make -C fpga build/prbs_xor/prbs_xor.v
+make -C fpga build/prbs_xor_top/prbs_xor_top.v
+```
+
+Artifacts:
+
+```
+fpga/build/prbs_xor/prbs_xor.v
+fpga/build/prbs_xor_top/prbs_xor_top.v
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    nw  = Path('fpga/src/prbs_xor.nw')
+    old = Path('fpga/src/prbs_xor_top.nw')
+    v1  = Path('fpga/build/prbs_xor/prbs_xor.v')
+    v2  = Path('fpga/build/prbs_xor_top/prbs_xor_top.v')
+
+    if not (nw.is_file() and nw.stat().st_size > 0):
+        return False
+    if old.exists():
+        return False
+    for v in (v1, v2):
+        if not (v.is_file() and v.stat().st_size > 0):
+            return False
+        if v.stat().st_mtime < nw.stat().st_mtime:
+            return False
+
+    nw_text = nw.read_text(encoding='utf-8', errors='replace')
+    for tok in ('<<prbs_xor.v>>=', '<<prbs_xor_top.v>>=',
+                '<<prbs_xor.mk>>=', 'module prbs_xor',
+                'module prbs_xor_top'):
+        if tok not in nw_text:
+            return False
+
+    for v in (v1, v2):
+        text = v.read_text(encoding='utf-8', errors='replace')
+        if 'SPDX-License-Identifier' not in text:
+            return False
+        disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+        if any(token in text for token in disallowed):
+            return False
+
+    return True
+```
+
+Rationale: the reusable module and a worked example of how to drive
+it belong in one chapter so the reader does not have to chase two
+files for a single design unit. The split into two `.nw` files was
+an artefact of incremental construction; collapsing it into one
+chapter is a one-shot refactor that does not change any synthesised
+behaviour, so it is the smallest meaningful step that resolves the
+chapter sprawl. Splitting it further (delete the standalone top file
+in one iteration, move chunks in another) would leave the build
+broken in between.
+
 ## WIP
 
 ### Verify physical connectivity
@@ -4754,3 +4838,8 @@ software overhead.
 
 Implement enough JEDEC flash behavior for the MP135 QuadSPI peripheral
 to use the FPGA stream in memory-mapped mode at 400 Mbps or faster.
+
+### Temporary: remove stale files
+
+When all works fine, we can remove the fpga/src/to_be_replaced_by_cleaner_code
+ files.
