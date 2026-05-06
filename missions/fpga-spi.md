@@ -4175,6 +4175,68 @@ the build path, and the verification template that subsequent steps
 extend with the XOR checksum, the UART command interface, and the
 MP135 baremetal mirror.
 
+### Add prbs_xor XOR checksum register
+
+Extend the `prbs_xor` chapter with a streaming 32-bit XOR checksum
+register and a `clear` pulse that zeroes the accumulator without
+disturbing the LFSR. The active-low `rst_n` still resets both the LFSR
+and the checksum to known values. No UART command interface or MP135
+baremetal mirror yet; those land in later iterations.
+
+Build:
+
+```
+make -C fpga build/prbs_xor/prbs_xor.v
+```
+
+Artifacts:
+
+```
+fpga/build/prbs_xor/prbs_xor.v
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    nw = Path('fpga/src/prbs_xor.nw')
+    v  = Path('fpga/build/prbs_xor/prbs_xor.v')
+    if not (nw.is_file() and nw.stat().st_size > 0):
+        return False
+    if not (v.is_file() and v.stat().st_size > 0):
+        return False
+    if v.stat().st_mtime < nw.stat().st_mtime:
+        return False
+    nw_text = nw.read_text(encoding='utf-8', errors='replace')
+    for tok in ('clear', 'output reg [31:0] checksum',
+                'checksum <= checksum ^ state'):
+        if tok not in nw_text:
+            return False
+    text = v.read_text(encoding='utf-8', errors='replace')
+    if 'output reg [31:0] checksum' not in text:
+        return False
+    if 'checksum <= checksum ^ state' not in text:
+        return False
+    if 'SPDX-License-Identifier' not in text:
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(token in text for token in disallowed):
+        return False
+    return True
+```
+
+Rationale: smallest meaningful extension after the LFSR skeleton.
+Adding only the checksum register plus a `clear` pulse keeps the chunk
+to a few extra lines of Verilog while establishing the data path the
+upcoming UART command interface will drive; making the step any
+smaller (for example, only adding the port and not the accumulator,
+or only adding `clear` without the XOR) would leave no observable
+behaviour and therefore zero progress.
+
 ## WIP
 
 ### Verify physical connectivity
