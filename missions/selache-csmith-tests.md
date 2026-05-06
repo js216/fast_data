@@ -8,8 +8,20 @@ plan/verify shape as the core sweep (companion mission
 (`draft_cases/` instead of `cases/`) and the build/output prefix
 (`build/drafts/` instead of `build/`).
 
+Selache is a full C99 toolchain. Drafts may intentionally exercise
+difficult C99 features such as structs, unions, bitfields, nested
+aggregate initializers, aggregate copy/assignment, aggregate function
+arguments and returns, exact layout, and the runtime support those
+constructs require. A failure in `sel`, `selcc`, `selas`, `seld`, or
+`selload` is therefore a toolchain bug to diagnose and fix; do not
+weaken, hand-edit, or delete a valid C99 draft merely because it hits a
+currently failing implementation path. Use gcc, clang, and cces as
+reference implementations for the generated C99 semantics.
+
 Vacuously passes when `draft_cases/` is empty. Otherwise: every draft
-must pass on all four toolchains before any of them get promoted.
+must pass on all four toolchains before any of them get promoted. If a
+draft is valid C99 and passes the reference toolchains but not Selache,
+advance the toolchain until Selache passes it.
 
 ### selache cctest drafts
 
