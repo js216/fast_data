@@ -183,3 +183,14 @@ made by "Jakob Kastelic", "kastelic.jakob@gmail.com".
 ### Author
 
 Jakob Kastelic (Stanford Research Systems, Inc.)
+2026-05-05T20:13:33 selache-csmith-tests Tester fail sel_3a2855a5_crc_mismatch
+2026-05-05T20:32:45 selache-csmith-tests Worker pass fix-packed-byte-compound-and-i64-return
+2026-05-05T20:46:18 selache-csmith-tests Tester fail sel_3f461bd7_crc_mismatch
+2026-05-05T20:51:03 selache-csmith-tests Worker pass fix-mixed-uint32-int64-compare
+2026-05-05T21:08:27 selache-csmith-tests Tester fail sel_7a9c3c73_crc_mismatch
+2026-05-05T21:13:56 selache-csmith-tests Worker pass fix-hex-long-literal-width
+2026-05-05T21:29:54 selache-csmith-tests Tester fail sel_7be41801_crc_mismatch
+2026-05-05T22:06:57-07:00 selache-csmith-tests Worker pass fix-signed-mod64-csmith-7be41801
+2026-05-05T22:07:50-07:00 selache-csmith-tests Tester fail bac1cbd7_layout_overflow_after_mod64_probe
+2026-05-05T22:07:50-07:00 selache-csmith-tests Worker pass shrink-temporary-mod64-shortcut
+2026-05-05T22:08:50-07:00 selache-csmith-tests Worker pass move-signed-i64-helpers-to-block1
