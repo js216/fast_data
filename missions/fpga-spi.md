@@ -4595,6 +4595,60 @@ needed by every later iteration; making it any smaller (latching
 `uart_tx` without the FSM that drives it) would leave the print
 behaviour unobservable, so zero progress.
 
+### Add MP135 baremetal prbs_test skeleton
+
+Add a minimal LFSR-only baremetal sub-project at
+`stm32mp135_test_board/baremetal/prbs_test/` that mirrors the FPGA
+`prbs_xor` polynomial on the MPU side. This is the smallest first step
+toward the MPU half of the upcoming PRBS / XOR-checksum / UART command
+stack; the streaming XOR checksum, UART command interface, and matching
+burst behaviour are added in later iterations.
+
+Build:
+
+```
+make -C stm32mp135_test_board/baremetal/prbs_test build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    base = Path('stm32mp135_test_board/baremetal/prbs_test')
+    mk = base / 'Makefile'
+    src = base / 'src/main.c'
+    img = base / 'build/main.stm32'
+    if not mk.is_file():
+        return False
+    if not src.is_file():
+        return False
+    text = src.read_text(encoding='utf-8', errors='replace')
+    for token in ('0x80200003', 'prbs_step', '(state >> 1) ^',
+                  'SPDX-License-Identifier'):
+        if token not in text:
+            return False
+    if not (img.is_file() and img.stat().st_size > 0):
+        return False
+    if img.stat().st_mtime < src.stat().st_mtime:
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(token in text for token in disallowed):
+        return False
+    return True
+```
+
+Rationale: smallest meaningful MPU-side PRBS step. Adding only the LFSR
+recurrence (no UART, no checksum, no command interface) keeps the
+change to one new sub-project directory and a tiny `main.c`, while
+still establishing the build path, the SPDX header, and the
+verification template that subsequent steps extend with the streaming
+XOR checksum, the UART command parser, and burst commands matching the
+FPGA `prbs_xor_top` interface.
+
 ## WIP
 
 ### Verify physical connectivity
