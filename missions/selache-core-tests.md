@@ -13,8 +13,6 @@ cases built by the CCES toolchain.
 haven't been promoted yet live in `draft_cases/` and run via the
 companion mission `selache-csmith-tests.md`.
 
-## WIP
-
 ### selache core gcc host sweep
 
 Compile and run every promoted core cctest through host `gcc`, using the
@@ -71,7 +69,7 @@ Test (max 10 min):
 dsp:reset
 dsp:uart_open
 dsp:boot ldr=@ldr timeout_ms=2500
-delay ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
 dsp:uart_close
 mark tag=cctest_run
 ```
