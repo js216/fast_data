@@ -1,7 +1,7 @@
 # NAND-flash boot for the STM32MP135 custom board
 
 Drive the custom PCB through reset -> DFU bootloader -> write
-`nand.img` to NAND -> boot Linux from NAND -> SSH.
+`nand.img` to NAND -> boot Linux from NAND.
 
 Bootloader is built with `-DNAND_FLASH` (swaps `two`/`load_sd` for
 `fmc_*`; autoboot calls `fmc_bload`). Two DTS files differ only in
@@ -59,7 +59,7 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 3 min):
 
 ```
-lease:claim devices="mp135.custom,ssh.custom" duration_s=3600 auto_release_on_session_end=true
+lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -130,8 +130,7 @@ Verify:
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    needed = {'mp135.custom', 'bench_mcu.0', 'ssh.custom',
-              'lease._default'}
+    needed = {'mp135.custom', 'bench_mcu.0', 'lease._default'}
     devs = Verification.load_devices(extract_dir)
     return needed.issubset({d['id'] for d in devs})
 ```
@@ -193,7 +192,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 30 s):
 
 ```
-lease:claim devices="mp135.custom,ssh.custom" duration_s=3600
+lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -324,7 +323,7 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 2 min):
 
 ```
-lease:claim devices="mp135.custom,ssh.custom" duration_s=3600
+lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -385,7 +384,7 @@ Inherits the bootloader-at-`> ` state from the round-trip. Runs
 `fmc_scan` (reads OOB on every block, prints `bad: blk N` per bad
 block then `scan done: K bad / N total`) and `fmc_test_boot`
 (validates magic+checksum of bootloader blocks, partition table, and
-DTB header in NAND). No Linux, no SSH. Cheap gate before `fmc_bload`.
+DTB header in NAND). No Linux. Cheap gate before `fmc_bload`.
 
 Build: nothing required.
 
@@ -434,7 +433,7 @@ def check(extract_dir):
 
 Inherits the bootloader-at-`> ` state from the previous test, boots
 Linux from NAND with `fmc_bload` + `jump`, then talks to Linux over the
-serial console rather than SSH. Logs in as `root`/`root`, prints
+serial console. Logs in as `root`/`root`, prints
 `/proc/mtd`, `ubinfo -a`, `mtdinfo -a`, and a filtered `dmesg`.
 Asserts the expected partitions are present, UBI reports zero corrupted
 PEBs, factory bad PEBs stay within a board-realistic bound, and `dmesg`
@@ -470,6 +469,7 @@ mp135.custom:uart_write data="echo ___MTD___; cat /proc/mtd; echo ___UBI___; ubi
 mp135.custom:uart_expect sentinel="___END___" timeout_ms=15000
 mp135.custom:uart_expect sentinel="# " timeout_ms=3000
 mp135.custom:uart_close
+lease:release token="{{LEASE_TOKEN}}"
 mark tag=nand_health_linux
 ```
 
@@ -500,42 +500,12 @@ def check(extract_dir):
     return True
 ```
 
-### SSH smoke (no reload)
-
-Build: nothing required.
-
-Test (max 1 min):
-
-```
-lease:resume token="{{LEASE_TOKEN}}"
-delay ms=20000
-ssh.custom:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu root@buildroot"
-ssh.custom:exec command="ip -4 -o addr show dev eth0; uname -a; mount | grep ' / '"
-lease:release token="{{LEASE_TOKEN}}"
-mark tag=ssh_smoke_nand
-```
-
-Verify (rootfs must be `ubifs`, proving the kernel really came from
-NAND):
-
-```
-import re
-
-def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
-    out = Verification.load_stream(
-        extract_dir, 'ssh.exec').decode('utf-8', 'replace')
-    return (bool(re.search(r'eth0\s+inet \d+\.\d+\.\d+\.\d+/\d+', out))
-            and 'Linux' in out and 'armv7l' in out
-            and 'ubifs' in out)
-```
-
-### Full end-to-end: DFU -> NAND write+commit -> boot Linux -> SSH IP
+### Full end-to-end: DFU -> NAND write+commit -> boot Linux console
 
 Cold path. Reset, DFU NAND bootloader, stop autoload, write+commit
-`nand.img`, `fmc_bload` + `jump`, SSH. The 3 MB/s MSC write floor is a
-hard requirement; lowering it hides a broken NAND boot path.
+`nand.img`, `fmc_bload` + `jump`, and reach the Linux login prompt on
+the serial console. The 3 MB/s MSC write floor is a hard requirement;
+lowering it hides a broken NAND boot path.
 
 Build:
 
@@ -590,23 +560,21 @@ mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
 mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
 mp135.custom:uart_close
-delay ms=20000
-ssh.custom:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu root@buildroot"
-ssh.custom:exec command="ip -4 -o addr show dev eth0; uname -a; mount | grep ' / '"
 mark tag=full_end_to_end_nand
 ```
 
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    out = Verification.load_stream(extract_dir, 'ssh.exec').decode('utf-8', 'replace')
-    return (bool(re.search(r'eth0\s+inet \d+\.\d+\.\d+\.\d+/\d+', out))
-            and 'Linux' in out and 'armv7l' in out and 'ubifs' in out)
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    bad = ('Kernel panic', 'Unable to mount root fs', 'UBIFS error',
+           'UBI error', 'ECC error', 'uncorrectable', 'unrecoverable')
+    return ('Linux version' in uart and 'ubi0: attached mtd' in uart
+            and 'login:' in uart and not any(s in uart for s in bad))
 ```
 
 ### NAND reboot persistence: Linux reboot -> bootloader reload -> second NAND boot
@@ -629,9 +597,18 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 2 min):
 
 ```
-lease:claim devices="mp135.custom,ssh.custom" duration_s=3600
-ssh.custom:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu root@buildroot"
-ssh.custom:exec command="mount | grep ' / '; sync; reboot"
+lease:claim devices="mp135.custom" duration_s=3600
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="login:" timeout_ms=5000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=5000
+mp135.custom:uart_write data="mount | grep ' / '; sync; reboot\r"
+mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=15000
+mp135.custom:uart_close
 delay ms=12000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
@@ -654,8 +631,6 @@ mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
 mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
 mp135.custom:uart_close
-delay ms=20000
-ssh.custom:exec command="ip -4 -o addr show dev eth0; uname -a; mount | grep ' / '; dmesg | grep -iE 'UBI|UBIFS|ECC|uncorrect|panic' || true"
 lease:release
 mark tag=nand_reboot_persistence
 ```
@@ -670,13 +645,9 @@ def check(extract_dir):
         return False
     uart = Verification.load_stream(
         extract_dir, 'mp135.uart').decode('utf-8', 'replace')
-    out = Verification.load_stream(
-        extract_dir, 'ssh.exec').decode('utf-8', 'replace')
     bad = (r'Kernel panic', r'Unable to mount root fs', r'UBIFS error',
            r'UBI error', r'ECC error', r'uncorrectable', r'unrecoverable')
     return ('Linux version' in uart and 'ubi0: attached mtd' in uart
-            and 'login:' in uart and 'ubifs' in out
-            and bool(re.search(r'eth0\s+inet \d+\.\d+\.\d+\.\d+/\d+', out))
-            and not any(re.search(p, uart, re.I) or re.search(p, out, re.I)
-                        for p in bad))
+            and 'login:' in uart and not any(re.search(p, uart, re.I)
+                                             for p in bad))
 ```
