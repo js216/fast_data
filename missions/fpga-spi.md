@@ -4649,6 +4649,57 @@ verification template that subsequent steps extend with the streaming
 XOR checksum, the UART command parser, and burst commands matching the
 FPGA `prbs_xor_top` interface.
 
+### Add MP135 prbs_test XOR checksum
+
+Extend the MP135 baremetal `prbs_test` skeleton with a streaming XOR
+checksum that aggregates each PRBS state into a 32-bit accumulator. A
+new `prbs_state_t` struct pairs the LFSR state with the checksum, and a
+`prbs_step_with_checksum` helper advances the LFSR while XORing the
+prior state into the checksum, mirroring the FPGA `prbs_xor` data path.
+No UART or command surface yet; that arrives in a later iteration.
+
+Build:
+
+```
+make -C stm32mp135_test_board/baremetal/prbs_test build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    base = Path('stm32mp135_test_board/baremetal/prbs_test')
+    src = base / 'src/main.c'
+    img = base / 'build/main.stm32'
+    if not src.is_file():
+        return False
+    text = src.read_text(encoding='utf-8', errors='replace')
+    for token in ('prbs_state_t', 'prbs_step_with_checksum',
+                  'checksum ^=', 'SPDX-License-Identifier'):
+        if token not in text:
+            return False
+    if not (img.is_file() and img.stat().st_size > 0):
+        return False
+    if img.stat().st_mtime < src.stat().st_mtime:
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(token in text for token in disallowed):
+        return False
+    return True
+```
+
+Rationale: smallest meaningful extension after the LFSR-only skeleton.
+Adding only the `prbs_state_t` struct and the `prbs_step_with_checksum`
+helper keeps the change to one cohesive accumulator addition without
+introducing UART, command parsing, or burst behaviour; making it any
+smaller (struct alone with no XOR, or XOR without the struct that pairs
+state with checksum) would leave the checksum unobservable to later
+UART steps, so zero progress.
+
 ## WIP
 
 ### Verify physical connectivity
