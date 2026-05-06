@@ -779,6 +779,47 @@ def check(_extract_dir):
     return 'main.stm32' in text
 ```
 
+### Reset MP135 before GPIO UART probe
+
+Press the MP135 reset line in a standalone plan so `bench_mcu.0` is
+released immediately before the longer MP135 flash and UART probe.
+
+Test (max 1 min):
+
+```
+bench_mcu.0:reset_dut
+mark tag=gpio_replay_mp135_uart_reset
+```
+
+Verify:
+
+```
+import json
+
+ALLOWED_OPS = {
+    (None, 'description'),
+    ('bench_mcu.0', 'reset_dut'),
+    (None, 'mark'),
+}
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        ops = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+    saw = set()
+    for record in ops:
+        if not isinstance(record, dict) or record.get('status') != 'ok':
+            return False
+        key = (record.get('device'), record.get('verb'))
+        if key not in ALLOWED_OPS:
+            return False
+        saw.add(key)
+    return ALLOWED_OPS <= saw
+```
+
 ### Bring up MP135 GPIO test UART
 
 Build and flash a minimal MP135 `gpio_test` image, then confirm its UART
@@ -809,7 +850,6 @@ Test (max 5 min):
 ```
 lease:claim devices="mp135.evb" duration_s=60
 inventory
-bench_mcu.0:reset_dut
 delay ms=2000
 dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.evb:uart_open
@@ -829,7 +869,6 @@ ALLOWED_OPS = {
     (None, 'description'),
     ('lease', 'claim'),
     (None, 'inventory'),
-    ('bench_mcu.0', 'reset_dut'),
     (None, 'delay'),
     ('dfu.evb', 'flash_layout'),
     ('mp135.evb', 'uart_open'),
@@ -876,11 +915,53 @@ def check(extract_dir):
     )
 ```
 
+### Reset MP135 before physical smoke
+
+Press the MP135 reset line in a standalone plan so `bench_mcu.0` is
+released immediately before the longer FPGA and MP135 physical smoke
+setup.
+
+Test (max 1 min):
+
+```
+bench_mcu.0:reset_dut
+mark tag=gpio_physical_replay_setup_reset
+```
+
+Verify:
+
+```
+import json
+
+ALLOWED_OPS = {
+    (None, 'description'),
+    ('bench_mcu.0', 'reset_dut'),
+    (None, 'mark'),
+}
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        ops = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+    saw = set()
+    for record in ops:
+        if not isinstance(record, dict) or record.get('status') != 'ok':
+            return False
+        key = (record.get('device'), record.get('verb'))
+        if key not in ALLOWED_OPS:
+            return False
+        saw.add(key)
+    return ALLOWED_OPS <= saw
+```
+
 ### Smoke physical GPIO replay setup
 
-Confirm the physical setup can program the FPGA GPIO image, reset the
-MP135 DUT without leasing `bench_mcu.0`, flash the MP135 GPIO test
-image, and observe the MPU-side ready banner.
+Confirm the physical setup can program the FPGA GPIO image, rely on the
+preceding standalone reset plan, flash the MP135 GPIO test image, and
+observe the MPU-side ready banner.
 
 Build:
 
@@ -903,7 +984,6 @@ Test (max 5 min):
 lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
-bench_mcu.0:reset_dut
 delay ms=2000
 dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.evb:uart_open
@@ -924,7 +1004,6 @@ ALLOWED_OPS = {
     ('lease', 'claim'),
     (None, 'inventory'),
     ('fpga.hx1k', 'program'),
-    ('bench_mcu.0', 'reset_dut'),
     (None, 'delay'),
     ('dfu.evb', 'flash_layout'),
     ('mp135.evb', 'uart_open'),
@@ -949,8 +1028,6 @@ def check(extract_dir):
     if not isinstance(manifest.get('lease_token'), str):
         return False
     plan_text = Path(extract_dir, 'plan.txt').read_text()
-    if 'lease:claim devices="fpga.hx1k,mp135.evb,bench_mcu.0"' in plan_text:
-        return False
     if 'lease:claim devices="fpga.hx1k,mp135.evb"' not in plan_text:
         return False
     saw = set()
