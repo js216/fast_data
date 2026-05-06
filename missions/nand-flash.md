@@ -652,15 +652,14 @@ def check(extract_dir):
                                              for p in bad))
 ```
 
-### NAND writable persistent state: write marker -> reboot -> verify marker
+### NAND writable persistent state: write marker -> reboot same image
 
 NAND must provide usable persistent state, not only a read-only boot
 medium. After Linux boots from NAND, create or reuse a writable UBI
 volume named `state`, mount it as UBIFS, write a marker with a unique
 payload, sync and unmount it, then reboot Linux. The board returns to
 DFU, so reload only the bootloader and do not rewrite or flush
-`nand.img`. Boot Linux from the same NAND contents and verify that the
-marker is still present on the `state` volume and that the boot has no
+`nand.img`. Boot Linux from the same NAND contents and reject
 UBI/UBIFS/ECC/rootfs panic signatures.
 
 Build: nothing required.
@@ -684,7 +683,7 @@ mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
 mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=5000
-mp135.custom:uart_write data="echo ___STATE_WRITE___; ubinfo -a; ubimkvol /dev/ubi0 -N state -s 8MiB || true; mkdir -p /run/state; mount -t ubifs ubi0:state /run/state; printf 'nand-state-v1\n' >/run/state/marker.txt; sync; cat /run/state/marker.txt; umount /run/state; echo ___STATE_REBOOT___; sync; reboot\r"
+mp135.custom:uart_write data="echo ___STATE_WRITE___; ubinfo -a; ubimkvol /dev/ubi0 -N state -s 8MiB || true; mkdir -p /run/state; mount -t ubifs ubi0:state /run/state; echo nand-state-v1 >/run/state/marker.txt; sync; cat /run/state/marker.txt; umount /run/state; echo ___STATE_REBOOT___; sync; reboot\r"
 mp135.custom:uart_expect sentinel="___STATE_WRITE___" timeout_ms=5000
 mp135.custom:uart_expect sentinel="nand-state-v1" timeout_ms=20000
 mp135.custom:uart_expect sentinel="___STATE_REBOOT___" timeout_ms=5000
@@ -711,17 +710,9 @@ mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
 mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
-mp135.custom:uart_write data="root\r"
-mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
-mp135.custom:uart_write data="root\r"
-mp135.custom:uart_expect sentinel="# " timeout_ms=5000
-mp135.custom:uart_write data="echo ___STATE_READ___; mkdir -p /run/state; mount -t ubifs ubi0:state /run/state; cat /run/state/marker.txt; umount /run/state; dmesg | grep -iE 'UBI|UBIFS|ECC|uncorrect|panic' || true; echo ___STATE_END___\r"
-mp135.custom:uart_expect sentinel="___STATE_READ___" timeout_ms=5000
-mp135.custom:uart_expect sentinel="nand-state-v1" timeout_ms=20000
-mp135.custom:uart_expect sentinel="___STATE_END___" timeout_ms=15000
 mp135.custom:uart_close
 lease:release
-mark tag=nand_writable_persistent_state
+mark tag=nand_writable_persistent_state_reboot
 ```
 
 Verify:
@@ -736,7 +727,206 @@ def check(extract_dir):
         extract_dir, 'mp135.uart').decode('utf-8', 'replace')
     bad = (r'Kernel panic', r'Unable to mount root fs', r'UBIFS error',
            r'UBI error', r'ECC error', r'uncorrectable', r'unrecoverable')
-    return ('___STATE_WRITE___' in uart and '___STATE_READ___' in uart
-            and 'nand-state-v1' in uart and '___STATE_END___' in uart
+    return ('___STATE_WRITE___' in uart
+            and 'nand-state-v1' in uart
+            and '___STATE_REBOOT___' in uart
+            and 'ubi0: attached mtd' in uart
+            and 'login:' in uart
+            and not any(re.search(p, uart, re.I) for p in bad))
+```
+
+### NAND writable persistent state: verify marker after same-image reboot
+
+After the previous step has rebooted Linux from the same NAND image,
+start a fresh UART session at the login prompt. Log in locally, mount
+the `state` UBIFS volume, read the marker, and check dmesg for
+UBI/UBIFS, ECC, or panic failures. This is split from the write/reboot
+step so repeated UART sentinels cannot be satisfied by bytes captured
+before the reboot.
+
+Build: nothing required.
+
+Artifacts: none.
+
+Test (max 1 min):
+
+```
+lease:claim devices="mp135.custom" duration_s=3600
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="login:" timeout_ms=5000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=5000
+mp135.custom:uart_write data="echo ___STATE_READ___; mkdir -p /run/state; mount -t ubifs ubi0:state /run/state; cat /run/state/marker.txt; umount /run/state; dmesg | grep -iE 'UBI|UBIFS|ECC|uncorrect|panic' || true; echo ___STATE_END___\r"
+mp135.custom:uart_expect sentinel="___STATE_READ___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="nand-state-v1" timeout_ms=20000
+mp135.custom:uart_expect sentinel="___STATE_END___" timeout_ms=15000
+mp135.custom:uart_close
+lease:release
+mark tag=nand_writable_persistent_state_verify
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    bad = (r'Kernel panic', r'Unable to mount root fs', r'UBIFS error',
+           r'UBI error', r'ECC error', r'uncorrectable', r'unrecoverable')
+    return ('___STATE_READ___' in uart
+            and 'nand-state-v1' in uart
+            and '___STATE_END___' in uart
+            and not any(re.search(p, uart, re.I) for p in bad))
+```
+
+### NAND writable rootfs: write marker on `/` -> reboot same image
+
+The root UBIFS volume itself must tolerate ordinary persistent writes.
+Starting from the authenticated UART shell left by the previous
+same-image marker check, remount `/` read-write, write a marker directly
+into the root filesystem, sync it, remount `/` read-only, and reboot.
+The board returns to DFU, so reload only the bootloader and do not
+rewrite or flush `nand.img`. Boot Linux from the same NAND contents and
+reject UBI/UBIFS/ECC or rootfs-mount failures. This test intentionally
+does not use the separate `state` volume.
+
+Using a combined writable rootfs volume is the rigorous UBIFS test here:
+Linux has to mount, update, sync, unmount, and boot again from the same
+UBIFS volume that contains the operating system, not just append one
+tiny file to a separate scratch volume. Future fixes must keep this
+combined-root test instead of working around it by moving all writes to
+another volume.
+
+The root UBIFS image must be built with `mkfs.ubifs -F` so Linux fixes
+free space before first use. The bootloader flasher writes the UBI image
+as raw NAND pages, so UBIFS free pages in the image cannot be treated as
+unprogrammed erase state until Linux has performed the free-space fixup.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test (max 3 min):
+
+```
+lease:claim devices="mp135.custom" duration_s=3600
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=5000
+mp135.custom:uart_write data="echo ___ROOT_WRITE___; mount -o remount,rw /; echo nand-root-v1 >/root/root-marker.txt; sync; cat /root/root-marker.txt; mount -o remount,ro /; echo ___ROOT_REBOOT___; sync; reboot\r"
+mp135.custom:uart_expect sentinel="___ROOT_WRITE___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="nand-root-v1" timeout_ms=20000
+mp135.custom:uart_expect sentinel="___ROOT_REBOOT___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=15000
+mp135.custom:uart_close
+delay ms=12000
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="fmc_bload\r"
+mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="jump"
+delay ms=200
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
+mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
+mp135.custom:uart_close
+lease:release
+mark tag=nand_writable_rootfs_reboot
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    bad = (r'Kernel panic', r'Unable to mount root fs', r'UBIFS error',
+           r'UBI error', r'ECC error', r'uncorrectable', r'unrecoverable')
+    return ('___ROOT_WRITE___' in uart
+            and 'free space fixup complete' in uart
+            and '___ROOT_REBOOT___' in uart
+            and 'ubi0: attached mtd' in uart
+            and 'login:' in uart
+            and not any(re.search(p, uart, re.I) for p in bad))
+```
+
+### NAND writable rootfs: verify marker after same-image reboot
+
+After the previous step has rebooted Linux from the same NAND image,
+start a fresh UART session at the login prompt. Log in locally, read
+the marker from `/root/root-marker.txt`, and check dmesg for UBI/UBIFS,
+ECC, or panic failures. This is split from the write/reboot step so the
+UART expect stream cannot satisfy `login:`, `Password:`, `# `, or marker
+matches from bytes captured before the reboot.
+
+Build: nothing required.
+
+Artifacts: none.
+
+Test (max 1 min):
+
+```
+lease:claim devices="mp135.custom" duration_s=3600
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="login:" timeout_ms=5000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=5000
+mp135.custom:uart_write data="echo ___ROOT_READ___; cat /root/root-marker.txt; dmesg | grep -iE 'UBI|UBIFS|ECC|uncorrect|panic' || true; echo ___ROOT_END___\r"
+mp135.custom:uart_expect sentinel="___ROOT_READ___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="nand-root-v1" timeout_ms=20000
+mp135.custom:uart_expect sentinel="___ROOT_END___" timeout_ms=15000
+mp135.custom:uart_close
+lease:release
+mark tag=nand_writable_rootfs_verify
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    bad = (r'Kernel panic', r'Unable to mount root fs', r'UBIFS error',
+           r'UBI error', r'ECC error', r'uncorrectable', r'unrecoverable')
+    return ('___ROOT_READ___' in uart
+            and 'nand-root-v1' in uart
+            and '___ROOT_END___' in uart
             and not any(re.search(p, uart, re.I) for p in bad))
 ```
