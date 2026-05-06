@@ -1603,6 +1603,109 @@ def check(_extract_dir):
     return image.stat().st_mtime >= latest_dep
 ```
 
+### Verify FPGA-to-MP135 IO0
+
+Drive iCEstick `pins[13]` low and high through the FPGA GPIO UART and
+verify the MP135 `gpio_test` harness samples `mpu_qspi_io0_to_fpga_io0`.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C fpga build/gpio/gpio.bin
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test (max 5 min):
+
+```
+lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
+inventory
+fpga.hx1k:program bin=@gpio.bin
+fpga.hx1k:uart_open
+fpga.hx1k:uart_write data="W0000"
+fpga.hx1k:uart_write data="E2000"
+delay ms=2000
+mp135.evb:uart_open
+mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
+mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_io0_to_fpga_io0 low ok" timeout_ms=10000
+fpga.hx1k:uart_write data="W2000"
+mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_io0_to_fpga_io0 high ok" timeout_ms=10000
+fpga.hx1k:uart_write data="E0000"
+mp135.evb:uart_close
+fpga.hx1k:uart_close
+mark tag=gpio_physical_fpga_to_mpu_io0
+lease:release
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+ALLOWED_OPS = {
+    (None, 'description'),
+    ('lease', 'claim'),
+    (None, 'inventory'),
+    ('fpga.hx1k', 'program'),
+    ('fpga.hx1k', 'uart_open'),
+    ('fpga.hx1k', 'uart_write'),
+    ('fpga.hx1k', 'uart_close'),
+    (None, 'delay'),
+    ('mp135.evb', 'uart_open'),
+    ('mp135.evb', 'uart_expect'),
+    ('mp135.evb', 'uart_close'),
+    (None, 'mark'),
+    ('lease', 'release'),
+}
+
+REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        ops = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    plan_text = Path(extract_dir, 'plan.txt').read_text()
+    required_text = [
+        'lease:claim devices="fpga.hx1k,mp135.evb"',
+        'fpga.hx1k:program bin=@gpio.bin',
+        'fpga.hx1k:uart_write data="E2000"',
+        'fpga.hx1k:uart_write data="W2000"',
+        'gpio_test mpu_qspi_io0_to_fpga_io0 low ok',
+        'gpio_test mpu_qspi_io0_to_fpga_io0 high ok',
+        'gpio_physical_fpga_to_mpu_io0',
+    ]
+    if not all(token in plan_text for token in required_text):
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(device in plan_text for device in disallowed):
+        return False
+
+    saw = set()
+    for record in ops:
+        if not isinstance(record, dict) or record.get('status') != 'ok':
+            return False
+        key = (record.get('device'), record.get('verb'))
+        if key not in ALLOWED_OPS:
+            return False
+        saw.add(key)
+
+    return REQUIRED_OPS <= saw
+```
+
 ## WIP
 
 ### Verify physical connectivity
