@@ -2050,6 +2050,97 @@ Rationale: this is the smallest machine-testable step that advances
 physical connectivity beyond NCS by adding the MP135-side SCLK drive
 hook needed for the next hardware line check.
 
+### Gate SCLK drive report behind UART command
+
+Wire the existing MP135 SCLK drive report into `gpio_test` behind an
+explicit UART command. The normal startup replay and periodic status
+loop must not drive SCLK, so the existing NCS hardware checks continue
+to observe only the NCS line.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    stub = Path('stm32mp135_test_board/baremetal/gpio_test/gpio_replay_mpu_stub.c')
+    main = Path('stm32mp135_test_board/baremetal/gpio_test/src/main.c')
+    image = Path(artifacts['main.stm32'])
+
+    stub_text = stub.read_text(encoding='utf-8', errors='replace')
+    main_text = main.read_text(encoding='utf-8', errors='replace')
+
+    required_main = [
+        '#include "console.h"',
+        'console_rx_empty()',
+        'console_rx_get()',
+        'gpio_connectivity_mpu_replay_ncs_drive_report();',
+    ]
+    if not all(token in main_text for token in required_main):
+        return False
+
+    handler_start = main_text.find('static void gpio_test_handle_command')
+    handler_end = main_text.find('static void gpio_test_poll_commands')
+    if handler_start < 0 or handler_end < handler_start:
+        return False
+    handler_text = main_text[handler_start:handler_end]
+    if "command == 's'" not in handler_text:
+        return False
+    if 'gpio_connectivity_mpu_replay_sclk_drive_report();' not in handler_text:
+        return False
+
+    loop_start = main_text.find('while (1)')
+    if loop_start < 0:
+        return False
+    if 'gpio_connectivity_mpu_replay_sclk_drive_report();' in main_text[loop_start:]:
+        return False
+
+    required_stub = [
+        'gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok',
+        'gpio_test mpu_qspi_clk_to_fpga_sclk high drive ok',
+        'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
+        'gpio_test mpu_qspi_ncs_to_fpga_cs_n high drive ok',
+    ]
+    if not all(token in stub_text for token in required_stub):
+        return False
+
+    drive_start = stub_text.find('static const mpu_gpio_signal_t mpu_drive_signals[]')
+    drive_end = stub_text.find('static const mpu_gpio_signal_t mpu_sclk_drive_signal')
+    if drive_start < 0 or drive_end < drive_start:
+        return False
+    drive_table = stub_text[drive_start:drive_end]
+    if 'mpu_qspi_clk_to_fpga_sclk' in drive_table:
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(token in main_text or token in stub_text for token in disallowed):
+        return False
+    if not image.is_file() or image.stat().st_size == 0:
+        return False
+
+    latest_dep = max(stub.stat().st_mtime, main.stat().st_mtime)
+    return image.stat().st_mtime >= latest_dep
+```
+
+Rationale: this makes the SCLK report deliberately triggerable for the
+next hardware check without re-enabling the generic replay path that
+previously asserted SCLK during the NCS tests.
+
 ## WIP
 
 ### Verify physical connectivity
