@@ -61,7 +61,7 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 3 min):
 
 ```
-lease:claim devices="mp135.custom,ssh.target" duration_s=3600
+lease:claim devices="mp135.custom,ssh.target" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -95,7 +95,7 @@ mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
 mp135.custom:uart_expect sentinel="UBI: attached mtd" timeout_ms=20000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
 mp135.custom:uart_close
-lease:release token="{{LEASE_TOKEN}}"
+lease:release
 mark tag=stale_ubi_tail_panic_fixed
 ```
 
