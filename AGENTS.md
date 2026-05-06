@@ -225,7 +225,9 @@ underlying content, environment, or repository state so the hook passes
 normally.
 
 Do not add "Co-Author" lines to the commit messages. All commits must be
-made by "Jakob Kastelic", "kastelic.jakob@gmail.com".
+made by "Jakob Kastelic", "kastelic.jakob@gmail.com". Commit messages
+must have a title line (<50 chars) and a message body describing the
+commit in more detail (<72 char per line).
 
 When Orchestrator stops, it must leave all repos in a clean state,
 ready to sync.sh.
