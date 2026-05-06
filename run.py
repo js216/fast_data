@@ -117,7 +117,7 @@ class Runner:
         """Best-effort release of a stale lease token left over from a
         prior run. Submits the canonical resume+release pair; failures
         are swallowed (the lease may have already expired)."""
-        section = self.workdir / '_ghost_release'
+        section = self.workdir / f'_ghost_release_{time.time_ns()}'
         section.mkdir()
         plan_path = section / 'plan.txt'
         plan_path.write_text(

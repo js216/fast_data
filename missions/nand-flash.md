@@ -15,6 +15,104 @@ requirement. Do not lower any `min_rate_Bps=3000000` threshold to pass
 the mission. A sub-3 MB/s MSC read or write means the NAND boot path is
 broken and the code must be fixed.
 
+## WIP
+
+### Temporary: fix stale UBI rootfs tail panic
+
+The current NAND boot reaches Linux but panics while mounting UBIFS
+because UBI sees stale eraseblocks after the newly written image. The
+observed signature was:
+
+```
+ubi0: attaching mtd4
+ubi0 error: scan_peb.constprop.0: bad image sequence number 540517424 in PEB 46, expected 1951870196
+ubi_attach_mtd_dev: failed to attach mtd4, error -22
+VFS: Cannot open root device "ubi0:rootfs" or unknown-block(0,0): error -19
+Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)
+```
+
+At the time, `fmc_flush` reported `FMC flush: 114 blocks`; the rootfs
+partition starts at block 68, so UBI PEB 46 maps to physical block 114,
+the first block after the flushed image. The next fix should make NAND
+provisioning erase or otherwise invalidate the rootfs tail after
+`nand.img` while preserving the factory/runtime bad-block OOB markers.
+Do not solve this by bulk-erasing bad-block metadata or lowering MSC
+rate requirements.
+
+Build:
+
+```
+make -C stm32mp135_test_board patch
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=custom-nand dtb
+make -C stm32mp135_test_board br
+make -C stm32mp135_test_board DTS=custom-nand nand
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/nand.img
+```
+
+Test (max 3 min):
+
+```
+lease:claim devices="mp135.custom,ssh.target" duration_s=3600
+bench_mcu:reset_dut2
+delay ms=2000
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_close
+inventory
+msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="fmc_flush\r"
+mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
+mp135.custom:uart_expect sentinel="written" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="fmc_bload\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=30000
+mp135.custom:uart_write data="jump"
+delay ms=200
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.custom:uart_expect sentinel="UBI: attached mtd" timeout_ms=20000
+mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
+mp135.custom:uart_close
+lease:release token="{{LEASE_TOKEN}}"
+mark tag=stale_ubi_tail_panic_fixed
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    bad = ('bad image sequence number', 'cannot attach mtd4',
+           'Unable to mount root fs', 'Kernel panic')
+    return ('UBI: attached mtd' in uart and 'login:' in uart
+            and not any(s in uart for s in bad))
+```
+
 ### Inventory smoke
 
 Build: nothing required.
@@ -94,7 +192,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 30 s):
 
 ```
-lease:claim devices="bench_mcu.0,mp135.custom,ssh.target" duration_s=3600
+lease:claim devices="mp135.custom,ssh.target" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -187,15 +285,17 @@ def check(extract_dir):
     return 'FDT magic' in uart or 'partition' in uart or 'FMC' in uart
 ```
 
-### NAND image round-trip: write -> fmc_flush -> fmc_load -> diff
+### NAND image round-trip: write -> fmc_flush -> poison -> fmc_load -> diff
 
 Write `nand.img` to DDR via MSC, `fmc_flush` to NAND, `fmc_load` back
-into DDR, MSC-read and offline-diff the leading bytes. The image build
-can outlive an in-memory bench lease if the poller restarts, so this
-step claims a fresh lease after the build and re-enters the bootloader
-state it needs. The 3 MB/s MSC write and read floors are hard
-requirements for NAND provisioning; sub-3 MB/s results are code
-failures.
+into DDR, MSC-read and offline-diff the leading bytes. Before
+`fmc_load`, overwrite the leading DDR staging window with deterministic
+PRBS and verify the poison landed, so a no-op `fmc_load` cannot pass by
+reading back the original MSC write. The image build can outlive an
+in-memory bench lease if the poller restarts, so this step claims a
+fresh lease after the build and re-enters the bootloader state it
+needs. The 3 MB/s MSC write and read floors are hard requirements for
+NAND provisioning; sub-3 MB/s results are code failures.
 
 Build:
 
@@ -216,10 +316,10 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/nand.img
 ```
 
-Test (max 1 min):
+Test (max 2 min):
 
 ```
-lease:claim devices="bench_mcu.0,mp135.custom,ssh.target" duration_s=3600
+lease:claim devices="mp135.custom,ssh.target" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -244,6 +344,13 @@ mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
 mp135.custom:uart_expect sentinel="written" timeout_ms=10000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_close
+msc.custom:write_prbs n=4194304 seed=3735928559 offset_lba=0 min_rate_Bps=3000000
+msc.custom:verify_prbs n=4194304 seed=3735928559 offset_lba=0 min_rate_Bps=3000000
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_load\r"
 mp135.custom:uart_expect sentinel="FMC load:" timeout_ms=3000
 mp135.custom:uart_expect sentinel="rd errs" timeout_ms=10000
@@ -266,8 +373,6 @@ def check(extract_dir):
     n = min(len(img), len(got), 4194304)
     return got[:n] == img[:n]
 ```
-
-## WIP
 
 ### NAND health (bootloader-side)
 
@@ -322,11 +427,12 @@ def check(extract_dir):
 
 ### NAND + UBI health (Linux-side via UART)
 
-Inherits the running Linux from the previous test, but talks to it
-over the serial console rather than SSH. Logs in as `root`/`root`,
-prints `/proc/mtd`, `ubinfo -a`, `mtdinfo -a`, and a filtered
-`dmesg`. Asserts the expected partitions are present, UBI reports
-zero corrupted PEBs, and `dmesg` is clear of UBI/UBIFS/ECC errors.
+Inherits the bootloader-at-`> ` state from the previous test, boots
+Linux from NAND with `fmc_bload` + `jump`, then talks to Linux over the
+serial console rather than SSH. Logs in as `root`/`root`, prints
+`/proc/mtd`, `ubinfo -a`, `mtdinfo -a`, and a filtered `dmesg`.
+Asserts the expected partitions are present, UBI reports zero corrupted
+PEBs, and `dmesg` is clear of UBI/UBIFS/ECC errors.
 Requires `BR2_PACKAGE_MTD=y` in `config/buildroot.conf` for the
 mtd-utils binaries.
 
@@ -339,7 +445,16 @@ lease:resume token="{{LEASE_TOKEN}}"
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
-mp135.custom:uart_expect sentinel="login:" timeout_ms=5000
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="fmc_bload\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=30000
+mp135.custom:uart_write data="jump"
+delay ms=200
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.custom:uart_expect sentinel="UBI: attached mtd" timeout_ms=20000
+mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
 mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
 mp135.custom:uart_write data="root\r"
