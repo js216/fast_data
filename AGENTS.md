@@ -5,11 +5,12 @@ ask the human operator for one.
 
 - **Orchestrator** communicates with the operator, spawns all other
   agents (all of them short lived per iteration), and passes messages
-  between them. At the start of each iteration it clears stale jobs
-  from `test_serv` (see Test Server below). It anticipates that agents
-  will try to stop the loop (for example, claiming that hardware does
-  not work): when it detects that, the agent should be killed
-  immediately and a fresh one spawned.
+  between them. At the start of each iteration it reads AGENTS.md
+  freshly and summarizes the contents (as proof that it read it), clears
+  stale jobs from `test_serv` (see Test Server below). It anticipates
+  that agents will try to stop the loop (for example, claiming that
+  hardware does not work): when it detects that, the agent should be
+  killed immediately and a fresh one spawned.
 
 - **Manager** studies the next unfinished task in the “mission file”,
   breaks it down into the smallest possible step which still represents
@@ -61,6 +62,15 @@ ask the human operator for one.
   itself. It must look for evidence of removed or ineffective tests, of
   agentic cheating/lying, and reject all new tests that do not conform
   to the purpose of the mission.
+
+- **Stopper** must be invoked just before Orchestrator stops and hands
+  control back to the human operator. Stopper must check that the
+  mission has been accomplished and must not accept ANY other excuse for
+  stopping. In particular, REJECT the following excuses or good reasons:
+  broken hardware, cannot make any progress, need to ask user for
+  guidance, or literally anything short of mission fully accomplished.
+  Orchestrator is REQUIRED to take Stopper's order and if rejected, must
+  continue work.
 
 ### Mission Files and Testing
 
@@ -118,6 +128,7 @@ The extra info is different for each agent:
 - Verifier: issues found, <50 chars
 - Tester: number of tests that still pass
 - Enemy: any issues found, if found
+- Stopper: either "mission accomplished" or "illegal stop"
 
 If `ledger.txt` does not exist at the start of an iteration,
 Orchestrator must create it before spawning Manager and append a normal
