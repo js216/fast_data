@@ -86,7 +86,8 @@ mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
 mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_write data="fmc_bload\r"
-mp135.custom:uart_expect sentinel="> " timeout_ms=30000
+mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_write data="jump"
 delay ms=200
 mp135.custom:uart_write data="\r"
@@ -452,7 +453,8 @@ delay ms=300
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_bload\r"
-mp135.custom:uart_expect sentinel="> " timeout_ms=30000
+mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_write data="jump"
 delay ms=200
 mp135.custom:uart_write data="\r"
@@ -506,7 +508,7 @@ Test (max 1 min):
 
 ```
 lease:resume token="{{LEASE_TOKEN}}"
-delay ms=8000
+delay ms=20000
 ssh.custom:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu root@buildroot"
 ssh.custom:exec command="ip -4 -o addr show dev eth0; uname -a; mount | grep ' / '"
 lease:release token="{{LEASE_TOKEN}}"
@@ -578,7 +580,8 @@ mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
 mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_write data="fmc_bload\r"
-mp135.custom:uart_expect sentinel="> " timeout_ms=30000
+mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_write data="jump"
 delay ms=200
 mp135.custom:uart_write data="\r"
@@ -587,7 +590,7 @@ mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
 mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
 mp135.custom:uart_close
-delay ms=8000
+delay ms=20000
 ssh.custom:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu root@buildroot"
 ssh.custom:exec command="ip -4 -o addr show dev eth0; uname -a; mount | grep ' / '"
 mark tag=full_end_to_end_nand
@@ -604,4 +607,76 @@ def check(extract_dir):
     out = Verification.load_stream(extract_dir, 'ssh.exec').decode('utf-8', 'replace')
     return (bool(re.search(r'eth0\s+inet \d+\.\d+\.\d+\.\d+/\d+', out))
             and 'Linux' in out and 'armv7l' in out and 'ubifs' in out)
+```
+
+### NAND reboot persistence: Linux reboot -> bootloader reload -> second NAND boot
+
+After a successful Linux boot from NAND, ask Linux to reboot. The board
+returns to DFU, so reload only the bootloader and do not rewrite or
+flush `nand.img`. The same NAND image may be modified by Linux during
+normal operation, but it must remain bootable across repeated reboot
+cycles.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test (max 2 min):
+
+```
+lease:claim devices="mp135.custom,ssh.custom" duration_s=3600
+ssh.custom:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu root@buildroot"
+ssh.custom:exec command="mount | grep ' / '; sync; reboot"
+delay ms=12000
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="fmc_bload\r"
+mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="jump"
+delay ms=200
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
+mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
+mp135.custom:uart_close
+delay ms=20000
+ssh.custom:exec command="ip -4 -o addr show dev eth0; uname -a; mount | grep ' / '; dmesg | grep -iE 'UBI|UBIFS|ECC|uncorrect|panic' || true"
+lease:release
+mark tag=nand_reboot_persistence
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    out = Verification.load_stream(
+        extract_dir, 'ssh.exec').decode('utf-8', 'replace')
+    bad = (r'Kernel panic', r'Unable to mount root fs', r'UBIFS error',
+           r'UBI error', r'ECC error', r'uncorrectable', r'unrecoverable')
+    return ('Linux version' in uart and 'ubi0: attached mtd' in uart
+            and 'login:' in uart and 'ubifs' in out
+            and bool(re.search(r'eth0\s+inet \d+\.\d+\.\d+\.\d+/\d+', out))
+            and not any(re.search(p, uart, re.I) or re.search(p, out, re.I)
+                        for p in bad))
 ```
