@@ -4437,6 +4437,83 @@ register with no decode, or only the decode without wiring `clk_en`)
 would leave the new pulse unobservable in the build output, so zero
 progress.
 
+### Add prbs_xor_top burst command
+
+Extend the `prbs_xor_top` wrapper with a third UART command: byte
+`'b'` (`8'h62`) loads a 17-bit `burst_count` register with
+`17'd65536` and the wrapper drives `clk_en` high while
+`burst_count` is non-zero, decrementing by one each cycle. The
+result is exactly `2**16 = 65536` consecutive cycles of `clk_en`
+high starting the cycle after the burst byte is decoded, advancing
+the LFSR/checksum by one full PRBS period chunk. `clk_en` is the
+OR of the existing single-step `clk_en_q` pulse and the
+`burst_count != 0` term, so the existing `'r'` (`8'h72`) reset and
+`'s'` (`8'h73`) single-step behaviours are preserved unchanged.
+`clear` stays tied low; `state` and `checksum` remain dangling so
+the synthesizer trims them. The top-level ports are still just
+`clk` and `rx`. The checksum-print command lands in a later
+iteration.
+
+Build:
+
+```
+make -C fpga build/prbs_xor_top/prbs_xor_top.v
+```
+
+Artifacts:
+
+```
+fpga/build/prbs_xor_top/prbs_xor_top.v
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    nw = Path('fpga/src/prbs_xor_top.nw')
+    v  = Path('fpga/build/prbs_xor_top/prbs_xor_top.v')
+    if not (nw.is_file() and nw.stat().st_size > 0):
+        return False
+    if not (v.is_file() and v.stat().st_size > 0):
+        return False
+    if v.stat().st_mtime < nw.stat().st_mtime:
+        return False
+    nw_text = nw.read_text(encoding='utf-8', errors='replace')
+    for tok in ('module prbs_xor_top', 'uart_rx', 'prbs_xor',
+                "8'h72", "8'h73", "8'h62", 'clk_en_q',
+                'burst_count', 'burst_count - 17',
+                'clk_en_q | (burst_count != 17'):
+        if tok not in nw_text:
+            return False
+    text = v.read_text(encoding='utf-8', errors='replace')
+    for tok in ('module prbs_xor_top', 'uart_rx', 'prbs_xor',
+                "8'h72", "8'h73", "8'h62", 'clk_en_q',
+                'burst_count', 'burst_count - 17',
+                'clk_en_q | (burst_count != 17'):
+        if tok not in text:
+            return False
+    if 'SPDX-License-Identifier' not in text:
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(token in text for token in disallowed):
+        return False
+    return True
+```
+
+Rationale: smallest meaningful extension after the single-step
+command. Adding only the `'b'` decode plus a 17-bit `burst_count`
+counter and the `clk_en` OR keeps the wrapper change to a single
+new register and a single new compare while establishing the
+multi-cycle clock-enable path the checksum-print command will
+observe; making it any smaller (only the register with no decode,
+or only the decode without wiring `burst_count` into `clk_en`)
+would leave the burst unobservable in the build output, so zero
+progress.
+
 ## WIP
 
 ### Verify physical connectivity
