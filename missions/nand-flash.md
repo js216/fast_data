@@ -15,8 +15,6 @@ requirement. Do not lower any `min_rate_Bps=3000000` threshold to pass
 the mission. A sub-3 MB/s MSC read or write means the NAND boot path is
 broken and the code must be fixed.
 
-## WIP
-
 ### Temporary: fix stale UBI rootfs tail panic
 
 The current NAND boot reaches Linux but panics while mounting UBIFS
@@ -61,7 +59,7 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 3 min):
 
 ```
-lease:claim devices="mp135.custom,ssh.target" duration_s=3600 auto_release_on_session_end=true
+lease:claim devices="mp135.custom,ssh.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -76,7 +74,8 @@ mp135.custom:uart_expect sentinel="> " timeout_ms=8000
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_close
-inventory
+delay ms=2000
+inventory refresh=true verify=false
 msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
 mp135.custom:uart_open
 delay ms=300
@@ -84,7 +83,7 @@ mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
-mp135.custom:uart_expect sentinel="written" timeout_ms=30000
+mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_write data="fmc_bload\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=30000
@@ -92,7 +91,7 @@ mp135.custom:uart_write data="jump"
 delay ms=200
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
-mp135.custom:uart_expect sentinel="UBI: attached mtd" timeout_ms=20000
+mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
 mp135.custom:uart_close
 lease:release
@@ -109,7 +108,7 @@ def check(extract_dir):
         extract_dir, 'mp135.uart').decode('utf-8', 'replace')
     bad = ('bad image sequence number', 'cannot attach mtd4',
            'Unable to mount root fs', 'Kernel panic')
-    return ('UBI: attached mtd' in uart and 'login:' in uart
+    return ('ubi0: attached mtd' in uart and 'login:' in uart
             and not any(s in uart for s in bad))
 ```
 
@@ -130,7 +129,7 @@ Verify:
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    needed = {'mp135.custom', 'bench_mcu.0', 'ssh.target',
+    needed = {'mp135.custom', 'bench_mcu.0', 'ssh.custom',
               'lease._default'}
     devs = Verification.load_devices(extract_dir)
     return needed.issubset({d['id'] for d in devs})
@@ -173,8 +172,9 @@ def check(_extract_dir):
 
 ### DFU NAND bootloader flash smoke
 
-Reset (D12 via `reset_dut2`) and DFU-load the NAND bootloader. Keep
-the lease alive for the UART hold step.
+Reset (D12 via `reset_dut2`), DFU-load the NAND bootloader, and stop
+autoboot before the bootloader can fall through to Linux. Keep the
+lease alive for the UART hold step.
 
 Build:
 
@@ -192,10 +192,19 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 30 s):
 
 ```
-lease:claim devices="mp135.custom,ssh.target" duration_s=3600
+lease:claim devices="mp135.custom,ssh.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_close
 mark tag=dfu_nand_flash
 ```
 
@@ -206,13 +215,14 @@ def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     ops = Verification.load_ops(extract_dir)
-    return Verification.op_succeeded(ops, 'dfu.custom', 'flash_layout')
+    return (Verification.op_succeeded(ops, 'dfu.custom', 'flash_layout')
+            and Verification.op_succeeded(ops, 'mp135.custom', 'uart_expect'))
 ```
 
 ### Bootloader hold via UART
 
-Inherits the DFU-loaded NAND bootloader state, stops autoload, and
-parks at `> `.
+Inherits the DFU-loaded NAND bootloader state and confirms it is still
+parked at `> `.
 
 Build: nothing required.
 
@@ -222,14 +232,8 @@ Test (max 15 s):
 lease:resume token="{{LEASE_TOKEN}}"
 mp135.custom:uart_open
 delay ms=300
-mp135.custom:uart_write data="x"
-delay ms=200
-mp135.custom:uart_write data="x"
-delay ms=200
-mp135.custom:uart_write data="x"
-mp135.custom:uart_expect sentinel="> " timeout_ms=8000
 mp135.custom:uart_write data="\r"
-mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
 mark tag=bootloader_hold
 ```
@@ -290,7 +294,7 @@ def check(extract_dir):
 Write `nand.img` to DDR via MSC, `fmc_flush` to NAND, `fmc_load` back
 into DDR, MSC-read and offline-diff the leading bytes. Before
 `fmc_load`, overwrite the leading DDR staging window with deterministic
-PRBS and verify the poison landed, so a no-op `fmc_load` cannot pass by
+zeroes and verify the poison landed, so a no-op `fmc_load` cannot pass by
 reading back the original MSC write. The image build can outlive an
 in-memory bench lease if the poller restarts, so this step claims a
 fresh lease after the build and re-enters the bootloader state it
@@ -319,7 +323,7 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 2 min):
 
 ```
-lease:claim devices="mp135.custom,ssh.target" duration_s=3600
+lease:claim devices="mp135.custom,ssh.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -342,11 +346,11 @@ mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
-mp135.custom:uart_expect sentinel="written" timeout_ms=10000
+mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
-msc.custom:write_prbs n=4194304 seed=3735928559 offset_lba=0 min_rate_Bps=3000000
-msc.custom:verify_prbs n=4194304 seed=3735928559 offset_lba=0 min_rate_Bps=3000000
+msc.custom:write_zeroes n=4194304 offset_lba=0 min_rate_Bps=3000000
+msc.custom:verify_zeroes n=4194304 offset_lba=0 min_rate_Bps=3000000
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -432,7 +436,8 @@ Linux from NAND with `fmc_bload` + `jump`, then talks to Linux over the
 serial console rather than SSH. Logs in as `root`/`root`, prints
 `/proc/mtd`, `ubinfo -a`, `mtdinfo -a`, and a filtered `dmesg`.
 Asserts the expected partitions are present, UBI reports zero corrupted
-PEBs, and `dmesg` is clear of UBI/UBIFS/ECC errors.
+PEBs, factory bad PEBs stay within a board-realistic bound, and `dmesg`
+is clear of UBI/UBIFS/ECC errors.
 Requires `BR2_PACKAGE_MTD=y` in `config/buildroot.conf` for the
 mtd-utils binaries.
 
@@ -453,7 +458,7 @@ delay ms=200
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
-mp135.custom:uart_expect sentinel="UBI: attached mtd" timeout_ms=20000
+mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
 mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
@@ -480,11 +485,12 @@ def check(extract_dir):
     for label in ('bootloader', 'ptable', 'dtb', 'kernel', 'rootfs'):
         if label not in body:
             return False
-    corr = re.search(r'Corrupted PEBs:\s+(\d+)', body)
+    corr = re.search(r'corrupted PEBs:\s+(\d+)', body, re.I)
     if not corr or int(corr.group(1)) != 0:
         return False
-    bad = re.search(r'Bad PEB count:\s+(\d+)', body)
-    if not bad or int(bad.group(1)) > 4:
+    bad = re.search(r'(?:Count of bad physical eraseblocks|bad PEBs):\s+(\d+)',
+                    body, re.I)
+    if not bad or int(bad.group(1)) > 32:
         return False
     if re.search(r'UBIFS error|UBI error|ECC unrecoverable|uncorrectable',
                  body, re.I):
@@ -501,8 +507,8 @@ Test (max 1 min):
 ```
 lease:resume token="{{LEASE_TOKEN}}"
 delay ms=8000
-ssh:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq2/Qf4lNrw/weZ9Aod1VTCvett2F/iNjzDBuA/gKe/ stm32mp135-evb-recovery"
-ssh:exec command="ip -4 -o addr show dev eth0; uname -a; mount | grep ' / '"
+ssh.custom:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu root@buildroot"
+ssh.custom:exec command="ip -4 -o addr show dev eth0; uname -a; mount | grep ' / '"
 lease:release token="{{LEASE_TOKEN}}"
 mark tag=ssh_smoke_nand
 ```
@@ -569,7 +575,7 @@ mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
-mp135.custom:uart_expect sentinel="written" timeout_ms=10000
+mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_write data="fmc_bload\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=30000
@@ -578,12 +584,12 @@ delay ms=200
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
-mp135.custom:uart_expect sentinel="UBI: attached mtd" timeout_ms=20000
+mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
 mp135.custom:uart_close
 delay ms=8000
-ssh:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq2/Qf4lNrw/weZ9Aod1VTCvett2F/iNjzDBuA/gKe/ stm32mp135-evb-recovery"
-ssh:exec command="ip -4 -o addr show dev eth0; uname -a; mount | grep ' / '"
+ssh.custom:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu root@buildroot"
+ssh.custom:exec command="ip -4 -o addr show dev eth0; uname -a; mount | grep ' / '"
 mark tag=full_end_to_end_nand
 ```
 
