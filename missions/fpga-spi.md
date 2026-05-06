@@ -4121,6 +4121,60 @@ same plan so the heartbeat observes IO3 low (`0xa400`) regardless of
 prior MP135 firmware state, uses `mp135.evb`, and does not claim
 `bench_mcu.0`.
 
+### Add prbs_xor PRBS skeleton
+
+Add a minimal LFSR-only `fpga/src/prbs_xor.nw` chapter and a Makefile
+rule that tangles its `prbs_xor.v` into `fpga/build/prbs_xor/prbs_xor.v`.
+This is the smallest first step toward the upcoming PRBS / XOR-checksum
+/ UART command stack; the XOR checksum, the UART command interface, and
+the matching MP135 baremetal mirror are added in later iterations.
+
+Build:
+
+```
+make -C fpga build/prbs_xor/prbs_xor.v
+```
+
+Artifacts:
+
+```
+fpga/build/prbs_xor/prbs_xor.v
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    nw = Path('fpga/src/prbs_xor.nw')
+    v  = Path('fpga/build/prbs_xor/prbs_xor.v')
+    if not (nw.is_file() and nw.stat().st_size > 0):
+        return False
+    if not (v.is_file() and v.stat().st_size > 0):
+        return False
+    if v.stat().st_mtime < nw.stat().st_mtime:
+        return False
+    text = v.read_text(encoding='utf-8', errors='replace')
+    if 'module prbs_xor' not in text:
+        return False
+    if 'always @(posedge clk)' not in text:
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(token in text for token in disallowed):
+        return False
+    return True
+```
+
+Rationale: smallest meaningful PRBS step. Adding only the LFSR module
+(no UART, no checksum) keeps the change to one new noweb file and one
+generic Makefile copy rule, while still establishing the noweb chapter,
+the build path, and the verification template that subsequent steps
+extend with the XOR checksum, the UART command interface, and the
+MP135 baremetal mirror.
+
 ## WIP
 
 ### Verify physical connectivity
