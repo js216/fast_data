@@ -1878,10 +1878,12 @@ def check(extract_dir):
 
 ### Verify MP135-to-FPGA NCS low
 
-Drive every FPGA GPIO fixture bit except `cs_n` low, let the MP135
-`gpio_test` firmware drive `mpu_qspi_ncs_to_fpga_cs_n` low through the
-existing NCS report path, and verify the FPGA GPIO heartbeat observes
-all sampled bits low.
+Drive every FPGA GPIO fixture bit except `cs_n` low, send the explicit
+`n` command to the MP135 `gpio_test` UART to hold
+`mpu_qspi_ncs_to_fpga_cs_n` low, and verify the FPGA GPIO heartbeat
+observes all sampled bits low. The combined periodic NCS report drives
+low and then immediately high, so this low-level check must use the
+low-only command rather than the periodic report path.
 
 Build:
 
@@ -1911,6 +1913,7 @@ fpga.hx1k:uart_write data="Ef7ff"
 delay ms=2000
 mp135.evb:uart_open
 mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
+mp135.evb:uart_write data="n"
 mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok" timeout_ms=10000
 fpga.hx1k:uart_expect sentinel="0000\r\n" timeout_ms=10000
 fpga.hx1k:uart_write data="E0000"
@@ -1937,6 +1940,7 @@ ALLOWED_OPS = {
     ('fpga.hx1k', 'uart_close'),
     (None, 'delay'),
     ('mp135.evb', 'uart_open'),
+    ('mp135.evb', 'uart_write'),
     ('mp135.evb', 'uart_expect'),
     ('mp135.evb', 'uart_close'),
     (None, 'mark'),
@@ -1957,6 +1961,7 @@ def check(extract_dir):
     required_text = [
         'lease:claim devices="fpga.hx1k,mp135.evb"',
         'fpga.hx1k:uart_write data="Ef7ff"',
+        'mp135.evb:uart_write data="n"',
         'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
         'fpga.hx1k:uart_expect sentinel="0000\\r\\n"',
         'gpio_physical_mp135_to_fpga_ncs_low',
@@ -2234,6 +2239,115 @@ Rationale: this is the smallest hardware-backed check after adding the
 UART trigger. It proves the trigger reaches the SCLK report while
 using only the EVB UART and leaving FPGA SCLK sampling for the next
 step.
+
+### Verify MP135-to-FPGA SCLK high
+
+Drive every FPGA GPIO fixture bit except `sclk` low, send the explicit
+`s` command to the MP135 `gpio_test` UART, and verify the FPGA GPIO
+heartbeat observes the SCLK bit high after the MP135 reports the high
+drive action.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C fpga build/gpio/gpio.bin
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test (max 5 min):
+
+```
+lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
+inventory
+fpga.hx1k:program bin=@gpio.bin
+fpga.hx1k:uart_open
+fpga.hx1k:uart_write data="W0000"
+fpga.hx1k:uart_write data="Ebfff"
+mp135.evb:uart_open
+mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
+mp135.evb:uart_write data="s"
+mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok" timeout_ms=10000
+mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_clk_to_fpga_sclk high drive ok" timeout_ms=10000
+fpga.hx1k:uart_expect sentinel="4000\r\n" timeout_ms=10000
+fpga.hx1k:uart_write data="E0000"
+mp135.evb:uart_close
+fpga.hx1k:uart_close
+mark tag=gpio_physical_mp135_to_fpga_sclk_high
+lease:release
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+ALLOWED_OPS = {
+    (None, 'description'),
+    ('lease', 'claim'),
+    (None, 'inventory'),
+    ('fpga.hx1k', 'program'),
+    ('fpga.hx1k', 'uart_open'),
+    ('fpga.hx1k', 'uart_write'),
+    ('fpga.hx1k', 'uart_expect'),
+    ('fpga.hx1k', 'uart_close'),
+    ('mp135.evb', 'uart_open'),
+    ('mp135.evb', 'uart_write'),
+    ('mp135.evb', 'uart_expect'),
+    ('mp135.evb', 'uart_close'),
+    (None, 'mark'),
+    ('lease', 'release'),
+}
+
+REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        ops = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    plan_text = Path(extract_dir, 'plan.txt').read_text()
+    required_text = [
+        'lease:claim devices="fpga.hx1k,mp135.evb"',
+        'fpga.hx1k:uart_write data="Ebfff"',
+        'mp135.evb:uart_write data="s"',
+        'gpio_test mpu_qspi_clk_to_fpga_sclk high drive ok',
+        'fpga.hx1k:uart_expect sentinel="4000\\r\\n"',
+        'gpio_physical_mp135_to_fpga_sclk_high',
+    ]
+    if not all(token in plan_text for token in required_text):
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(device in plan_text for device in disallowed):
+        return False
+
+    saw = set()
+    for record in ops:
+        if not isinstance(record, dict) or record.get('status') != 'ok':
+            return False
+        key = (record.get('device'), record.get('verb'))
+        if key not in ALLOWED_OPS:
+            return False
+        saw.add(key)
+
+    return REQUIRED_OPS <= saw
+```
+
+Rationale: this is the smallest physical SCLK sampling step after the
+UART-trigger report. It verifies only the high level on FPGA bit 14
+(`0x4000`) and keeps the low-level sample for a separate follow-up.
 
 ## WIP
 
