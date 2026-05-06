@@ -876,6 +876,99 @@ def check(extract_dir):
     )
 ```
 
+### Smoke physical GPIO replay setup
+
+Confirm the physical setup can program the FPGA GPIO image, reset the
+MP135 DUT without leasing `bench_mcu.0`, flash the MP135 GPIO test
+image, and observe the MPU-side ready banner.
+
+Build:
+
+```
+make -C fpga build/gpio/gpio.bin
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test (max 5 min):
+
+```
+lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
+inventory
+fpga.hx1k:program bin=@gpio.bin
+bench_mcu.0:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
+mp135.evb:uart_close
+mark tag=gpio_physical_replay_setup_smoke
+lease:release
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+ALLOWED_OPS = {
+    (None, 'description'),
+    ('lease', 'claim'),
+    (None, 'inventory'),
+    ('fpga.hx1k', 'program'),
+    ('bench_mcu.0', 'reset_dut'),
+    (None, 'delay'),
+    ('dfu.evb', 'flash_layout'),
+    ('mp135.evb', 'uart_open'),
+    ('mp135.evb', 'uart_expect'),
+    ('mp135.evb', 'uart_close'),
+    (None, 'mark'),
+    ('lease', 'release'),
+}
+DISALLOWED_VERBS = {
+    'uart_write',
+    'drive', 'sample', 'expect', 'gpio_write', 'gpio_read',
+}
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        manifest = Verification.load_manifest(extract_dir)
+        ops = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(manifest.get('lease_token'), str):
+        return False
+    plan_text = Path(extract_dir, 'plan.txt').read_text()
+    if 'lease:claim devices="fpga.hx1k,mp135.evb,bench_mcu.0"' in plan_text:
+        return False
+    if 'lease:claim devices="fpga.hx1k,mp135.evb"' not in plan_text:
+        return False
+    saw = set()
+    for record in ops:
+        if not isinstance(record, dict) or record.get('status') != 'ok':
+            return False
+        key = (record.get('device'), record.get('verb'))
+        if key not in ALLOWED_OPS:
+            return False
+        if record.get('verb') in DISALLOWED_VERBS:
+            return False
+        saw.add(key)
+    return (
+        ALLOWED_OPS <= saw and
+        'gpio_physical_replay_setup_smoke' in plan_text
+    )
+```
+
 ## WIP
 
 ### Verify physical connectivity
