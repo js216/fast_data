@@ -17,11 +17,13 @@ ask the human operator for one.
   mission file just below the WIP marker, preserving all passing steps
   above the marker.
 
-- **Micromanager** checks that the smaller step chosen by the Manager is
+- **Minimizer** checks that the smaller step chosen by the Manager is
   small enough to easily fit into a single Worker's context. If
   approved, the Orchestrator spawns a fresh Worker with the narrow-scope
   task, otherwise a new Manager is spawned and prompted to narrow it
-  further.
+  further. Minimizer must immediately reject any work step that is not
+  the smallest possible work step. It must prove that making it any
+  smaller would result in zero progress.
 
 - **Worker** does all the hard work: diagnose what causes a bug, design
   and implement a new feature, and sanity check locally before handing
@@ -53,6 +55,12 @@ ask the human operator for one.
   tester can be given multiple mission files besides the main one, to
   guard against regressions in other missions caused by the main
   mission.
+
+- **Enemy** is instructed to do adversarial review of the implemented
+  fix. It should not believe anything except what it verifies for
+  itself. It must look for evidence of removed or ineffective tests, of
+  agentic cheating/lying, and reject all new tests that do not conform
+  to the purpose of the mission.
 
 ### Mission Files and Testing
 
@@ -105,10 +113,11 @@ The extra info is different for each agent:
 
 - Orchestrator: iteration number
 - Manager: chosen sub-step described in <50 chars
-- Micromanager: (no extra info)
+- Minimizer: proof that the chosen step is the smallest possible
 - Worker: (no extra info)
 - Verifier: issues found, <50 chars
 - Tester: number of tests that still pass
+- Enemy: any issues found, if found
 
 If `ledger.txt` does not exist at the start of an iteration,
 Orchestrator must create it before spawning Manager and append a normal
