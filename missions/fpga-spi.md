@@ -1535,6 +1535,74 @@ def check(extract_dir):
     return REQUIRED_OPS <= saw
 ```
 
+### Add MP135 GPIO sample output for IO0
+
+Teach the MP135 `gpio_test` firmware to map `mpu_qspi_io0_to_fpga_io0`
+to the QSPI IO0 HAL GPIO input and print per-signal sample results for
+low and high expectations. This is build-only support for the next
+physical line test.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    stub = Path('stm32mp135_test_board/baremetal/gpio_test/gpio_replay_mpu_stub.c')
+    main = Path('stm32mp135_test_board/baremetal/gpio_test/src/main.c')
+    board = Path('stm32mp135_test_board/baremetal/qspi/src/board.h')
+    image = Path(artifacts['main.stm32'])
+
+    stub_text = stub.read_text(encoding='utf-8', errors='replace')
+    main_text = main.read_text(encoding='utf-8', errors='replace')
+    board_text = board.read_text(encoding='utf-8', errors='replace')
+
+    if '#define QSPI_IO0_PORT GPIOH' not in board_text:
+        return False
+    if '#define QSPI_IO0_PIN  GPIO_PIN_3' not in board_text:
+        return False
+
+    required_stub = [
+        'mpu_qspi_io0_to_fpga_io0',
+        'GPIOH',
+        'GPIO_PIN_3',
+        'HAL_GPIO_ReadPin',
+        'GPIO_TypeDef',
+        'GPIO_PinState',
+        'gpio_test mpu_qspi_io0_to_fpga_io0 low ok',
+        'gpio_test mpu_qspi_io0_to_fpga_io0 high ok',
+    ]
+    if not all(token in stub_text for token in required_stub):
+        return False
+    if 'gpio_connectivity_mpu_replay_io0_sample_report' not in main_text:
+        return False
+
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(token in stub_text or token in main_text for token in disallowed):
+        return False
+    if not image.is_file() or image.stat().st_size == 0:
+        return False
+
+    latest_dep = max(stub.stat().st_mtime, main.stat().st_mtime, board.stat().st_mtime)
+    return image.stat().st_mtime >= latest_dep
+```
+
 ## WIP
 
 ### Verify physical connectivity
