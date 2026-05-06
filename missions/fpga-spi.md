@@ -2349,6 +2349,76 @@ Rationale: this is the smallest physical SCLK sampling step after the
 UART-trigger report. It verifies only the high level on FPGA bit 14
 (`0x4000`) and keeps the low-level sample for a separate follow-up.
 
+### Add MP135 SCLK low UART trigger
+
+Add an explicit MP135 `gpio_test` UART command that drives
+`mpu_qspi_clk_to_fpga_sclk` low and leaves it low. This provides a
+sustained low trigger for the next SCLK physical sample instead of
+using the combined low/high SCLK report.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    stub = Path('stm32mp135_test_board/baremetal/gpio_test/gpio_replay_mpu_stub.c')
+    main = Path('stm32mp135_test_board/baremetal/gpio_test/src/main.c')
+    image = Path(artifacts['main.stm32'])
+
+    stub_text = stub.read_text(encoding='utf-8', errors='replace')
+    main_text = main.read_text(encoding='utf-8', errors='replace')
+
+    required_stub = [
+        'gpio_connectivity_mpu_replay_sclk_low_report',
+        'QSPI_CLK_PORT',
+        'QSPI_CLK_PIN',
+        'GPIO_PIN_RESET',
+        'gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok',
+    ]
+    if not all(token in stub_text for token in required_stub):
+        return False
+
+    handler_start = main_text.find('static void gpio_test_handle_command')
+    handler_end = main_text.find('static void gpio_test_poll_commands')
+    if handler_start < 0 or handler_end < handler_start:
+        return False
+    handler_text = main_text[handler_start:handler_end]
+    if "command == 'l'" not in handler_text:
+        return False
+    if 'gpio_connectivity_mpu_replay_sclk_low_report();' not in handler_text:
+        return False
+
+    if not image.is_file() or image.stat().st_size == 0:
+        return False
+    latest_dep = max(stub.stat().st_mtime, main.stat().st_mtime)
+    if image.stat().st_mtime < latest_dep:
+        return False
+
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    return not any(token in stub_text or token in main_text for token in disallowed)
+```
+
+Rationale: this is the smallest safe step after the SCLK-high physical
+check. It adds the sustained-low firmware trigger needed for a reliable
+SCLK-low hardware sample without changing any bench plan.
+
 ## WIP
 
 ### Verify physical connectivity
