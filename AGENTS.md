@@ -162,11 +162,24 @@ the operator, and then resume the mission loop under the existing
 instructions. Merely reporting a failed hardware or software test is
 not sufficient. The only allowed stop conditions are: the operator
 explicitly asks to stop or run a single test only; the mission file has
-no WIP marker after a successful Tester run and commit; or AGENTS.md
-requires stopping for bad existing ledger format. Hardware symptoms
-such as missing UART bytes, a wedged job, timeout, failed verification,
-or a bench device not responding are ordinary Worker inputs, not stop
-conditions.
+no WIP marker after a successful Tester run and commit; AGENTS.md
+requires stopping for bad existing ledger format; or the Orchestrator's
+own agent context is approaching exhaustion (see "Context budget pause"
+below). Hardware symptoms such as missing UART bytes, a wedged job,
+timeout, failed verification, or a bench device not responding are
+ordinary Worker inputs, not stop conditions.
+
+Context budget pause: the Orchestrator may pause and hand control back
+to the operator when its own agent context is approaching exhaustion,
+provided ALL of the following are true at the moment it pauses:
+the most recent Tester run passed; the WIP marker has been moved past
+the just-passed step; every touched repo (parent and submodules) is
+clean on branch `main`; the ledger has a closing `Orchestrator pass
+<iteration>` line; and the response includes a one-paragraph "resume
+point" naming the next step a fresh Orchestrator should pick up. This
+clause prevents the worse failure mode of running out of context
+mid-edit and leaving a dirty repo. The next Orchestrator session
+resumes the loop from the head commit.
 
 Orchestrator must also stop if it detects bad format or a missing line
 in an existing ledger file. In that case it must also diagnose the
