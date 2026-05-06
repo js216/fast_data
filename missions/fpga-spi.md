@@ -2419,6 +2419,117 @@ Rationale: this is the smallest safe step after the SCLK-high physical
 check. It adds the sustained-low firmware trigger needed for a reliable
 SCLK-low hardware sample without changing any bench plan.
 
+### Verify MP135-to-FPGA SCLK low
+
+Drive every FPGA GPIO fixture bit except `sclk` low, hold NCS low with
+the existing MP135 `n` command, then send the explicit `l` command to
+hold `mpu_qspi_clk_to_fpga_sclk` low and verify the FPGA GPIO
+heartbeat observes all sampled bits low.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C fpga build/gpio/gpio.bin
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test (max 5 min):
+
+```
+lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
+inventory
+fpga.hx1k:program bin=@gpio.bin
+fpga.hx1k:uart_open
+fpga.hx1k:uart_write data="W0000"
+fpga.hx1k:uart_write data="Ebfff"
+mp135.evb:uart_open
+mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
+mp135.evb:uart_write data="n"
+mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok" timeout_ms=10000
+mp135.evb:uart_write data="l"
+mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok" timeout_ms=10000
+fpga.hx1k:uart_expect sentinel="0000\r\n" timeout_ms=10000
+fpga.hx1k:uart_write data="E0000"
+mp135.evb:uart_close
+fpga.hx1k:uart_close
+mark tag=gpio_physical_mp135_to_fpga_sclk_low
+lease:release
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+ALLOWED_OPS = {
+    (None, 'description'),
+    ('lease', 'claim'),
+    (None, 'inventory'),
+    ('fpga.hx1k', 'program'),
+    ('fpga.hx1k', 'uart_open'),
+    ('fpga.hx1k', 'uart_write'),
+    ('fpga.hx1k', 'uart_expect'),
+    ('fpga.hx1k', 'uart_close'),
+    ('mp135.evb', 'uart_open'),
+    ('mp135.evb', 'uart_write'),
+    ('mp135.evb', 'uart_expect'),
+    ('mp135.evb', 'uart_close'),
+    (None, 'mark'),
+    ('lease', 'release'),
+}
+
+REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        ops = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    plan_text = Path(extract_dir, 'plan.txt').read_text()
+    required_text = [
+        'lease:claim devices="fpga.hx1k,mp135.evb"',
+        'fpga.hx1k:uart_write data="Ebfff"',
+        'mp135.evb:uart_write data="n"',
+        'mp135.evb:uart_write data="l"',
+        'gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok',
+        'fpga.hx1k:uart_expect sentinel="0000\\r\\n"',
+        'gpio_physical_mp135_to_fpga_sclk_low',
+    ]
+    if not all(token in plan_text for token in required_text):
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(device in plan_text for device in disallowed):
+        return False
+
+    saw = set()
+    for record in ops:
+        if not isinstance(record, dict) or record.get('status') != 'ok':
+            return False
+        key = (record.get('device'), record.get('verb'))
+        if key not in ALLOWED_OPS:
+            return False
+        saw.add(key)
+
+    return REQUIRED_OPS <= saw
+```
+
+Rationale: this is the smallest physical follow-up to the sustained
+SCLK-low UART trigger. It samples only the low level, uses `mp135.evb`,
+and does not claim `bench_mcu.0`.
+
 ## WIP
 
 ### Verify physical connectivity
