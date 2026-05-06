@@ -300,11 +300,11 @@ def check(extract_dir):
     return True
 ```
 
-### Acquire GPIO replay bench lease
+### Acquire GPIO replay MPU/FPGA lease
 
 Run a no-toggle hardware readiness probe before GPIO replay. The plan
-holds the required FPGA, MP135, and bench MCU resources, records the
-lease/probe result, and confirms that replay-capable UART, programming,
+holds only the FPGA and MP135 resources, records the lease/probe result,
+and confirms from inventory that replay-capable UART, programming,
 reset, and DFU operations remain available without driving DUT GPIOs.
 
 Build:
@@ -321,7 +321,7 @@ python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stu
 Test (max 1 min):
 
 ```
-lease:claim devices="fpga.hx1k,mp135.evb,bench_mcu.0" duration_s=30
+lease:claim devices="fpga.hx1k,mp135.evb" duration_s=30
 inventory
 mark tag=gpio_replay_bench_lease_probe
 lease:release
@@ -417,7 +417,10 @@ def check(extract_dir):
     if not ALLOWED_OPS <= saw:
         return False
     plan_text = Path(extract_dir, 'plan.txt').read_text()
-    return 'gpio_replay_bench_lease_probe' in plan_text
+    return (
+        'gpio_replay_bench_lease_probe' in plan_text and
+        'lease:claim devices="fpga.hx1k,mp135.evb,bench_mcu.0"' not in plan_text
+    )
 ```
 
 ### Program FPGA GPIO image under lease
@@ -724,7 +727,57 @@ def check(extract_dir):
     )
 ```
 
-## WIP
+### Build MP135 GPIO test image
+
+Build the minimal MP135 `gpio_test` image and verify that its flash
+layout and STM32 payload artifacts are produced before any hardware
+lease, reset, DFU flash, UART, jumper line, or replay vector is used.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_scripts.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/dry_run_connectivity.py
+python3 stm32mp135_test_board/baremetal/gpio_test/generate_connectivity_fixtures.py --check
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    flash = Path(artifacts['flash.tsv'])
+    image = Path(artifacts['main.stm32'])
+    deps = [
+        Path('stm32mp135_test_board/baremetal/gpio_test/Makefile'),
+        Path('stm32mp135_test_board/baremetal/gpio_test/gpio_replay_mpu_stub.c'),
+        Path('stm32mp135_test_board/baremetal/gpio_test/src/irq_stubs.c'),
+        Path('stm32mp135_test_board/baremetal/gpio_test/src/main.c'),
+    ]
+    if not all(p.is_file() and p.stat().st_size > 0 for p in [flash, image]):
+        return False
+    if not all(p.is_file() for p in deps):
+        return False
+    latest_dep = max(p.stat().st_mtime for p in deps)
+    if image.stat().st_mtime < latest_dep:
+        return False
+    text = flash.read_text(encoding='utf-8', errors='replace')
+    return 'main.stm32' in text
+```
 
 ### Bring up MP135 GPIO test UART
 
@@ -754,9 +807,10 @@ stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 Test (max 5 min):
 
 ```
-lease:claim devices="mp135.evb,dfu.evb,bench_mcu.0" duration_s=60
+lease:claim devices="mp135.evb" duration_s=60
 inventory
 bench_mcu.0:reset_dut
+delay ms=2000
 dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.evb:uart_open
 mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
@@ -776,6 +830,7 @@ ALLOWED_OPS = {
     ('lease', 'claim'),
     (None, 'inventory'),
     ('bench_mcu.0', 'reset_dut'),
+    (None, 'delay'),
     ('dfu.evb', 'flash_layout'),
     ('mp135.evb', 'uart_open'),
     ('mp135.evb', 'uart_expect'),
@@ -801,7 +856,9 @@ def check(extract_dir):
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     if 'fpga.hx1k' in plan_text:
         return False
-    if 'mp135.evb,dfu.evb,bench_mcu.0' not in plan_text:
+    if 'mp135.evb' not in plan_text:
+        return False
+    if 'lease:claim devices="mp135.evb,' in plan_text:
         return False
     saw = set()
     for record in ops:
@@ -818,6 +875,8 @@ def check(extract_dir):
         'gpio_replay_mp135_uart_probe' in plan_text
     )
 ```
+
+## WIP
 
 ### Verify physical connectivity
 

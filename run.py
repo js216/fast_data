@@ -78,7 +78,7 @@ class Runner:
     FAST_DATA = Path(__file__).resolve().parent
     SUBMIT_PY = FAST_DATA / 'test_serv' / 'submit.py'
     SERVER = 'http://localhost:8080'
-    WAIT_S = 600                     # generous upper bound
+    WAIT_S = 1200                    # generous shared-bench upper bound
     LEASE_PLACEHOLDER = '{{LEASE_TOKEN}}'
     # Persists the most recent captured lease token across run.py
     # invocations so a crashed run that never reached its mission's
@@ -347,8 +347,9 @@ class Runner:
         stdout is a TTY, render a queued/running countdown on the line
         BELOW the head so the head never wraps; the countdown line is
         cleared and the cursor restored to end-of-head before
-        returning. Enforces an agent-side watchdog at ``max_s + 30``
-        so a stuck submit.py can't outlive its budget. Returns the
+        returning. Enforces an agent-side watchdog just beyond
+        ``submit.py --wait`` so queued shared-bench jobs are not killed
+        before the server has a chance to run them. Returns the
         subprocess return code."""
         live = (line_prefix is not None and sys.stdout.isatty())
         started_at = time.monotonic()
