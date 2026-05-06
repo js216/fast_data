@@ -4237,6 +4237,69 @@ smaller (for example, only adding the port and not the accumulator,
 or only adding `clear` without the XOR) would leave no observable
 behaviour and therefore zero progress.
 
+### Add prbs_xor clk_en gating
+
+Extend the `prbs_xor` chapter with a `clk_en` input that gates LFSR
+and checksum advance. When `clk_en` is low, neither `state` nor
+`checksum` change; `rst_n` and `clear` reset behaviour are
+unaffected. This prepares the module for the UART command
+interpreter (idle by default, pulse high for single-step, hold high
+for a `2**16`-cycle burst). No wrapper module, no UART hookup yet.
+
+Build:
+
+```
+make -C fpga build/prbs_xor/prbs_xor.v
+```
+
+Artifacts:
+
+```
+fpga/build/prbs_xor/prbs_xor.v
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    nw = Path('fpga/src/prbs_xor.nw')
+    v  = Path('fpga/build/prbs_xor/prbs_xor.v')
+    if not (nw.is_file() and nw.stat().st_size > 0):
+        return False
+    if not (v.is_file() and v.stat().st_size > 0):
+        return False
+    if v.stat().st_mtime < nw.stat().st_mtime:
+        return False
+    nw_text = nw.read_text(encoding='utf-8', errors='replace')
+    for tok in ('input             clk_en', 'else if (clk_en) begin'):
+        if tok not in nw_text:
+            return False
+    text = v.read_text(encoding='utf-8', errors='replace')
+    for tok in ('input             clk_en', 'else if (clk_en) begin',
+                'state <= (state >> 1)',
+                'checksum <= checksum ^ state'):
+        if tok not in text:
+            return False
+    if 'SPDX-License-Identifier' not in text:
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(token in text for token in disallowed):
+        return False
+    return True
+```
+
+Rationale: smallest meaningful extension after the checksum
+register. Adding only a `clk_en` input plus the gating clause keeps
+the chunk to a one-line port and a single `else if` while
+establishing the stream-enable signal the UART command interpreter
+will drive; making it any smaller (only the port, or only the
+gating without the port) would either be a syntax error or leave
+the gate unobservable, so zero progress.
+
 ## WIP
 
 ### Verify physical connectivity
