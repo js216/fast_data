@@ -192,7 +192,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 30 s):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
+lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -323,7 +323,7 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 2 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
+lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -597,7 +597,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 2 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
+lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -674,7 +674,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 3 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
+lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -751,7 +751,7 @@ Artifacts: none.
 Test (max 1 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
+lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -822,7 +822,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 3 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
+lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -895,7 +895,7 @@ Artifacts: none.
 Test (max 1 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
+lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -928,5 +928,105 @@ def check(extract_dir):
     return ('___ROOT_READ___' in uart
             and 'nand-root-v1' in uart
             and '___ROOT_END___' in uart
+            and not any(re.search(p, uart, re.I) for p in bad))
+```
+
+## WIP
+
+### NAND writable rootfs: five 50MiB write and reboot cycles
+
+The combined writable rootfs must survive repeated large writes and
+same-image reboots, not just a tiny marker file. This stress test loops
+five times with `Foreach`. Each iteration starts from the authenticated
+UART shell left by the previous section or previous loop iteration,
+checks an existing `/root/bigfile` against `/root/bigfile.sha256` when
+present, writes a fresh 50 MiB random file on `/`, stores its checksum
+beside it, reboots Linux, reloads only the bootloader through DFU, boots
+from the same NAND contents, logs in, and verifies the checksum again.
+The rootfs UBI volume is intentionally the operating-system volume; do
+not replace this with a separate scratch volume.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Foreach:
+
+```
+loop in missions/data/nand-root-loop/*.iter
+```
+
+Test (max 8 min):
+
+```
+lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=5000
+mp135.custom:uart_write data="echo ___ROOT_LOOP_START___; mount -o remount,rw /; if [ -f /root/bigfile ] && [ -f /root/bigfile.sha256 ]; then sha256sum -c /root/bigfile.sha256 || echo ___ROOT_LOOP_PRECHECK_FAIL___; else echo ___ROOT_LOOP_NO_PRECHECK___; fi; echo ___ROOT_LOOP_DD_BEGIN___; rm -f /root/bigfile /root/bigfile.sha256; dd if=/dev/urandom of=/root/bigfile bs=1M count=50; rc=$?; echo ___ROOT_LOOP_DD_RC_${rc}___; sha256sum /root/bigfile >/root/bigfile.sha256; cat /root/bigfile.sha256; sync; mount -o remount,ro /; echo ___ROOT_LOOP_REBOOT___; sync; reboot\r"
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_START___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_DD_BEGIN___" timeout_ms=30000
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_DD_RC_0___" timeout_ms=240000
+mp135.custom:uart_expect sentinel="/root/bigfile" timeout_ms=120000
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_REBOOT___" timeout_ms=10000
+mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=15000
+mp135.custom:uart_close
+delay ms=12000
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="fmc_bload\r"
+mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="jump"
+delay ms=200
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
+mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=5000
+mp135.custom:uart_write data="echo ___ROOT_LOOP_VERIFY___; sha256sum -c /root/bigfile.sha256; dmesg | grep -iE 'UBI|UBIFS|ECC|uncorrect|panic' || true; echo ___ROOT_LOOP_END___\r"
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_VERIFY___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="/root/bigfile: OK" timeout_ms=120000
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_END___" timeout_ms=15000
+mp135.custom:uart_close
+lease:release
+mark tag=nand_writable_rootfs_50m_reboot_loop
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir, loop):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    bad = (r'Kernel panic', r'Unable to mount root fs', r'UBIFS error',
+           r'UBI error', r'ECC error', r'uncorrectable', r'unrecoverable',
+           r'___ROOT_LOOP_PRECHECK_FAIL___', r'FAILED',
+           r'No space left on device')
+    return ('___ROOT_LOOP_DD_RC_0___' in uart
+            and '/root/bigfile: OK' in uart
+            and '___ROOT_LOOP_END___' in uart
             and not any(re.search(p, uart, re.I) for p in bad))
 ```
