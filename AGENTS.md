@@ -200,7 +200,7 @@ normally.
 Do not add "Co-Author" lines to the commit messages. All commits must be
 made by "Jakob Kastelic", "kastelic.jakob@gmail.com".
 
-When Orchestrator stops, it must leave all repost in a clean state,
+When Orchestrator stops, it must leave all repos in a clean state,
 ready to sync.sh.
 
 ### Author
