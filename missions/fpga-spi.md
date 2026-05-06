@@ -4514,6 +4514,87 @@ or only the decode without wiring `burst_count` into `clk_en`)
 would leave the burst unobservable in the build output, so zero
 progress.
 
+### Add prbs_xor_top print-checksum command
+
+Extend the `prbs_xor_top` wrapper with a fourth UART command: byte
+`'p'` (`8'h70`) latches the current `checksum` into a 32-bit
+register `checksum_q` and starts a small print state machine that
+streams the captured value as eight ASCII hex digits MSB-first
+followed by `8'h0d` (`CR`) and `8'h0a` (`LF`) over a new top-level
+`tx` UART output. The state machine indexes the bytes with a 4-bit
+`print_idx`: 0..7 select nibbles `checksum_q[31:28]` through
+`checksum_q[3:0]`, 8 selects `CR`, 9 selects `LF`, and 10 means
+idle. Each cycle in which `print_idx != 4'd10` and the shared
+`uart_tx` instance is not busy, the wrapper presents the next byte
+on `tx_data`, raises `tx_start` for one clock, and increments
+`print_idx`. The 4-bit-to-ASCII conversion follows
+`(nib < 4'd10) ? (8'h30 + nib) : (8'h61 + nib - 4'd10)`, emitting
+lowercase `a`-`f`. The single new `uart_tx` (default
+`CLKS_PER_BIT = 104`) drives the new `tx` port. The `'r'`
+(`8'h72`) reset, `'s'` (`8'h73`) single-step, and `'b'` (`8'h62`)
+burst behaviours are preserved unchanged. `clear` stays tied low
+and `state` remains dangling so the synthesizer trims it.
+
+Build:
+
+```
+make -C fpga build/prbs_xor_top/prbs_xor_top.v
+```
+
+Artifacts:
+
+```
+fpga/build/prbs_xor_top/prbs_xor_top.v
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    nw = Path('fpga/src/prbs_xor_top.nw')
+    v  = Path('fpga/build/prbs_xor_top/prbs_xor_top.v')
+    if not (nw.is_file() and nw.stat().st_size > 0):
+        return False
+    if not (v.is_file() and v.stat().st_size > 0):
+        return False
+    if v.stat().st_mtime < nw.stat().st_mtime:
+        return False
+    nw_text = nw.read_text(encoding='utf-8', errors='replace')
+    for tok in ('module prbs_xor_top', 'output tx', 'uart_rx',
+                'uart_tx', 'prbs_xor', "8'h72", "8'h73", "8'h62",
+                "8'h70", "8'h0d", "8'h0a", 'clk_en_q',
+                'burst_count', 'checksum_q', 'print_idx'):
+        if tok not in nw_text:
+            return False
+    text = v.read_text(encoding='utf-8', errors='replace')
+    for tok in ('module prbs_xor_top', 'output tx', 'uart_rx',
+                'uart_tx', 'prbs_xor', "8'h72", "8'h73", "8'h62",
+                "8'h70", "8'h0d", "8'h0a", 'clk_en_q',
+                'burst_count', 'checksum_q', 'print_idx'):
+        if tok not in text:
+            return False
+    if 'SPDX-License-Identifier' not in text:
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(token in text for token in disallowed):
+        return False
+    return True
+```
+
+Rationale: smallest meaningful extension after the burst command.
+Adding only the `'p'` decode plus the `checksum_q` latch, the
+`print_idx` state machine, the hex-nibble ASCII codec, and the
+single new `uart_tx` instance keeps the wrapper change to one
+cohesive print path while finally introducing the `tx` output
+needed by every later iteration; making it any smaller (latching
+`checksum_q` without instantiating `uart_tx`, or instantiating
+`uart_tx` without the FSM that drives it) would leave the print
+behaviour unobservable, so zero progress.
+
 ## WIP
 
 ### Verify physical connectivity
