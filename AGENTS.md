@@ -69,8 +69,16 @@ ask the human operator for one.
   stopping. In particular, REJECT the following excuses or good reasons:
   broken hardware, cannot make any progress, need to ask user for
   guidance, or literally anything short of mission fully accomplished.
-  Orchestrator is REQUIRED to take Stopper's order and if rejected, must
-  continue work.
+  The single exception is a context-budget pause (see "Context budget
+  pause" below): Stopper may approve only if the Orchestrator's request
+  includes a verbatim copy of the most recent `/context` readout AND
+  the "Messages" line in that readout shows >=85% of total context
+  consumed. Anything less — including a subjective sense that "a lot
+  has happened", a count of iterations completed, a time-on-task
+  estimate, or a /context reading below 85% — must be rejected as a
+  vibes-based stop, with the rejection citing the actual percentage
+  observed. Orchestrator is REQUIRED to take Stopper's order and if
+  rejected, must continue work.
 
 ### Mission Files and Testing
 
@@ -170,16 +178,22 @@ timeout, failed verification, or a bench device not responding are
 ordinary Worker inputs, not stop conditions.
 
 Context budget pause: the Orchestrator may pause and hand control back
-to the operator when its own agent context is approaching exhaustion,
-provided ALL of the following are true at the moment it pauses:
-the most recent Tester run passed; the WIP marker has been moved past
-the just-passed step; every touched repo (parent and submodules) is
+to the operator only when its own agent context is genuinely
+approaching exhaustion, measured by the `/context` slash command's
+"Messages" line reading >=85% of the model's total context window.
+Subjective impressions ("feels long", "many iterations", "been
+working a while") are NOT a valid trigger; the Orchestrator must run
+`/context` and quote the percentage in the Stopper request. ALL of
+the following must also be true at the moment of pause: the most
+recent Tester run passed; the WIP marker has been moved past the
+just-passed step; every touched repo (parent and submodules) is
 clean on branch `main`; the ledger has a closing `Orchestrator pass
 <iteration>` line; and the response includes a one-paragraph "resume
-point" naming the next step a fresh Orchestrator should pick up. This
-clause prevents the worse failure mode of running out of context
-mid-edit and leaving a dirty repo. The next Orchestrator session
-resumes the loop from the head commit.
+point" naming the next step a fresh Orchestrator should pick up.
+This clause prevents both the worse failure mode of running out of
+context mid-edit (leaving a dirty repo) and the lesser failure mode
+of stopping prematurely on a hunch (false context-exhaustion claims).
+The next Orchestrator session resumes the loop from the head commit.
 
 Orchestrator must also stop if it detects bad format or a missing line
 in an existing ledger file. In that case it must also diagnose the
