@@ -2917,6 +2917,85 @@ held high, so this step expects IO0 plus IO1 high (`0xa000`) after the
 IO1 trigger rather than resetting the board or claiming the reset
 helper.
 
+### Add MP135 IO2 high UART trigger
+
+Add an explicit MP135 `gpio_test` UART command that drives
+`mpu_qspi_io2_to_fpga_io2` high and leaves it high. This provides a
+sustained high trigger for the next IO2 MP135-to-FPGA physical sample.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    stub = Path('stm32mp135_test_board/baremetal/gpio_test/gpio_replay_mpu_stub.c')
+    main = Path('stm32mp135_test_board/baremetal/gpio_test/src/main.c')
+    image = Path(artifacts['main.stm32'])
+
+    stub_text = stub.read_text(encoding='utf-8', errors='replace')
+    main_text = main.read_text(encoding='utf-8', errors='replace')
+
+    required_stub = [
+        'gpio_connectivity_mpu_replay_io2_high_report',
+        'mpu_io2_drive_signal',
+        'GPIO_PIN_SET',
+        'gpio_test mpu_qspi_io2_to_fpga_io2 high drive ok',
+    ]
+    if not all(token in stub_text for token in required_stub):
+        return False
+
+    handler_start = main_text.find('static void gpio_test_handle_command')
+    handler_end = main_text.find('static void gpio_test_poll_commands')
+    if handler_start < 0 or handler_end < handler_start:
+        return False
+    handler_text = main_text[handler_start:handler_end]
+    if "command == '2'" not in handler_text:
+        return False
+    if 'gpio_connectivity_mpu_replay_io2_high_report()' not in handler_text:
+        return False
+    if 'io2_hold_high = 1;' not in handler_text:
+        return False
+
+    loop_start = main_text.find('while (1)')
+    if loop_start < 0:
+        return False
+    loop_text = main_text[loop_start:]
+    if 'if (!io2_hold_high)' not in loop_text:
+        return False
+    if 'gpio_connectivity_mpu_replay_io2_sample_report();' not in loop_text:
+        return False
+
+    if not image.is_file() or image.stat().st_size == 0:
+        return False
+    latest_dep = max(stub.stat().st_mtime, main.stat().st_mtime)
+    if image.stat().st_mtime < latest_dep:
+        return False
+
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    return not any(token in stub_text or token in main_text for token in disallowed)
+```
+
+Rationale: this is the smallest next step after the IO1 high physical
+check. It adds firmware support for a sustained IO2 drive trigger
+without adding a hardware plan or reset-helper usage.
+
 ## WIP
 
 ### Verify physical connectivity
