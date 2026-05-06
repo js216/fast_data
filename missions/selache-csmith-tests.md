@@ -11,17 +11,6 @@ plan/verify shape as the core sweep (companion mission
 Vacuously passes when `draft_cases/` is empty. Otherwise: every draft
 must pass on all four toolchains before any of them get promoted.
 
-## WIP
-
-### Fix Selache layout overflow on generated drafts
-
-Some valid draft csmith cases build with host gcc/clang and CCES but
-fail in the Selache target path during `seld` layout with
-`block2_sw_code` overflow. Treat these drafts as Selache bug
-reproducers. Do not delete, shrink, replace, or promote the offending
-tests to make this mission pass; fix Selache code generation, runtime
-size, or layout behavior so the existing drafts build and run.
-
 ### selache cctest drafts
 
 Build:
