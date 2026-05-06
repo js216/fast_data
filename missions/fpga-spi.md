@@ -1706,6 +1706,73 @@ def check(extract_dir):
     return REQUIRED_OPS <= saw
 ```
 
+### Add MP135 GPIO drive output for NCS
+
+Teach the MP135 `gpio_test` firmware to map
+`mpu_qspi_ncs_to_fpga_cs_n` to the QSPI NCS HAL GPIO output and provide
+a low/high drive report entry point. This is build-only support for the
+next physical NCS line test.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    stub = Path('stm32mp135_test_board/baremetal/gpio_test/gpio_replay_mpu_stub.c')
+    main = Path('stm32mp135_test_board/baremetal/gpio_test/src/main.c')
+    board = Path('stm32mp135_test_board/baremetal/qspi/src/board.h')
+    image = Path(artifacts['main.stm32'])
+
+    stub_text = stub.read_text(encoding='utf-8', errors='replace')
+    main_text = main.read_text(encoding='utf-8', errors='replace')
+    board_text = board.read_text(encoding='utf-8', errors='replace')
+
+    required = [
+        'mpu_qspi_ncs_to_fpga_cs_n',
+        'QSPI_NCS_PORT',
+        'QSPI_NCS_PIN',
+        'GPIO_MODE_OUTPUT_PP',
+        'HAL_GPIO_WritePin',
+        'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
+        'gpio_test mpu_qspi_ncs_to_fpga_cs_n high drive ok',
+        'gpio_connectivity_mpu_replay_ncs_drive_report',
+    ]
+    if not all(token in stub_text for token in required):
+        return False
+    if 'gpio_connectivity_mpu_replay_ncs_drive_report' not in main_text:
+        return False
+    if '#define QSPI_NCS_PORT GPIOD' not in board_text:
+        return False
+    if '#define QSPI_NCS_PIN  GPIO_PIN_1' not in board_text:
+        return False
+
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(token in stub_text or token in main_text for token in disallowed):
+        return False
+    if not image.is_file() or image.stat().st_size == 0:
+        return False
+
+    latest_dep = max(stub.stat().st_mtime, main.stat().st_mtime, board.stat().st_mtime)
+    return image.stat().st_mtime >= latest_dep
+```
+
 ## WIP
 
 ### Verify physical connectivity
