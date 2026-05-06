@@ -651,3 +651,92 @@ def check(extract_dir):
             and 'login:' in uart and not any(re.search(p, uart, re.I)
                                              for p in bad))
 ```
+
+### NAND writable persistent state: write marker -> reboot -> verify marker
+
+NAND must provide usable persistent state, not only a read-only boot
+medium. After Linux boots from NAND, create or reuse a writable UBI
+volume named `state`, mount it as UBIFS, write a marker with a unique
+payload, sync and unmount it, then reboot Linux. The board returns to
+DFU, so reload only the bootloader and do not rewrite or flush
+`nand.img`. Boot Linux from the same NAND contents and verify that the
+marker is still present on the `state` volume and that the boot has no
+UBI/UBIFS/ECC/rootfs panic signatures.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test (max 3 min):
+
+```
+lease:claim devices="mp135.custom" duration_s=3600
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="login:" timeout_ms=5000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=5000
+mp135.custom:uart_write data="echo ___STATE_WRITE___; ubinfo -a; ubimkvol /dev/ubi0 -N state -s 8MiB || true; mkdir -p /run/state; mount -t ubifs ubi0:state /run/state; printf 'nand-state-v1\n' >/run/state/marker.txt; sync; cat /run/state/marker.txt; umount /run/state; echo ___STATE_REBOOT___; sync; reboot\r"
+mp135.custom:uart_expect sentinel="___STATE_WRITE___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="nand-state-v1" timeout_ms=20000
+mp135.custom:uart_expect sentinel="___STATE_REBOOT___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=15000
+mp135.custom:uart_close
+delay ms=12000
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="fmc_bload\r"
+mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="jump"
+delay ms=200
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
+mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=5000
+mp135.custom:uart_write data="echo ___STATE_READ___; mkdir -p /run/state; mount -t ubifs ubi0:state /run/state; cat /run/state/marker.txt; umount /run/state; dmesg | grep -iE 'UBI|UBIFS|ECC|uncorrect|panic' || true; echo ___STATE_END___\r"
+mp135.custom:uart_expect sentinel="___STATE_READ___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="nand-state-v1" timeout_ms=20000
+mp135.custom:uart_expect sentinel="___STATE_END___" timeout_ms=15000
+mp135.custom:uart_close
+lease:release
+mark tag=nand_writable_persistent_state
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    bad = (r'Kernel panic', r'Unable to mount root fs', r'UBIFS error',
+           r'UBI error', r'ECC error', r'uncorrectable', r'unrecoverable')
+    return ('___STATE_WRITE___' in uart and '___STATE_READ___' in uart
+            and 'nand-state-v1' in uart and '___STATE_END___' in uart
+            and not any(re.search(p, uart, re.I) for p in bad))
+```
