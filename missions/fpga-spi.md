@@ -2141,6 +2141,100 @@ Rationale: this makes the SCLK report deliberately triggerable for the
 next hardware check without re-enabling the generic replay path that
 previously asserted SCLK during the NCS tests.
 
+### Verify MP135 SCLK UART trigger report
+
+Send the explicit `s` command to the MP135 `gpio_test` UART and verify
+that the firmware reports both SCLK low and high drive actions. This
+checks the trigger path without adding FPGA sampling expectations yet.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+```
+
+Test (max 2 min):
+
+```
+lease:claim devices="mp135.evb" duration_s=60
+inventory
+mp135.evb:uart_open
+mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
+mp135.evb:uart_write data="s"
+mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok" timeout_ms=10000
+mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_clk_to_fpga_sclk high drive ok" timeout_ms=10000
+mp135.evb:uart_close
+mark tag=gpio_sclk_uart_trigger_report
+lease:release
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+ALLOWED_OPS = {
+    (None, 'description'),
+    ('lease', 'claim'),
+    (None, 'inventory'),
+    ('mp135.evb', 'uart_open'),
+    ('mp135.evb', 'uart_write'),
+    ('mp135.evb', 'uart_expect'),
+    ('mp135.evb', 'uart_close'),
+    (None, 'mark'),
+    ('lease', 'release'),
+}
+
+REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        ops = Verification.load_ops(extract_dir)
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    plan_text = Path(extract_dir, 'plan.txt').read_text()
+    required_text = [
+        'lease:claim devices="mp135.evb"',
+        'mp135.evb:uart_write data="s"',
+        'gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok',
+        'gpio_test mpu_qspi_clk_to_fpga_sclk high drive ok',
+        'gpio_sclk_uart_trigger_report',
+    ]
+    if not all(token in plan_text for token in required_text):
+        return False
+    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
+    if any(device in plan_text for device in disallowed):
+        return False
+
+    saw = set()
+    for record in ops:
+        if not isinstance(record, dict) or record.get('status') != 'ok':
+            return False
+        key = (record.get('device'), record.get('verb'))
+        if key not in ALLOWED_OPS:
+            return False
+        saw.add(key)
+
+    return REQUIRED_OPS <= saw
+```
+
+Rationale: this is the smallest hardware-backed check after adding the
+UART trigger. It proves the trigger reaches the SCLK report while
+using only the EVB UART and leaving FPGA SCLK sampling for the next
+step.
+
 ## WIP
 
 ### Verify physical connectivity
