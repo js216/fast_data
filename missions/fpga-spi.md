@@ -5421,6 +5421,106 @@ smaller than the next firmware-side step (adding a `reset_n`
 drive primitive to `gpio_replay_mpu_stub.c`), which is gated on
 selecting an MP135 GPIO port for the MPU side.
 
+### Document control GPIO MPU-pin TODO in mpu replay stub
+
+Surface the iter-73 gap in code rather than only in mission
+narrative. The replay headers (auto-generated from
+`connectivity_manifest.json`) already include the three control
+GPIOs `mpu_reset_output_to_fpga_reset_n`,
+`mpu_control_output_to_fpga_ctrl_start`, and
+`fpga_ready_status_to_mpu_status_input`, with vector indices 4..9
+in `connectivity_mpu_replay.h` / `connectivity_fpga_replay.h`. The
+manually-maintained firmware-side per-signal tables
+(`mpu_drive_signals[]` and `mpu_sample_signals[]` in
+`stm32mp135_test_board/baremetal/gpio_test/gpio_replay_mpu_stub.c`)
+remain QSPI-only, so the helpers `mpu_drive()` and
+`mpu_sample_expect()` silently no-op when invoked with one of those
+control-GPIO signal names: `find_mpu_drive_signal()` /
+`find_mpu_sample_signal()` return NULL and the helpers return
+success without touching any HAL pin.
+
+Add a `TODO(gpio_test mpu pin choice)` comment block immediately
+after `mpu_drive_signals[]` listing the three signals, naming the
+silent-no-op behaviour, and pointing at the next firmware lift
+(define `RESET_N` / `CTRL_START` / `STATUS_INPUT` port and pin
+macros mirroring `QSPI_NCS_PORT` / `QSPI_NCS_PIN`, and extend the
+two per-signal tables). The block is a code comment, not a new
+audit, and it captures iter-73's manager-side finding inside the C
+source where the next firmware editor will read it.
+
+This is the smallest meaningful step toward `Verify physical
+connectivity` that does not pick a new MP135 GPIO pin and is not a
+schema-shadow audit. It is build-only, machine-checkable in well
+under a minute, and changes one file (the firmware stub source) in
+a way that compiles unchanged under both the bench HAL build and
+the host `GPIO_REPLAY_STUB_MAIN` self-check.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_replay_mpu_stub_control_gpio_todo
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    stub = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'gpio_replay_mpu_stub.c')
+    try:
+        text = stub.read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        return False
+
+    qspi_required = [
+        '"mpu_qspi_ncs_to_fpga_cs_n", QSPI_NCS_PORT, QSPI_NCS_PIN',
+        '"mpu_qspi_io0_to_fpga_io0", GPIOH, GPIO_PIN_3',
+        '"mpu_qspi_io1_to_fpga_io1", GPIOF, GPIO_PIN_9',
+        '"mpu_qspi_io2_to_fpga_io2", GPIOH, GPIO_PIN_6',
+        '"mpu_qspi_io3_to_fpga_io3", GPIOH, GPIO_PIN_7',
+    ]
+    if not all(token in text for token in qspi_required):
+        return False
+
+    todo_required = [
+        'TODO(gpio_test mpu pin choice)',
+        'mpu_reset_output_to_fpga_reset_n',
+        'mpu_control_output_to_fpga_ctrl_start',
+        'fpga_ready_status_to_mpu_status_input',
+        'silently no-op',
+    ]
+    if not all(token in text for token in todo_required):
+        return False
+
+    return True
+```
+
+Rationale: this is strictly smaller than the gated firmware lift
+(picking an MP135 GPIO port for `reset_n` and adding a real entry
+to `mpu_drive_signals[]`), strictly smaller than committing an
+MPU-side `mpu_signal_pin` in the manifest (which would still be a
+paper change but would freeze a bench-engineering decision without
+schematic input), and not a duplicate of the iter-73 lock-in audit
+(that audit checks `connectivity_manifest.json`'s `fpga_signal_pin`
+column for the `TBD` substring; this chapter touches only
+`gpio_replay_mpu_stub.c` and asserts a positive code-comment
+property, not a manifest-shadow property). The verify also keeps
+the existing QSPI per-signal-table coverage in scope so the comment
+addition does not regress the bench-tested wiring.
+
 ## WIP
 
 ### Verify physical connectivity
