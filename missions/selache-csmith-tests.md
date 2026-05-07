@@ -159,6 +159,79 @@ def check(extract_dir):
     return True
 ```
 
+### selcc sub-word struct field global init
+
+Fix the first link in a chain of selcc bugs that block sub-word struct
+fields in global initializers: the struct branch of `build_init_words`
+in `selache/selcc/src/emit_asm.rs:1163-1188` hard-errors on every field
+whose `byte_off % 4 != 0` with `field <name> at byte offset N is not
+word-aligned; sub-word struct fields in global initializers are not
+supported`. Sub-word fields (`int8_t`, `int16_t`, etc.) inside a struct
+global must be packed into their containing 32-bit word's initializer
+value, not rejected, since SHARC addresses memory in 32-bit words and
+the struct layout already places multiple sub-word fields per word.
+
+Replace the unconditional error with packing logic in `field_map`
+construction and in the positional / `Expr::DesignatedInit` paths that
+write into `v` (around lines 1186-1232). For each containing word
+(`byte_off / 4`), compute a single `InitWord::Num` whose value is the
+bitwise OR of each sub-word field's value shifted left by
+`(byte_off % 4) * 8`. Width comes from `size_bytes_ctx(fty, tctx)`
+(1 or 2 bytes typical) and the field's value is masked to that width
+before shifting so adjacent fields do not collide.
+
+Scope this iteration narrowly to sub-word fields whose values are
+**constant integer literals** (the simplest and most common shape).
+Bitfields, nested aggregates packed into a sub-word slot, string
+literals, and addresses remain rejected with the existing error so the
+fix stays auditable. Word-aligned fields keep their existing per-word
+emission unchanged.
+
+This is the **first of several iterations** required to unblock csmith
+drafts that mix sub-word struct fields with harder shapes (e.g.
+`cctest_csmith_9405adb0.c` mixes a `#pragma pack(1)` struct, a 10-bit
+bitfield, and a nested aggregate, plus separately overflows seld layout).
+Subsequent iterations will extend packing to bitfields, then nested
+aggregates, mirror the fix in the local-scope twin
+`flatten_struct_init_local`/`build_struct_local_init` in
+`selache/selcc/src/lower.rs`, and address the seld layout overflow as
+an independent bug. This step alone unblocks any future draft (or
+hand-shrunk reproducer) that lands only the constant-int sub-word
+pattern; the unit test below exercises exactly that capability and
+fails before the fix.
+
+Build:
+
+```
+cd selache && cargo build --release
+cd selache && cargo test -p selcc --release sub_word_struct_field_global_init -- --nocapture
+cd selache && cargo clippy --all-targets --release -- -D warnings
+```
+
+The new `sub_word_struct_field_global_init` test must live in
+`selache/selcc/src/emit_asm.rs` alongside the other `#[test]` items.
+It should call `selcc::compile_to_asm` (with `cli::Options { char_size:
+8, ..Default::default() }`) on a minimal source that places two
+sub-word fields into one word, e.g.
+
+```c
+struct S { signed char a; signed char b; int w; };
+struct S g = { 0x12, 0x34, 0x55667788 };
+```
+
+and assert the call returns `Ok` (and ideally that the emitted asm
+contains `0x3412` packed into the first word). The test must fail
+before the fix and pass after it.
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    return True
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
