@@ -6449,6 +6449,130 @@ def check(extract_dir):
 
 ## WIP
 
+### Add MP135 prbs_test UART ready banner
+
+Wire the MP135 `prbs_test` baremetal app to the existing UART console
+support and print a deterministic `prbs_test ready` banner at boot. Reuse
+the shared `uart_echo` setup/console/printf sources the GPIO replay app
+already uses, initialize HAL/system clocks/UART4 before the PRBS
+self-check code, and keep the existing LFSR/checksum state update
+unchanged. Do not add command parsing, FPGA interaction, or hardware
+checksum comparison in this step.
+
+Build:
+
+```
+make -C stm32mp135_test_board/baremetal/prbs_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/prbs_test/build/main.stm32
+```
+
+Test: no hardware.
+
+```
+mark tag=prbs_test_uart_ready_banner
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md')
+    try:
+        mission_text = mission.read_text(encoding='utf-8',
+                                         errors='replace')
+    except OSError:
+        return False
+    if 'mark tag=prbs_test_uart_ready_banner' not in mission_text:
+        return False
+
+    base = Path('stm32mp135_test_board/baremetal/prbs_test')
+    mk = base / 'Makefile'
+    src = base / 'src/main.c'
+    img = base / 'build/main.stm32'
+    shared_app = base.parent / 'uart_echo'
+    shared_inputs = [
+        shared_app / 'src/console.c',
+        shared_app / 'src/debug.c',
+        shared_app / 'src/setup.c',
+        shared_app / 'utils/printf.c',
+        shared_app / 'drivers/mmu_stm32mp13xx.c',
+        shared_app / 'drivers/system_stm32mp13xx_A7.c',
+        shared_app / 'drivers/startup_stm32mp135fxx_ca7.c',
+        shared_app / 'drivers/syscalls.c',
+        shared_app / 'drivers/irq_ctrl_gic.c',
+        shared_app / 'drivers/stm32mp13xx_hal.c',
+        shared_app / 'drivers/stm32mp13xx_hal_gpio.c',
+        shared_app / 'drivers/stm32mp13xx_hal_rcc.c',
+        shared_app / 'drivers/stm32mp13xx_hal_rcc_ex.c',
+        shared_app / 'drivers/stm32mp13xx_hal_uart.c',
+        shared_app / 'drivers/stm32mp13xx_hal_uart_ex.c',
+        shared_app / 'src/sysram.ld',
+    ]
+    try:
+        mk_text = mk.read_text(encoding='utf-8', errors='replace')
+        src_text = src.read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        return False
+
+    if not (img.is_file() and img.stat().st_size > 0):
+        return False
+    build_inputs = [mk, src] + shared_inputs
+    if not all(path.is_file() for path in build_inputs):
+        return False
+    if img.stat().st_mtime < max(path.stat().st_mtime for path in build_inputs):
+        return False
+
+    make_required = [
+        'SHARED_APP := ../uart_echo',
+        '$(SHARED_APP)/src/console.c',
+        '$(SHARED_APP)/src/setup.c',
+        '$(SHARED_APP)/utils/printf.c',
+    ]
+    if not all(tok in mk_text for tok in make_required):
+        return False
+
+    source_required = [
+        '#include "console.h"',
+        '#include "printf.h"',
+        '#include "setup.h"',
+        'HAL_Init();',
+        'sysclk_init();',
+        'perclk_init();',
+        'uart4_init();',
+        'my_printf("prbs_test ready\\r\\n");',
+        'prbs_step_with_checksum',
+    ]
+    if not all(tok in src_text for tok in source_required):
+        return False
+
+    forbidden = [
+        'fpga.hx1k',
+        'mp135.evb:uart_open',
+        'uart_write data=',
+        'uart_expect sentinel=',
+    ]
+    if any(tok in src_text or tok in mk_text for tok in forbidden):
+        return False
+
+    return True
+```
+
+Rationale: this is the smallest meaningful UART step left in the
+PRBS/checksum track. It adds only boot-time UART plumbing and a stable
+banner to the existing MP135 PRBS/checksum app, making the firmware
+observable over the same UART path later command handlers will use.
+Splitting smaller into only Makefile source wiring or only a banner
+string would not produce a working UART-visible app; adding the reset,
+single-step, burst, or print commands would combine transport bring-up
+with command semantics and exceed the minimum useful slice.
+
 ### PRBS, UART, Checksum
 
 Add `prbs_xor.nw`, combining an LFSR PRBS generator, an XOR checksum,
