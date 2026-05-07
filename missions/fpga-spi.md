@@ -5292,6 +5292,135 @@ def check(extract_dir):
     return True
 ```
 
+### Audit no fpga_signal_pin TBD in connectivity_manifest
+
+Lock in the iter-70/71/72 wins by asserting that every jumper row
+in `stm32mp135_test_board/baremetal/gpio_test/connectivity_manifest.json`
+has a concrete (non-TBD) `fpga_signal_pin`. Iter 70 committed
+`reset_n` to iCEstick pin 112, iter 71 committed `ctrl_start` to
+113, and iter 72 committed `status_output` to 114; before those
+three iters, four FPGA pin slots were the string `exact FPGA pin
+TBD`. With those resolved, the FPGA side of the jumper table is
+fully concretised. A small standing audit prevents a future
+edit from regressing any of those three commits in isolation.
+
+`validate_connectivity_manifest.py` does not enforce this property:
+it only checks (i) that the markdown table and the JSON jumper
+list match field-for-field, (ii) that signal names follow the
+naming regex, and (iii) that `first_pass_test_plan` covers every
+jumper for every legal driver/sampler/value tuple. None of those
+clauses inspects the textual content of `fpga_signal_pin` for a
+`TBD` substring, so a regression that flips one row back to
+`exact FPGA pin TBD` while keeping the markdown table in sync
+would still pass `validate_connectivity_manifest.py`. The previous
+schema-shadow cleanup in commit `05caf9c` removed audits that
+re-asserted clauses already enforced by the validator (plan signal
+in jumpers, plan `expect` in {0,1}, plan `driver` in {mpu,fpga},
+`set_io` pin uniqueness, FPGA pin numbers vs `gpio.nw`); this
+audit is not in that class.
+
+The audit is FPGA-side only: `mpu_signal_pin` entries remain TBD
+across all eleven rows because no MP135 GPIO port has been
+committed. The six bench-tested jumpers (sclk, ncs, io0..io3) work
+today despite their MPU-pin TBD strings because the firmware uses
+`board.h` HAL macros (`QSPI_CLK_PORT`, `QSPI_NCS_PORT`, ...), so
+the documentation TBD is not on the bench-progress critical path.
+The corresponding firmware step for `reset_n` (`ctrl_start`,
+`status_output`) is to add a board.h GPIO definition and a
+`gpio_replay_mpu_stub.c` drive entry, mirroring the existing
+"Add MP135 GPIO drive output for SCLK" chapter; that step picks
+an MP135 port and is the next bench-progress lift, not bundled
+here.
+
+This is the smallest meaningful step toward `Verify physical
+connectivity` that does not require selecting a new MP135 GPIO
+port. It is host-only, machine-checkable in well under a minute,
+and it converts a property currently held only by inspection
+("iter 70/71/72 ate every FPGA-side TBD") into a property held
+by the verify path.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_manifest_no_fpga_signal_pin_tbd
+```
+
+Verify:
+
+```
+import json
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    manifest_path = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'connectivity_manifest.json')
+    try:
+        manifest = json.loads(manifest_path.read_text(
+            encoding='utf-8', errors='replace'))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    jumpers = manifest.get('jumpers')
+    if not isinstance(jumpers, list):
+        return False
+    if not jumpers:
+        return False
+
+    required_signals = {
+        'mpu_uart_tx_to_fpga_rx',
+        'fpga_uart_tx_to_mpu_rx',
+        'mpu_reset_output_to_fpga_reset_n',
+        'mpu_control_output_to_fpga_ctrl_start',
+        'fpga_ready_status_to_mpu_status_input',
+        'mpu_qspi_clk_to_fpga_sclk',
+        'mpu_qspi_ncs_to_fpga_cs_n',
+        'mpu_qspi_io0_to_fpga_io0',
+        'mpu_qspi_io1_to_fpga_io1',
+        'mpu_qspi_io2_to_fpga_io2',
+        'mpu_qspi_io3_to_fpga_io3',
+    }
+    seen_signals = set()
+
+    for row in jumpers:
+        if not isinstance(row, dict):
+            return False
+        signal = row.get('signal')
+        if not isinstance(signal, str):
+            return False
+        seen_signals.add(signal)
+        fpga_pin_str = row.get('fpga_signal_pin', '')
+        if not isinstance(fpga_pin_str, str):
+            return False
+        if 'TBD' in fpga_pin_str:
+            return False
+        if 'iCEstick pin' not in fpga_pin_str:
+            return False
+
+    if not required_signals <= seen_signals:
+        return False
+
+    return True
+```
+
+Rationale: this is a one-shot host-side post-condition that
+locks in iter-70/71/72's TBD elimination on the FPGA side of the
+jumper table without overlapping the validator's existing
+checks, without picking a new MPU GPIO, and without changing the
+synthesised bitstream or any firmware artefact. It is strictly
+smaller than the next firmware-side step (adding a `reset_n`
+drive primitive to `gpio_replay_mpu_stub.c`), which is gated on
+selecting an MP135 GPIO port for the MPU side.
+
 ## WIP
 
 ### Verify physical connectivity
