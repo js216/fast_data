@@ -5157,6 +5157,88 @@ rule. It does not weaken any earlier audit: iter 63's required-tag
 coverage, iter 64's manifest↔PCF presence, and iter 65's PCF pin
 uniqueness all remain in force.
 
+### Audit first_pass_test_plan driver field is valid
+
+Add a host-only audit gate that proves every entry in
+`connectivity_manifest.json`'s `first_pass_test_plan` has a `driver`
+field whose value is one of the two known controller names
+(`"mpu"`, `"fpga"`). The iter 66 audit only validates each entry's
+`signal` resolves to a real `jumpers[]` row; it would still pass if
+an entry had a missing, misspelled, or wrong-typed `driver` (for
+example `"DRIVER":"mpu"` after a key-case rename, or
+`"driver":"cpu"` after a typo) which would silently produce a
+vector the bench could never schedule because the harness keys off
+the controller name.
+
+This audit reads the manifest, walks every `first_pass_test_plan`
+entry, and asserts the entry's `driver` field is a string equal to
+`"mpu"` or `"fpga"`. It does not validate any other field
+(`sampler`, `drive`, `expect`, or driver-vs-jumper-direction
+consistency); those are separate failure modes left for later
+sub-steps so this slice carries exactly one new passing assertion
+beyond iter 66.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=manifest_plan_driver_is_valid_controller
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    manifest_path = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'connectivity_manifest.json')
+    try:
+        manifest = json.loads(manifest_path.read_text(
+            encoding='utf-8', errors='replace'))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    plan = manifest.get('first_pass_test_plan')
+    if not isinstance(plan, list) or not plan:
+        return False
+
+    valid_drivers = {'mpu', 'fpga'}
+    for entry in plan:
+        if not isinstance(entry, dict):
+            return False
+        drv = entry.get('driver')
+        if not isinstance(drv, str) or drv not in valid_drivers:
+            return False
+
+    return True
+```
+
+Rationale: this sub-step is host-only, touches no firmware, and
+adds exactly one new failure mode (a plan entry whose `driver` is
+absent, non-string, or not one of the two known controllers).
+Splitting smaller (asserting only that `driver` exists, separate
+from asserting it is one of the two controllers) would deliver no
+runnable bench-relevant guarantee on its own because a string
+`driver` that is not `"mpu"` or `"fpga"` is just as unwirable as a
+missing key. Folding into iter 66 would bundle two distinct
+concerns (signal referential integrity and driver-name validity)
+and break the "single new passing test" rule. It does not weaken
+any earlier audit: iter 63's required-tag coverage, iter 64's
+manifest->PCF presence, iter 65's PCF pin uniqueness, and iter
+66's plan->jumpers signal referential integrity all remain in
+force.
+
 ## WIP
 
 ### Verify physical connectivity
