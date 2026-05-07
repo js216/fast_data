@@ -5724,6 +5724,110 @@ smaller (only width, or only init, or only one side) would let
 drift through on the unaudited dimension or unaudited side,
 leaving zero locked-in cross-language progress on this invariant.
 
+### Audit prbs step shape match across FPGA and MPU
+
+Lock in a third cross-language PRBS interface invariant complementing
+iter 75's polynomial+seed audit and iter 76's checksum width+init
+audit: the FPGA `prbs_xor` core (`fpga/src/prbs_xor.nw`) and the MPU
+baremetal `prbs_test` reference (`stm32mp135_test_board/baremetal/
+prbs_test/src/main.c`) must agree on the **algorithmic shape** of
+the LFSR step itself --- specifically that both sides (i) gate the
+feedback XOR on the LSB of `state` and (ii) advance the state by
+right-shifting one bit and XOR-ing the polynomial mask only when
+that LSB is one. Iter 75 locks the polynomial and seed literals,
+iter 76 locks the checksum register, but neither inspects the
+recurrence expression that turns the literals into the next state.
+A future edit that flipped one side from `state >> 1` to
+`state << 1` (a left-shift Galois variant) while keeping the same
+`POLY` literal would still produce a valid maximum-length PRBS,
+just a different sequence, and would silently break every later
+FPGA-vs-MPU checksum comparison.
+
+The audit is host-only and textual: it reads both source files
+and asserts the FPGA side contains the right-shift Galois recurrence
+`state <= (state >> 1) ^ POLY;` guarded by a `state[0]` LSB test,
+and the MPU side contains the matching `(state >> 1) ^ PRBS_POLY`
+return guarded by a `state & 1u` LSB test.
+
+This is not a schema-shadow audit: there is no existing validator
+that enforces cross-language PRBS step shape equivalence. Iter 75
+asserts `(state >> 1) ^ PRBS_POLY` on the MPU side only; it does
+not look at the Verilog recurrence or the LSB gate on either side.
+Iter 76 only inspects the checksum register width and init values.
+Without this audit the only thing tying the recurrence shapes
+together is mission narrative prose.
+
+This is the smallest meaningful step toward `PRBS, UART, Checksum`
+that does not require adding UART command parsing to the MPU
+firmware. It is host-only, machine-checkable in well under a
+minute, and changes zero source files (chapter is verify-only on
+existing artefacts). Both the right-shift expression and the
+LSB gate must be checked on each side: a one-sided check would
+let the unaudited side flip its shift direction or drop its LSB
+gate undetected, and checking only the shift without the gate
+would let one side mis-condition the XOR on a different bit.
+
+Build: no build step (host-only verify on existing sources).
+
+Test (max 1 min):
+
+```
+mark tag=prbs_xor_mpu_step_shape_match
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    fpga_nw = Path('fpga/src/prbs_xor.nw')
+    mpu_c   = Path('stm32mp135_test_board/baremetal/'
+                   'prbs_test/src/main.c')
+    try:
+        nw_text = fpga_nw.read_text(encoding='utf-8',
+                                    errors='replace')
+        c_text  = mpu_c.read_text(encoding='utf-8',
+                                  errors='replace')
+    except OSError:
+        return False
+
+    fpga_required = [
+        'if (state[0])',
+        'state <= (state >> 1) ^ POLY;',
+        'state <= (state >> 1);',
+    ]
+    if not all(tok in nw_text for tok in fpga_required):
+        return False
+
+    mpu_required = [
+        'if (state & 1u) {',
+        'return (state >> 1) ^ PRBS_POLY;',
+        'return (state >> 1);',
+    ]
+    if not all(tok in c_text for tok in mpu_required):
+        return False
+
+    return True
+```
+
+Rationale: this is strictly smaller than adding any new firmware
+or Verilog code (the audit changes no source file outside the
+mission file itself), strictly smaller than the next bench-progress
+step toward end-to-end checksum comparison, and not a duplicate
+of iter 75 or iter 76 (iter 75 reads the polynomial and seed
+literals plus the C-side `(state >> 1) ^ PRBS_POLY` substring but
+not the Verilog recurrence or the LSB gates; iter 76 reads only
+the checksum register width and init values). Making it any
+smaller (only one side, or only the shift, or only the LSB gate)
+would let drift through on the unaudited side or unaudited half
+of the recurrence; making it any larger (e.g. running an actual
+PRBS sequence in both languages and comparing) would require a
+simulator or compiled execution and is not host-only.
+
 ### Verify physical connectivity
 
 Use `gpio.nw` and the MP135 `gpio_test` harness to verify the physical
