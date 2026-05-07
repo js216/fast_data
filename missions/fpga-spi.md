@@ -6571,8 +6571,6 @@ string would not produce a working UART-visible app; adding the reset,
 single-step, burst, or print commands would combine transport bring-up
 with command semantics and exceed the minimum useful slice.
 
-## WIP
-
 ### Add MP135 prbs_test reset UART command
 
 Extend the MP135 `prbs_test` UART loop with one command: byte `'r'`
@@ -6686,6 +6684,8 @@ checksum-print commands a known starting point. Splitting smaller into
 only a polling loop or only a reset helper would not expose any useful
 UART behavior; adding any other command or hardware interaction would
 combine multiple semantics into one Worker step.
+
+## WIP
 
 ### PRBS, UART, Checksum
 
