@@ -232,6 +232,84 @@ def check(extract_dir):
     return True
 ```
 
+### selcc bitfield struct global init
+
+Lift the next link in the sub-word struct-field chain: the `field_map`
+construction loop in `selache/selcc/src/emit_asm.rs` (around lines
+1215-1244, just added by the prior step) hard-errors on every struct
+field whose type is `Type::Bitfield(_, _)` with `field <name> is a
+bitfield; bitfields in struct global initializers are not supported`.
+Csmith draft `cctest_csmith_9405adb0.c` defines `struct S0 { signed f0
+: 6; }` and `struct S1 { int8_t f0; unsigned f1 : 10; uint8_t f2;
+uint64_t f3; struct S0 f4; }` (under `#pragma pack(1)`), and any global
+initializer for `S1` therefore trips this rejection even after the
+constant-int sub-word packing fix landed.
+
+Replace the up-front bitfield rejection with packing into the
+containing 32-bit word. The bit offset and width come from
+`crate::types::struct_field_layout_ctx(fields, fname, tctx)`, which
+already returns `(byte_offset, Some(bit_offset), Some(bit_width))` for
+bitfields (see `selache/selcc/src/types.rs:488-533`). For each
+bitfield-typed field, evaluate its initializer as a constant integer,
+mask to `bit_width` bits (`value & ((1u64 << bit_width) - 1)`), shift
+left by `(byte_offset % 4) * 8 + bit_offset_within_byte` so the bits
+land at the correct position inside the containing word, and OR into
+the existing `InitWord::Num` slot at `byte_offset / 4`. Designated
+initializers for bitfield fields take the same packed path.
+
+Scope this iteration narrowly:
+- Bitfield value must still be a constant integer literal (no symbol,
+  no `Expr::InitList`, no `Expr::StringLit`).
+- Cross-word bitfields (a bitfield whose `bit_offset + bit_width`
+  exceeds the containing storage unit) keep a hard error so the fix
+  stays auditable.
+- Nested aggregates packed at sub-word slots stay rejected (deferred
+  to the next iteration).
+- Word-aligned non-bitfield fields keep their existing recursive
+  emission unchanged.
+- The local-scope twin in `selache/selcc/src/lower.rs` stays untouched
+  (a later iteration will mirror the fix there).
+
+This is the **third link** in the chain that ultimately unblocks
+`cctest_csmith_9405adb0.c`'s `struct S1 g_166[3][4][3]` global. After
+this step, the remaining links are: nested aggregate sub-word fields
+(e.g. `struct S0 f4` packed at a sub-word offset inside `S1`), the
+local-scope twin in `lower.rs`, and the independent seld layout
+overflow surfaced by the same draft. None of those are addressed here.
+
+Build:
+
+```
+cd selache && cargo build --release
+cd selache && cargo test -p selcc --release bitfield_struct_global_init -- --nocapture
+cd selache && cargo clippy --all-targets --release -- -D warnings
+```
+
+The new `bitfield_struct_global_init` test must live in
+`selache/selcc/src/emit_asm.rs` alongside the other `#[test]` items.
+It should call `selcc::compile_to_asm` (with `cli::Options { char_size:
+8, ..Default::default() }`) on a minimal source that places a bitfield
+into the containing word of a struct global, e.g.
+
+```c
+struct S { unsigned f0 : 10; unsigned f1 : 6; int w; };
+struct S g = { 0x123, 0x2A, 0x55667788 };
+```
+
+and assert the call returns `Ok` (and ideally that the emitted asm
+contains `((0x2A & 0x3F) << 10) | (0x123 & 0x3FF) == 0xA923` packed
+into the first word). The test must fail before the fix and pass after
+it.
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    return True
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
@@ -305,3 +383,5 @@ def check(extract_dir, ldr):
     got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
     return bool(got) and int(got[-1], 16) == expect
 ```
+2026-05-07T04:36:53 selache-csmith-tests Minimizer pass smallest bitfield extension of iter-6 packed path
+2026-05-07T04:46:27 selache-csmith-tests Verifier pass none
