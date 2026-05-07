@@ -6039,6 +6039,137 @@ larger (e.g. running an actual PRBS sequence in both
 languages and comparing a multi-word stream) would require
 a simulator or compiled execution and is not host-only.
 
+### Audit iter 63 required_tags covers all gpio_physical mark tags above WIP
+
+Iter 63's `required_tags` literal dict enumerates the 14
+per-jumper `gpio_physical_*` mark tags expected for the six
+committed-pin QSPI signals. It does NOT enumerate the
+non-jumper general tags (`gpio_physical_replay_setup_reset`,
+`gpio_physical_replay_setup_smoke`) nor its own audit tag
+(`gpio_physical_connectivity_audit`). A future operator who
+adds a new physical-line chapter for a newly-committed signal
+(for example, after the iter 70/71/72 control GPIOs leave
+`TBD` and gain a per-jumper high/low mark like
+`gpio_physical_mp135_to_fpga_reset_n_high`) but forgets to
+add that tag to iter 63's `required_tags` value lists would
+silently drop coverage for the new line: iter 63 would still
+pass without ever reading the new tag, and the connectivity
+audit would no longer be a closed loop over the present
+physical-line evidence.
+
+This audit closes that loop. It scans the above-WIP region
+of the mission file for every `mark tag=gpio_physical_*`
+occurrence, then asserts each tag is either (a) listed in
+iter 63's `required_tags` flattened value set, or (b) one of
+the three known non-jumper general tags on a small explicit
+whitelist. Any new `gpio_physical_*` tag added above WIP that
+matches neither bucket fails this audit, forcing the operator
+to either add it to iter 63's per-signal value list (closing
+coverage on the new jumper) or extend the whitelist here
+(documenting it as intentionally non-jumper).
+
+This is not a schema-shadow audit: there is no existing
+validator that compares iter 63's literal dict to the actual
+above-WIP tag population. Iter 63 itself only checks the
+forward direction (each tag listed in its dict must appear
+above WIP); it does not check the reverse direction (each
+above-WIP `gpio_physical_*` tag must appear in the dict or
+the whitelist). The reverse direction is what catches
+silent additions.
+
+This is the smallest meaningful next step: it changes zero
+source files, runs host-only in well under a minute, and
+audits a real silent-drift failure mode that no prior
+chapter catches. Splitting it smaller (auditing only a
+subset of tags) would still require the same audit harness
+and would leave the remaining tags unaudited; making it
+larger (e.g. cross-referencing manifest jumper signals back
+to mission tags) overlaps iter 63's existing forward check.
+
+Build: no build step (host-only verify on existing sources).
+
+Test (max 1 min):
+
+```
+mark tag=gpio_physical_required_tags_reverse_audit
+```
+
+Verify:
+
+```
+import re
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    mission_path = Path('missions/fpga-spi.md')
+    try:
+        mission = mission_path.read_text(
+            encoding='utf-8', errors='replace')
+    except OSError:
+        return False
+
+    wip_idx = mission.find('\n## WIP\n')
+    if wip_idx < 0:
+        return False
+    above_wip = mission[:wip_idx]
+
+    # Mirror iter 63's literal required_tags value set.
+    iter63_required = {
+        'gpio_physical_mp135_to_fpga_sclk_high',
+        'gpio_physical_mp135_to_fpga_sclk_low',
+        'gpio_physical_mp135_to_fpga_ncs_high',
+        'gpio_physical_mp135_to_fpga_ncs_low',
+        'gpio_physical_fpga_to_mpu_io0',
+        'gpio_physical_mp135_to_fpga_io0_high',
+        'gpio_physical_mp135_to_fpga_io0_low',
+        'gpio_physical_fpga_to_mpu_io1',
+        'gpio_physical_mp135_to_fpga_io1_high',
+        'gpio_physical_mp135_to_fpga_io1_low',
+        'gpio_physical_fpga_to_mpu_io2',
+        'gpio_physical_mp135_to_fpga_io2_high',
+        'gpio_physical_mp135_to_fpga_io2_low',
+        'gpio_physical_fpga_to_mpu_io3',
+        'gpio_physical_mp135_to_fpga_io3_high',
+        'gpio_physical_mp135_to_fpga_io3_low',
+    }
+    # Known non-jumper general tags intentionally not in iter 63.
+    non_jumper_whitelist = {
+        'gpio_physical_replay_setup_reset',
+        'gpio_physical_replay_setup_smoke',
+        'gpio_physical_connectivity_audit',
+        'gpio_physical_required_tags_reverse_audit',
+    }
+    allowed = iter63_required | non_jumper_whitelist
+
+    pattern = re.compile(r'mark tag=(gpio_physical_[A-Za-z0-9_]+)')
+    found = set(pattern.findall(above_wip))
+    if not found:
+        return False
+    if not found.issubset(allowed):
+        return False
+
+    # Sanity: every iter63_required tag is actually present
+    # above WIP (forward check, mirroring iter 63 cheaply).
+    if not iter63_required.issubset(found):
+        return False
+
+    return True
+```
+
+Rationale: this sub-step is host-only, touches no firmware,
+and asserts only a textual completeness invariant on the
+mission file itself. Splitting it smaller (e.g. auditing
+only one tag bucket) would still require the same regex
+scan and the same iter-63 mirror set, with no progress
+benefit. Making it larger (e.g. extending to manifest
+jumper signals or to the iter 64 pin map) duplicates the
+forward-direction checks already performed by iter 63 and
+iter 64. The chosen scope is exactly the reverse-direction
+gap left by iter 63.
+
 ## WIP
 
 ### Verify physical connectivity
