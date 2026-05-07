@@ -88,6 +88,46 @@ def check(extract_dir):
     return True
 ```
 
+### SSH target advertises a concrete target address
+
+Confirm `ssh.target` exposes the configured STM32MP135 Linux target
+address in inventory metadata before attempting any network operation.
+This is a discovery check only; it must not boot, flash, connect to, or
+modify the board.
+
+Build: nothing required.
+
+Test (max 30 s):
+
+```
+inventory
+mark tag=stream_ws_ssh_address
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    devices = Verification.load_devices(extract_dir)
+    ssh_targets = [d for d in devices if d["id"] == "ssh.target"]
+    if len(ssh_targets) != 1:
+        return False
+
+    target = ssh_targets[0]
+    if target.get("plugin") != "ssh":
+        return False
+
+    spec = target.get("spec")
+    if not isinstance(spec, dict):
+        return False
+
+    ip = spec.get("ip")
+    return isinstance(ip, str) and bool(ip.strip())
+```
+
 ## WIP
 
 ## Planned Mission Arc
