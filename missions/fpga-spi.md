@@ -5926,6 +5926,119 @@ larger (e.g. running an actual PRBS sequence in both languages and
 comparing checksums) would require a simulator or compiled execution
 and is not host-only.
 
+### Audit FPGA prbs state register init+reset to SEED
+
+Lock in another cross-language PRBS interface invariant complementing
+iter 75/76/77/78: the FPGA `prbs_xor` core
+(`fpga/src/prbs_xor.nw`) must apply the named `SEED` constant to its
+32-bit `state` register at BOTH elaboration time
+(`initial state    = SEED;`) AND on synchronous reset
+(`state    <= SEED;` inside the `if (!rst_n)` clause). Iter 75 pins
+the value of the `SEED` localparam (`32'h0000_0001`); iter 76 pins
+the `checksum` register's elaboration-init and reset-clause; neither
+pins the `state` register's elaboration-init or reset-clause. A
+future edit that changed `initial state = SEED;` to
+`initial state = 32'h0;`, or changed the reset clause from
+`state <= SEED;` to `state <= 32'h0;`, would silently leave the
+LFSR stuck at the all-zero degenerate state forever (since
+`(0 >> 1)` and `(0 >> 1) ^ POLY` both evaluate to zero whenever
+the LSB is zero, and zero's LSB is zero, so once at zero the
+state never advances). The FPGA would then emit a stream of
+zero words while the MPU continued to step from `PRBS_SEED`,
+and every cross-checksum comparison would diverge after one
+word. This audit wires that invariant into the verify path.
+
+The MPU side does not need a fresh check here: iter 76 already
+pins `{ PRBS_SEED, 0 }` in the test entry path, which fixes the
+`state` field's init to `PRBS_SEED` (and iter 75 pins the
+`#define PRBS_SEED 0x00000001u` constant value). The remaining
+unaudited surface is exclusively on the FPGA side — the
+elaboration-init line and the reset-clause assignment for the
+`state` register.
+
+The audit is host-only and textual: it reads the FPGA source
+file and asserts both `initial state    = SEED;` and
+`state    <= SEED;` substrings are present (with their exact
+double-space spacing as written in the current file, which
+also serves as a small style-anchor against accidental
+reformatting that would split the assignment across lines).
+It does not re-check the `SEED` localparam value (iter 75)
+nor the polynomial (iter 75) nor the checksum init (iter 76)
+nor the step shape (iter 77) nor the checksum xor-update
+fold (iter 78); it checks only the `state`-register init+reset
+applies, which no prior audit covers.
+
+This is not a schema-shadow audit: there is no existing
+validator that enforces FPGA `state`-register init or reset
+to the `SEED` constant. Iter 75's audit only locks down the
+literal values of `POLY` and `SEED`; it permits a future edit
+to leave `SEED` untouched while changing `initial state =
+SEED;` to `initial state = 32'h0;` and locking up the LFSR.
+
+This is the smallest meaningful step toward `PRBS, UART,
+Checksum` that does not require adding UART command parsing
+to the MPU firmware. It is host-only, machine-checkable in
+well under a minute, and changes zero source files (chapter
+is verify-only on existing artefacts). Both the elaboration
+init and the reset clause are required: elaboration init
+without reset would let `rst_n` deassertion clear the state
+to zero on a real bench reset, reset without elaboration init
+would let an FPGA simulator that skips the reset pulse start
+from `x` storage. Either alone permits silent drift, so both
+checks together are the minimum.
+
+Build: no build step (host-only verify on existing sources).
+
+Test (max 1 min):
+
+```
+mark tag=prbs_xor_fpga_state_seed_init_reset
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    fpga_nw = Path('fpga/src/prbs_xor.nw')
+    try:
+        nw_text = fpga_nw.read_text(encoding='utf-8',
+                                    errors='replace')
+    except OSError:
+        return False
+
+    fpga_required = [
+        'initial state    = SEED;',
+        'state    <= SEED;',
+    ]
+    if not all(tok in nw_text for tok in fpga_required):
+        return False
+
+    return True
+```
+
+Rationale: this is strictly smaller than adding any new
+firmware or Verilog code (the audit changes no source file
+outside the mission file itself), strictly smaller than the
+next bench-progress step toward end-to-end checksum
+comparison (which requires an MPU UART command parser plus
+a `'p'`-style print path), and not a duplicate of iter
+75/76/77/78 (iter 75 reads polynomial+seed literal values;
+iter 76 reads only the checksum register width and init;
+iter 77 reads only the LFSR recurrence and LSB gate; iter 78
+reads the checksum xor-update fold and pre-step capture;
+none reads the `state` register's elaboration-init or
+reset-clause apply of `SEED`). Making it any smaller (only
+elaboration init, or only reset clause) would let drift
+through on the unaudited half of the rule; making it any
+larger (e.g. running an actual PRBS sequence in both
+languages and comparing a multi-word stream) would require
+a simulator or compiled execution and is not host-only.
+
 ## WIP
 
 ### Verify physical connectivity
