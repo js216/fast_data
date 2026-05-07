@@ -25,7 +25,7 @@ Assumed hardware connections:
 | MP135 UART RX, exact MPU pin TBD | `tx`, iCEstick pin 8 | FPGA -> MPU | Assumed 3.3 V LVCMOS, verify MPU UART bank | FPGA UART TX pin is documented for iCEstick; MPU UART instance/header pin is not documented here. |
 | MP135 GPIO reset output, exact MPU pin TBD | FPGA `reset_n` on `pins[0]`, iCEstick pin 112 | MPU -> FPGA | Assumed 3.3 V LVCMOS control GPIO | Active-low FPGA logic reset/control jumper; reuses the `pins[0]` slot already bound in `gpio.nw` PCF chunk so existing GPIO bring-up samples the same physical line. |
 | MP135 GPIO control output, exact MPU pin TBD | FPGA `ctrl`/`start` on `pins[1]`, iCEstick pin 113 | MPU -> FPGA | Assumed 3.3 V LVCMOS control GPIO | Bring-up control GPIO for connection tests; reuses the `pins[1]` slot already bound in `gpio.nw` PCF chunk so existing GPIO bring-up samples the same physical line. |
-| MP135 GPIO status input, exact MPU pin TBD | FPGA `ready`/`status`, exact FPGA pin TBD | FPGA -> MPU | Assumed 3.3 V LVCMOS control GPIO | Optional FPGA-to-MPU status GPIO for connection tests; exact signal name and pin remain TBD. |
+| MP135 GPIO status input, exact MPU pin TBD | FPGA `ready`/`status` on `pins[2]`, iCEstick pin 114 | FPGA -> MPU | Assumed 3.3 V LVCMOS control GPIO | Bring-up status GPIO for connection tests; reuses the `pins[2]` slot already bound in `gpio.nw` PCF chunk so existing GPIO bring-up drives the same physical line. |
 | MP135 QUADSPI `CLK` on CN8, exact CN8 pin TBD | `sclk`, iCEstick pin 45 | MPU -> FPGA | Assumed 3.3 V LVCMOS QSPI bank | Repository notes place QSPI on MP135 CN8 and use SPI mode 0; exact CN8 pin is not documented here. |
 | MP135 QUADSPI `NCS` on CN8, exact CN8 pin TBD | `cs_n`, iCEstick pin 56 | MPU -> FPGA | Assumed 3.3 V LVCMOS QSPI bank | Active-low chip select; FPGA source uses `cs_n`. |
 | MP135 QUADSPI `IO0` on CN8, exact CN8 pin TBD | `io[0]`, iCEstick pin 47 | Bidirectional | Assumed 3.3 V LVCMOS QSPI bank | Single-lane MOSI during command/address phases; bidirectional for quad data phases. |
@@ -5187,6 +5187,106 @@ def check(extract_dir):
     if target.get('mpu_role') != 'drive':
         return False
     if target.get('fpga_role') != 'sample':
+        return False
+
+    return True
+```
+
+### Commit FPGA status_output to iCEstick pin 114
+
+Pin down the third of the three TBD control GPIOs. Update the
+`Assumed hardware connections` table and the matching jumper in
+`stm32mp135_test_board/baremetal/gpio_test/connectivity_manifest.json`
+so that `fpga_ready_status_to_mpu_status_input.fpga_signal_pin`
+reads `FPGA ready/status on pins[2], iCEstick pin 114` instead of
+`FPGA ready/status, exact FPGA pin TBD`. The chosen pin reuses the
+`pins[2]` slot already bound by `set_io pins[2] 114` in the
+`gpio.pcf` chunk of `fpga/src/gpio.nw`, so the existing
+`gpio_test` GPIO bank already drives and samples the same
+physical line and no new top-level Verilog port is required. The
+`gpio.v` body assigns `pins[g] = gpio_oe[g] ? gpio_out[g] : 1'bz`,
+so when commanded over UART the FPGA can drive `pins[2]` high or
+low to satisfy the FPGA-driven direction of this jumper. The MPU
+side of the jumper remains TBD because the MP135 GPIO status
+input pin has not been identified.
+
+This is the smallest concrete-progress step toward `Verify
+physical connectivity`: it converts the last of the three
+remaining TBD control GPIOs into a concrete iCEstick pin without
+changing the synthesised bitstream, without adding a new test
+vector, and without committing the MPU side. The iter-64 PCF
+cross-check audit covers the new pin automatically (pin 114 is in
+the set parsed from `gpio.nw`), and the host validator continues
+to match the table against the manifest. Splitting smaller (e.g.
+only editing the manifest, or only editing the table) would
+desync the two and trip the validator. Folding into a future
+bench-side `Verify FPGA status high/low` chapter would bundle a
+hardware-driving step with the pin commit and break the
+"single new passing test" rule.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_manifest_status_output_pin_committed
+```
+
+Verify:
+
+```
+import json
+import re
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    manifest_path = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'connectivity_manifest.json')
+    try:
+        manifest = json.loads(manifest_path.read_text(
+            encoding='utf-8', errors='replace'))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    jumpers = manifest.get('jumpers')
+    if not isinstance(jumpers, list):
+        return False
+
+    target = None
+    for row in jumpers:
+        if not isinstance(row, dict):
+            return False
+        if row.get('signal') == 'fpga_ready_status_to_mpu_status_input':
+            target = row
+            break
+    if target is None:
+        return False
+
+    fpga_pin_str = target.get('fpga_signal_pin', '')
+    if not isinstance(fpga_pin_str, str):
+        return False
+    if 'TBD' in fpga_pin_str:
+        return False
+
+    m = re.search(r'iCEstick pin (\d+)', fpga_pin_str)
+    if m is None:
+        return False
+    if int(m.group(1)) != 114:
+        return False
+
+    if target.get('direction') != 'FPGA -> MPU':
+        return False
+    if target.get('mpu_role') != 'sample':
+        return False
+    if target.get('fpga_role') != 'drive':
         return False
 
     return True
