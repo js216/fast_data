@@ -6170,6 +6170,98 @@ forward-direction checks already performed by iter 63 and
 iter 64. The chosen scope is exactly the reverse-direction
 gap left by iter 63.
 
+### Audit FPGA pin numbers are unique across manifest jumpers
+
+Add a host-only audit gate that proves every concrete iCEstick pin
+number named in `connectivity_manifest.json`'s `fpga_signal_pin`
+strings is claimed by exactly one jumper row. Iter 64 already
+verifies that each manifest-claimed pin exists in `gpio.nw`'s
+`gpio.pcf` set_io block, but it does not catch the failure mode
+where two manifest jumpers both claim the same iCEstick pin (a
+plausible copy-paste mistake when extending the manifest). The
+PCF-side uniqueness is enforced by nextpnr at synth time, so this
+audit is the manifest-side counterpart: a textual invariant that
+any duplicate iCEstick pin number across two distinct jumper rows
+is rejected before bitstream build.
+
+The audit walks `connectivity_manifest.json`'s `jumpers` list,
+extracts the integer pin number from any `fpga_signal_pin` string
+matching `iCEstick pin (\d+)`, and groups the matching rows by pin
+number. Rows whose `fpga_signal_pin` does not match the regex
+(e.g. `TBD` placeholders or unrelated descriptors) are skipped
+defensively. The check passes only when every observed pin number
+maps to exactly one signal AND at least one concrete pin was
+observed, so an empty or all-skipped manifest cannot pass
+vacuously. Splitting smaller (auditing one pin at a time) would
+reuse the same parser and verify plumbing for no smaller delivered
+work; folding this into iter 64 would conflate a presence check
+(pin exists in PCF) with a uniqueness check (pin claimed by
+exactly one manifest row), which are independent invariants.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=manifest_jumper_pins_are_unique
+```
+
+Verify:
+
+```
+import json
+import re
+from collections import defaultdict
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    manifest_path = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'connectivity_manifest.json')
+    try:
+        manifest = json.loads(manifest_path.read_text(
+            encoding='utf-8', errors='replace'))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    jumpers = manifest.get('jumpers')
+    if not isinstance(jumpers, list) or not jumpers:
+        return False
+
+    pin_re = re.compile(r'iCEstick pin (\d+)')
+    pin_to_signals = defaultdict(list)
+    saw_concrete_pin = False
+    for row in jumpers:
+        if not isinstance(row, dict):
+            return False
+        fpga_pin_str = row.get('fpga_signal_pin', '')
+        if not isinstance(fpga_pin_str, str):
+            return False
+        m = pin_re.search(fpga_pin_str)
+        if m is None:
+            continue
+        pin = int(m.group(1))
+        signal = row.get('signal', '')
+        pin_to_signals[pin].append(signal)
+        saw_concrete_pin = True
+
+    if not saw_concrete_pin:
+        return False
+
+    for pin, signals in pin_to_signals.items():
+        if len(signals) != 1:
+            return False
+
+    return True
+```
+
 ## WIP
 
 ### Verify physical connectivity
