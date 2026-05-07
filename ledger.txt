@@ -1,0 +1,24 @@
+2026-05-07T11:37:44 usbtmc Orchestrator pass 1
+2026-05-07T11:38:48 usbtmc Manager pass EVB MSC gadget smoke descriptor
+2026-05-07T11:39:40 usbtmc Minimizer fail split configfs setup from host smoke
+2026-05-07T11:40:16 usbtmc Manager pass EVB configfs MSC setup
+2026-05-07T11:41:00 usbtmc Minimizer fail split mount/backing/function/bind
+2026-05-07T11:42:06 usbtmc Manager pass EVB configfs mounted
+2026-05-07T11:42:46 usbtmc Minimizer pass configfs+usb_gadget atomic base
+2026-05-07T11:46:02 usbtmc Worker pass
+2026-05-07T11:48:07 usbtmc Verifier pass none
+2026-05-07T11:53:36 usbtmc Tester fail 0 sd_missing_rootfs
+2026-05-07T11:55:13 usbtmc Worker pass
+2026-05-07T11:56:55 usbtmc Verifier pass none
+2026-05-07T12:48:30 usbtmc Tester fail 0 mp135_evb_leased
+2026-05-07T12:49:38 usbtmc Worker pass
+2026-05-07T12:51:04 usbtmc Verifier pass none
+2026-05-07T13:05:49 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-07T13:17:18 usbtmc Tester fail 0 ssh_exit_255
+2026-05-07T13:19:38 usbtmc Worker pass
+2026-05-07T13:21:11 usbtmc Verifier pass none
+2026-05-07T13:51:16 usbtmc Tester fail 0 msc_write_timeout
+2026-05-07T13:52:53 usbtmc Worker pass
+2026-05-07T13:54:03 usbtmc Verifier pass none
+2026-05-07T14:14:53 usbtmc Tester pass 1
+2026-05-07T14:16:38 usbtmc Worker pass
