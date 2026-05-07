@@ -1,5 +1,39 @@
 ## WIP
 
+### selache draft gcc host sweep
+
+Compile and run every csmith draft through host `gcc`, using the
+existing xtest draft target to compare each program's `got NN` output
+against its source `@expect` value. This is the first reference gate for
+the draft suite and does not exercise clang, CCES, Selache, or hardware.
+
+Build:
+
+```
+make -C selache/xtest drafts-gcc -j$(nproc)
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    xtest = Path('selache/xtest')
+    drafts = sorted((xtest / 'draft_cases').glob('cctest_*.c'))
+    if not drafts:
+        return True
+
+    out = xtest / 'build/drafts/gcc'
+    expected = {p.stem for p in drafts}
+    runs = {p.stem for p in out.glob('cctest_*.run')}
+    bins = {p.stem for p in out.glob('cctest_*.bin') if p.stat().st_size}
+
+    return runs == expected and bins == expected
+```
+
 # Selache csmith draft regression sweep
 
 Validate randomly-generated cctest candidates in
@@ -51,6 +85,7 @@ Test (max 1 min):
 dsp:reset
 dsp:uart_open
 dsp:boot ldr=@ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
 delay ms=2500
 dsp:uart_close
 mark tag=cctest_run
@@ -67,6 +102,6 @@ def check(extract_dir, ldr):
         return False
     expect = int(m.group(1), 16)
     uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
-    g = re.search(r'got\s+([0-9a-fA-F]+)', uart)
-    return bool(g) and int(g.group(1), 16) == expect
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == expect
 ```
