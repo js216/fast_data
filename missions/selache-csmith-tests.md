@@ -66,6 +66,45 @@ def check(extract_dir):
     return runs == expected and bins == expected
 ```
 
+### selache draft cces compile gate
+
+Compile every csmith draft through the embedded `cces` toolchain,
+mirroring the gcc and clang draft sweeps above. This is the third
+reference toolchain gate and the first that exercises the embedded
+target ABI (producing `cctest_*.0xNN.ldr` siblings). Host-only; no
+bench hardware required. Locks cces in as a reference before we start
+chasing selcc/seld bugs surfaced by `make drafts-sel`.
+
+Build:
+
+```
+make -C selache/xtest drafts-cces -j$(nproc)
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+    import re
+
+    xtest = Path('selache/xtest')
+    drafts = sorted((xtest / 'draft_cases').glob('cctest_*.c'))
+    if not drafts:
+        return True
+
+    out = xtest / 'build/drafts/cces'
+    expected = {p.stem for p in drafts}
+    bins = {p.stem for p in out.glob('cctest_*.ldr')
+            if p.stat().st_size and not re.search(r'\.0x[0-9a-f]+\.ldr$', p.name)}
+    targets = {re.sub(r'\.0x[0-9a-f]+$', '', p.stem)
+               for p in out.glob('cctest_*.0x*.ldr') if p.stat().st_size}
+
+    return bins == expected and targets == expected
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
