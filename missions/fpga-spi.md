@@ -5622,6 +5622,108 @@ host-only.
 
 ## WIP
 
+### Audit prbs checksum word width and init match across FPGA and MPU
+
+Lock in a second cross-language PRBS interface invariant complementing
+iter 75's polynomial+seed audit: the FPGA `prbs_xor` core
+(`fpga/src/prbs_xor.nw`) and the MPU baremetal `prbs_test` reference
+(`stm32mp135_test_board/baremetal/prbs_test/src/main.c`) must agree
+on (i) the **checksum word width** of 32 bits and (ii) the
+**checksum initial value** of zero on entry/reset. They are written
+as independent type/width declarations in two source files in two
+languages, so a future edit that narrowed the FPGA `checksum` reg
+to `[15:0]` or widened the MPU `prbs_state_t.checksum` to
+`uint64_t`, or removed the zero-init, would silently break every
+later FPGA-vs-MPU checksum comparison without any existing verifier
+noticing. This audit wires that invariant into the verify path.
+
+The audit is host-only and textual: it reads both source files
+and asserts the FPGA side declares `output reg [31:0] checksum`
+and zero-initializes both at elaboration (`initial checksum =
+32'h0000_0000;`) and on synchronous reset (`checksum <=
+32'h0000_0000;`); and the MPU side declares `uint32_t checksum;`
+inside `prbs_state_t` and zero-initializes the `checksum` field
+in the test entry path (`{ PRBS_SEED, 0 }`).
+
+This is not a schema-shadow audit: there is no existing validator
+that enforces cross-language PRBS checksum width-or-init
+equivalence. The iter 75 audit only locks down the polynomial and
+seed constants; it permits the FPGA to keep a 32-bit checksum
+while the MPU silently uses `uint16_t` (or vice versa), or for
+either side to start from random uninitialised storage. Without
+this audit nothing machine-checkable ties the checksum word
+width and init state between the two implementations.
+
+This is the smallest meaningful step toward `PRBS, UART, Checksum`
+that does not require adding UART command parsing to the MPU
+firmware. It is host-only, machine-checkable in well under a
+minute, and changes zero source files (chapter is verify-only on
+existing artefacts). Width and init are both required: width
+without init would let one side start from undefined storage and
+still match by accident on short bursts, init without width would
+let one side keep XORing 16 bits while the other XORs 32 and
+appear to agree on the low half. Either alone permits silent
+drift, so both checks together are the minimum.
+
+Build: no build step (host-only verify on existing sources).
+
+Test (max 1 min):
+
+```
+mark tag=prbs_xor_mpu_checksum_width_init_match
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    fpga_nw = Path('fpga/src/prbs_xor.nw')
+    mpu_c   = Path('stm32mp135_test_board/baremetal/'
+                   'prbs_test/src/main.c')
+    try:
+        nw_text = fpga_nw.read_text(encoding='utf-8',
+                                    errors='replace')
+        c_text  = mpu_c.read_text(encoding='utf-8',
+                                  errors='replace')
+    except OSError:
+        return False
+
+    fpga_required = [
+        "output reg [31:0] checksum",
+        "initial checksum = 32'h0000_0000;",
+        "checksum <= 32'h0000_0000;",
+    ]
+    if not all(tok in nw_text for tok in fpga_required):
+        return False
+
+    mpu_required = [
+        'uint32_t checksum;',
+        '{ PRBS_SEED, 0 }',
+    ]
+    if not all(tok in c_text for tok in mpu_required):
+        return False
+
+    return True
+```
+
+Rationale: this is strictly smaller than adding any new firmware
+or Verilog code (the audit changes no source file outside the
+mission file itself), strictly smaller than the next bench-progress
+step toward end-to-end checksum comparison (which requires an MPU
+UART command parser plus a `'p'`-style print path, several files
+of new firmware), and not a duplicate of iter 75's audit (that
+audit reads the polynomial and seed literals; this audit reads
+the checksum register width declaration and the checksum reset/
+init values, neither of which iter 75 inspects). Making it any
+smaller (only width, or only init, or only one side) would let
+drift through on the unaudited dimension or unaudited side,
+leaving zero locked-in cross-language progress on this invariant.
+
 ### Verify physical connectivity
 
 Use `gpio.nw` and the MP135 `gpio_test` harness to verify the physical
