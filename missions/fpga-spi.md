@@ -5239,6 +5239,89 @@ manifest->PCF presence, iter 65's PCF pin uniqueness, and iter
 66's plan->jumpers signal referential integrity all remain in
 force.
 
+### Audit first_pass_test_plan expect field is binary
+
+Add a host-only audit gate that proves every entry in
+`connectivity_manifest.json`'s `first_pass_test_plan` has an
+`expect` field whose value is an integer equal to `0` or `1`. The
+iter 67 audit only validates the entry's `driver` is one of the
+two known controllers; it would still pass if an entry had a
+missing, non-integer, or out-of-range `expect` (for example
+`"expect":"high"` after a string-rename, `"expect":2` after a
+typo, or a missing key) which would silently produce a vector the
+sampler harness could never grade because the comparator keys off
+a binary level.
+
+This audit reads the manifest, walks every `first_pass_test_plan`
+entry, and asserts the entry's `expect` field is an `int` (not
+`bool`, not `str`) equal to `0` or `1`. It does not validate any
+other field (`signal`, `driver`, `sampler`, `drive`, or
+drive-vs-expect consistency); those are separate failure modes
+left for later sub-steps so this slice carries exactly one new
+passing assertion beyond iter 67.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=manifest_plan_expect_is_binary_int
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    manifest_path = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'connectivity_manifest.json')
+    try:
+        manifest = json.loads(manifest_path.read_text(
+            encoding='utf-8', errors='replace'))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    plan = manifest.get('first_pass_test_plan')
+    if not isinstance(plan, list) or not plan:
+        return False
+
+    for entry in plan:
+        if not isinstance(entry, dict):
+            return False
+        exp = entry.get('expect')
+        if isinstance(exp, bool) or not isinstance(exp, int):
+            return False
+        if exp not in (0, 1):
+            return False
+
+    return True
+```
+
+Rationale: this sub-step is host-only, touches no firmware, and
+adds exactly one new failure mode (a plan entry whose `expect` is
+absent, non-integer, boolean, or not in `{0, 1}`). Splitting
+smaller (asserting only that `expect` exists, separate from
+asserting it is `0` or `1`) would deliver no runnable
+bench-relevant guarantee on its own because an `expect` value
+that is the wrong type or out of range is just as ungradable as a
+missing key. Folding into iter 67 would bundle two distinct
+concerns (driver-name validity and expect-level validity) and
+break the "single new passing test" rule. It does not weaken any
+earlier audit: iter 63's required-tag coverage, iter 64's
+manifest->PCF presence, iter 65's PCF pin uniqueness, iter 66's
+plan->jumpers signal referential integrity, and iter 67's
+driver-name validity all remain in force.
+
 ## WIP
 
 ### Verify physical connectivity
