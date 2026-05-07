@@ -23,7 +23,7 @@ Assumed hardware connections:
 | --- | --- | --- | --- | --- |
 | MP135 UART TX, exact MPU pin TBD | `rx`, iCEstick pin 9 | MPU -> FPGA | Assumed 3.3 V LVCMOS, verify MPU UART bank | FPGA UART RX pin is documented for iCEstick; MPU UART instance/header pin is not documented here. |
 | MP135 UART RX, exact MPU pin TBD | `tx`, iCEstick pin 8 | FPGA -> MPU | Assumed 3.3 V LVCMOS, verify MPU UART bank | FPGA UART TX pin is documented for iCEstick; MPU UART instance/header pin is not documented here. |
-| MP135 GPIO reset output, exact MPU pin TBD | FPGA `reset_n`, exact FPGA pin TBD | MPU -> FPGA | Assumed 3.3 V LVCMOS control GPIO | Active-low FPGA logic reset/control jumper; no committed FPGA package pin found yet. |
+| MP135 GPIO reset output, exact MPU pin TBD | FPGA `reset_n` on `pins[0]`, iCEstick pin 112 | MPU -> FPGA | Assumed 3.3 V LVCMOS control GPIO | Active-low FPGA logic reset/control jumper; reuses the `pins[0]` slot already bound in `gpio.nw` PCF chunk so existing GPIO bring-up samples the same physical line. |
 | MP135 GPIO control output, exact MPU pin TBD | FPGA `ctrl`/`start`, exact FPGA pin TBD | MPU -> FPGA | Assumed 3.3 V LVCMOS control GPIO | Optional bring-up control GPIO for connection tests; exact signal name and pin remain TBD. |
 | MP135 GPIO status input, exact MPU pin TBD | FPGA `ready`/`status`, exact FPGA pin TBD | FPGA -> MPU | Assumed 3.3 V LVCMOS control GPIO | Optional FPGA-to-MPU status GPIO for connection tests; exact signal name and pin remain TBD. |
 | MP135 QUADSPI `CLK` on CN8, exact CN8 pin TBD | `sclk`, iCEstick pin 45 | MPU -> FPGA | Assumed 3.3 V LVCMOS QSPI bank | Repository notes place QSPI on MP135 CN8 and use SPI mode 0; exact CN8 pin is not documented here. |
@@ -4996,6 +4996,103 @@ def check(extract_dir):
         saw_concrete_pin = True
 
     return saw_concrete_pin
+```
+
+### Commit FPGA reset_n to iCEstick pin 112
+
+Pin down the first of the three TBD control GPIOs. Update the
+`Assumed hardware connections` table and the matching jumper in
+`stm32mp135_test_board/baremetal/gpio_test/connectivity_manifest.json`
+so that `mpu_reset_output_to_fpga_reset_n.fpga_signal_pin` reads
+`FPGA reset_n on pins[0], iCEstick pin 112` instead of `FPGA
+reset_n, exact FPGA pin TBD`. The chosen pin reuses the `pins[0]`
+slot already bound by `set_io pins[0] 112` in the `gpio.pcf` chunk
+of `fpga/src/gpio.nw`, so the existing `gpio_test` GPIO bank
+already drives and samples the same physical line and no new
+top-level Verilog port is required. The MPU side of the jumper
+remains TBD because the MP135 GPIO reset output pin has not been
+identified.
+
+This is the smallest concrete-progress step toward `Verify
+physical connectivity`: it converts one of the three remaining
+TBD control GPIOs into a concrete iCEstick pin without changing
+the synthesised bitstream, without adding a new test vector, and
+without committing the MPU side. The iter-64 PCF cross-check
+audit covers the new pin automatically (pin 112 is in the set
+parsed from `gpio.nw`), and the host validator continues to match
+the table against the manifest. Splitting smaller (e.g. only
+editing the manifest, or only editing the table) would desync the
+two and trip the validator. Folding into a future bench-side
+`Verify FPGA reset_n high/low` chapter would bundle a
+hardware-driving step with the pin commit and break the
+"single new passing test" rule.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_manifest_reset_n_pin_committed
+```
+
+Verify:
+
+```
+import json
+import re
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    manifest_path = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'connectivity_manifest.json')
+    try:
+        manifest = json.loads(manifest_path.read_text(
+            encoding='utf-8', errors='replace'))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    jumpers = manifest.get('jumpers')
+    if not isinstance(jumpers, list):
+        return False
+
+    target = None
+    for row in jumpers:
+        if not isinstance(row, dict):
+            return False
+        if row.get('signal') == 'mpu_reset_output_to_fpga_reset_n':
+            target = row
+            break
+    if target is None:
+        return False
+
+    fpga_pin_str = target.get('fpga_signal_pin', '')
+    if not isinstance(fpga_pin_str, str):
+        return False
+    if 'TBD' in fpga_pin_str:
+        return False
+
+    m = re.search(r'iCEstick pin (\d+)', fpga_pin_str)
+    if m is None:
+        return False
+    if int(m.group(1)) != 112:
+        return False
+
+    if target.get('direction') != 'MPU -> FPGA':
+        return False
+    if target.get('mpu_role') != 'drive':
+        return False
+    if target.get('fpga_role') != 'sample':
+        return False
+
+    return True
 ```
 
 ## WIP
