@@ -438,6 +438,94 @@ def check(extract_dir):
     return True
 ```
 
+### dsp expander reopen retries on DEVICE_NOT_OPENED flake
+
+Item 12 of the bench-sweep (`cctest_csmith_3f1fa455.0x39f2cfc.ldr`)
+fails three retries in a row with the same shape: `_Expander.pulse_reset`
+crashes at `ft.openByDescription(self.desc)` with
+`ft4222.ft4222.FT2XXDeviceError: DEVICE_NOT_OPENED`, and then
+`dsp:uart_expect` times out because the chip never booted. Items 1-11
+pass back-to-back, so the FT4222 device handle accumulates state across
+the sweep: each `dsp:boot` spawns a child that opens the device
+(`_open_master`, line 202-211 of `selache/test_serv/plugins/dsp.py`),
+streams the LDR, and `dev.close()`s. After enough back-to-back boots,
+the FT4222 driver occasionally returns `DEVICE_NOT_OPENED` to the next
+`openByDescription` even though no other process holds the handle (a
+known FTDI USB-host re-enumeration race; the device is fine a moment
+later). Today every `openByDescription` call site in `dsp.py`
+(`_Expander.pulse_reset` line 149, `_Expander.init_and_reset` line 132,
+and the boot helper at line 364) opens once and propagates any error.
+The sweep only fails when this race lands on the very first op of an
+item, because that is `dsp:reset` and there is nothing to retry it.
+
+The host gcc build of `cctest_csmith_3f1fa455` runs in 2 ms and emits
+exactly `got 39f2cfc` (matches its `@expect 0x39f2cfc`), so the failing
+draft is not at fault — the toolchain output is correct, the bench just
+never gets to capture it.
+
+Fix in `selache/test_serv/plugins/dsp.py`: add a small private helper
+`_open_ft4222_with_retry(desc, session=None, attempts=4, backoff_s=0.2)`
+that wraps `_lazy_ft4222().openByDescription(desc)` and retries on
+`FT2XXDeviceError` whose `args[0]` is `DEVICE_NOT_OPENED` (string-match
+the enum name to avoid hard-importing the ft4222 enum). Between
+attempts, sleep `backoff_s * 2**i` (0.2 s, 0.4 s, 0.8 s) via
+`session.cancel_event.wait(...)` when a session is supplied so cancel
+propagation is preserved, falling back to `time.sleep` when not. After
+the last attempt, re-raise the original error verbatim. Use the helper
+at the three openByDescription call sites: `_Expander.pulse_reset`
+(line 149), `_Expander.init_and_reset` (line 132, no session), and the
+inline boot helper code at line 364 (string-replace the
+`dsp._open_master(...)` line with a snippet that resolves through the
+new helper before calling `dev.spiMaster_Init` — the cleanest shape is
+to add a public `dsp._open_ft4222_with_retry` that the helper imports
+and calls, then have `_open_master` route through it). Other
+`openByDescription` paths (none today) inherit the same retry by going
+through the helper. The helper does not catch `BusyError` or any other
+exception class.
+
+Add a unit test `test_expander_pulse_reset_retries_on_device_not_opened`
+to `selache/test_serv/test_core.py` alongside the existing
+`test_dsp_reset_*` items. The test must:
+
+- Monkeypatch `_lazy_ft4222()` to return a fake module whose
+  `openByDescription` raises a fake `FT2XXDeviceError("DEVICE_NOT_OPENED")`
+  on the first two calls and returns a fake dev (with no-op
+  `i2cMaster_Init`, `close`, and `__getattr__` for the i2c writes) on
+  the third.
+- Construct a `FakeSession` (mirror existing `test_dsp_boot_*` fakes)
+  with a non-set `cancel_event`.
+- Call `_Expander(desc='X')`.pulse_reset(session=fake_session)`.
+- Assert: `openByDescription` was called exactly 3 times, the call
+  returned without raising, and the fake `cancel_event.wait` was called
+  with the expected back-off arguments (0.2, 0.4).
+
+A second sub-test must construct a fake that always raises
+`DEVICE_NOT_OPENED` and assert that `pulse_reset` re-raises after 4
+attempts (i.e. retries are bounded).
+
+A third sub-test must construct a fake that raises a *different*
+`FT2XXDeviceError` (e.g. `OTHER_ERROR`) on the first call and assert
+that `pulse_reset` re-raises immediately without retrying — the helper
+only retries the specific `DEVICE_NOT_OPENED` shape.
+
+The tests must fail before the fix (today `openByDescription` is called
+once and any error propagates) and pass after.
+
+Build:
+
+```
+cd test_serv && python3 test_core.py
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    return True
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
@@ -512,9 +600,3 @@ def check(extract_dir, ldr):
     return bool(got) and int(got[-1], 16) == expect
 ```
 
-2026-05-07T04:36:53 selache-csmith-tests Minimizer pass smallest bitfield extension of iter-6 packed path
-2026-05-07T04:46:27 selache-csmith-tests Verifier pass none
-2026-05-07T04:54:17 selache-csmith-tests Manager pass selcc-cap-block0-helper-spill-l1-budget
-- 2026-05-06 minimizer: APPROVE selcc-cap-block0-helper-spill-l1-budget — heuristics at lines 665/724 confirmed; budget-tracking redirect to seg_swco is hermetic ~20-50 line change in selcc/src/emit_asm.rs; no LDF/seld scope creep; smaller "cap to 0" variant rejected as it regresses internal selcc small-helper-spill tests.
-2026-05-07T05:23:31 selache-csmith-tests Worker pass relocate-block0-cap-step
-2026-05-07T06:05:51 selache-csmith-tests Manager pass dsp-reset-drain-uart-residue
