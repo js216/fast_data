@@ -310,6 +310,56 @@ def check(extract_dir):
     return True
 ```
 
+### selcc cap block0 helper spill against L1 budget
+
+When the csmith root is too large for block0 (`root_instrs > 24_000`),
+selcc currently sends `func_1` to `block1_swco` and dumps every other
+"large" csmith body (`is_large_csmith_generated_body`) into
+`seg_l1_block0_swco`. For draft `cctest_csmith_9405adb0`, the resulting
+block0 input totals 132064 units versus a 130064-unit budget (after the
+64KB `stack_reserve` carve-out), so seld fails with:
+
+```
+%seld - FATAL ERROR
+layout overflow: section `block0_sw_code` requires 132064 units in
+segment `mem_l1_block0` but only 130064 units remain
+```
+
+Fix in `selcc/src/emit_asm.rs`: track a running estimate of instruction
+units already routed to `seg_l1_block0_swco` while iterating
+`compiled`, and once the next large helper would exceed a conservative
+block0 cap (e.g. 60_000 emitted instrs ~ 120_000 units, leaving
+headroom for `main`/`test_main` and alignment fill), redirect that
+helper to the default `seg_swco` (block2) instead. Keep the existing
+small-root carve-outs (`crc32_*`, `transparent_crc`, the single
+`spill_nonroot_func`) unchanged — they already respect the budget. The
+24-bit CJUMP-range comment in `link.ldf` is preserved for the helpers
+that still fit; only overflow spills to block2. No changes to
+`link.ldf`, `seld`, or any test assertion (no xtest case currently
+asserts block0 placement; selcc's own emit_asm tests only require that
+"useful generated non-root body should spill into block0 for small
+roots", which the small-root path still does).
+
+Build:
+
+```
+cd selache && cargo build --release
+cd selache && cargo test -p selcc --release -- --nocapture
+cd selache && cargo clippy --all-targets --release -- -D warnings
+make -C selache/xtest build/drafts/sel/cctest_csmith_9405adb0.ldr -j$(nproc)
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+    p = Path('selache/xtest/build/drafts/sel/cctest_csmith_9405adb0.ldr')
+    return p.exists() and p.stat().st_size > 0
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
@@ -383,5 +433,9 @@ def check(extract_dir, ldr):
     got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
     return bool(got) and int(got[-1], 16) == expect
 ```
+
 2026-05-07T04:36:53 selache-csmith-tests Minimizer pass smallest bitfield extension of iter-6 packed path
 2026-05-07T04:46:27 selache-csmith-tests Verifier pass none
+2026-05-07T04:54:17 selache-csmith-tests Manager pass selcc-cap-block0-helper-spill-l1-budget
+- 2026-05-06 minimizer: APPROVE selcc-cap-block0-helper-spill-l1-budget — heuristics at lines 665/724 confirmed; budget-tracking redirect to seg_swco is hermetic ~20-50 line change in selcc/src/emit_asm.rs; no LDF/seld scope creep; smaller "cap to 0" variant rejected as it regresses internal selcc small-helper-spill tests.
+2026-05-07T05:23:31 selache-csmith-tests Worker pass relocate-block0-cap-step
