@@ -6447,8 +6447,6 @@ def check(extract_dir):
     return 'mark tag=gpio_physical_connectivity_closure' in plan
 ```
 
-## WIP
-
 ### Add MP135 prbs_test UART ready banner
 
 Wire the MP135 `prbs_test` baremetal app to the existing UART console
@@ -6572,6 +6570,8 @@ Splitting smaller into only Makefile source wiring or only a banner
 string would not produce a working UART-visible app; adding the reset,
 single-step, burst, or print commands would combine transport bring-up
 with command semantics and exceed the minimum useful slice.
+
+## WIP
 
 ### PRBS, UART, Checksum
 
