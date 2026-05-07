@@ -4899,6 +4899,105 @@ smaller delivered work. Splitting the other way (folding any new
 hardware-driving check into this audit) would bundle two distinct
 concerns and break the "single new passing test" rule.
 
+### Audit FPGA pin numbers in manifest match gpio.nw set_io
+
+Add a host-only audit gate that proves every concrete iCEstick pin
+number named in `connectivity_manifest.json`'s `fpga_signal_pin`
+strings is actually bound by a `set_io` directive in
+`fpga/src/gpio.nw`'s `gpio.pcf` chunk. The manifest currently
+claims `sclk, iCEstick pin 45`, `cs_n, iCEstick pin 56`, `io[0..3]`
+on pins `47/44/60/48`, `tx, iCEstick pin 8`, and `rx, iCEstick
+pin 9`; the audit reads `gpio.nw`, parses every `set_io <name>
+<pin>` line in the `gpio.pcf` block, and asserts the multiset of
+pin numbers contains each manifest-claimed pin at least once.
+Entries whose `fpga_signal_pin` is still `TBD` (the three control
+GPIOs) are skipped because there is no concrete pin to audit yet.
+
+This is a strict tightening of the prior coverage audit: it does
+not change the set of jumpers we drive on hardware, but it forbids
+a typo or rebind in `gpio.nw` from silently desynchronising the
+manifest from the physical pin assignment. Once any of the three
+TBD control GPIOs is committed to a concrete iCEstick pin, the
+same parser will pick it up automatically. Splitting smaller
+(auditing one pin at a time) would reuse the same parser and
+verify plumbing for no smaller delivered work; folding this into
+a hardware-driving check would bundle two concerns and break the
+"single new passing test" rule.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_manifest_pin_matches_gpio_nw
+```
+
+Verify:
+
+```
+import json
+import re
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    manifest_path = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'connectivity_manifest.json')
+    gpio_nw_path = Path('fpga/src/gpio.nw')
+    try:
+        manifest = json.loads(manifest_path.read_text(
+            encoding='utf-8', errors='replace'))
+        gpio_nw = gpio_nw_path.read_text(
+            encoding='utf-8', errors='replace')
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    # Extract the gpio.pcf chunk and parse its set_io lines.
+    chunk_re = re.compile(
+        r'<<gpio\.pcf>>=\n(.*?)\n@', re.DOTALL)
+    match = chunk_re.search(gpio_nw)
+    if match is None:
+        return False
+    pcf_pins = set()
+    for line in match.group(1).splitlines():
+        m = re.match(r'\s*set_io\s+\S+\s+(\d+)\s*$', line)
+        if m:
+            pcf_pins.add(int(m.group(1)))
+    if not pcf_pins:
+        return False
+
+    jumpers = manifest.get('jumpers')
+    if not isinstance(jumpers, list) or not jumpers:
+        return False
+
+    pin_re = re.compile(r'iCEstick pin (\d+)')
+    saw_concrete_pin = False
+    for row in jumpers:
+        if not isinstance(row, dict):
+            return False
+        fpga_pin_str = row.get('fpga_signal_pin', '')
+        if not isinstance(fpga_pin_str, str):
+            return False
+        if 'TBD' in fpga_pin_str:
+            continue
+        m = pin_re.search(fpga_pin_str)
+        if m is None:
+            return False
+        pin = int(m.group(1))
+        if pin not in pcf_pins:
+            return False
+        saw_concrete_pin = True
+
+    return saw_concrete_pin
+```
+
 ## WIP
 
 ### Verify physical connectivity
