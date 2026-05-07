@@ -6405,6 +6405,48 @@ def check(extract_dir):
     return True
 ```
 
+### Audit physical connectivity closure
+
+Add a host-only closure gate for the physical connectivity milestone.
+It proves the already-passing above-WIP mission text contains the
+per-line `gpio_physical_*` evidence for SCLK, NCS, and IO0 through IO3,
+plus the manifest/pin/replay coverage audits that keep those checks
+tied to the jumper table and MPU/FPGA replay mappings.
+
+This is the smallest final slice of `Verify physical connectivity`: it
+does not select new MPU pins, drive new hardware, or change firmware.
+Making it smaller would only re-check one already-proven line or audit
+without establishing milestone closure; making it larger would bundle
+new design or bench work into a closure check.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_physical_connectivity_closure.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_physical_connectivity_closure
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    try:
+        plan = Path(extract_dir, 'plan.txt').read_text(
+            encoding='utf-8', errors='replace')
+    except OSError:
+        return False
+    return 'mark tag=gpio_physical_connectivity_closure' in plan
+```
+
 ## WIP
 
 ### Verify physical connectivity
