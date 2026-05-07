@@ -12,3 +12,11 @@
 2026-05-07T11:40:10 kernel-clock-bringup Verifier pass none
 2026-05-07T11:50:28 kernel-clock-bringup Tester pass 2
 2026-05-07T11:51:49 kernel-clock-bringup Worker pass
+2026-05-07T11:54:07 kernel-clock-bringup Orchestrator pass 2
+2026-05-07T11:54:54 kernel-clock-bringup Manager pass Trace unused-clock shutdown hang
+2026-05-07T11:56:04 kernel-clock-bringup Minimizer pass Trace+boot is atomic; smaller yields no culprit
+2026-05-07T11:58:46 kernel-clock-bringup Worker pass
+2026-05-07T12:03:02 kernel-clock-bringup Verifier pass none
+2026-05-07T13:01:20 kernel-clock-bringup Tester pass 3
+2026-05-07T13:03:01 kernel-clock-bringup Enemy pass dirty_precommit_expected
+2026-05-07T13:04:13 kernel-clock-bringup Worker pass
