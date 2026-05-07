@@ -1,5 +1,3 @@
-## WIP
-
 ### selache draft gcc host sweep
 
 Compile and run every csmith draft through host `gcc`, using the
@@ -33,6 +31,8 @@ def check(extract_dir):
 
     return runs == expected and bins == expected
 ```
+
+## WIP
 
 # Selache csmith draft regression sweep
 
