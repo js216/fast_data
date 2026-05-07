@@ -4784,6 +4784,121 @@ chapter sprawl. Splitting it further (delete the standalone top file
 in one iteration, move chunks in another) would leave the build
 broken in between.
 
+### Audit physical connectivity coverage for QSPI jumpers
+
+Add a host-only audit gate that proves the six concrete-pin QSPI
+jumpers from the assumed jumper table (`sclk`, `cs_n`, `io[0..3]`)
+are each already covered by at least one passing physical
+`gpio_physical_*` mark tag in this mission file. The control GPIOs
+(`reset_n`, `ctrl/start`, `ready/status`) and the UART jumpers
+remain `TBD` for FPGA pin assignment in the assumed table and are
+intentionally out of scope for this audit; the audit only enforces
+coverage for jumpers whose FPGA pin is committed.
+
+This is the smallest first slice of "Verify physical connectivity":
+it surfaces the exact set of jumpers already proven on hardware in
+prior chapters, without driving any new bench plan, so a future
+sub-step can extend coverage to whichever signal the audit reports
+as unproven.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_physical_connectivity_audit
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    mission = Path('missions/fpga-spi.md').read_text(
+        encoding='utf-8', errors='replace')
+    manifest_path = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'connectivity_manifest.json')
+    try:
+        manifest = json.loads(manifest_path.read_text(
+            encoding='utf-8', errors='replace'))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    plan = manifest.get('first_pass_test_plan')
+    if not isinstance(plan, list) or not plan:
+        return False
+
+    # Concrete-pin QSPI jumpers whose FPGA pin is committed in the
+    # assumed table. Each must have at least one matching
+    # gpio_physical_* mark tag already passing in this mission.
+    required_tags = {
+        'mpu_qspi_clk_to_fpga_sclk': (
+            'gpio_physical_mp135_to_fpga_sclk_high',
+            'gpio_physical_mp135_to_fpga_sclk_low',
+        ),
+        'mpu_qspi_ncs_to_fpga_cs_n': (
+            'gpio_physical_mp135_to_fpga_ncs_high',
+            'gpio_physical_mp135_to_fpga_ncs_low',
+        ),
+        'mpu_qspi_io0_to_fpga_io0': (
+            'gpio_physical_fpga_to_mpu_io0',
+            'gpio_physical_mp135_to_fpga_io0_high',
+            'gpio_physical_mp135_to_fpga_io0_low',
+        ),
+        'mpu_qspi_io1_to_fpga_io1': (
+            'gpio_physical_fpga_to_mpu_io1',
+            'gpio_physical_mp135_to_fpga_io1_high',
+            'gpio_physical_mp135_to_fpga_io1_low',
+        ),
+        'mpu_qspi_io2_to_fpga_io2': (
+            'gpio_physical_fpga_to_mpu_io2',
+            'gpio_physical_mp135_to_fpga_io2_high',
+            'gpio_physical_mp135_to_fpga_io2_low',
+        ),
+        'mpu_qspi_io3_to_fpga_io3': (
+            'gpio_physical_fpga_to_mpu_io3',
+            'gpio_physical_mp135_to_fpga_io3_high',
+            'gpio_physical_mp135_to_fpga_io3_low',
+        ),
+    }
+
+    plan_signals = {entry.get('signal') for entry in plan
+                    if isinstance(entry, dict)}
+    for signal in required_tags:
+        if signal not in plan_signals:
+            return False
+
+    wip_idx = mission.find('\n## WIP\n')
+    if wip_idx < 0:
+        return False
+    above_wip = mission[:wip_idx]
+    for tags in required_tags.values():
+        for tag in tags:
+            if ('mark tag=' + tag) not in above_wip:
+                return False
+
+    return True
+```
+
+Rationale: this sub-step is host-only, touches no firmware, and
+asserts only what the previously passing chapters already prove on
+hardware. Splitting it smaller (auditing one signal at a time)
+would still require the same audit harness and the same Verify
+plumbing, so the per-signal slice would not produce strictly
+smaller delivered work. Splitting the other way (folding any new
+hardware-driving check into this audit) would bundle two distinct
+concerns and break the "single new passing test" rule.
+
 ## WIP
 
 ### Verify physical connectivity
