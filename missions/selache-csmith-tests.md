@@ -105,6 +105,60 @@ def check(extract_dir):
     return bins == expected and targets == expected
 ```
 
+### selcc narrow-array brace-elided scalar initializer
+
+Fix a selcc C99 conformance bug: a scalar element of a `char` / `short`
+narrow array initializer surrounded by braces (`int8_t arr[N] = { ...,
+{1}, ... }`) crashes the global initializer emitter with
+`narrow array element requires a numeric constant initializer; got
+InitList([IntLit(1, UL)])`. C99 6.7.8 explicitly allows extra braces
+around a scalar initializer (brace-elision is the inverse direction).
+
+The faulty path is the leaf-scalar arm of `flatten_narrow_array_init`
+in `selache/selcc/src/emit_asm.rs:863-883`: it calls
+`eval_const_expr_i64(init)` directly on whatever `init` it received,
+even when `init` is `Expr::InitList` containing a single inner scalar.
+The fix is local: when the leaf branch sees an `Expr::InitList` with
+exactly one element, recurse on that single element (or peel the brace
+and re-evaluate). InitLists with zero or more than one element at a
+scalar position remain hard errors. The same brace-elision should also
+be tolerated by the local-initializer twin in
+`selache/selcc/src/lower.rs` (`flatten_narrow_array_local`, around line
+5929) so file-scope and block-scope narrow arrays stay consistent.
+
+This unblocks csmith draft `g_56` and any other draft that lands an
+extra brace around a narrow-array scalar element.
+
+Build:
+
+```
+cd selache && cargo build --release
+cd selache && cargo test -p selcc --release narrow_array_brace_elided_scalar_init -- --nocapture
+cd selache && cargo clippy --all-targets --release -- -D warnings
+```
+
+The new `narrow_array_brace_elided_scalar_init` test must live in
+`selache/selcc/src/emit_asm.rs` alongside the other `#[test]` items.
+It should call `selcc::compile_to_asm` (with `cli::Options { char_size:
+8, ..Default::default() }`) on a minimal source like
+
+```c
+signed char arr[3] = { 0, {1}, 2 };
+```
+
+and assert the call returns `Ok` (and, ideally, that the emitted asm
+contains the byte 0x01 packed into the expected word). The test must
+fail before the fix and pass after it.
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    return True
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
