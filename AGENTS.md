@@ -120,9 +120,13 @@ touched.
 The `run.py` appends all output to the `log.txt` file. This file must
 never be deleted. Before any other work, Orchestrator must verify the
 repo-root `ledger.txt`: if missing, create an empty file; if present,
-verify that every non-empty existing line uses the required format. In
-addition, all agents must append one line to the `ledger.txt` file each
-iteration, in the form:
+verify that every non-empty existing line uses the required format. If
+the initial iteration finds existing malformed lines that can be
+mechanically repaired without losing their essential meaning, the
+Orchestrator must fix them first, revalidate the whole file, and
+continue the active mission loop. This initial repair is not a stopping
+condition. In addition, all agents must append one line to the
+`ledger.txt` file each iteration, in the form:
 
     YYYY-MM-DDTHH:MM:SS <mission> <agent_name> <pass/fail> <extra_info>
 
@@ -170,12 +174,12 @@ the operator, and then resume the mission loop under the existing
 instructions. Merely reporting a failed hardware or software test is
 not sufficient. The only allowed stop conditions are: the operator
 explicitly asks to stop or run a single test only; the mission file has
-no WIP marker after a successful Tester run and commit; AGENTS.md
-requires stopping for bad existing ledger format; or the Orchestrator's
-own agent context is approaching exhaustion (see "Context budget pause"
-below). Hardware symptoms such as missing UART bytes, a wedged job,
-timeout, failed verification, or a bench device not responding are
-ordinary Worker inputs, not stop conditions.
+no WIP marker after a successful Tester run and commit; bad ledger
+format is detected after the initial ledger repair/revalidation window;
+or the Orchestrator's own agent context is approaching exhaustion (see
+"Context budget pause" below). Hardware symptoms such as missing UART
+bytes, a wedged job, timeout, failed verification, or a bench device not
+responding are ordinary Worker inputs, not stop conditions.
 
 Context budget pause: the Orchestrator may pause and hand control back
 to the operator only when its own agent context is genuinely
@@ -195,9 +199,10 @@ context mid-edit (leaving a dirty repo) and the lesser failure mode
 of stopping prematurely on a hunch (false context-exhaustion claims).
 The next Orchestrator session resumes the loop from the head commit.
 
-Orchestrator must also stop if it detects bad format or a missing line
-in an existing ledger file. In that case it must also diagnose the
-AGENTS.md bug and present suggestion for improvement.
+After the initial ledger repair/revalidation window, Orchestrator must
+also stop if it detects bad format or a missing line in an existing
+ledger file. In that case it must also diagnose the AGENTS.md bug and
+present suggestion for improvement.
 
 ### Repository
 
