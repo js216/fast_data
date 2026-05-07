@@ -5521,6 +5521,105 @@ property, not a manifest-shadow property). The verify also keeps
 the existing QSPI per-signal-table coverage in scope so the comment
 addition does not regress the bench-tested wiring.
 
+### Audit prbs polynomial and seed match across FPGA and MPU
+
+Lock in the cross-language PRBS interface invariant: the FPGA
+`prbs_xor` core (`fpga/src/prbs_xor.nw`) and the MPU baremetal
+`prbs_test` reference (`stm32mp135_test_board/baremetal/prbs_test/
+src/main.c`) must agree on (i) the 32-bit Galois LFSR polynomial
+`0x80200003` and (ii) the seed `0x00000001`. They are written as
+independent literals in two source files in two languages, so a
+future edit that retunes the polynomial in one file but not the
+other would silently break every later FPGA-vs-MPU checksum
+comparison without any existing verifier noticing. This audit
+wires that invariant into the verify path.
+
+The audit is host-only and textual: it reads both source files
+and asserts each contains the polynomial constant in its
+language-native hex spelling (`32'h8020_0003` for Verilog,
+`0x80200003u` for C) and the seed constant (`32'h0000_0001` for
+Verilog, `0x00000001u` for C). It also asserts the symbolic names
+match between the two files (`POLY` / `SEED` on the Verilog side,
+`PRBS_POLY` / `PRBS_SEED` on the C side) so future readers find
+both constants by the same intent.
+
+This is not a schema-shadow audit: there is no existing validator
+that enforces cross-language PRBS constant equivalence. The FPGA
+build path tangles `prbs_xor.v` from `prbs_xor.nw` but does not
+read the MPU sources; the MPU build compiles `main.c` but does
+not read `prbs_xor.nw`. Without this audit the only thing tying
+the two values together is a comment in the mission narrative,
+which is not machine-checkable.
+
+This is the smallest meaningful step toward `PRBS, UART, Checksum`
+that does not require adding UART command parsing to the MPU
+firmware (which is a multi-iteration lift requiring a HAL UART
+RX loop, command dispatch, and matching test fixtures). It is
+host-only, machine-checkable in well under a minute, and changes
+zero source files (chapter is verify-only on existing artefacts).
+
+Build: no build step (host-only verify on existing sources).
+
+Test (max 1 min):
+
+```
+mark tag=prbs_xor_mpu_constants_match
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    fpga_nw = Path('fpga/src/prbs_xor.nw')
+    mpu_c   = Path('stm32mp135_test_board/baremetal/'
+                   'prbs_test/src/main.c')
+    try:
+        nw_text = fpga_nw.read_text(encoding='utf-8',
+                                    errors='replace')
+        c_text  = mpu_c.read_text(encoding='utf-8',
+                                  errors='replace')
+    except OSError:
+        return False
+
+    fpga_required = [
+        "localparam [31:0] SEED = 32'h0000_0001;",
+        "localparam [31:0] POLY = 32'h8020_0003;",
+    ]
+    if not all(tok in nw_text for tok in fpga_required):
+        return False
+
+    mpu_required = [
+        '#define PRBS_POLY 0x80200003u',
+        '#define PRBS_SEED 0x00000001u',
+        '(state >> 1) ^ PRBS_POLY',
+    ]
+    if not all(tok in c_text for tok in mpu_required):
+        return False
+
+    return True
+```
+
+Rationale: this is strictly smaller than adding any new firmware
+or Verilog code (the audit changes no source file outside the
+mission file itself), strictly smaller than the next bench-progress
+step toward end-to-end checksum comparison (which requires an MPU
+UART command parser plus a `'p'`-style print path, several files
+of new firmware), and not a duplicate of any earlier audit (no
+existing audit reads both `prbs_xor.nw` and `prbs_test/src/main.c`,
+so this audit's invariant is not enforced anywhere today). Making
+it any smaller (audit only POLY, or audit only SEED, or audit
+only one of the two files) would let drift through on the
+unaudited constant or unaudited side, leaving zero locked-in
+cross-language progress; making it any larger (e.g. recompute the
+LFSR sequence in Python and compare to a captured C/Verilog trace)
+would require running a simulator or executing the C and is not
+host-only.
+
 ## WIP
 
 ### Verify physical connectivity
