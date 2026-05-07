@@ -782,3 +782,10 @@
 2026-05-07T10:42:43 fpga-spi Worker pass
 2026-05-07T10:43:55 fpga-spi Orchestrator pass 86
 2026-05-07T10:44:43 fpga-spi Worker pass
+2026-05-07T10:46:12 fpga-spi Manager pass MP135 prbs_test reset UART command
+2026-05-07T10:47:23 fpga-spi Minimizer pass Atomic cmd; smaller has no UART behavior
+2026-05-07T10:48:44 fpga-spi Worker pass
+2026-05-07T10:50:18 fpga-spi Verifier pass none
+2026-05-07T11:15:13 fpga-spi Tester pass 80
+2026-05-07T11:16:05 fpga-spi Enemy pass none
+2026-05-07T11:16:53 fpga-spi Worker pass

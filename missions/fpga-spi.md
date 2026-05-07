@@ -6573,6 +6573,120 @@ with command semantics and exceed the minimum useful slice.
 
 ## WIP
 
+### Add MP135 prbs_test reset UART command
+
+Extend the MP135 `prbs_test` UART loop with one command: byte `'r'`
+resets the local PRBS state to `PRBS_SEED`, clears the XOR checksum to
+zero, and prints `prbs reset` followed by CRLF. Keep the existing
+`prbs_test ready` boot banner and PRBS/checksum recurrence unchanged.
+Do not add single-step, burst, checksum-print, FPGA UART, SPI, or
+hardware comparison behavior in this step.
+
+Build:
+
+```
+make -C stm32mp135_test_board/baremetal/prbs_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/prbs_test/build/main.stm32
+```
+
+Test: no hardware.
+
+```
+mark tag=prbs_test_uart_reset_command
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md')
+    try:
+        mission_text = mission.read_text(encoding='utf-8',
+                                         errors='replace')
+    except OSError:
+        return False
+    if 'mark tag=prbs_test_uart_reset_command' not in mission_text:
+        return False
+
+    base = Path('stm32mp135_test_board/baremetal/prbs_test')
+    mk = base / 'Makefile'
+    src = base / 'src/main.c'
+    img = base / 'build/main.stm32'
+    shared_app = base.parent / 'uart_echo'
+    shared_inputs = [
+        shared_app / 'src/console.c',
+        shared_app / 'src/debug.c',
+        shared_app / 'src/setup.c',
+        shared_app / 'utils/printf.c',
+        shared_app / 'drivers/mmu_stm32mp13xx.c',
+        shared_app / 'drivers/system_stm32mp13xx_A7.c',
+        shared_app / 'drivers/startup_stm32mp135fxx_ca7.c',
+        shared_app / 'drivers/syscalls.c',
+        shared_app / 'drivers/irq_ctrl_gic.c',
+        shared_app / 'drivers/stm32mp13xx_hal.c',
+        shared_app / 'drivers/stm32mp13xx_hal_gpio.c',
+        shared_app / 'drivers/stm32mp13xx_hal_rcc.c',
+        shared_app / 'drivers/stm32mp13xx_hal_rcc_ex.c',
+        shared_app / 'drivers/stm32mp13xx_hal_uart.c',
+        shared_app / 'drivers/stm32mp13xx_hal_uart_ex.c',
+        shared_app / 'src/sysram.ld',
+    ]
+    try:
+        src_text = src.read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        return False
+
+    if not (mk.is_file() and img.is_file() and img.stat().st_size > 0):
+        return False
+    build_inputs = [mk, src] + shared_inputs
+    if not all(path.is_file() for path in build_inputs):
+        return False
+    if img.stat().st_mtime < max(path.stat().st_mtime for path in build_inputs):
+        return False
+
+    required = [
+        'my_printf("prbs_test ready\\r\\n");',
+        'console_rx_empty()',
+        'console_rx_get()',
+        "case 'r':",
+        'PRBS_SEED',
+        'checksum = 0',
+        'my_printf("prbs reset\\r\\n");',
+        'prbs_step_with_checksum',
+    ]
+    if not all(tok in src_text for tok in required):
+        return False
+
+    forbidden = [
+        "case 's':",
+        "case 'b':",
+        "case 'p':",
+        'fpga.hx1k',
+        'mp135.evb:uart_open',
+        'uart_write data=',
+        'uart_expect sentinel=',
+    ]
+    if any(tok in src_text for tok in forbidden):
+        return False
+
+    return True
+```
+
+Rationale: this is the smallest meaningful command slice after the
+UART ready banner. A reset command proves the MP135 PRBS/checksum state
+can be controlled over UART and gives later single-step, burst, and
+checksum-print commands a known starting point. Splitting smaller into
+only a polling loop or only a reset helper would not expose any useful
+UART behavior; adding any other command or hardware interaction would
+combine multiple semantics into one Worker step.
+
 ### PRBS, UART, Checksum
 
 Add `prbs_xor.nw`, combining an LFSR PRBS generator, an XOR checksum,
