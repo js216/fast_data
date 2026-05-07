@@ -4998,6 +4998,78 @@ def check(extract_dir):
     return saw_concrete_pin
 ```
 
+### Audit gpio.nw set_io pin numbers are unique
+
+Add a host-only audit gate that proves no iCEstick pin number is
+bound twice in `fpga/src/gpio.nw`'s `gpio.pcf` chunk. The iter 64
+audit only asserts every concrete manifest pin is *present* in the
+PCF; it would still pass if two distinct PCF signal names happened
+to share the same physical pin (which would silently short two
+FPGA outputs at synthesis). This audit reuses the same chunk
+parser, collects each `set_io <name> <pin>` pair, and asserts the
+multiset of pin numbers has no duplicates.
+
+This is a strict tightening: it does not change the set of jumpers
+we drive on hardware, does not relax any existing required-tag or
+manifest-coverage check, and adds exactly one new failure mode
+(duplicate PCF pin). Splitting smaller (auditing one pin at a
+time) would reuse the same parser and verify plumbing for no
+smaller delivered work. Folding into iter 64's audit would bundle
+two distinct concerns (manifest-vs-PCF coverage and PCF self
+consistency) and break the "single new passing test" rule.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_nw_set_io_pins_unique
+```
+
+Verify:
+
+```
+import re
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    gpio_nw_path = Path('fpga/src/gpio.nw')
+    try:
+        gpio_nw = gpio_nw_path.read_text(
+            encoding='utf-8', errors='replace')
+    except OSError:
+        return False
+
+    chunk_re = re.compile(
+        r'<<gpio\.pcf>>=\n(.*?)\n@', re.DOTALL)
+    match = chunk_re.search(gpio_nw)
+    if match is None:
+        return False
+
+    pin_to_names = {}
+    saw_any = False
+    for line in match.group(1).splitlines():
+        m = re.match(
+            r'\s*set_io\s+(\S+)\s+(\d+)\s*$', line)
+        if not m:
+            continue
+        name = m.group(1)
+        pin = int(m.group(2))
+        saw_any = True
+        if pin in pin_to_names:
+            return False
+        pin_to_names[pin] = name
+
+    return saw_any
+```
+
 ## WIP
 
 ### Verify physical connectivity
