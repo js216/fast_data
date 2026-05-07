@@ -5070,6 +5070,93 @@ def check(extract_dir):
     return saw_any
 ```
 
+### Audit first_pass_test_plan signals are real jumper rows
+
+Add a host-only audit gate that proves every entry in
+`connectivity_manifest.json`'s `first_pass_test_plan` references a
+`signal` name that actually appears as a row in the manifest's
+`jumpers` array. The iter 63 audit only checks that a fixed set of
+six QSPI signals are present in the plan; it would still pass if
+the plan additionally listed a stale or typo'd `signal` name (for
+example `mpu_qspi_io4_to_fpga_io4` after a rename) that has no
+corresponding jumper row, which would silently produce a vector
+the bench can never wire up.
+
+This audit reads the manifest, builds the set of `jumpers[].signal`
+strings, walks every `first_pass_test_plan` entry, and asserts the
+entry's `signal` is in that set. It does not validate any other
+field (`driver`, `sampler`, `drive`, `expect`); those are separate
+failure modes left for later sub-steps so this slice carries
+exactly one new passing assertion.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=manifest_plan_signals_in_jumpers
+```
+
+Verify:
+
+```
+from pathlib import Path
+import json
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    manifest_path = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'connectivity_manifest.json')
+    try:
+        manifest = json.loads(manifest_path.read_text(
+            encoding='utf-8', errors='replace'))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    plan = manifest.get('first_pass_test_plan')
+    jumpers = manifest.get('jumpers')
+    if not isinstance(plan, list) or not plan:
+        return False
+    if not isinstance(jumpers, list) or not jumpers:
+        return False
+
+    jumper_signals = set()
+    for row in jumpers:
+        if not isinstance(row, dict):
+            return False
+        sig = row.get('signal')
+        if not isinstance(sig, str) or not sig:
+            return False
+        jumper_signals.add(sig)
+
+    for entry in plan:
+        if not isinstance(entry, dict):
+            return False
+        sig = entry.get('signal')
+        if not isinstance(sig, str) or sig not in jumper_signals:
+            return False
+
+    return True
+```
+
+Rationale: this sub-step is host-only, touches no firmware, and
+adds exactly one new failure mode (a plan entry whose `signal` is
+not a jumper row). Splitting smaller (auditing one signal at a
+time) would reuse the same parser and Verify plumbing for no
+smaller delivered work. Folding into iter 63's audit would bundle
+two distinct concerns (required-tag coverage and plan↔jumpers
+referential integrity) and break the "single new passing test"
+rule. It does not weaken any earlier audit: iter 63's required-tag
+coverage, iter 64's manifest↔PCF presence, and iter 65's PCF pin
+uniqueness all remain in force.
+
 ## WIP
 
 ### Verify physical connectivity
