@@ -5620,8 +5620,6 @@ LFSR sequence in Python and compare to a captured C/Verilog trace)
 would require running a simulator or executing the C and is not
 host-only.
 
-## WIP
-
 ### Audit prbs checksum word width and init match across FPGA and MPU
 
 Lock in a second cross-language PRBS interface invariant complementing
@@ -5827,6 +5825,8 @@ would let drift through on the unaudited side or unaudited half
 of the recurrence; making it any larger (e.g. running an actual
 PRBS sequence in both languages and comparing) would require a
 simulator or compiled execution and is not host-only.
+
+## WIP
 
 ### Verify physical connectivity
 
