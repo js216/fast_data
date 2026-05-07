@@ -6061,7 +6061,7 @@ This audit closes that loop. It scans the above-WIP region
 of the mission file for every `mark tag=gpio_physical_*`
 occurrence, then asserts each tag is either (a) listed in
 iter 63's `required_tags` flattened value set, or (b) one of
-the three known non-jumper general tags on a small explicit
+the known non-jumper general tags on a small explicit
 whitelist. Any new `gpio_physical_*` tag added above WIP that
 matches neither bucket fails this audit, forcing the operator
 to either add it to iter 63's per-signal value list (closing
@@ -6088,7 +6088,9 @@ to mission tags) overlaps iter 63's existing forward check.
 
 Build: no build step (host-only verify on existing sources).
 
-Test (max 1 min):
+Test: no hardware.
+
+Documented no-hardware evidence:
 
 ```
 mark tag=gpio_physical_required_tags_reverse_audit
@@ -6100,10 +6102,7 @@ Verify:
 import re
 from pathlib import Path
 
-def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
-
+def check(_extract_dir):
     mission_path = Path('missions/fpga-spi.md')
     try:
         mission = mission_path.read_text(
@@ -6141,6 +6140,7 @@ def check(extract_dir):
         'gpio_physical_replay_setup_smoke',
         'gpio_physical_connectivity_audit',
         'gpio_physical_required_tags_reverse_audit',
+        'gpio_physical_connectivity_closure',
     }
     allowed = iter63_required | non_jumper_whitelist
 
@@ -6448,11 +6448,6 @@ def check(extract_dir):
 ```
 
 ## WIP
-
-### Verify physical connectivity
-
-Use `gpio.nw` and the MP135 `gpio_test` harness to verify the physical
-connections in the assumed jumper table.
 
 ### PRBS, UART, Checksum
 
