@@ -360,7 +360,365 @@ def check(extract_dir):
     return p.exists() and p.stat().st_size > 0
 ```
 
-## WIP
+### sel csmith 0f4d7af9 checksum
+
+Fix the next focused draft runtime mismatch from the full foreach sweep:
+`selache/xtest/build/drafts/sel/cctest_csmith_0f4d7af9.0xaa43ccd0.ldr`
+boots after writing the full `230400/230400` bytes and prints
+`got efad66fa` on the DSP, but the source declares the expected checksum
+encoded in the artifact name, `0xaa43ccd0`. Keep this step scoped to
+this single Selache-built draft and the compiler/runtime behavior needed
+to make it report the expected checksum on hardware. Do not rewrite the
+expected checksum, delete the draft, weaken the foreach test, or replace
+this with a full draft-sweep fix.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/sel/cctest_csmith_0f4d7af9.0xaa43ccd0.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/sel/cctest_csmith_0f4d7af9.0xaa43ccd0.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_0f4d7af9.0xaa43ccd0.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0xaa43ccd0
+```
+
+### cces csmith c19baf86 checksum
+
+Fix the next focused draft runtime mismatch from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_c19baf86.0x83abec32.ldr`
+boots after writing the full `13312/13312` bytes and prints
+`got df7bba29` on the DSP, but the source declares the expected checksum
+encoded in the artifact name, `0x83abec32`. Keep this step scoped to
+this single CCES-built draft and the compiler/runtime behavior needed to
+make it report the expected checksum on hardware. Do not rewrite the
+expected checksum, delete the draft, weaken the foreach test, or replace
+this with a full draft-sweep fix.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_c19baf86.0x83abec32.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_c19baf86.0x83abec32.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_c19baf86.0x83abec32.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0x83abec32
+```
+
+### cces csmith 95d42820 checksum
+
+Fix the next focused draft runtime mismatch from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_95d42820.0x298c9077.ldr`
+boots after writing the full `29696/29696` bytes and prints
+`got af87f644` on the DSP, but the source declares the expected
+checksum encoded in the artifact name, `0x298c9077`. Keep this step
+scoped to this single CCES-built draft and the compiler/runtime
+behavior needed to make it report the expected checksum on hardware. Do
+not rewrite the expected checksum, delete the draft, weaken the foreach
+test, or replace this with a full draft-sweep fix.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_95d42820.0x298c9077.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_95d42820.0x298c9077.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_95d42820.0x298c9077.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0x298c9077
+```
+
+### cces csmith 62d5d342 checksum
+
+Fix the next focused draft runtime mismatch from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_62d5d342.0x925dcb2e.ldr`
+boots after writing the full `10240/10240` bytes and prints
+`got bb9654c2` on the DSP, but the source declares the expected checksum
+encoded in the artifact name, `0x925dcb2e`. Keep this step scoped to
+this single CCES-built draft and the compiler/runtime behavior needed to
+make it report the expected checksum on hardware. Do not rewrite the
+expected checksum, delete the draft, weaken the foreach test, or replace
+this with a full draft-sweep fix.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_62d5d342.0x925dcb2e.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_62d5d342.0x925dcb2e.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_62d5d342.0x925dcb2e.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0x925dcb2e
+```
+
+### cces csmith 58953aa9 boot timeout
+
+Fix the next focused draft bench failure from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_58953aa9.0xf57f2c63.ldr`
+times out during `dsp:boot` after a partial transfer
+(`2048/20480`) and produces no UART output. Keep this step scoped to
+this single CCES-built draft and the loader/artefact behavior needed to
+make it boot reliably. Do not rewrite the expected checksum, delete the
+draft, weaken the foreach test, or replace this with a full draft-sweep
+fix. The corrected CCES-built draft must boot on hardware and report
+the source's expected checksum.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_58953aa9.0xf57f2c63.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_58953aa9.0xf57f2c63.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_58953aa9.0xf57f2c63.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0xf57f2c63
+```
+
+### cces csmith 4c2338b1 boot timeout
+
+Fix the next focused draft bench failure from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_4c2338b1.0xab757f71.ldr`
+times out during `dsp:boot` after a partial transfer
+(`8192/19456`) and produces no UART output. Keep this step scoped to
+this single CCES-built draft and the loader/artefact behavior needed to
+make it boot reliably. Do not rewrite the expected checksum, delete the
+draft, weaken the foreach test, or replace this with a full draft-sweep
+fix. The corrected CCES-built draft must boot on hardware and report
+the source's expected checksum.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_4c2338b1.0xab757f71.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_4c2338b1.0xab757f71.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_4c2338b1.0xab757f71.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0xab757f71
+```
+
+### cces csmith 3f5ea6f7 checksum
+
+Fix the next focused draft runtime mismatch from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_3f5ea6f7.0x7d4b5790.ldr`
+boots and prints `got 46179bc7` on the DSP, but the source declares
+`/* @expect 0x7d4b5790 */`. CCES diagnoses the same class of packed
+struct / bitfield layout incompatibility here, so keep this step scoped
+to removing the nonportable `#pragma pack` wrappers from this single
+draft for all toolchains. Do not rewrite the expected checksum, delete
+the draft, or duplicate the full sweep. The corrected CCES-built draft
+must report the expected checksum on hardware.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_3f5ea6f7.0x7d4b5790.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_3f5ea6f7.0x7d4b5790.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_3f5ea6f7.0x7d4b5790.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0x7d4b5790
+```
+
+### cces csmith 3f1fa455 checksum
+
+Fix the first remaining draft runtime mismatch in the foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_3f1fa455.0x39f2cfc.ldr`
+boots and prints `got b17e6505` on the DSP, but the source declares
+`/* @expect 0x39f2cfc */`. CCES diagnoses the cause as a packed
+bitfield layout that may be incompatible with gcc, so keep this step
+scoped to removing that nonportable `#pragma pack` wrapper from this
+single draft for all toolchains, without changing the expected value or
+the remaining bitfield and aggregate stress. The corrected CCES-built
+draft must report the expected checksum on hardware.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_3f1fa455.0x39f2cfc.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_3f1fa455.0x39f2cfc.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_3f1fa455.0x39f2cfc.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0x39f2cfc
+```
 
 # Selache csmith draft regression sweep
 
@@ -433,4 +791,3 @@ def check(extract_dir, ldr):
     got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
     return bool(got) and int(got[-1], 16) == expect
 ```
-
