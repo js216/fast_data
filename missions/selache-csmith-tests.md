@@ -360,6 +360,84 @@ def check(extract_dir):
     return p.exists() and p.stat().st_size > 0
 ```
 
+### dsp reset drains stale uart residue before tests capture
+
+The csmith draft bench-sweep reaches the hardware UART verify phase but
+fails because the DSP UART stream captures a `got <hex>` line from the
+PRIOR boot's tx tail (lurking in the FT232/USB-host pipeline) BEFORE the
+freshly-loaded ldr has produced its own output. Iter-8 timeline for
+`cctest_csmith_0f4d7af9.0xaa43ccd0.ldr` shows `STREAM dsp.uart 'got
+efad66fa\r\n'` at t=5.060 — after `dsp:uart_open` (t=4.659) and BEFORE
+`dsp:boot wrote 230400/230400` (t=5.142). `dsp:uart_expect` then matches
+the residue, and bench Verify's `re.findall(r'got\s+([0-9a-fA-F]+)',
+uart)` picks up the stale hex (`efad66fa`) instead of the post-boot one
+(`aa43ccd0`).
+
+`plugins/dsp.py` `DspHandle.uart_open` only does
+`self._ser.reset_input_buffer()` once at the moment the serial port is
+opened (line 58), then immediately starts the reader thread. Bytes
+already in flight on the USB-host side at that instant are not flushed:
+they arrive at the host's serial buffer microseconds AFTER `uart_open`
+returns, so the reader thread streams them straight into `dsp.uart`.
+The plugin docstring (`"SHARC DSP over FT4222 QSPI master; expander
+reset; UART drain."`, line 729) already advertises a UART drain that the
+code does not actually perform.
+
+Fix in `_op_reset` (around lines 216-220 of `selache/test_serv/plugins/
+dsp.py`, i.e. the `dsp:reset` op handler): after `pulse_reset` and
+`init_and_reset` return — i.e. after the SHARC has been driven into the
+expander-reset state and re-initialised — open the configured
+`h.serial_port` briefly with the same baud as `uart_open` uses, call
+`reset_input_buffer()`, then read-and-discard for ~200 ms (or until two
+consecutive 0-byte reads with `timeout=0.05` return empty), and close.
+This eats any tx-FIFO tail from the prior boot that is still draining
+into the host while the bus pulse runs. `dsp:uart_open` afterwards opens
+a clean port with no residue. The drain is unconditional and therefore
+benefits every consumer of `dsp:reset` (not just this csmith sweep). If
+no `serial_port` is configured for the dsp instance (probe returned
+None) the drain is a no-op. The reset op already has session-cancel
+hooks; the drain loop must respect `session.cancel_event.wait` between
+chunks so cancel propagation is preserved.
+
+Add a unit test `test_dsp_reset_drains_uart_residue` to
+`test_serv/test_core.py` alongside the existing `test_dsp_boot_*` items.
+The test must:
+
+- Monkeypatch `dsp._lazy_serial()` (or `serial.Serial` on the lazy-
+  imported module) to return a fake serial object that yields a known
+  payload (e.g. `b'got efad66fa\r\n'`) on `read()` and records
+  `reset_input_buffer` and `close` calls.
+- Monkeypatch `dsp._Expander` so `pulse_reset` and `init_and_reset` are
+  cheap no-ops (no FT4222 hardware required).
+- Construct a `DspHandle` with a non-empty `serial_port` and a fake
+  session (mirroring the `FakeSession` pattern already used by
+  `test_dsp_boot_requires_timeout_and_kills_hung_helper`).
+- Invoke `dsp._op_reset(session, handle, {})`.
+- Assert: the fake serial was opened, `reset_input_buffer` was called,
+  the residue payload was consumed (read() returned at least one
+  non-empty chunk), and the port was closed before `_op_reset` returned.
+- Add a second assertion path with `serial_port=None` confirming
+  `_op_reset` returns successfully without trying to open a serial.
+
+The test must fail before the fix (today `_op_reset` opens no serial at
+all, so `serial.Serial` is never called on the residue path) and pass
+after.
+
+Build:
+
+```
+cd test_serv && python3 test_core.py
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    return True
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
@@ -439,3 +517,4 @@ def check(extract_dir, ldr):
 2026-05-07T04:54:17 selache-csmith-tests Manager pass selcc-cap-block0-helper-spill-l1-budget
 - 2026-05-06 minimizer: APPROVE selcc-cap-block0-helper-spill-l1-budget — heuristics at lines 665/724 confirmed; budget-tracking redirect to seg_swco is hermetic ~20-50 line change in selcc/src/emit_asm.rs; no LDF/seld scope creep; smaller "cap to 0" variant rejected as it regresses internal selcc small-helper-spill tests.
 2026-05-07T05:23:31 selache-csmith-tests Worker pass relocate-block0-cap-step
+2026-05-07T06:05:51 selache-csmith-tests Manager pass dsp-reset-drain-uart-residue
