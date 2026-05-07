@@ -5826,6 +5826,106 @@ of the recurrence; making it any larger (e.g. running an actual
 PRBS sequence in both languages and comparing) would require a
 simulator or compiled execution and is not host-only.
 
+### Audit prbs checksum xor-update rule match across FPGA and MPU
+
+Lock in a fourth cross-language PRBS interface invariant complementing
+iter 75's polynomial+seed audit, iter 76's checksum width+init audit,
+and iter 77's LFSR step-shape audit: the FPGA `prbs_xor` core
+(`fpga/src/prbs_xor.nw`) and the MPU baremetal `prbs_test` reference
+(`stm32mp135_test_board/baremetal/prbs_test/src/main.c`) must agree
+on the **checksum update rule** itself --- specifically that on each
+PRBS step both sides XOR the *pre-step* LFSR state into the running
+checksum register. Iter 75 locks the polynomial and seed literals,
+iter 76 locks the checksum register width and init, iter 77 locks the
+LFSR recurrence shape, but none inspects the line that folds each
+PRBS word into the checksum. A future edit that flipped one side
+from XOR-with-pre-step-state to XOR-with-post-step-state, or to
+`checksum + state`, or to `checksum ^ (state & MASK)` with a mask on
+only one side, would silently desynchronise the running checksums
+across long bursts while every earlier audit still passed.
+
+The audit is host-only and textual: it reads both source files and
+asserts the FPGA side contains the unmasked `checksum <= checksum ^
+state;` recurrence and the MPU side contains the matching
+`s->checksum ^= prev;` C statement together with the `prev =
+s->state` assignment that captures the *pre-step* state. Both
+substrings together pin: (i) operator is XOR (not add, not OR),
+(ii) operands are the running checksum and the live LFSR state
+word with no truncation mask, and (iii) the captured operand on
+the MPU side is the value held *before* the step.
+
+This is not a schema-shadow audit: there is no existing validator
+that enforces cross-language checksum-update equivalence. Iter 75
+asserts the polynomial+seed; iter 76 asserts only checksum width
+and init; iter 77 asserts only the LFSR recurrence and LSB gate.
+Without this audit the only thing tying the per-word XOR fold
+together is mission narrative prose.
+
+This is the smallest meaningful step toward `PRBS, UART, Checksum`
+that does not require adding UART command parsing to the MPU
+firmware. It is host-only, machine-checkable in well under a minute,
+and changes zero source files (chapter is verify-only on existing
+artefacts). Both substrings (the C `^=` fold and the `prev =
+s->state` capture) must be present on the MPU side: dropping the
+`prev` capture would let a future edit fold the post-step state
+(matching neither side's intent) without tripping the audit.
+
+Build: no build step (host-only verify on existing sources).
+
+Test (max 1 min):
+
+```
+mark tag=prbs_xor_mpu_checksum_update_match
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    fpga_nw = Path('fpga/src/prbs_xor.nw')
+    mpu_c   = Path('stm32mp135_test_board/baremetal/'
+                   'prbs_test/src/main.c')
+    try:
+        nw_text = fpga_nw.read_text(encoding='utf-8',
+                                    errors='replace')
+        c_text  = mpu_c.read_text(encoding='utf-8',
+                                  errors='replace')
+    except OSError:
+        return False
+
+    if 'checksum <= checksum ^ state;' not in nw_text:
+        return False
+
+    mpu_required = [
+        'uint32_t prev = s->state;',
+        's->checksum ^= prev;',
+    ]
+    if not all(tok in c_text for tok in mpu_required):
+        return False
+
+    return True
+```
+
+Rationale: this is strictly smaller than adding any new firmware or
+Verilog code (the audit changes no source file outside the mission
+file itself), strictly smaller than the next bench-progress step
+toward end-to-end checksum comparison (which requires an MPU UART
+command parser plus a `'p'`-style print path), and not a duplicate
+of iter 75/76/77 (iter 75 reads polynomial+seed literals; iter 76
+reads only checksum register width and init; iter 77 reads only the
+LFSR recurrence and LSB gate; none reads the `^=` fold or the
+pre-step `prev` capture). Making it any smaller (only one side, or
+only the fold without the pre-step capture) would let drift through
+on the unaudited side or unaudited half of the rule; making it any
+larger (e.g. running an actual PRBS sequence in both languages and
+comparing checksums) would require a simulator or compiled execution
+and is not host-only.
+
 ## WIP
 
 ### Verify physical connectivity
