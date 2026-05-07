@@ -587,7 +587,7 @@ class Runner:
             if rc != 0:
                 last_reason = f'   submit.py rc={rc}'
                 self._release_failed_attempt_lease(extract, test)
-                if self._lease_released_in_attempt(extract):
+                if self._released_external_lease_in_attempt(extract, test):
                     break
                 continue
             try:
@@ -595,17 +595,31 @@ class Runner:
             except Exception as e:
                 last_reason = f'   verify {type(e).__name__}: {e}'
                 self._release_failed_attempt_lease(extract, test)
-                if self._lease_released_in_attempt(extract):
+                if self._released_external_lease_in_attempt(extract, test):
                     break
                 continue
             if not ok:
                 last_reason = '   verify check() returned False'
                 self._release_failed_attempt_lease(extract, test)
-                if self._lease_released_in_attempt(extract):
+                if self._released_external_lease_in_attempt(extract, test):
                     break
                 continue
             return True, digest, None, extract, log
         return False, digest, last_reason, last_extract, last_log
+
+    def _released_external_lease_in_attempt(self, extract_dir, plan_text):
+        """Return True when retrying would reuse a consumed lease token.
+
+        A failed attempt may still reach an in-plan ``lease:release``.
+        For resume/release plans this consumes a cross-section lease,
+        so another retry cannot legitimately run the same plan. For
+        claim/release plans each attempt can claim a fresh lease; the
+        release is just cleanup and must not poison retry of transient
+        hardware errors.
+        """
+        if not self._lease_released_in_attempt(extract_dir):
+            return False
+        return 'lease:claim' not in plan_text
 
     def _lease_released_in_attempt(self, extract_dir):
         """Return True if the attempt consumed its lease token."""

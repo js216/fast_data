@@ -6262,6 +6262,149 @@ def check(extract_dir):
     return True
 ```
 
+### Audit MPU replay covers QSPI manifest jumpers
+
+Add a host-only audit gate that proves every QSPI jumper in
+`connectivity_manifest.json` is backed by a concrete MPU-side HAL
+mapping in `gpio_replay_mpu_stub.c`. The audit checks that every QSPI
+signal the MPU can drive (`mpu_qspi_clk_to_fpga_sclk`,
+`mpu_qspi_ncs_to_fpga_cs_n`, and `mpu_qspi_io0_to_fpga_io0` through
+`mpu_qspi_io3_to_fpga_io3`) has a concrete MPU drive mapping. NCS stays
+in the generic startup replay drive table, while SCLK and the four IO
+lanes stay in the dedicated report-only drive mappings used by the UART
+trigger helpers. The four bidirectional IO signals also appear in the
+MPU sample table. SCLK/NCS use `QSPI_*_PORT` / `QSPI_*_PIN` macros; IO
+lanes use concrete `GPIO*` / `GPIO_PIN_*` pairs. It does not cover the
+three control GPIOs because their MPU-side pins are still intentionally
+unselected.
+
+This is the smallest next slice of `Verify physical connectivity`
+that adds a new machine-checkable property without selecting a new
+MP135 GPIO port or driving another bench plan. Splitting smaller
+would reuse the same manifest/stub parser for only one signal, while
+folding this into a control-GPIO pin-selection step would bundle an
+audit with a hardware-design decision.
+
+Build:
+
+```
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_connectivity_manifest.py
+python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
+```
+
+Test (max 1 min):
+
+```
+mark tag=gpio_replay_mpu_qspi_manifest_coverage
+```
+
+Verify:
+
+```
+import json
+import re
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    manifest_path = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'connectivity_manifest.json')
+    stub_path = Path(
+        'stm32mp135_test_board/baremetal/gpio_test/'
+        'gpio_replay_mpu_stub.c')
+    try:
+        manifest = json.loads(manifest_path.read_text(
+            encoding='utf-8', errors='replace'))
+        stub = stub_path.read_text(encoding='utf-8', errors='replace')
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    jumpers = manifest.get('jumpers')
+    if not isinstance(jumpers, list):
+        return False
+    qspi = {
+        row.get('signal'): row
+        for row in jumpers
+        if isinstance(row, dict)
+        and isinstance(row.get('signal'), str)
+        and row.get('signal').startswith('mpu_qspi_')
+    }
+
+    startup_drive = {
+        'mpu_qspi_ncs_to_fpga_cs_n': ('QSPI_NCS_PORT', 'QSPI_NCS_PIN'),
+    }
+    dedicated_drive = {
+        'mpu_qspi_clk_to_fpga_sclk': (
+            'mpu_sclk_drive_signal', 'QSPI_CLK_PORT', 'QSPI_CLK_PIN'),
+        'mpu_qspi_io0_to_fpga_io0': (
+            'mpu_io0_drive_signal', 'GPIOH', 'GPIO_PIN_3'),
+        'mpu_qspi_io1_to_fpga_io1': (
+            'mpu_io1_drive_signal', 'GPIOF', 'GPIO_PIN_9'),
+        'mpu_qspi_io2_to_fpga_io2': (
+            'mpu_io2_drive_signal', 'GPIOH', 'GPIO_PIN_6'),
+        'mpu_qspi_io3_to_fpga_io3': (
+            'mpu_io3_drive_signal', 'GPIOH', 'GPIO_PIN_7'),
+    }
+    expected_sample = {
+        'mpu_qspi_io0_to_fpga_io0': ('GPIOH', 'GPIO_PIN_3'),
+        'mpu_qspi_io1_to_fpga_io1': ('GPIOF', 'GPIO_PIN_9'),
+        'mpu_qspi_io2_to_fpga_io2': ('GPIOH', 'GPIO_PIN_6'),
+        'mpu_qspi_io3_to_fpga_io3': ('GPIOH', 'GPIO_PIN_7'),
+    }
+    expected_signals = set(startup_drive) | set(dedicated_drive)
+    if set(qspi) != expected_signals:
+        return False
+
+    for signal in expected_signals:
+        row = qspi[signal]
+        if signal in expected_sample:
+            if (row.get('mpu_role') != 'drive_sample'
+                    or row.get('fpga_role') != 'drive_sample'):
+                return False
+        elif row.get('mpu_role') != 'drive' or row.get('fpga_role') != 'sample':
+            return False
+
+    drive_match = re.search(
+        r'static const mpu_gpio_signal_t mpu_drive_signals\[\] = '
+        r'\{(.*?)\};', stub, re.DOTALL)
+    sample_match = re.search(
+        r'static const mpu_gpio_signal_t mpu_sample_signals\[\] = '
+        r'\{(.*?)\};', stub, re.DOTALL)
+    if drive_match is None or sample_match is None:
+        return False
+    drive_table = drive_match.group(1)
+    sample_table = sample_match.group(1)
+
+    def table_has(table, signal, pins):
+        row_re = re.compile(
+            r'\{"' + re.escape(signal) + r'",\s*'
+            + re.escape(pins[0]) + r',\s*' + re.escape(pins[1]) + r'\}')
+        return row_re.search(table) is not None
+
+    for signal, pins in startup_drive.items():
+        if not table_has(drive_table, signal, pins):
+            return False
+    for signal in dedicated_drive:
+        if signal in drive_table:
+            return False
+    for signal, (object_name, port, pin) in dedicated_drive.items():
+        object_re = re.compile(
+            r'static const mpu_gpio_signal_t ' + re.escape(object_name)
+            + r'\s*=\s*\{\s*"' + re.escape(signal) + r'",\s*'
+            + re.escape(port) + r',\s*' + re.escape(pin) + r'\s*\};',
+            re.DOTALL)
+        if object_re.search(stub) is None:
+            return False
+    for signal, pins in expected_sample.items():
+        if not table_has(sample_table, signal, pins):
+            return False
+
+    return True
+```
+
 ## WIP
 
 ### Verify physical connectivity
