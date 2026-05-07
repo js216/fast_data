@@ -32,6 +32,40 @@ def check(extract_dir):
     return runs == expected and bins == expected
 ```
 
+### selache draft clang host sweep
+
+Compile and run every csmith draft through host `clang`, mirroring the
+gcc draft sweep above. Adds a second reference toolchain gate before any
+of the embedded toolchains (cces, sel) or bench hardware get involved.
+Host-only; no bench required.
+
+Build:
+
+```
+make -C selache/xtest drafts-clang -j$(nproc)
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    xtest = Path('selache/xtest')
+    drafts = sorted((xtest / 'draft_cases').glob('cctest_*.c'))
+    if not drafts:
+        return True
+
+    out = xtest / 'build/drafts/clang'
+    expected = {p.stem for p in drafts}
+    runs = {p.stem for p in out.glob('cctest_*.run')}
+    bins = {p.stem for p in out.glob('cctest_*.bin') if p.stat().st_size}
+
+    return runs == expected and bins == expected
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
