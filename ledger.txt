@@ -956,3 +956,13 @@
 2026-05-08T08:31:07 fpga-spi Verifier pass none
 2026-05-08T10:00:32 fpga-spi Tester pass 81
 2026-05-08T10:01:47 fpga-spi Worker pass
+2026-05-08T10:03:18 fpga-spi Orchestrator pass 90
+2026-05-08T10:04:14 fpga-spi Manager pass Add-MP135-prbs-burst-command
+2026-05-08T10:05:03 fpga-spi Minimizer pass atomic-burst-UART-progress
+2026-05-08T10:05:51 fpga-spi Worker pass
+2026-05-08T10:06:39 fpga-spi Verifier pass none
+2026-05-08T11:15:33 fpga-spi Tester fail 79 fail reset-forbids-burst artefact=/tmp/runpy-ltfejw4m/add_mp135_prbs_test_reset_uart_command
+2026-05-08T11:16:13 fpga-spi Worker pass
+2026-05-08T11:17:23 fpga-spi Verifier pass none
+2026-05-08T12:33:37 fpga-spi Tester pass 82
+2026-05-08T12:34:11 fpga-spi Worker pass

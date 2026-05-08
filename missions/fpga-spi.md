@@ -7331,7 +7331,6 @@ def check(_extract_dir):
         return False
 
     forbidden = [
-        "case 'b':",
         "case 'p':",
         'fpga.hx1k',
         'mp135.evb:uart_open',
@@ -7446,7 +7445,6 @@ def check(_extract_dir):
         return False
 
     forbidden = [
-        "case 'b':",
         "case 'p':",
         'fpga.hx1k',
         'mp135.evb:uart_open',
@@ -7467,6 +7465,92 @@ a helper call or only a print string would not expose observable PRBS
 progress over UART; adding burst mode, checksum printing, FPGA
 interaction, SPI, or hardware comparison would combine multiple
 semantics into one Worker step.
+
+### Add MP135 prbs_test burst UART command
+
+Extend the MP135 `prbs_test` UART loop with one new command: byte `'b'`
+advances the local PRBS/checksum state by exactly `2**16` words and
+prints `prbs burst` followed by CRLF. Keep the existing ready banner,
+`'r'` reset command, `'s'` single-step command, PRBS recurrence, and
+checksum fold unchanged. Do not add checksum printing, FPGA UART, SPI,
+or hardware comparison behavior in this step.
+
+Build:
+
+```
+make -C stm32mp135_test_board/baremetal/prbs_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/prbs_test/build/main.stm32
+```
+
+Test: no hardware.
+
+```
+mark tag=prbs_test_uart_burst_command
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md')
+    try:
+        mission_text = mission.read_text(encoding='utf-8',
+                                         errors='replace')
+    except OSError:
+        return False
+    if 'mark tag=prbs_test_uart_burst_command' not in mission_text:
+        return False
+
+    base = Path('stm32mp135_test_board/baremetal/prbs_test')
+    mk = base / 'Makefile'
+    src = base / 'src/main.c'
+    img = base / 'build/main.stm32'
+    try:
+        src_text = src.read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        return False
+
+    if not (mk.is_file() and img.is_file() and img.stat().st_size > 0):
+        return False
+
+    required = [
+        'my_printf("prbs_test ready\\r\\n");',
+        "case 'r':",
+        "case 's':",
+        "case 'b':",
+        '65536',
+        'prbs_step_with_checksum',
+        'my_printf("prbs burst\\r\\n");',
+    ]
+    if not all(tok in src_text for tok in required):
+        return False
+
+    forbidden = [
+        "case 'p':",
+        'fpga.hx1k',
+        'mp135.evb:uart_open',
+        'uart_write data=',
+        'uart_expect sentinel=',
+    ]
+    return not any(tok in src_text for tok in forbidden)
+```
+
+Rationale: this is the smallest meaningful command slice after the
+MP135 single-step command. A burst command proves the MP135
+PRBS/checksum state can advance through the same large-step count used
+by the FPGA UART burst path while preserving reset and single-step as
+known controls. Splitting smaller into only a helper loop, only command
+decode, only a print string, or a shorter loop would not expose the
+required burst behavior; adding checksum printing, FPGA interaction,
+SPI, or hardware comparison would combine multiple semantics in one
+step.
 
 ## WIP
 
