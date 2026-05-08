@@ -533,6 +533,71 @@ def check(extract_dir):
     return "ARM" in desc and "ELF" in desc
 ```
 
+### Add host TCP receive operation
+
+Add the smallest bench-host operation needed to prove the target-side
+TCP hello service is reachable from the host: a `tcp:recv` plugin op
+that connects to a configured host and port, captures a bounded response
+into `tcp.recv`, and optionally checks an expected byte string. This is
+host-side test infrastructure only; it must not boot, flash, upload,
+run the target service, or change kernel command-line/root handling.
+
+Build:
+
+```
+python3 -m py_compile test_serv/plugins/tcp.py
+```
+
+Artifacts:
+
+```
+test_serv/plugins/tcp.py
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    import ast
+    from pathlib import Path
+
+    linux_conf = Path("stm32mp135_test_board/config/linux.conf").read_text()
+    if 'CONFIG_CMDLINE="root=' in linux_conf:
+        return False
+    if "CONFIG_CMDLINE_FORCE=y" in linux_conf:
+        return False
+
+    path = Path("test_serv/plugins/tcp.py")
+    text = path.read_text()
+    tree = ast.parse(text)
+
+    functions = {
+        node.name for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    }
+    if "_op_recv" not in functions:
+        return False
+
+    classes = {
+        node.name for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef)
+    }
+    if "TcpPlugin" not in classes:
+        return False
+
+    required = [
+        'name = "tcp"',
+        '"recv": Op(',
+        'args={"host": "str", "port": "int"}',
+        'optional_args={"expect": "str", "timeout_ms": "int"}',
+        "socket.create_connection",
+        'session.stream("tcp.recv")',
+    ]
+    return all(item in text for item in required)
+```
+
 ## WIP
 
 ## Planned Mission Arc

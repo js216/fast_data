@@ -153,3 +153,10 @@
 2026-05-08T06:55:17 stream-websockets Verifier pass none
 2026-05-08T07:15:19 stream-websockets Tester pass 10
 2026-05-08T07:18:21 stream-websockets Enemy pass none
+2026-05-08T07:20:12 stream-websockets Orchestrator pass 8
+2026-05-08T07:21:35 stream-websockets Manager pass host tcp recv op
+2026-05-08T07:22:50 stream-websockets Minimizer pass recv_op_min_for_live_tcp
+2026-05-08T07:25:31 stream-websockets Worker pass
+2026-05-08T07:28:44 stream-websockets Verifier pass none
+2026-05-08T07:45:58 stream-websockets Tester pass 11
+2026-05-08T07:48:06 stream-websockets Enemy pass none
