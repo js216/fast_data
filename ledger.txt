@@ -23,3 +23,39 @@
 2026-05-07T14:14:53 usbtmc Tester pass 1
 2026-05-07T14:16:38 usbtmc Worker pass
 2026-05-07T14:20:25 usbtmc Worker pass
+2026-05-07T14:21:34 usbtmc Orchestrator pass 2
+2026-05-07T14:22:20 usbtmc Manager pass create deterministic MSC backing file
+2026-05-07T14:23:00 usbtmc Minimizer pass file_artifact_atomic_no_smaller_progress
+2026-05-07T14:25:08 usbtmc Worker pass
+2026-05-07T14:37:50 usbtmc Verifier pass none
+2026-05-07T14:47:26 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-07T14:49:07 usbtmc Worker pass
+2026-05-07T14:50:19 usbtmc Verifier pass none
+2026-05-07T15:17:50 usbtmc Tester fail 1 verify_predicate_mismatch
+2026-05-07T15:22:22 usbtmc Worker pass
+2026-05-07T15:24:25 usbtmc Verifier pass none
+2026-05-07T15:27:55 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-07T15:29:33 usbtmc Worker pass
+2026-05-07T15:31:51 usbtmc Verifier pass none
+2026-05-07T15:43:57 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-07T15:44:47 usbtmc Worker pass
+2026-05-07T15:45:33 usbtmc Verifier pass bench contention only
+2026-05-07T16:23:42 usbtmc Tester fail 1 msc_backing_uart_timeout
+2026-05-07T16:26:16 usbtmc Worker pass
+2026-05-07T16:30:00 usbtmc Verifier pass none
+2026-05-07T17:03:48 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-07T17:05:06 usbtmc Worker pass
+2026-05-07T17:06:02 usbtmc Verifier pass bench contention only
+2026-05-07T17:28:00 usbtmc Tester fail 1 submit_connection_reset
+2026-05-07T17:29:20 usbtmc Worker pass
+2026-05-07T17:30:35 usbtmc Verifier pass transport cancel only
+2026-05-07T17:52:34 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-07T17:53:30 usbtmc Worker pass
+2026-05-07T17:54:49 usbtmc Verifier pass bench contention only
+2026-05-07T18:44:06 usbtmc Tester fail 1 submit_watchdog_killed
+2026-05-07T18:45:56 usbtmc Worker pass
+2026-05-07T18:46:36 usbtmc Verifier pass mission quoting issue
+2026-05-07T18:48:39 usbtmc Worker pass
+2026-05-07T18:51:28 usbtmc Verifier pass none
+2026-05-07T19:37:12 usbtmc Tester pass 2
+2026-05-07T19:39:11 usbtmc Worker pass
