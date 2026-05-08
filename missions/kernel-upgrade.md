@@ -671,3 +671,95 @@ def check(extract_dir):
 
     return True
 ```
+
+### Wire the upstream stable remote in linux
+
+Add an `upstream` git remote to `stm32mp135_test_board/linux` pointing at the
+upstream stable repository URL recorded in `config/kernel-upstream-refresh.md`.
+This step ONLY adds the remote: do not fetch any refs, do not check out
+anything, do not move the Linux HEAD, and do not change the parent gitlink.
+The act of adding a remote does not touch tracked source — `git remote add`
+only writes the linux `.git/config`. Fetching the target tag is the next step.
+
+Build: nothing required.
+
+Test: no hardware.
+
+Verify:
+```
+def check(extract_dir):
+    from pathlib import Path
+    import re
+    import subprocess
+
+    root = Path.cwd()
+    board = root / 'stm32mp135_test_board'
+    linux = board / 'linux'
+    notes = board / 'config/kernel-upstream-refresh.md'
+
+    if not notes.exists():
+        raise AssertionError('missing upstream refresh notes')
+
+    text = notes.read_text()
+
+    url_match = re.search(r'upstream stable repository:\s*(\S+)', text)
+    if not url_match:
+        raise AssertionError('notes do not name upstream stable repository URL')
+    stable_url = url_match.group(1)
+
+    commit_match = re.search(r'current linux commit:\s*([0-9a-f]{7,40})', text)
+    if not commit_match:
+        raise AssertionError('notes do not name current linux commit')
+    expected_head = commit_match.group(1)
+
+    remotes = subprocess.check_output(
+        ['git', '-C', str(linux), 'remote', '-v'],
+        text=True)
+    upstream_lines = [
+        line for line in remotes.splitlines()
+        if line.split('\t', 1)[0] == 'upstream'
+    ]
+    if not upstream_lines:
+        raise AssertionError('no `upstream` remote configured in linux')
+    seen_kinds = set()
+    for line in upstream_lines:
+        parts = line.split()
+        if len(parts) < 3:
+            raise AssertionError('malformed upstream remote line: ' + line)
+        url = parts[1]
+        kind = parts[2]
+        if url != stable_url:
+            raise AssertionError(
+                'upstream remote URL mismatch: ' + url
+                + ' != ' + stable_url)
+        seen_kinds.add(kind)
+    for required_kind in ('(fetch)', '(push)'):
+        if required_kind not in seen_kinds:
+            raise AssertionError(
+                'upstream remote missing ' + required_kind + ' row')
+
+    head = subprocess.check_output(
+        ['git', '-C', str(linux), 'rev-parse', 'HEAD'],
+        text=True).strip()
+    if not head.startswith(expected_head) and not expected_head.startswith(head):
+        raise AssertionError(
+            'linux HEAD moved from recorded baseline ' + expected_head
+            + ' to ' + head)
+
+    board_gitlink = subprocess.check_output(
+        ['git', '-C', str(board), 'ls-tree', 'HEAD', 'linux'],
+        text=True).strip()
+    if not board_gitlink:
+        raise AssertionError(
+            'stm32mp135_test_board has no gitlink for linux submodule')
+    parts = board_gitlink.split()
+    if len(parts) < 3 or parts[1] != 'commit':
+        raise AssertionError('linux entry is not a submodule gitlink')
+    pinned = parts[2]
+    if pinned != head:
+        raise AssertionError(
+            'stm32mp135_test_board gitlink ' + pinned
+            + ' does not match linux HEAD ' + head)
+
+    return True
+```

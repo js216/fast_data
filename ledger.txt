@@ -348,3 +348,17 @@
 2026-05-08T12:12:16 kernel-upgrade Enemy pass none
 2026-05-08T12:13:42 kernel-upgrade Worker pass
 2026-05-08T12:15:24 kernel-upgrade Stopper pass mission accomplished
+2026-05-08T23:06:08 kernel-upgrade Orchestrator pass 6
+2026-05-08T23:07:26 kernel-upgrade Manager pass wire upstream remote and fetch v7.0.5 tag
+2026-05-08T23:09:08 kernel-upgrade Minimizer fail bundles two atoms: add-remote and fetch-tag
+2026-05-08T23:10:20 kernel-upgrade Manager pass wire upstream remote in linux
+2026-05-08T23:11:03 kernel-upgrade Minimizer pass remote add only; smaller no usable target
+2026-05-08T23:11:56 kernel-upgrade Worker pass
+2026-05-08T23:12:53 kernel-upgrade Verifier pass none
+2026-05-08T23:18:30 kernel-upgrade Tester fail 9
+2026-05-08T23:32:50 kernel-upgrade Tester fail 13
+2026-05-08T23:34:35 kernel-upgrade Worker pass
+2026-05-08T23:35:50 kernel-upgrade Verifier pass none
+2026-05-08T23:45:30 kernel-upgrade Tester pass 14
+2026-05-08T23:46:57 kernel-upgrade Enemy pass none
+2026-05-08T23:49:06 kernel-upgrade Worker pass
