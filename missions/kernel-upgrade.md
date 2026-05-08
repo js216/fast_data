@@ -1,5 +1,41 @@
 ## WIP
 
+### Record the current Linux baseline commit
+
+Create `stm32mp135_test_board/config/kernel-upgrade-baseline.md` and record
+the exact commit currently checked out in `stm32mp135_test_board/linux` before
+changing any tracked source.
+
+Build: nothing required.
+
+Test: no hardware.
+
+Verify:
+```
+def check(extract_dir):
+    from pathlib import Path
+    import subprocess
+
+    root = Path.cwd()
+    linux = root / 'stm32mp135_test_board/linux'
+    notes = root / 'stm32mp135_test_board/config/kernel-upgrade-baseline.md'
+
+    if not notes.exists():
+        raise AssertionError('missing kernel upgrade baseline notes')
+
+    text = notes.read_text()
+    if 'current linux commit:' not in text:
+        raise AssertionError('baseline notes missing current commit label')
+
+    current = subprocess.check_output(
+        ['git', '-C', str(linux), 'rev-parse', 'HEAD'],
+        text=True).strip()
+    if current not in text:
+        raise AssertionError('baseline notes do not name current commit')
+
+    return True
+```
+
 ### Document the current kernel upgrade baseline
 
 Record the exact starting kernel commit, the latest target kernel commit, and
@@ -135,7 +171,10 @@ old full driver files over the latest kernel drivers. The regulator SW_OUT
 voltage must remain 3.3 V, and the PMIC must tolerate the board's missing PMIC
 IRQ without failing probe.
 
-Build: `make -C stm32mp135_test_board kernel`
+Build:
+```
+make -C stm32mp135_test_board kernel
+```
 
 Test: no hardware.
 
@@ -228,7 +267,10 @@ Adapt the board `dtb` build to the updated kernel DTS layout. Latest ST v6.6
 stores STM32 DTS files under `arch/arm/boot/dts/st/`; the custom board DTS must
 build in that layout without relying on TF-A, OP-TEE, or U-Boot nodes.
 
-Build: `make -C stm32mp135_test_board dtb`
+Build:
+```
+make -C stm32mp135_test_board dtb
+```
 
 Test: no hardware.
 
@@ -267,7 +309,10 @@ Build the upgraded kernel with the board bootloader path and updated kernel
 sources. The build must produce `zImage` without requiring TF-A, OP-TEE, or
 U-Boot artifacts.
 
-Build: `make -C stm32mp135_test_board patch kernel dtb`
+Build:
+```
+make -C stm32mp135_test_board patch kernel dtb
+```
 
 Test: no hardware.
 
