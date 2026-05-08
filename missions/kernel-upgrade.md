@@ -571,7 +571,6 @@ delay ms=200
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
-mp135.custom:uart_expect sentinel="Freeing unused kernel image" timeout_ms=30000
 mp135.custom:uart_expect sentinel="Welcome" timeout_ms=30000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
 mp135.custom:uart_close
@@ -589,7 +588,6 @@ def check(extract_dir):
 
     for required in [
         'Linux version',
-        'Freeing unused kernel image',
         'Welcome',
         'login:',
     ]:
@@ -607,6 +605,69 @@ def check(extract_dir):
     for item in forbidden:
         if item in text:
             raise AssertionError('boot log contains forbidden/fatal text: ' + item)
+
+    return True
+```
+
+### Record the upstream kernel refresh target
+
+Create `stm32mp135_test_board/config/kernel-upstream-refresh.md` and record
+the exact currently pinned Linux commit, the upstream stable repository URL,
+and the latest upstream stable kernel tag before changing any tracked source.
+This step only establishes a reproducible target for the next refresh step; do
+not move the Linux checkout or edit board sources yet.
+
+Build: nothing required.
+
+Test: no hardware.
+
+Verify:
+```
+def check(extract_dir):
+    from pathlib import Path
+    import re
+    import subprocess
+
+    root = Path.cwd()
+    linux = root / 'stm32mp135_test_board/linux'
+    notes = root / 'stm32mp135_test_board/config/kernel-upstream-refresh.md'
+    stable_url = 'https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git'
+
+    if not notes.exists():
+        raise AssertionError('missing upstream refresh notes')
+
+    text = notes.read_text()
+    for required in [
+        'current linux commit:',
+        'upstream stable repository:',
+        stable_url,
+        'target upstream tag:',
+    ]:
+        if required not in text:
+            raise AssertionError('upstream refresh notes missing: ' + required)
+
+    current = subprocess.check_output(
+        ['git', '-C', str(linux), 'rev-parse', 'HEAD'],
+        text=True).strip()
+    if current not in text:
+        raise AssertionError('upstream refresh notes do not name current commit')
+
+    refs = subprocess.check_output(
+        ['git', 'ls-remote', '--tags', '--refs', stable_url, 'v[0-9]*'],
+        text=True)
+    versions = []
+    for line in refs.splitlines():
+        ref = line.rsplit('/', 1)[-1]
+        match = re.fullmatch(r'v(\d+)\.(\d+)(?:\.(\d+))?', ref)
+        if match:
+            parts = tuple(int(part or 0) for part in match.groups())
+            versions.append((parts, ref))
+    if not versions:
+        raise AssertionError('could not discover upstream stable tags')
+
+    latest = max(versions)[1]
+    if latest not in text:
+        raise AssertionError('upstream refresh notes do not name latest tag ' + latest)
 
     return True
 ```

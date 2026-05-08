@@ -1,0 +1,349 @@
+2026-05-07T10:19:43 kernel-clock-bringup Orchestrator pass 1
+2026-05-07T10:20:06 kernel-clock-bringup Manager pass Confirm clk_ignore_unused is required
+2026-05-07T10:20:57 kernel-clock-bringup Minimizer pass Only compare two boot args; smaller gives no baseline
+2026-05-07T10:31:25 kernel-separate-drivers Orchestrator pass 1
+2026-05-07T10:33:12 kernel-separate-drivers Manager pass Inventory patch hunks
+2026-05-07T10:35:14 kernel-separate-drivers Minimizer pass Partial inventory gives no migration map
+2026-05-07T10:37:26 kernel-separate-drivers Worker pass
+2026-05-07T10:39:22 kernel-separate-drivers Verifier pass none
+2026-05-07T10:40:16 kernel-separate-drivers Tester fail 0
+2026-05-07T10:41:52 kernel-separate-drivers Worker pass
+2026-05-07T10:43:14 kernel-separate-drivers Verifier pass none
+2026-05-07T10:43:39 kernel-separate-drivers Tester pass 1
+2026-05-07T10:44:57 kernel-separate-drivers Enemy pass none
+2026-05-07T10:46:07 kernel-separate-drivers Worker pass
+2026-05-07T10:47:04 kernel-separate-drivers Orchestrator pass 2
+2026-05-07T10:47:43 kernel-separate-drivers Manager pass Stage STPMIC regulator source
+2026-05-07T10:49:07 kernel-separate-drivers Minimizer pass Single hunk file; smaller yields no artifact
+2026-05-07T10:50:51 kernel-separate-drivers Worker pass
+2026-05-07T10:52:37 kernel-separate-drivers Verifier fail regulator source not staged
+2026-05-07T10:53:30 kernel-separate-drivers Worker fail run.py failed after staging
+2026-05-07T10:54:17 kernel-separate-drivers Worker pass
+2026-05-07T10:55:40 kernel-separate-drivers Verifier pass none
+2026-05-07T10:56:08 kernel-separate-drivers Tester pass 2
+2026-05-07T10:57:32 kernel-separate-drivers Enemy fail weak config/drivers gate
+2026-05-07T10:58:41 kernel-separate-drivers Worker pass
+2026-05-07T11:00:14 kernel-separate-drivers Verifier pass none
+2026-05-07T11:00:38 kernel-separate-drivers Tester pass 2
+2026-05-07T11:01:34 kernel-separate-drivers Enemy pass none
+2026-05-07T11:02:30 kernel-separate-drivers Worker pass
+2026-05-07T11:03:21 kernel-separate-drivers Orchestrator pass 3
+2026-05-07T11:04:08 kernel-separate-drivers Manager pass Stage STPMIC MFD source
+2026-05-07T11:05:11 kernel-separate-drivers Minimizer pass One file plus gate; smaller yields no pass
+2026-05-07T11:06:54 kernel-separate-drivers Worker pass
+2026-05-07T11:08:37 kernel-separate-drivers Verifier pass none
+2026-05-07T11:09:00 kernel-separate-drivers Tester pass 3
+2026-05-07T11:10:22 kernel-separate-drivers Enemy pass none
+2026-05-07T11:11:30 kernel-separate-drivers Worker pass
+2026-05-07T11:13:02 kernel-separate-drivers Orchestrator pass 4
+2026-05-07T11:13:47 kernel-separate-drivers Manager pass Stage clock core header
+2026-05-07T11:15:09 kernel-separate-drivers Minimizer pass One header+gate; smaller yields no pass
+2026-05-07T11:16:32 kernel-separate-drivers Worker pass
+2026-05-07T11:18:24 kernel-separate-drivers Verifier pass none
+2026-05-07T11:18:56 kernel-separate-drivers Tester pass 4
+2026-05-07T11:20:27 kernel-separate-drivers Enemy pass none
+2026-05-07T11:21:20 kernel-separate-drivers Worker pass
+2026-05-07T11:22:16 kernel-separate-drivers Orchestrator pass 5
+2026-05-07T11:23:01 kernel-separate-drivers Manager pass Stage clock core source
+2026-05-07T11:24:32 kernel-separate-drivers Minimizer pass One source+gate; smaller cannot pass
+2026-05-07T11:26:37 kernel-separate-drivers Worker pass
+2026-05-07T11:28:10 kernel-separate-drivers Verifier pass no issues
+2026-05-07T11:28:36 kernel-separate-drivers Tester pass 5
+2026-05-07T11:30:13 kernel-separate-drivers Enemy pass none
+2026-05-07T11:31:07 kernel-separate-drivers Worker pass
+2026-05-07T11:32:07 kernel-separate-drivers Orchestrator pass 6
+2026-05-07T11:32:48 kernel-separate-drivers Manager pass Stage STM32MP13 clock source
+2026-05-07T11:33:53 kernel-separate-drivers Minimizer pass One source+gate; smaller cannot pass
+2026-05-07T11:35:10 kernel-separate-drivers Worker pass
+2026-05-07T11:36:22 kernel-separate-drivers Verifier pass no issues
+2026-05-07T11:36:50 kernel-separate-drivers Tester pass 6
+2026-05-07T11:38:19 kernel-separate-drivers Enemy pass none
+2026-05-07T11:39:24 kernel-separate-drivers Worker pass
+2026-05-07T11:40:31 kernel-separate-drivers Orchestrator pass 7
+2026-05-07T11:41:21 kernel-separate-drivers Manager pass Wire regulator build copy
+2026-05-07T11:42:27 kernel-separate-drivers Minimizer pass One copy hook; less gives no build wiring
+2026-05-07T11:44:35 kernel-separate-drivers Worker pass
+2026-05-07T11:46:26 kernel-separate-drivers Verifier pass no issues
+2026-05-07T11:46:57 kernel-separate-drivers Tester pass 7
+2026-05-07T11:48:08 kernel-separate-drivers Enemy fail mission relaxed prior tests
+2026-05-07T11:50:25 kernel-separate-drivers Worker pass
+2026-05-07T11:55:04 kernel-separate-drivers Verifier pass no issues
+2026-05-07T11:55:27 kernel-separate-drivers Tester pass 7
+2026-05-07T11:56:36 kernel-separate-drivers Enemy fail unexpected_literal_make
+2026-05-07T11:59:14 kernel-separate-drivers Worker pass
+2026-05-07T12:00:41 kernel-separate-drivers Verifier pass no issues
+2026-05-07T12:01:08 kernel-separate-drivers Tester pass 7
+2026-05-07T12:02:29 kernel-separate-drivers Enemy pass none
+2026-05-07T12:03:59 kernel-separate-drivers Worker pass
+2026-05-07T12:05:07 kernel-separate-drivers Orchestrator pass 8
+2026-05-07T12:05:35 kernel-separate-drivers Manager pass Wire MFD build copy
+2026-05-07T12:06:26 kernel-separate-drivers Minimizer pass One MFD copy; less gives no build wiring
+2026-05-07T12:08:42 kernel-separate-drivers Worker pass
+2026-05-07T12:10:15 kernel-separate-drivers Verifier pass no issues
+2026-05-07T12:10:45 kernel-separate-drivers Tester pass 8
+2026-05-07T12:11:53 kernel-separate-drivers Enemy pass none
+2026-05-07T12:13:11 kernel-separate-drivers Worker pass
+2026-05-07T12:13:54 kernel-separate-drivers Orchestrator pass 9
+2026-05-07T12:14:29 kernel-separate-drivers Manager pass Wire clock core header copy
+2026-05-07T12:15:45 kernel-separate-drivers Minimizer pass One header copy; less gives no build wiring
+2026-05-07T12:17:29 kernel-separate-drivers Worker pass
+2026-05-07T12:19:15 kernel-separate-drivers Verifier pass no issues
+2026-05-07T12:19:48 kernel-separate-drivers Tester pass 9
+2026-05-07T12:21:10 kernel-separate-drivers Enemy pass none
+2026-05-07T12:22:25 kernel-separate-drivers Worker pass
+2026-05-07T12:23:15 kernel-separate-drivers Orchestrator pass 10
+2026-05-07T12:23:55 kernel-separate-drivers Manager pass Wire clock core source copy
+2026-05-07T12:25:04 kernel-separate-drivers Minimizer pass One source copy; less gives no build wiring
+2026-05-07T12:27:12 kernel-separate-drivers Worker pass
+2026-05-07T12:28:53 kernel-separate-drivers Verifier pass no issues
+2026-05-07T12:29:14 kernel-separate-drivers Tester pass 10
+2026-05-07T12:30:16 kernel-separate-drivers Enemy pass none
+2026-05-07T12:32:06 kernel-separate-drivers Worker pass
+2026-05-07T12:32:57 kernel-separate-drivers Orchestrator pass 11
+2026-05-07T12:33:21 kernel-separate-drivers Manager pass Wire STM32MP13 clock source copy
+2026-05-07T12:34:49 kernel-separate-drivers Minimizer pass One source copy; less gives no build wiring
+2026-05-07T12:36:55 kernel-separate-drivers Worker pass
+2026-05-07T12:38:32 kernel-separate-drivers Verifier pass no issues
+2026-05-07T12:38:55 kernel-separate-drivers Tester pass 11
+2026-05-07T12:40:11 kernel-separate-drivers Enemy pass none
+2026-05-07T12:41:31 kernel-separate-drivers Worker pass
+2026-05-07T12:42:26 kernel-separate-drivers Orchestrator pass 12
+2026-05-07T12:43:19 kernel-separate-drivers Manager pass Stage Kconfig patch
+2026-05-07T12:44:29 kernel-separate-drivers Minimizer pass One patch file; less is no staged artifact
+2026-05-07T12:46:28 kernel-separate-drivers Worker pass
+2026-05-07T12:48:08 kernel-separate-drivers Verifier pass no issues
+2026-05-07T12:48:28 kernel-separate-drivers Tester pass 12
+2026-05-07T12:49:18 kernel-separate-drivers Enemy pass none
+2026-05-07T12:50:54 kernel-separate-drivers Worker pass
+2026-05-07T12:51:43 kernel-separate-drivers Orchestrator pass 13
+2026-05-07T12:52:38 kernel-separate-drivers Manager pass Wire Kconfig patch into kernel
+2026-05-07T12:53:29 kernel-separate-drivers Minimizer pass One patch apply; less gives no build wiring
+2026-05-07T12:55:12 kernel-separate-drivers Worker pass
+2026-05-07T12:56:46 kernel-separate-drivers Verifier fail section below WIP
+2026-05-07T12:58:10 kernel-separate-drivers Worker pass
+2026-05-07T12:59:30 kernel-separate-drivers Verifier pass no issues
+2026-05-07T13:00:04 kernel-separate-drivers Tester pass 13
+2026-05-07T13:01:16 kernel-separate-drivers Enemy pass none
+2026-05-07T13:02:43 kernel-separate-drivers Worker pass
+2026-05-07T13:03:29 kernel-separate-drivers Orchestrator pass 14
+2026-05-07T13:04:24 kernel-separate-drivers Manager pass Stage patch without regulator driver
+2026-05-07T13:05:44 kernel-separate-drivers Minimizer pass One patch artifact; less gives no reduction
+2026-05-07T13:07:08 kernel-separate-drivers Worker pass
+2026-05-07T13:08:33 kernel-separate-drivers Verifier pass no issues
+2026-05-07T13:09:06 kernel-separate-drivers Tester pass 14
+2026-05-07T13:10:13 kernel-separate-drivers Enemy pass none
+2026-05-07T13:11:21 kernel-separate-drivers Worker pass
+2026-05-07T13:12:31 kernel-separate-drivers Orchestrator pass 15
+2026-05-07T13:13:18 kernel-separate-drivers Manager pass Drop regulator from active patch
+2026-05-07T13:14:11 kernel-separate-drivers Minimizer pass One diff drop; less gives no active reduction
+2026-05-07T13:17:31 kernel-separate-drivers Worker pass
+2026-05-07T13:19:18 kernel-separate-drivers Verifier pass no issues
+2026-05-07T13:19:46 kernel-separate-drivers Tester pass 15
+2026-05-07T13:21:17 kernel-separate-drivers Enemy pass none
+2026-05-07T13:22:44 kernel-separate-drivers Worker pass
+2026-05-07T13:23:38 kernel-separate-drivers Orchestrator pass 16
+2026-05-07T13:24:33 kernel-separate-drivers Manager pass Stage patch without MFD driver
+2026-05-07T13:25:47 kernel-separate-drivers Minimizer pass One patch file; less gives no artifact
+2026-05-07T13:27:17 kernel-separate-drivers Worker pass
+2026-05-07T13:28:50 kernel-separate-drivers Verifier pass no issues
+2026-05-07T13:29:26 kernel-separate-drivers Tester pass 16
+2026-05-07T13:30:52 kernel-separate-drivers Enemy pass none
+2026-05-07T13:32:29 kernel-separate-drivers Worker pass
+2026-05-07T13:33:29 kernel-separate-drivers Orchestrator pass 17
+2026-05-07T13:34:16 kernel-separate-drivers Manager pass Drop MFD from active patch
+2026-05-07T13:35:30 kernel-separate-drivers Minimizer pass One driver diff; less leaves partial MFD
+2026-05-07T13:39:25 kernel-separate-drivers Worker pass
+2026-05-07T13:40:55 kernel-separate-drivers Verifier pass no issues
+2026-05-07T13:41:38 kernel-separate-drivers Tester pass 17
+2026-05-07T13:43:11 kernel-separate-drivers Enemy pass none
+2026-05-07T13:44:05 kernel-separate-drivers Worker pass
+2026-05-07T13:45:03 kernel-separate-drivers Orchestrator pass 18
+2026-05-07T13:46:25 kernel-separate-drivers Manager pass Stage patch without clock header
+2026-05-07T13:47:09 kernel-separate-drivers Minimizer pass One inert patch; less is no artifact
+2026-05-07T13:49:05 kernel-separate-drivers Worker pass
+2026-05-07T13:50:35 kernel-separate-drivers Verifier pass no issues
+2026-05-07T13:51:14 kernel-separate-drivers Tester pass 18
+2026-05-07T13:52:31 kernel-separate-drivers Enemy pass none
+2026-05-07T13:53:29 kernel-separate-drivers Worker pass
+2026-05-07T13:54:19 kernel-separate-drivers Orchestrator pass 19
+2026-05-07T13:55:02 kernel-separate-drivers Manager pass Drop clock header from active patch
+2026-05-07T13:55:56 kernel-separate-drivers Minimizer pass One diff block; smaller leaves no progress
+2026-05-07T14:06:51 kernel-separate-drivers Worker pass
+2026-05-07T14:08:31 kernel-separate-drivers Verifier pass no issues
+2026-05-07T14:09:17 kernel-separate-drivers Tester pass 19
+2026-05-07T14:11:16 kernel-separate-drivers Enemy pass none
+2026-05-07T14:12:09 kernel-separate-drivers Worker pass
+2026-05-07T14:12:48 kernel-separate-drivers Orchestrator pass 20
+2026-05-07T14:13:28 kernel-separate-drivers Manager pass Stage patch without clock core source
+2026-05-07T14:14:27 kernel-separate-drivers Minimizer pass One staged file; less yields no artifact
+2026-05-07T14:15:39 kernel-separate-drivers Worker pass
+2026-05-07T14:17:02 kernel-separate-drivers Verifier pass no issues
+2026-05-07T14:17:41 kernel-separate-drivers Tester pass 20
+2026-05-07T14:18:47 kernel-separate-drivers Enemy pass none
+2026-05-07T14:19:31 kernel-separate-drivers Worker pass
+2026-05-07T14:20:14 kernel-separate-drivers Orchestrator pass 21
+2026-05-07T14:21:50 kernel-separate-drivers Manager pass Drop clock core source from active patch
+2026-05-07T14:22:29 kernel-separate-drivers Minimizer pass One diff block; smaller is zero progress
+2026-05-07T14:28:16 kernel-separate-drivers Worker pass
+2026-05-07T14:36:43 kernel-separate-drivers Verifier pass no issues
+2026-05-07T14:37:15 kernel-separate-drivers Tester pass 21
+2026-05-07T14:38:28 kernel-separate-drivers Enemy pass none
+2026-05-07T14:39:25 kernel-separate-drivers Worker pass
+2026-05-07T14:40:04 kernel-separate-drivers Orchestrator pass 22
+2026-05-07T14:41:18 kernel-separate-drivers Manager pass Stage patch without STM32MP13 clock source
+2026-05-07T14:42:11 kernel-separate-drivers Minimizer pass One staged file; less gives no patch
+2026-05-07T14:43:38 kernel-separate-drivers Worker pass
+2026-05-07T14:45:11 kernel-separate-drivers Verifier pass no issues
+2026-05-07T14:45:43 kernel-separate-drivers Tester pass 22
+2026-05-07T14:46:55 kernel-separate-drivers Enemy pass none
+2026-05-07T14:47:44 kernel-separate-drivers Worker pass
+2026-05-07T14:48:23 kernel-separate-drivers Orchestrator pass 23
+2026-05-07T14:48:58 kernel-separate-drivers Manager pass Drop MP13 source from active patch
+2026-05-07T14:50:13 kernel-separate-drivers Minimizer pass Atomic active swap; less leaves source diff
+2026-05-07T14:54:13 kernel-separate-drivers Worker pass
+2026-05-07T14:56:02 kernel-separate-drivers Verifier pass no issues
+2026-05-07T14:56:50 kernel-separate-drivers Tester pass 23
+2026-05-07T14:58:29 kernel-separate-drivers Enemy pass none
+2026-05-07T14:59:32 kernel-separate-drivers Worker pass
+2026-05-07T15:01:07 kernel-separate-drivers Stopper pass mission accomplished
+2026-05-07T16:37:16 kernel-upgrade Orchestrator pass 1
+2026-05-07T16:37:58 kernel-upgrade Manager pass Record current Linux commit
+2026-05-07T16:38:38 kernel-upgrade Minimizer pass One fact; less records nothing
+2026-05-07T16:39:13 kernel-upgrade Worker pass
+2026-05-07T16:40:33 kernel-upgrade Verifier pass no issues
+2026-05-07T16:41:18 kernel-upgrade Tester fail 1
+2026-05-07T16:41:59 kernel-upgrade Worker pass
+2026-05-07T16:42:59 kernel-upgrade Verifier pass none
+2026-05-07T16:43:38 kernel-upgrade Tester fail 2
+2026-05-07T16:45:09 kernel-upgrade Worker pass
+2026-05-07T16:46:46 kernel-upgrade Verifier pass no issues
+2026-05-07T16:47:22 kernel-upgrade Tester fail 3
+2026-05-07T16:48:33 kernel-upgrade Worker pass
+2026-05-07T16:49:44 kernel-upgrade Verifier pass no issues
+2026-05-07T16:50:13 kernel-upgrade Tester fail 4
+2026-05-07T16:52:13 kernel-upgrade Worker pass
+2026-05-07T16:53:31 kernel-upgrade Verifier pass none
+2026-05-07T16:54:21 kernel-upgrade Tester fail 3
+2026-05-07T16:55:35 kernel-upgrade Worker pass
+2026-05-07T16:56:32 kernel-upgrade Verifier pass no issues
+2026-05-07T16:57:30 kernel-upgrade Worker pass
+2026-05-07T17:00:44 kernel-upgrade Verifier pass no issues
+2026-05-07T17:09:56 kernel-upgrade Tester fail 5
+2026-05-07T17:11:25 kernel-upgrade Worker pass
+2026-05-07T17:13:17 kernel-upgrade Verifier pass none
+2026-05-07T17:14:05 kernel-upgrade Tester fail 5
+2026-05-07T17:14:47 kernel-upgrade Worker pass
+2026-05-07T17:15:46 kernel-upgrade Verifier pass none
+2026-05-07T17:16:41 kernel-upgrade Tester fail 7
+2026-05-07T17:17:05 kernel-upgrade Worker pass
+2026-05-07T17:18:15 kernel-upgrade Verifier fail no st/custom.dtb rule
+2026-05-07T17:19:04 kernel-upgrade Worker pass
+2026-05-07T17:20:47 kernel-upgrade Verifier fail missing stm32mp13_sys_bus.h
+2026-05-07T17:22:04 kernel-upgrade Worker pass
+2026-05-07T17:23:01 kernel-upgrade Worker pass
+2026-05-07T17:25:00 kernel-upgrade Verifier pass none
+2026-05-07T17:25:52 kernel-upgrade Tester fail 7
+2026-05-07T17:26:11 kernel-upgrade Worker pass
+2026-05-07T17:27:48 kernel-upgrade Verifier pass no issues
+2026-05-07T17:29:06 kernel-upgrade Tester pass 8
+2026-05-07T17:30:47 kernel-upgrade Enemy fail stale-zImage PSCI-DTS dirty-linux
+2026-05-07T17:31:34 kernel-upgrade Worker pass
+2026-05-07T17:32:42 kernel-upgrade Verifier pass no issues
+2026-05-07T17:34:21 kernel-upgrade Tester pass 8
+2026-05-07T17:35:59 kernel-upgrade Enemy fail dirty-linux-stale-objects
+2026-05-07T17:38:19 kernel-upgrade Worker pass
+2026-05-07T17:40:46 kernel-upgrade Orchestrator pass 2
+2026-05-07T17:42:24 kernel-upgrade Manager pass banner boot plan
+2026-05-07T17:43:39 kernel-upgrade Minimizer pass banner-is-first-kernel-proof
+2026-05-07T17:45:38 kernel-upgrade Worker pass
+2026-05-07T17:47:17 kernel-upgrade Verifier fail userspace invalid helper
+2026-05-07T17:47:37 kernel-upgrade Worker pass
+2026-05-07T17:48:48 kernel-upgrade Verifier pass none
+2026-05-07T19:00:32 kernel-upgrade Tester fail 9
+2026-05-07T19:04:59 kernel-upgrade Worker pass
+2026-05-07T19:07:12 kernel-upgrade Verifier pass none
+2026-05-07T19:40:09 kernel-upgrade Tester fail 8
+2026-05-07T19:42:38 kernel-upgrade Worker pass
+2026-05-07T19:44:46 kernel-upgrade Verifier pass none
+2026-05-07T20:08:28 kernel-upgrade Tester fail 9
+2026-05-07T20:11:44 kernel-upgrade Worker pass
+2026-05-07T20:13:56 kernel-upgrade Verifier pass none
+2026-05-07T20:40:01 kernel-upgrade Tester fail 9
+2026-05-07T20:41:47 kernel-upgrade Worker pass
+2026-05-07T20:43:25 kernel-upgrade Verifier pass none
+2026-05-07T21:08:49 kernel-upgrade Tester fail 9
+2026-05-07T21:10:33 kernel-upgrade Worker pass
+2026-05-07T21:11:43 kernel-upgrade Verifier pass none
+2026-05-07T21:25:25 kernel-upgrade Tester fail 10
+2026-05-07T21:26:57 kernel-upgrade Worker pass
+2026-05-07T21:28:31 kernel-upgrade Verifier pass none
+2026-05-07T21:37:56 kernel-upgrade Tester fail 9
+2026-05-07T21:39:01 kernel-upgrade Worker pass
+2026-05-07T21:40:25 kernel-upgrade Verifier pass none
+2026-05-07T21:59:46 kernel-upgrade Tester fail 11
+2026-05-07T22:01:05 kernel-upgrade Worker pass
+2026-05-07T22:02:51 kernel-upgrade Verifier pass none
+2026-05-07T22:05:05 kernel-upgrade Tester fail 9
+2026-05-07T22:05:30 kernel-upgrade Worker pass
+2026-05-07T22:49:58 kernel-upgrade Tester fail 11
+2026-05-07T22:49:58 kernel-upgrade Orchestrator pass 3
+2026-05-07T22:52:09 kernel-upgrade Worker pass
+2026-05-07T22:53:51 kernel-upgrade Verifier fail etzpc compatible still old
+2026-05-07T22:55:23 kernel-upgrade Worker pass
+2026-05-07T22:58:33 kernel-upgrade Verifier fail custom dtb missing
+2026-05-07T23:01:02 kernel-upgrade Worker pass
+2026-05-07T23:03:14 kernel-upgrade Verifier pass none
+2026-05-07T23:20:05 kernel-upgrade Tester fail 11
+2026-05-07T23:22:54 kernel-upgrade Worker pass
+2026-05-07T23:24:47 kernel-upgrade Verifier pass none
+2026-05-07T23:44:44 kernel-upgrade Tester fail 11
+2026-05-07T23:47:39 kernel-upgrade Worker pass
+2026-05-07T23:49:33 kernel-upgrade Verifier pass none
+2026-05-08T00:04:42 kernel-upgrade Tester fail 11
+2026-05-08T00:07:11 kernel-upgrade Worker pass
+2026-05-08T00:09:23 kernel-upgrade Verifier pass none
+2026-05-08T00:20:46 kernel-upgrade Tester fail 11
+2026-05-08T00:24:32 kernel-upgrade Worker pass
+2026-05-08T00:26:19 kernel-upgrade Verifier pass none
+2026-05-08T00:55:25 kernel-upgrade Tester fail 11
+2026-05-08T00:58:10 kernel-upgrade Worker pass
+2026-05-08T01:01:12 kernel-upgrade Verifier pass none
+2026-05-08T01:20:17 kernel-upgrade Tester fail 11
+2026-05-08T01:22:11 kernel-upgrade Orchestrator pass 4
+2026-05-08T01:24:48 kernel-upgrade Worker pass
+2026-05-08T01:27:16 kernel-upgrade Verifier pass none
+2026-05-08T02:04:25 kernel-upgrade Tester fail 11
+2026-05-08T02:08:31 kernel-upgrade Worker pass
+2026-05-08T02:10:55 kernel-upgrade Verifier pass none
+2026-05-08T02:21:48 kernel-upgrade Tester fail 11
+2026-05-08T02:26:36 kernel-upgrade Worker pass
+2026-05-08T02:31:11 kernel-upgrade Verifier fail PLL4_P-not-exported
+2026-05-08T02:35:58 kernel-upgrade Worker pass
+2026-05-08T02:39:03 kernel-upgrade Verifier pass none
+2026-05-08T02:46:13 kernel-upgrade Tester pass 12
+2026-05-08T02:47:47 kernel-upgrade Enemy fail WIP-not-advanced_dirty-linux
+2026-05-08T02:49:42 kernel-upgrade Worker pass
+2026-05-08T02:51:28 kernel-upgrade Enemy pass none
+2026-05-08T02:53:27 kernel-upgrade Stopper fail illegal stop
+2026-05-08T02:53:52 kernel-upgrade Orchestrator pass preserved-untracked
+2026-05-08T02:54:54 kernel-upgrade Stopper pass mission accomplished
+2026-05-08T11:00:14 kernel-upgrade Orchestrator pass 5
+2026-05-08T11:00:59 kernel-upgrade Manager pass record-upstream-target
+2026-05-08T11:02:11 kernel-upgrade Minimizer pass All target facts atomic; less not reproducible
+2026-05-08T11:03:30 kernel-upgrade Worker pass
+2026-05-08T11:05:07 kernel-upgrade Verifier pass none
+2026-05-08T11:07:26 kernel-upgrade Tester fail 9
+2026-05-08T11:08:40 kernel-upgrade Worker pass
+2026-05-08T11:10:06 kernel-upgrade Verifier pass lease-contention-accurate
+2026-05-08T11:40:51 kernel-upgrade Tester fail 2
+2026-05-08T11:42:10 kernel-upgrade Worker pass
+2026-05-08T11:43:14 kernel-upgrade Verifier pass linux clean
+2026-05-08T11:53:20 kernel-upgrade Tester fail 11
+2026-05-08T11:54:27 kernel-upgrade Worker pass
+2026-05-08T11:55:54 kernel-upgrade Verifier pass old-artifact-status-errors
+2026-05-08T12:06:50 kernel-upgrade Tester pass 13
+2026-05-08T12:07:58 kernel-upgrade Enemy fail dirty-linux-source-edits
+2026-05-08T12:09:05 kernel-upgrade Worker pass
+2026-05-08T12:11:10 kernel-upgrade Verifier pass linux-clean
+2026-05-08T12:12:16 kernel-upgrade Enemy pass none
+2026-05-08T12:13:42 kernel-upgrade Worker pass
