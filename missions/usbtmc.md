@@ -103,14 +103,15 @@ def check(extract_dir):
             'usb_gadget_dir ' in out)
 ```
 
-## WIP
-
 ### EVB Linux MSC backing file
 
-Add only the target-side creation of a small deterministic regular file
-that will later back the mass-storage function. This step depends on
-configfs availability but must not create a gadget function,
-configuration link, or UDC binding.
+Add only the target-side boot-time creation of
+`/var/lib/usbtmc/msc-backing.bin`, a deterministic 4096-byte regular
+file that will later back the mass-storage function. The file content
+must begin with the ASCII marker `USBTMC EVB MSC BACKING\n`; remaining
+bytes may be zero padding. This step depends on configfs availability
+but must not create a gadget function, gadget directory, configuration
+link, or UDC binding.
 
 Build:
 
@@ -123,12 +124,89 @@ make -C stm32mp135_test_board br
 make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
 ```
 
-Test: boot the EVB Linux image through the existing DFU/MSC/SD path,
-wait for userspace, and capture target-side evidence that the backing
-file exists with the expected size and content.
+Artifacts:
 
-Verify: Linux reached userspace and the captured target artefact shows
-the mass-storage backing file was created after Linux boot.
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (max 15 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@sdcard.img offset_lba=0
+msc.evb:verify data=@sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=5000
+mp135.evb:uart_write data="two\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=15000
+mp135.evb:uart_write data="jump"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.evb:uart_expect sentinel="Welcome to STM32MP135 EVB" timeout_ms=10000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=15000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="Password:" timeout_ms=5000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=5000
+mp135.evb:uart_write data="p=/var/lib/usbtmc/msc-backing.bin\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data="g=/sys/kernel/config/usb_gadget/usbtmc\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data="test -f $p&&printf M&&printf SC_BACKING_FILE_OK;echo\r"
+mp135.evb:uart_expect sentinel="MSC_BACKING_FILE_OK" timeout_ms=5000
+mp135.evb:uart_write data='s=$(wc -c < $p 2>/dev/null);printf M;printf SC_BACKING_SIZE_%s "$s";echo\r'
+mp135.evb:uart_expect sentinel="MSC_BACKING_SIZE_4096" timeout_ms=5000
+mp135.evb:uart_write data='m=$(dd if=$p bs=22 count=1 2>/dev/null);printf M;printf SC_BACKING_MARKER_%s "$m";echo\r'
+mp135.evb:uart_expect sentinel="MSC_BACKING_MARKER_USBTMC EVB MSC BACKING" timeout_ms=5000
+mp135.evb:uart_write data="test ! -d $g&&printf M&&printf SC_BACKING_NO_GADGET_OK;echo\r"
+mp135.evb:uart_expect sentinel="MSC_BACKING_NO_GADGET_OK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=evb_msc_backing_file
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    out = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    return (Verification.op_succeeded(ops, 'dfu.evb', 'flash_layout') and
+            Verification.op_succeeded(ops, 'msc.evb', 'verify') and
+            Verification.op_succeeded(ops, 'mp135.evb', 'uart_expect') and
+            'Welcome to STM32MP135 EVB' in out and
+            'MSC_BACKING_FILE_OK' in out and
+            'MSC_BACKING_SIZE_4096' in out and
+            'MSC_BACKING_MARKER_USBTMC EVB MSC BACKING' in out and
+            'MSC_BACKING_NO_GADGET_OK' in out and
+            'MSC_BACKING_FAIL' not in out)
+```
+
+## WIP
 
 ### EVB Linux MSC function creation
 
