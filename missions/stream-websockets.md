@@ -196,6 +196,7 @@ Artifacts:
 ```
 stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/linux/arch/arm/boot/dts/stm32mp135f-dk.dtb
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
@@ -231,6 +232,8 @@ Verify:
 ```
 def check(extract_dir):
     from pathlib import Path
+    import subprocess
+    import tempfile
 
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -238,6 +241,24 @@ def check(extract_dir):
     if 'CONFIG_CMDLINE="root=' in kernel_config:
         return False
     if "CONFIG_CMDLINE_FORCE=y" in kernel_config:
+        return False
+    sd_image = Path(artifacts["sdcard.img"])
+    with sd_image.open("rb") as f:
+        f.seek(446 + 16)
+        dtb_entry = f.read(16)
+        dtb_lba = int.from_bytes(dtb_entry[8:12], "little")
+        dtb_sectors = int.from_bytes(dtb_entry[12:16], "little")
+        if not dtb_lba or not dtb_sectors:
+            return False
+        f.seek(dtb_lba * 512)
+        dtb_blob = f.read(dtb_sectors * 512)
+    with tempfile.NamedTemporaryFile() as tmp:
+        tmp.write(dtb_blob)
+        tmp.flush()
+        bootargs = subprocess.check_output(
+            ["fdtget", tmp.name, "/chosen", "bootargs"],
+            text=True).strip()
+    if bootargs != "root=/dev/mmcblk0p3 clk_ignore_unused":
         return False
     ops = Verification.load_ops(extract_dir)
     return (Verification.op_succeeded(ops, "msc.evb", "write") and
@@ -342,8 +363,6 @@ def check(extract_dir):
     return "stream_ws_ssh_reachable" in out.splitlines()
 ```
 
-## WIP
-
 ### SSH plugin exposes local put operation
 
 Add local `ssh:put` support to the test server SSH plugin before any
@@ -406,6 +425,8 @@ def check(extract_dir):
     ]
     return all(item in text for item in required)
 ```
+
+## WIP
 
 ## Planned Mission Arc
 

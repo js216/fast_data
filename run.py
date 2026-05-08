@@ -93,6 +93,7 @@ class Runner:
     # the sum of the non-zero entries.
     RETRY_BACKOFF_S = (0, 3, 10, 30)
     FOREIGN_LEASE_FALLBACK_WAIT_S = 60
+    CANCEL_DRAIN_WAIT_S = 30
     NO_HARDWARE_TEST = '__NO_HARDWARE__'
 
     def __init__(self, md_path):
@@ -182,6 +183,43 @@ class Runner:
     @staticmethod
     def is_no_hardware_test(test):
         return test == Runner.NO_HARDWARE_TEST
+
+    @staticmethod
+    def advance_wip_text(text):
+        """Move ## WIP past exactly one following ### section."""
+        wip_match = re.search(r'(?m)^## WIP[ \t]*\n?', text)
+        if wip_match is None:
+            return text
+
+        first_section = re.search(r'(?m)^### .+$', text[wip_match.end():])
+        if first_section is None:
+            return text
+        first_end = wip_match.end() + first_section.end()
+
+        next_section = re.search(r'(?m)^##(?:#)? .+$', text[first_end:])
+        insert_at = (len(text) if next_section is None
+                     else first_end + next_section.start())
+
+        remove_end = wip_match.end()
+        if remove_end < len(text) and text[remove_end] == '\n':
+            remove_end += 1
+        marker = text[wip_match.start():wip_match.end()].rstrip()
+        without_marker = text[:wip_match.start()] + text[remove_end:]
+        if insert_at > wip_match.start():
+            insert_at -= remove_end - wip_match.start()
+
+        before = without_marker[:insert_at].rstrip('\n')
+        after = without_marker[insert_at:].lstrip('\n')
+        if after:
+            return f'{before}\n\n{marker}\n\n{after}'
+        return f'{before}\n\n{marker}\n'
+
+    def advance_wip(self):
+        """Advance this mission's WIP marker one section after full PASS."""
+        text = self.md_path.read_text()
+        moved = self.advance_wip_text(text)
+        if moved != text:
+            self.md_path.write_text(moved)
 
     @staticmethod
     def parse_foreach(text):
@@ -379,6 +417,7 @@ class Runner:
         running_since = None
         countdown_open = False
         rc = None
+        canceled_digest = None
         while True:
             rc = proc.poll()
             if rc is not None:
@@ -400,6 +439,7 @@ class Runner:
                     and (time.time() - running_since) > run_deadline):
                 digest = self._find_active_job_digest(description)
                 self.cancel_job(digest)
+                canceled_digest = digest
                 proc.terminate()
                 try:
                     proc.wait(timeout=5)
@@ -409,6 +449,7 @@ class Runner:
                              b'budget; killed)\n')
                 self._log('  (agent watchdog: submit.py exceeded '
                           'budget; killed)')
+                self._wait_for_canceled_job(description, digest, log_fh)
                 rc = proc.poll() or 1
                 break
             if live:
@@ -437,9 +478,10 @@ class Runner:
             col = len(line_prefix) + 1
             sys.stdout.write(f'\r\033[K\033[A\033[{col}G')
             sys.stdout.flush()
-        if rc != 0:
+        if rc != 0 and canceled_digest is None:
             digest = self._find_active_job_digest(description)
             self.cancel_job(digest)
+            self._wait_for_canceled_job(description, digest, log_fh)
         return rc
 
     def capture_lease_token(self, extract_dir, plan_text):
@@ -480,6 +522,45 @@ class Runner:
         ]
         hit = matches[-1] if matches else None
         return hit.get('digest') if hit else None
+
+    def _active_matching_jobs(self, description, digest=None):
+        """Return active jobs matching this runner's exact description."""
+        try:
+            with urllib.request.urlopen(f'{self.SERVER}/jobs',
+                                        timeout=5) as r:
+                jobs = json.load(r)
+        except Exception:
+            return []
+        return [
+            j for j in jobs
+            if j.get('meta', {}).get('description') == description
+            and (digest is None or j.get('digest') == digest)
+            and j.get('status') in ('queued', 'running')
+        ]
+
+    def _wait_for_canceled_job(self, description, digest, log_fh):
+        """Wait briefly for test_serv to stop showing a canceled job active."""
+        deadline = time.monotonic() + self.CANCEL_DRAIN_WAIT_S
+        waited = False
+        while self._active_matching_jobs(description, digest):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                target = digest or description
+                msg = ('  (agent watchdog: canceled job still active '
+                       f'after {self.CANCEL_DRAIN_WAIT_S}s: {target})')
+                log_fh.write((msg + '\n').encode())
+                log_fh.flush()
+                self._log(msg)
+                return False
+            waited = True
+            time.sleep(min(1, remaining))
+        if waited:
+            target = digest or description
+            msg = f'  (agent watchdog: canceled job drained: {target})'
+            log_fh.write((msg + '\n').encode())
+            log_fh.flush()
+            self._log(msg)
+        return True
 
     def _recover_outputs(self, digest, extract_dir, log_fh):
         """Recover an artefact when submit.py lost its HTTP connection."""
@@ -611,7 +692,11 @@ class Runner:
         last_extract = None
         last_log = None
         digest = None
-        for attempt, backoff in enumerate(self.RETRY_BACKOFF_S):
+        backoffs = list(self.RETRY_BACKOFF_S)
+        foreign_lease_extensions = 0
+        attempt = 0
+        while attempt < len(backoffs):
+            backoff = backoffs[attempt]
             if backoff:
                 time.sleep(backoff)
             attempt_dir = work_dir / f'attempt_{attempt}'
@@ -626,7 +711,11 @@ class Runner:
                 self._release_failed_attempt_lease(extract, test)
                 if self._lease_released_in_attempt(extract):
                     break
-                self._wait_for_foreign_lease(extract)
+                if self._wait_for_foreign_lease(extract):
+                    if self._extend_retries_after_foreign_lease(
+                            backoffs, attempt, foreign_lease_extensions):
+                        foreign_lease_extensions += 1
+                attempt += 1
                 continue
             try:
                 ok = self.run_verify(verify, artifacts, extract, item)
@@ -635,27 +724,46 @@ class Runner:
                 self._release_failed_attempt_lease(extract, test)
                 if self._lease_released_in_attempt(extract):
                     break
-                self._wait_for_foreign_lease(extract)
+                if self._wait_for_foreign_lease(extract):
+                    if self._extend_retries_after_foreign_lease(
+                            backoffs, attempt, foreign_lease_extensions):
+                        foreign_lease_extensions += 1
+                attempt += 1
                 continue
             if not ok:
                 last_reason = '   verify check() returned False'
                 self._release_failed_attempt_lease(extract, test)
                 if self._lease_released_in_attempt(extract):
                     break
-                self._wait_for_foreign_lease(extract)
+                if self._wait_for_foreign_lease(extract):
+                    if self._extend_retries_after_foreign_lease(
+                            backoffs, attempt, foreign_lease_extensions):
+                        foreign_lease_extensions += 1
+                attempt += 1
                 continue
             return True, digest, None, extract, log
         return False, digest, last_reason, last_extract, last_log
+
+    @staticmethod
+    def _extend_retries_after_foreign_lease(
+            backoffs, attempt, foreign_lease_extensions):
+        """Allow one immediate retry after a final foreign-lease wait."""
+        if foreign_lease_extensions:
+            return False
+        if attempt == len(backoffs) - 1:
+            backoffs.append(0)
+            return True
+        return False
 
     def _wait_for_foreign_lease(self, extract_dir):
         """Pause retries while a plan failed on another active lease."""
         errors = extract_dir / 'errors.log'
         if not errors.exists():
-            return
+            return False
         m = re.search(r"is leased to '([0-9a-f]+)'", errors.read_text(
             errors='replace'))
         if not m:
-            return
+            return False
         token = m.group(1)
         try:
             with urllib.request.urlopen(f'{self.SERVER}/leases',
@@ -674,6 +782,8 @@ class Runner:
             self._log(
                 f'  (waiting {delay:.0f}s for foreign lease {token[:8]})')
             time.sleep(delay)
+            return True
+        return False
 
     def _lease_released_in_attempt(self, extract_dir):
         """Return True if the attempt consumed its lease token."""
@@ -836,6 +946,7 @@ class Runner:
 
             print(colored('PASS'))
             self._log(f'{colored("PASS")} {total - skipped}/{total}')
+            self.advance_wip()
             return 0
         finally:
             self.log_fh.close()
