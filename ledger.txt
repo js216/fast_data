@@ -59,3 +59,24 @@
 2026-05-07T18:51:28 usbtmc Verifier pass none
 2026-05-07T19:37:12 usbtmc Tester pass 2
 2026-05-07T19:39:11 usbtmc Worker pass
+2026-05-07T19:40:24 usbtmc Orchestrator pass 3
+2026-05-07T19:41:00 usbtmc Manager pass descriptor-only MSC gadget
+2026-05-07T19:41:52 usbtmc Minimizer pass descriptor identity is atomic
+2026-05-07T19:44:25 usbtmc Worker pass
+2026-05-07T19:46:52 usbtmc Verifier fail echo false positives
+2026-05-07T19:48:34 usbtmc Worker pass
+2026-05-07T19:50:08 usbtmc Verifier pass none
+2026-05-07T20:03:45 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-07T20:04:42 usbtmc Worker pass
+2026-05-07T20:05:34 usbtmc Verifier pass bench-contention-only
+2026-05-07T21:02:51 usbtmc Tester fail 1 backing_gadget_regression
+2026-05-07T21:05:01 usbtmc Worker pass
+2026-05-07T21:06:59 usbtmc Verifier pass none
+2026-05-07T21:28:47 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-07T21:30:06 usbtmc Worker pass
+2026-05-07T21:31:09 usbtmc Verifier pass bench-lease-only
+2026-05-07T21:48:32 usbtmc Tester fail 2 bench_mcu_leased
+2026-05-07T21:49:32 usbtmc Worker pass
+2026-05-07T21:50:25 usbtmc Verifier pass bench_contention_only
+2026-05-07T22:21:48 usbtmc Tester pass 3
+2026-05-07T22:23:42 usbtmc Worker pass
