@@ -20,3 +20,85 @@
 2026-05-07T13:01:20 kernel-clock-bringup Tester pass 3
 2026-05-07T13:03:01 kernel-clock-bringup Enemy pass dirty_precommit_expected
 2026-05-07T13:04:13 kernel-clock-bringup Worker pass
+2026-05-07T13:06:11 kernel-clock-bringup Orchestrator pass 3
+2026-05-07T13:06:52 kernel-clock-bringup Manager pass Keep stgen_k enabled no-flag boot
+2026-05-07T13:08:02 kernel-clock-bringup Minimizer pass stgen_k-only is atomic; smaller proves nothing
+2026-05-07T13:11:17 kernel-clock-bringup Worker pass
+2026-05-07T13:13:58 kernel-clock-bringup Verifier pass none
+2026-05-07T14:20:03 kernel-clock-bringup Tester fail 3
+2026-05-07T14:23:18 kernel-clock-bringup Worker pass
+2026-05-07T14:24:52 kernel-clock-bringup Verifier pass none
+2026-05-07T15:03:54 kernel-clock-bringup Tester fail 3
+2026-05-07T15:05:55 kernel-clock-bringup Worker pass
+2026-05-07T15:07:53 kernel-clock-bringup Verifier pass local-checks-clean
+2026-05-07T15:25:06 kernel-clock-bringup Tester fail 2
+2026-05-07T15:26:57 kernel-clock-bringup Worker pass
+2026-05-07T15:28:37 kernel-clock-bringup Verifier fail trailing-whitespace
+2026-05-07T15:30:53 kernel-clock-bringup Worker pass
+2026-05-07T15:32:30 kernel-clock-bringup Verifier pass local-checks-clean
+2026-05-07T16:27:12 kernel-clock-bringup Tester fail 3
+2026-05-07T16:29:47 kernel-clock-bringup Worker pass
+2026-05-07T16:32:43 kernel-clock-bringup Verifier fail patch-whitespace
+2026-05-07T16:33:36 kernel-clock-bringup Worker pass
+2026-05-07T16:35:29 kernel-clock-bringup Verifier pass none
+2026-05-07T16:59:13 kernel-clock-bringup Tester fail 3
+2026-05-07T17:02:18 kernel-clock-bringup Worker pass
+2026-05-07T17:03:51 kernel-clock-bringup Verifier pass cleanup-clean
+2026-05-07T17:20:17 kernel-clock-bringup Tester fail 2
+2026-05-07T17:21:48 kernel-clock-bringup Worker pass
+2026-05-07T17:23:22 kernel-clock-bringup Verifier pass cleanup-clean
+2026-05-07T17:47:16 kernel-clock-bringup Tester fail 2
+2026-05-07T17:48:38 kernel-clock-bringup Worker pass
+2026-05-07T17:50:11 kernel-clock-bringup Verifier pass cleanup-clean
+2026-05-07T17:53:46 kernel-clock-bringup Tester fail 0
+2026-05-07T17:55:10 kernel-clock-bringup Worker pass
+2026-05-07T17:57:02 kernel-clock-bringup Verifier pass none
+2026-05-07T18:28:00 kernel-clock-bringup Tester fail 3
+2026-05-07T18:30:29 kernel-clock-bringup Worker pass
+2026-05-07T18:31:52 kernel-clock-bringup Verifier pass cleanup-clean
+2026-05-07T18:53:31 kernel-clock-bringup Tester fail 3
+2026-05-07T18:54:51 kernel-clock-bringup Worker pass
+2026-05-07T18:56:38 kernel-clock-bringup Verifier pass cleanup-clean
+2026-05-07T19:28:04 kernel-clock-bringup Tester fail 3
+2026-05-07T19:32:11 kernel-clock-bringup Worker pass
+2026-05-07T19:33:52 kernel-clock-bringup Orchestrator pass 8
+2026-05-07T19:34:54 kernel-clock-bringup Verifier pass local-checks-clean
+2026-05-07T19:58:20 kernel-clock-bringup Tester fail 3
+2026-05-07T19:59:15 kernel-clock-bringup Worker pass
+2026-05-07T20:00:25 kernel-clock-bringup Verifier pass cleanup-correct
+2026-05-07T20:04:15 kernel-clock-bringup Tester fail 0
+2026-05-07T20:05:34 kernel-clock-bringup Worker pass
+2026-05-07T20:06:29 kernel-clock-bringup Verifier pass no-issues
+2026-05-07T20:39:32 kernel-clock-bringup Tester fail 2
+2026-05-07T20:40:50 kernel-clock-bringup Worker pass
+2026-05-07T20:42:05 kernel-clock-bringup Verifier pass cleanup-clean
+2026-05-07T21:43:48 kernel-clock-bringup Tester fail 3
+2026-05-07T21:47:14 kernel-clock-bringup Worker pass
+2026-05-07T21:49:03 kernel-clock-bringup Verifier pass no-issues
+2026-05-07T21:52:10 kernel-clock-bringup Tester fail 0
+2026-05-07T21:53:17 kernel-clock-bringup Worker pass
+2026-05-07T21:54:15 kernel-clock-bringup Verifier pass no-issues
+2026-05-07T22:44:39 kernel-clock-bringup Tester fail 3
+2026-05-07T22:45:50 kernel-clock-bringup Worker pass
+2026-05-07T22:46:52 kernel-clock-bringup Verifier pass no-issues
+2026-05-07T23:09:33 kernel-clock-bringup Tester fail 1
+2026-05-07T23:10:35 kernel-clock-bringup Worker pass
+2026-05-07T23:11:30 kernel-clock-bringup Verifier pass no-issues
+2026-05-07T23:55:01 kernel-clock-bringup Tester fail 2
+2026-05-07T23:56:41 kernel-clock-bringup Worker pass
+2026-05-07T23:57:46 kernel-clock-bringup Verifier pass no-issues
+2026-05-08T00:56:45 kernel-clock-bringup Tester fail 1
+2026-05-08T00:58:04 kernel-clock-bringup Worker pass
+2026-05-08T00:59:16 kernel-clock-bringup Verifier pass no-issues
+2026-05-08T01:09:27 kernel-clock-bringup Tester fail 1
+2026-05-08T01:11:16 kernel-clock-bringup Worker pass
+2026-05-08T01:12:30 kernel-clock-bringup Verifier pass no-issues
+2026-05-08T02:06:04 kernel-clock-bringup Tester fail 2
+2026-05-08T02:07:20 kernel-clock-bringup Worker pass
+2026-05-08T02:08:27 kernel-clock-bringup Verifier pass no-issues
+2026-05-08T03:08:52 kernel-clock-bringup Tester pass 4
+2026-05-08T03:11:01 kernel-clock-bringup Enemy fail WIP_not_advanced_dirty_linux
+2026-05-08T03:12:57 kernel-clock-bringup Worker pass
+2026-05-08T03:14:52 kernel-clock-bringup Verifier pass no-issues
+2026-05-08T03:15:49 kernel-clock-bringup Enemy pass no-issues
+2026-05-08T03:17:08 kernel-clock-bringup Worker pass
