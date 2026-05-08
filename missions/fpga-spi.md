@@ -7331,7 +7331,6 @@ def check(_extract_dir):
         return False
 
     forbidden = [
-        "case 'p':",
         'fpga.hx1k',
         'mp135.evb:uart_open',
         'uart_write data=',
@@ -7445,7 +7444,6 @@ def check(_extract_dir):
         return False
 
     forbidden = [
-        "case 'p':",
         'fpga.hx1k',
         'mp135.evb:uart_open',
         'uart_write data=',
@@ -7533,7 +7531,6 @@ def check(_extract_dir):
         return False
 
     forbidden = [
-        "case 'p':",
         'fpga.hx1k',
         'mp135.evb:uart_open',
         'uart_write data=',
@@ -7551,6 +7548,98 @@ decode, only a print string, or a shorter loop would not expose the
 required burst behavior; adding checksum printing, FPGA interaction,
 SPI, or hardware comparison would combine multiple semantics in one
 step.
+
+### Add MP135 prbs_test print-checksum UART command
+
+Extend the MP135 `prbs_test` UART loop with one new command: byte `'p'`
+prints the current 32-bit XOR checksum as exactly eight lowercase hex
+digits followed by CRLF. Keep the existing ready banner, `'r'` reset
+command, `'s'` single-step command, `'b'` burst command, PRBS recurrence,
+and checksum fold unchanged. Do not add FPGA UART, SPI, hardware
+comparison, or any cross-device checksum comparison in this step.
+
+Build:
+
+```
+make -C stm32mp135_test_board/baremetal/prbs_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/prbs_test/build/main.stm32
+```
+
+Test: no hardware.
+
+```
+mark tag=prbs_test_uart_print_checksum_command
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md')
+    try:
+        mission_text = mission.read_text(encoding='utf-8',
+                                         errors='replace')
+    except OSError:
+        return False
+    if 'mark tag=prbs_test_uart_print_checksum_command' not in mission_text:
+        return False
+
+    base = Path('stm32mp135_test_board/baremetal/prbs_test')
+    mk = base / 'Makefile'
+    src = base / 'src/main.c'
+    img = base / 'build/main.stm32'
+    try:
+        src_text = src.read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        return False
+
+    if not (mk.is_file() and img.is_file() and img.stat().st_size > 0):
+        return False
+
+    required = [
+        'my_printf("prbs_test ready\\r\\n");',
+        "case 'r':",
+        "case 's':",
+        "case 'b':",
+        "case 'p':",
+        'checksum',
+        'my_printf("\\r\\n");',
+    ]
+    if not all(tok in src_text for tok in required):
+        return False
+
+    has_hex_format = (
+        '%08' in src_text or
+        '0123456789abcdef' in src_text or
+        '0123456789ABCDEF' in src_text
+    )
+    if not has_hex_format:
+        return False
+
+    forbidden = [
+        'fpga.hx1k',
+        'mp135.evb:uart_open',
+        'uart_write data=',
+        'uart_expect sentinel=',
+        'spi',
+    ]
+    return not any(tok in src_text for tok in forbidden)
+```
+
+Rationale: this is the smallest meaningful command slice after the
+MP135 burst command. A print command exposes the current MP135
+PRBS/checksum state over UART so later steps can compare it with the
+FPGA checksum. Splitting smaller into only command decode, only a
+format helper, or only a newline would not expose a checksum value;
+adding FPGA UART, SPI, hardware comparison, or cross-device comparison
+would combine multiple semantics in one step.
 
 ## WIP
 

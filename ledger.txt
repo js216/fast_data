@@ -966,3 +966,13 @@
 2026-05-08T11:17:23 fpga-spi Verifier pass none
 2026-05-08T12:33:37 fpga-spi Tester pass 82
 2026-05-08T12:34:11 fpga-spi Worker pass
+2026-05-08T12:35:12 fpga-spi Orchestrator pass 91
+2026-05-08T12:36:28 fpga-spi Manager pass Add-MP135-prbs-print-checksum
+2026-05-08T12:36:44 fpga-spi Minimizer pass one-UART-checksum-observable
+2026-05-08T12:37:22 fpga-spi Worker pass
+2026-05-08T12:38:28 fpga-spi Verifier pass none
+2026-05-08T13:27:24 fpga-spi Tester fail 79 fail reset-forbids-print artefact=/tmp/runpy-10ppmnm_/add_mp135_prbs_test_reset_uart_command
+2026-05-08T13:28:11 fpga-spi Worker pass
+2026-05-08T13:29:49 fpga-spi Verifier pass none
+2026-05-08T14:46:18 fpga-spi Tester pass 83
+2026-05-08T14:46:39 fpga-spi Worker pass
