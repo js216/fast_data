@@ -115,3 +115,11 @@
 2026-05-08T03:02:42 stream-websockets Verifier pass none
 2026-05-08T03:19:11 stream-websockets Tester pass 8
 2026-05-08T03:20:57 stream-websockets Enemy pass none
+2026-05-08T03:23:34 stream-websockets Orchestrator pass 6
+2026-05-08T03:25:07 stream-websockets Manager pass live ssh put blob
+2026-05-08T03:25:56 stream-websockets Minimizer pass put+sha_min_live_probe
+2026-05-08T03:30:47 stream-websockets Worker fail
+2026-05-08T03:33:30 stream-websockets Worker pass
+2026-05-08T03:34:51 stream-websockets Verifier pass none
+2026-05-08T03:49:46 stream-websockets Tester pass 9
+2026-05-08T03:51:36 stream-websockets Enemy pass none

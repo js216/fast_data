@@ -426,6 +426,57 @@ def check(extract_dir):
     return all(item in text for item in required)
 ```
 
+### SSH put uploads one blob to the live target
+
+Prove the host-side `ssh:put` operation works against the STM32MP135
+Linux image left running by the earlier boot and SSH reachability
+sections. Upload one existing mission artifact to `/tmp`, verify the
+target-side bytes by SHA-256 through `ssh:exec`, then remove the file.
+This does not boot, flash, start a service, or modify persistent target
+storage.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+missions/stream-websockets.md
+```
+
+Test (max 3 min):
+
+```
+lease:claim devices="ssh.target" duration_s=180 auto_release_on_session_end=true
+ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu stm32mp135-evb-recovery"
+ssh.target:put data=@stream-websockets.md path=/tmp/stream_ws_put_probe.md timeout_ms=60000
+ssh.target:exec command="sha256sum /tmp/stream_ws_put_probe.md; rm -f /tmp/stream_ws_put_probe.md"
+lease:release
+mark tag=stream_ws_ssh_put_blob
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+    import hashlib
+
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    ops = Verification.load_ops(extract_dir)
+    if not Verification.op_succeeded(ops, "ssh.target", "put"):
+        return False
+    if not Verification.op_succeeded(ops, "ssh.target", "exec"):
+        return False
+
+    expected = hashlib.sha256(
+        Path(artifacts["stream-websockets.md"]).read_bytes()).hexdigest()
+    out = Verification.load_stream_text(
+        extract_dir, "ssh.exec", encoding="utf-8")
+    return expected in out
+```
+
 ## WIP
 
 ## Planned Mission Arc
