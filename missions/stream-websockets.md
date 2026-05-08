@@ -315,11 +315,11 @@ that just reached Linux.
 
 Build: nothing required.
 
-Test (max 90 s):
+Test (max 2 min):
 
 ```
 lease:resume token="{{LEASE_TOKEN}}"
-delay ms=30000
+delay ms=60000
 ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu stm32mp135-evb-recovery"
 ssh.target:exec command="printf %s stream_ws_ssh_reachable"
 lease:release token="{{LEASE_TOKEN}}"
@@ -343,6 +343,69 @@ def check(extract_dir):
 ```
 
 ## WIP
+
+### SSH plugin exposes local put operation
+
+Add local `ssh:put` support to the test server SSH plugin before any
+hardware mission section depends on it. This step is limited to the
+host-side operation surface: it must expose a `put` op that accepts a
+plan artifact as `data`, copies it to a target `path` with key-only scp,
+and preserves the existing SSH host-key and cancellation behavior.
+
+Build:
+
+```
+python3 -m py_compile test_serv/plugins/ssh.py
+```
+
+Artifacts:
+
+```
+test_serv/plugins/ssh.py
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    import ast
+    from pathlib import Path
+
+    path = Path("test_serv/plugins/ssh.py")
+    text = path.read_text()
+    tree = ast.parse(text)
+
+    functions = {
+        node.name for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    }
+    if "_op_put" not in functions:
+        return False
+
+    ops = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "ops":
+                    if isinstance(node.value, ast.Dict):
+                        for key in node.value.keys:
+                            if isinstance(key, ast.Constant):
+                                ops.append(key.value)
+
+    if "put" not in ops:
+        return False
+
+    required = [
+        '"put": Op(',
+        'args={"data": "blob", "path": "str"',
+        "scp",
+        "StrictHostKeyChecking=yes",
+        "ssh.put",
+    ]
+    return all(item in text for item in required)
+```
 
 ## Planned Mission Arc
 

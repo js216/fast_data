@@ -83,3 +83,16 @@
 2026-05-07T22:38:23 stream-websockets Tester pass 7
 2026-05-07T22:39:28 stream-websockets Enemy pass none
 2026-05-07T22:41:31 stream-websockets Worker pass
+2026-05-07T22:42:55 stream-websockets Orchestrator pass 5
+2026-05-07T22:44:42 stream-websockets Manager pass ssh_put_small_blob
+2026-05-07T22:46:02 stream-websockets Minimizer fail no_local_ssh_put
+2026-05-07T22:46:52 stream-websockets Manager pass add_local_ssh_put
+2026-05-07T22:48:23 stream-websockets Minimizer pass put_prereq_atomic
+2026-05-07T22:51:25 stream-websockets Worker pass
+2026-05-07T22:53:00 stream-websockets Verifier pass none
+2026-05-07T23:43:31 stream-websockets Tester fail 6 ssh_timeout
+2026-05-07T23:44:15 stream-websockets Worker pass
+2026-05-07T23:44:59 stream-websockets Verifier pass none
+2026-05-08T00:22:55 stream-websockets Tester pass 8
+2026-05-08T00:24:18 stream-websockets Enemy pass none
+2026-05-08T00:25:50 stream-websockets Worker pass
