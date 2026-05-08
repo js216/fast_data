@@ -598,6 +598,93 @@ def check(extract_dir):
     return all(item in text for item in required)
 ```
 
+### Upload TCP hello service to target
+
+Boot the STM32MP135 Linux image, upload the already built TCP hello
+service to `/tmp`, verify the target-side bytes by SHA-256, mark it
+executable, and remove it before releasing the lease. This proves the
+target binary can be delivered to the live board without starting the
+service, opening a host TCP connection, or changing kernel
+command-line/root handling; boot arguments remain supplied by the board
+DTS and rootfs/test plan.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+build/stream-websockets/tcp_hello
+```
+
+Test (max 7 min):
+
+```
+lease:claim devices="bench_mcu.0,mp135.evb,ssh.target" duration_s=600 auto_release_on_session_end=true
+bench_mcu:reset_dut
+delay ms=2000
+inventory refresh=true verify=false
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_write data="two\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=15000
+mp135.evb:uart_write data="jump"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=60000
+mp135.evb:uart_close
+delay ms=60000
+ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu stm32mp135-evb-recovery"
+ssh.target:put data=@tcp_hello path=/tmp/stream_ws_tcp_hello timeout_ms=60000
+ssh.target:exec command="sha256sum /tmp/stream_ws_tcp_hello && chmod 755 /tmp/stream_ws_tcp_hello && test -x /tmp/stream_ws_tcp_hello && echo stream_ws_tcp_hello_executable; rc=$?; rm -f /tmp/stream_ws_tcp_hello && test ! -e /tmp/stream_ws_tcp_hello || rc=$?; exit $rc"
+lease:release
+mark tag=stream_ws_upload_tcp_hello
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+    import hashlib
+
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    linux_conf = Path("stm32mp135_test_board/config/linux.conf").read_text()
+    if 'CONFIG_CMDLINE="root=' in linux_conf:
+        return False
+    if "CONFIG_CMDLINE_FORCE=y" in linux_conf:
+        return False
+
+    ops = Verification.load_ops(extract_dir)
+    if not Verification.op_succeeded(ops, "ssh.target", "put"):
+        return False
+    if not Verification.op_succeeded(ops, "ssh.target", "exec"):
+        return False
+
+    expected = hashlib.sha256(Path(artifacts["tcp_hello"]).read_bytes()).hexdigest()
+    out = Verification.load_stream_text(
+        extract_dir, "ssh.exec", encoding="utf-8")
+    return expected in out and "stream_ws_tcp_hello_executable" in out
+```
+
 ## WIP
 
 ## Planned Mission Arc

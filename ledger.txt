@@ -160,3 +160,20 @@
 2026-05-08T07:28:44 stream-websockets Verifier pass none
 2026-05-08T07:45:58 stream-websockets Tester pass 11
 2026-05-08T07:48:06 stream-websockets Enemy pass none
+2026-05-08T07:49:19 stream-websockets Orchestrator pass 9
+2026-05-08T07:49:48 stream-websockets Manager pass upload tcp hello
+2026-05-08T07:51:41 stream-websockets Minimizer pass upload_is_min_live_next
+2026-05-08T07:53:26 stream-websockets Worker pass
+2026-05-08T07:57:30 stream-websockets Verifier pass none
+2026-05-08T08:50:23 stream-websockets Tester fail 5 boot_login_timeout
+2026-05-08T08:55:10 stream-websockets Worker pass
+2026-05-08T09:00:15 stream-websockets Verifier pass none
+2026-05-08T09:51:03 stream-websockets Tester fail 6 ssh_conn_closed
+2026-05-08T10:13:41 stream-websockets Worker pass
+2026-05-08T10:17:19 stream-websockets Verifier pass none
+2026-05-08T10:33:20 stream-websockets Tester fail 11 lease_placeholder_before_claim
+2026-05-08T10:33:48 stream-websockets Worker pass
+2026-05-08T10:34:32 stream-websockets Worker pass
+2026-05-08T10:35:59 stream-websockets Verifier pass none
+2026-05-08T10:53:01 stream-websockets Tester pass 12
+2026-05-08T10:54:48 stream-websockets Enemy pass none
