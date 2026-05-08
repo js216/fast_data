@@ -19,6 +19,7 @@ import tarfile
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -93,6 +94,7 @@ class Runner:
     # the sum of the non-zero entries.
     RETRY_BACKOFF_S = (0, 3, 10, 30)
     FOREIGN_LEASE_FALLBACK_WAIT_S = 60
+    WATCHDOG_CANCEL_RETRY_BACKOFF_S = 60
     CANCEL_DRAIN_WAIT_S = 30
     NO_HARDWARE_TEST = '__NO_HARDWARE__'
 
@@ -107,6 +109,7 @@ class Runner:
         # subsequent sections. Cleared when a section's plan contains
         # lease:release.
         self.lease_token = None
+        self._last_watchdog_cancel = False
         # Defensive ghost-lease cleanup: a prior run that crashed
         # before its mission's lease:release fired would leave the
         # bench locked for the full duration_s. Best-effort release.
@@ -365,6 +368,7 @@ class Runner:
                 args=(proc.stdout, log_fh),
                 daemon=True)
             tee_thread.start()
+        self._last_watchdog_cancel = False
         rc = self._watch_submit(proc, log_fh, description, max_s,
                                 line_prefix)
         if tee_thread is not None:
@@ -440,6 +444,7 @@ class Runner:
                 digest = self._find_active_job_digest(description)
                 self.cancel_job(digest)
                 canceled_digest = digest
+                self._last_watchdog_cancel = True
                 proc.terminate()
                 try:
                     proc.wait(timeout=5)
@@ -546,6 +551,8 @@ class Runner:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 target = digest or description
+                if self._resolve_stale_cancel(digest, log_fh):
+                    return True
                 msg = ('  (agent watchdog: canceled job still active '
                        f'after {self.CANCEL_DRAIN_WAIT_S}s: {target})')
                 log_fh.write((msg + '\n').encode())
@@ -561,6 +568,33 @@ class Runner:
             log_fh.flush()
             self._log(msg)
         return True
+
+    def _resolve_stale_cancel(self, digest, log_fh):
+        """Ask test_serv to remove a cancel-pending orphan if it is stale."""
+        if not digest:
+            return False
+        req = urllib.request.Request(
+            f'{self.SERVER}/cancels/{digest}/stale',
+            data=b'', method='POST')
+        try:
+            with urllib.request.urlopen(req, timeout=5) as r:
+                body = json.load(r)
+        except urllib.error.HTTPError as e:
+            try:
+                body = json.loads(e.read().decode() or '{}')
+            except Exception:
+                body = {'status': f'http_{e.code}'}
+        except Exception:
+            return False
+        status = body.get('status')
+        if status in {'stale_canceled', 'done'}:
+            msg = ('  (agent watchdog: stale canceled job resolved: '
+                   f'{digest} status={status})')
+            log_fh.write((msg + '\n').encode())
+            log_fh.flush()
+            self._log(msg)
+            return True
+        return False
 
     def _recover_outputs(self, digest, extract_dir, log_fh):
         """Recover an artefact when submit.py lost its HTTP connection."""
@@ -694,6 +728,7 @@ class Runner:
         digest = None
         backoffs = list(self.RETRY_BACKOFF_S)
         foreign_lease_extensions = 0
+        watchdog_cancel_extensions = 0
         attempt = 0
         while attempt < len(backoffs):
             backoff = backoffs[attempt]
@@ -715,6 +750,12 @@ class Runner:
                     if self._extend_retries_after_foreign_lease(
                             backoffs, attempt, foreign_lease_extensions):
                         foreign_lease_extensions += 1
+                if self._last_watchdog_cancel:
+                    if self._extend_retries_after_watchdog_cancel(
+                            backoffs, attempt, watchdog_cancel_extensions):
+                        watchdog_cancel_extensions += 1
+                        self._log(
+                            '  (retrying after watchdog-canceled job)')
                 attempt += 1
                 continue
             try:
@@ -752,6 +793,17 @@ class Runner:
             return False
         if attempt == len(backoffs) - 1:
             backoffs.append(0)
+            return True
+        return False
+
+    @staticmethod
+    def _extend_retries_after_watchdog_cancel(
+            backoffs, attempt, watchdog_cancel_extensions):
+        """Allow one delayed retry after a final watchdog cancellation."""
+        if watchdog_cancel_extensions:
+            return False
+        if attempt == len(backoffs) - 1:
+            backoffs.append(Runner.WATCHDOG_CANCEL_RETRY_BACKOFF_S)
             return True
         return False
 

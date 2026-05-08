@@ -331,8 +331,8 @@ def check(extract_dir):
 Confirm `ssh.target` can execute one command on the running STM32MP135
 Linux image. This is a reachability probe only; it must not upload
 files, start services, or modify the target filesystem. It resumes the
-lease from the boot step so the SSH command runs against the board state
-that just reached Linux.
+lease from the boot step and intentionally leaves that lease active so
+the following upload probe runs against the same live board state.
 
 Build: nothing required.
 
@@ -343,7 +343,6 @@ lease:resume token="{{LEASE_TOKEN}}"
 delay ms=60000
 ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu stm32mp135-evb-recovery"
 ssh.target:exec command="printf %s stream_ws_ssh_reachable"
-lease:release token="{{LEASE_TOKEN}}"
 mark tag=stream_ws_ssh_exec
 ```
 
@@ -429,11 +428,11 @@ def check(extract_dir):
 ### SSH put uploads one blob to the live target
 
 Prove the host-side `ssh:put` operation works against the STM32MP135
-Linux image left running by the earlier boot and SSH reachability
-sections. Upload one existing mission artifact to `/tmp`, verify the
-target-side bytes by SHA-256 through `ssh:exec`, then remove the file.
-This does not boot, flash, start a service, or modify persistent target
-storage.
+Linux image still held by the boot and SSH reachability lease. Upload
+one existing mission artifact to `/tmp`, verify the target-side bytes by
+SHA-256 through `ssh:exec`, then remove the file and release the live
+hardware lease. This does not boot, flash, start a service, or modify
+persistent target storage.
 
 Build: nothing required.
 
@@ -446,11 +445,11 @@ missions/stream-websockets.md
 Test (max 3 min):
 
 ```
-lease:claim devices="ssh.target" duration_s=180 auto_release_on_session_end=true
+lease:resume token="{{LEASE_TOKEN}}"
 ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu stm32mp135-evb-recovery"
 ssh.target:put data=@stream-websockets.md path=/tmp/stream_ws_put_probe.md timeout_ms=60000
 ssh.target:exec command="sha256sum /tmp/stream_ws_put_probe.md; rm -f /tmp/stream_ws_put_probe.md"
-lease:release
+lease:release token="{{LEASE_TOKEN}}"
 mark tag=stream_ws_ssh_put_blob
 ```
 
@@ -475,6 +474,63 @@ def check(extract_dir):
     out = Verification.load_stream_text(
         extract_dir, "ssh.exec", encoding="utf-8")
     return expected in out
+```
+
+### Build target TCP hello service
+
+Add the smallest target-side Linux service needed for the next live
+networking step: a C TCP server for STM32MP135 that binds to port 8765,
+accepts one client, writes the fixed bytes `stream_ws_tcp_hello\n`, and
+exits. This step only builds the target binary; it must not boot, flash,
+upload, run the service, or change kernel command-line/root handling.
+
+Build:
+
+```
+make -C stm32mp135_test_board br
+mkdir -p build/stream-websockets
+stm32mp135_test_board/buildroot/output/host/bin/arm-buildroot-linux-uclibcgnueabihf-gcc -Os -Wall -Wextra -o build/stream-websockets/tcp_hello tools/stream_ws_tcp_hello.c
+```
+
+Artifacts:
+
+```
+tools/stream_ws_tcp_hello.c
+build/stream-websockets/tcp_hello
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+    import subprocess
+
+    linux_conf = Path("stm32mp135_test_board/config/linux.conf").read_text()
+    if 'CONFIG_CMDLINE="root=' in linux_conf:
+        return False
+    if "CONFIG_CMDLINE_FORCE=y" in linux_conf:
+        return False
+
+    src = Path("tools/stream_ws_tcp_hello.c").read_text()
+    required = [
+        "stream_ws_tcp_hello\\n",
+        "htons(8765)",
+        "bind(",
+        "listen(",
+        "accept(",
+    ]
+    if not all(item in src for item in required):
+        return False
+
+    binary = Path(artifacts["tcp_hello"])
+    if not binary.exists() or binary.stat().st_size == 0:
+        return False
+
+    desc = subprocess.check_output(["file", str(binary)], text=True)
+    return "ARM" in desc and "ELF" in desc
 ```
 
 ## WIP

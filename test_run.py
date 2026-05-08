@@ -133,6 +133,25 @@ class ForeignLeaseRetryTests(unittest.TestCase):
             Runner._extend_retries_after_foreign_lease(backoffs, 2, 1))
         self.assertEqual(backoffs, [0, 3, 0])
 
+    def test_extends_only_once_after_final_watchdog_cancel(self):
+        backoffs = [0, 3]
+
+        self.assertFalse(
+            Runner._extend_retries_after_watchdog_cancel(backoffs, 0, 0))
+        self.assertEqual(backoffs, [0, 3])
+
+        self.assertTrue(
+            Runner._extend_retries_after_watchdog_cancel(backoffs, 1, 0))
+        self.assertEqual(
+            backoffs,
+            [0, 3, Runner.WATCHDOG_CANCEL_RETRY_BACKOFF_S])
+
+        self.assertFalse(
+            Runner._extend_retries_after_watchdog_cancel(backoffs, 2, 1))
+        self.assertEqual(
+            backoffs,
+            [0, 3, Runner.WATCHDOG_CANCEL_RETRY_BACKOFF_S])
+
 
 class CancelDrainTests(unittest.TestCase):
     def _runner(self):
@@ -179,6 +198,7 @@ class CancelDrainTests(unittest.TestCase):
     def test_cancel_drain_timeout_is_bounded_and_logged(self):
         desc = 'agent1: Provision SD image with SSH keys [123]'
         runner = self._runner()
+        runner.SERVER = 'http://test.invalid'
         log = io.BytesIO()
         jobs = [[
             {'digest': 'a' * 64, 'status': 'running',
@@ -193,10 +213,36 @@ class CancelDrainTests(unittest.TestCase):
 
         self.assertIn(b'canceled job still active after 30s', log.getvalue())
 
+    def test_cancel_drain_resolves_stale_cancel_record(self):
+        desc = 'agent1: Provision SD image with SSH keys [123]'
+        runner = self._runner()
+        runner.SERVER = 'http://test.invalid'
+        log = io.BytesIO()
+        digest = 'a' * 64
+        jobs = [[
+            {'digest': digest, 'status': 'running',
+             'meta': {'description': desc}},
+        ]]
+        responses = self._urlopen_responses(jobs)
+        responses.append(io.BytesIO(json.dumps({
+            'status': 'stale_canceled',
+            'digest': digest,
+        }).encode()))
+
+        with mock.patch('run.urllib.request.urlopen',
+                        side_effect=responses):
+            with mock.patch('run.time.monotonic', side_effect=[100, 131]):
+                self.assertTrue(
+                    runner._wait_for_canceled_job(desc, digest, log))
+
+        self.assertIn(b'stale canceled job resolved', log.getvalue())
+        self.assertNotIn(b'canceled job still active', log.getvalue())
+
     def test_watch_submit_drains_watchdog_cancel_before_return(self):
         desc = 'agent1: Provision SD image with SSH keys [123]'
         runner = self._runner()
         runner.SERVER = 'http://test.invalid'
+        runner._last_watchdog_cancel = False
         proc = mock.Mock()
         proc.poll.return_value = None
         proc.wait.return_value = None
@@ -225,6 +271,7 @@ class CancelDrainTests(unittest.TestCase):
                                 line_prefix=None)
 
         self.assertEqual(rc, 1)
+        self.assertTrue(runner._last_watchdog_cancel)
         find_digest.assert_called_once_with(desc)
         cancel_job.assert_called_once_with('a' * 64)
         wait_drain.assert_called_once_with(desc, 'a' * 64, log)
