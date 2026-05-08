@@ -587,6 +587,8 @@ class Runner:
             if rc != 0:
                 last_reason = f'   submit.py rc={rc}'
                 self._release_failed_attempt_lease(extract, test)
+                if self._lease_resume_release_without_artifact(test, extract):
+                    break
                 if self._lease_released_in_attempt(extract):
                     break
                 continue
@@ -595,6 +597,8 @@ class Runner:
             except Exception as e:
                 last_reason = f'   verify {type(e).__name__}: {e}'
                 self._release_failed_attempt_lease(extract, test)
+                if self._lease_resume_release_without_artifact(test, extract):
+                    break
                 if self._lease_released_in_attempt(extract):
                     break
                 continue
@@ -606,6 +610,15 @@ class Runner:
                 continue
             return True, digest, None, extract, log
         return False, digest, last_reason, last_extract, last_log
+
+    def _lease_resume_release_without_artifact(self, plan_text, extract_dir):
+        """A final leased plan may have consumed the token before timeout."""
+        if 'lease:resume' not in plan_text or 'lease:release' not in plan_text:
+            return False
+        if not extract_dir.exists():
+            return True
+        return not any((extract_dir / name).exists()
+                       for name in ('manifest.json', 'ops.jsonl'))
 
     def _lease_released_in_attempt(self, extract_dir):
         """Return True if the attempt consumed its lease token."""

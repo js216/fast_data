@@ -1,5 +1,3 @@
-## WIP
-
 ### Record the current Linux baseline commit
 
 Create `stm32mp135_test_board/config/kernel-upgrade-baseline.md` and record
@@ -339,30 +337,261 @@ def check(extract_dir):
     return True
 ```
 
-### Boot the upgraded kernel on hardware
+### Port boot SDMMC access control binding
 
-Boot the upgraded `zImage` and `custom.dtb` through the local single-stage
-bootloader. The boot log must show Linux reaching userspace without TF-A,
-OP-TEE, U-Boot, or PSCI dependency failures.
+Update the custom device tree for the upgraded ST 6.6 kernel access-control
+binding on the enabled SDMMC host that backs `root=/dev/mmcblk0p3`. The local
+single-stage bootloader path must remain unchanged: no TF-A, no OP-TEE, no
+U-Boot, and no PSCI dependency.
 
-Build: `make -C stm32mp135_test_board all`
+Build:
+```
+make -C stm32mp135_test_board patch dtb
+```
 
-Test: hardware.
+Test: no hardware.
 
 Verify:
 ```
 def check(extract_dir):
     from pathlib import Path
+    import re
 
-    log = Path(extract_dir) / 'linux-boot.log'
-    if not log.exists():
-        raise AssertionError('missing linux boot log artifact')
-    text = log.read_text(errors='ignore')
+    root = Path.cwd()
+    board = root / 'stm32mp135_test_board'
+    dts = board / 'config/custom.dts'
+    text = dts.read_text()
+    mp13 = (board / 'linux/drivers/clk/stm32/clk-stm32mp13.c').read_text()
+
+    etzpc = text.split('etzpc: etzpc@5c007000', 1)[1].split('adc_1:', 1)[0]
+    if 'compatible = "st,stm32-etzpc", "simple-bus";' not in etzpc:
+        raise AssertionError('etzpc lacks ST 6.6 access-controller compatible')
+    if '#access-controller-cells = <1>;' not in etzpc:
+        raise AssertionError('etzpc cannot provide ST 6.6 access controllers')
+    for obsolete in ['feature-domain-controller;', '#feature-domain-cells = <1>;']:
+        if obsolete in etzpc:
+            raise AssertionError('etzpc still advertises obsolete feature-domain provider')
+
+    sdmmc = text.split('sdmmc1: mmc@58005000', 1)[1].split('};', 1)[0]
+    if 'status = "okay"' not in sdmmc:
+        raise AssertionError('sdmmc1 is not enabled for SD rootfs boot')
+    if 'access-controllers = <&etzpc STM32MP1_ETZPC_SDMMC1_ID>;' not in sdmmc:
+        raise AssertionError('sdmmc1 lacks ST 6.6 ETZPC access controller binding')
+    if 'feature-domains = <&etzpc STM32MP1_ETZPC_SDMMC1_ID>;' in sdmmc:
+        raise AssertionError('sdmmc1 still uses obsolete feature-domains binding')
+    if 'vmmc-supply = <&vdd_sd>;' not in sdmmc:
+        raise AssertionError('sdmmc1 card power must use the fixed 3.3 V SD rail')
+    if 'vqmmc-supply = <&vdd_sd>;' not in sdmmc:
+        raise AssertionError('sdmmc1 I/O rail must be constrained to fixed 3.3 V')
+    if 'no-1-8-v;' not in sdmmc:
+        raise AssertionError('sdmmc1 must not negotiate unsupported 1.8 V signaling')
+    if 'assigned-clocks = <&rcc SDMMC1_K>;' not in sdmmc:
+        raise AssertionError('sdmmc1 must explicitly own the SDMMC1_K parent selection')
+    cfg = mp13.split('static const struct clock_config stm32mp13_clock_cfg[] = {', 1)[1].split('};', 1)[0]
+    exported = set(re.findall(r'STM32_[A-Z_]+_CFG\(([A-Z0-9_]+),', cfg))
+    rcc_parent = re.search(r'assigned-clock-parents = <&rcc ([A-Z0-9_]+)>;', sdmmc)
+    if rcc_parent and rcc_parent.group(1) not in exported:
+        raise AssertionError('sdmmc1 assigns non-exported RCC parent: ' + rcc_parent.group(1))
+    for non_exported in ['PLL4_P', 'PLL3_R', 'CK_AXI', 'CK_HSI']:
+        if f'assigned-clock-parents = <&rcc {non_exported}>;' in sdmmc:
+            raise AssertionError('sdmmc1 must not assign non-exported RCC parent: ' + non_exported)
+    if 'assigned-clock-parents = <&clk_hsi>;' not in sdmmc:
+        raise AssertionError('sdmmc1 must assign OF-visible fixed HSI parent')
+    if 'max-frequency = <50000000>;' not in sdmmc:
+        raise AssertionError('sdmmc1 must stay within SD high-speed signaling')
+    if 'feature-domains = <&etzpc ' in text:
+        raise AssertionError('etzpc bus child still uses obsolete feature-domains binding')
+
+    bootargs = 'bootargs = "root=/dev/mmcblk0p3 rootwait clk_ignore_unused";'
+    if bootargs not in text:
+        raise AssertionError('custom DTS must wait for SD rootfs partition')
+
+    make_text = (board / 'Makefile').read_text(errors='ignore')
+    if 'dtb: dts' not in make_text:
+        raise AssertionError('DTB build no longer applies DTS patch first')
+    if 'cp config/$(DTS).dts linux/arch/arm/boot/dts/st/' not in make_text:
+        raise AssertionError('DTB build no longer installs custom DTS under dts/st')
+    if 'st/$(DTS).dtb' not in make_text:
+        raise AssertionError('DTB build no longer targets custom DTB under dts/st')
+
+    make_lower = make_text.lower()
+    for forbidden in ['tf-a', 'optee', 'u-boot']:
+        if forbidden in make_lower:
+            raise AssertionError('board Makefile invokes forbidden component: ' + forbidden)
+
+    return True
+```
+
+### Claim bench lease before upgraded kernel hardware boot
+
+Claim the stable bench devices before the hardware boot gates so the banner
+and userspace sections keep the board path under one continuous lease. Retries
+after a failed banner can resume the same token, and an interrupted run leaves
+the token available for automatic cleanup on the next run.
+
+Build: nothing required.
+
+Test (max 1 min):
+```
+lease:claim devices="bench_mcu.0,mp135.custom" duration_s=9000
+mark tag=kernel_hardware_lease
+```
+
+Verify:
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    manifest = Verification.load_manifest(extract_dir)
+    lease_token = manifest.get('lease_token')
+    if not isinstance(lease_token, str) or not lease_token:
+        raise AssertionError('manifest missing lease token')
+
+    return True
+```
+
+### Boot upgraded kernel to Linux banner on hardware
+
+Boot the upgraded SD image through the local single-stage bootloader and prove
+the kernel starts by reaching the Linux banner on UART. This first hardware
+gate intentionally stops before userspace so kernel-entry failures are isolated
+from root filesystem or init timing issues.
+
+Build:
+```
+make -C stm32mp135_test_board boot patch kernel dtb br sd
+```
+
+Artifacts:
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (max 10 min):
+```
+lease:resume token="{{LEASE_TOKEN}}"
+bench_mcu:reset_dut2
+delay ms=10000
+inventory refresh=true verify=false
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+delay ms=5000
+inventory refresh=true verify=false
+delay ms=5000
+inventory refresh=true verify=false
+msc.custom:write data=@sdcard.img offset_lba=0
+msc.custom:verify data=@sdcard.img offset_lba=0
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="two\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=15000
+mp135.custom:uart_write data="jump"
+delay ms=200
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.custom:uart_close
+mark tag=kernel_banner_boot
+```
+
+Verify:
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    text = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    for forbidden in [
+        'U-Boot',
+        'OP-TEE',
+        'TF-A',
+        'PSCI: failed',
+        'Unable to handle kernel',
+        'Kernel panic',
+    ]:
+        if forbidden in text:
+            raise AssertionError('boot log contains forbidden/fatal text: ' + forbidden)
+
+    return 'Linux version' in text and 'Jumping to address' in text
+```
+
+### Boot the upgraded kernel to userspace on hardware
+
+Using the SD card image written and verified by the preceding banner gate,
+boot the upgraded `zImage` and `custom.dtb` through the local single-stage
+bootloader. The boot log must show Linux reaching userspace without TF-A,
+OP-TEE, U-Boot, or PSCI dependency failures.
+
+Build: nothing required.
+
+Artifacts:
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test (max 10 min):
+```
+lease:resume token="{{LEASE_TOKEN}}"
+bench_mcu:reset_dut2
+delay ms=10000
+inventory refresh=true verify=false
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="two\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=15000
+mp135.custom:uart_write data="jump"
+delay ms=200
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.custom:uart_expect sentinel="Freeing unused kernel image" timeout_ms=30000
+mp135.custom:uart_expect sentinel="Welcome" timeout_ms=30000
+mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
+mp135.custom:uart_close
+lease:release token="{{LEASE_TOKEN}}"
+mark tag=kernel_userspace_boot
+```
+
+Verify:
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    text = Verification.load_stream_text(extract_dir, 'mp135.uart')
 
     for required in [
         'Linux version',
         'Freeing unused kernel image',
         'Welcome',
+        'login:',
     ]:
         if required not in text:
             raise AssertionError('boot log missing: ' + required)
