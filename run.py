@@ -10,10 +10,12 @@ Usage: python3 run.py ssh.md
 import argparse
 import datetime
 import getpass
+import io
 import json
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
 import time
@@ -90,6 +92,7 @@ class Runner:
     # attempt has no wait. Total worst-case extra wait per FAIL is
     # the sum of the non-zero entries.
     RETRY_BACKOFF_S = (0, 3, 10, 30)
+    FOREIGN_LEASE_FALLBACK_WAIT_S = 60
     NO_HARDWARE_TEST = '__NO_HARDWARE__'
 
     def __init__(self, md_path):
@@ -303,7 +306,11 @@ class Runner:
                '--wait', str(wait_s),
                '--extract', str(extract_dir)]
         if max_s is not None:
-            cmd += ['--runtime', str(int(max_s))]
+            # test_serv measures X-Test-Runtime from submission, so
+            # shared-bench queue time can otherwise expire a job before
+            # it acquires hardware. _watch_submit enforces the section
+            # budget after the job becomes running.
+            cmd += ['--runtime', str(int(wait_s))]
         cmd += [*blob_args, str(plan_path)]
         log_fh = log.open('ab')
         cmd_line = f'$ {" ".join(cmd)}'
@@ -324,12 +331,16 @@ class Runner:
                                 line_prefix)
         if tee_thread is not None:
             tee_thread.join()
-        log_fh.close()
         digest = None
         if extract_dir.exists():
             tars = list(extract_dir.glob('*.tar'))
             if tars:
                 digest = tars[0].stem
+        if rc != 0 and digest is None:
+            digest = self._find_job_digest(description)
+            if self._recover_outputs(digest, extract_dir, log_fh):
+                rc = 0
+        log_fh.close()
         return rc, digest
 
     def run_verify(self, verify_text, artifacts, extract_dir, item=None):
@@ -452,18 +463,44 @@ class Runner:
 
     def _find_active_job_digest(self, description):
         """Return the queued/running job digest matching a description."""
+        return self._find_job_digest(description, {'queued', 'running'})
+
+    def _find_job_digest(self, description, statuses=None):
+        """Return the newest job digest matching a description."""
         try:
             with urllib.request.urlopen(f'{self.SERVER}/jobs',
                                         timeout=5) as r:
                 jobs = json.load(r)
         except Exception:
             return None
-        hit = next(
-            (j for j in jobs
-             if j.get('meta', {}).get('description') == description
-             and j.get('status') in ('queued', 'running')),
-            None)
+        matches = [
+            j for j in jobs
+            if j.get('meta', {}).get('description') == description
+            and (statuses is None or j.get('status') in statuses)
+        ]
+        hit = matches[-1] if matches else None
         return hit.get('digest') if hit else None
+
+    def _recover_outputs(self, digest, extract_dir, log_fh):
+        """Recover an artefact when submit.py lost its HTTP connection."""
+        if not digest:
+            return False
+        try:
+            with urllib.request.urlopen(
+                    f'{self.SERVER}/outputs/{digest}.tar', timeout=10) as r:
+                data = r.read()
+        except Exception:
+            return False
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        tar_path = extract_dir / f'{digest}.tar'
+        tar_path.write_bytes(data)
+        with tarfile.open(fileobj=io.BytesIO(data), mode='r:') as tf:
+            tf.extractall(extract_dir)
+        msg = f'  (recovered outputs for {digest} after submit.py failure)'
+        log_fh.write((msg + '\n').encode())
+        log_fh.flush()
+        self._log(msg)
+        return True
 
     def cancel_job(self, digest):
         if not digest:
@@ -589,6 +626,7 @@ class Runner:
                 self._release_failed_attempt_lease(extract, test)
                 if self._lease_released_in_attempt(extract):
                     break
+                self._wait_for_foreign_lease(extract)
                 continue
             try:
                 ok = self.run_verify(verify, artifacts, extract, item)
@@ -597,15 +635,45 @@ class Runner:
                 self._release_failed_attempt_lease(extract, test)
                 if self._lease_released_in_attempt(extract):
                     break
+                self._wait_for_foreign_lease(extract)
                 continue
             if not ok:
                 last_reason = '   verify check() returned False'
                 self._release_failed_attempt_lease(extract, test)
                 if self._lease_released_in_attempt(extract):
                     break
+                self._wait_for_foreign_lease(extract)
                 continue
             return True, digest, None, extract, log
         return False, digest, last_reason, last_extract, last_log
+
+    def _wait_for_foreign_lease(self, extract_dir):
+        """Pause retries while a plan failed on another active lease."""
+        errors = extract_dir / 'errors.log'
+        if not errors.exists():
+            return
+        m = re.search(r"is leased to '([0-9a-f]+)'", errors.read_text(
+            errors='replace'))
+        if not m:
+            return
+        token = m.group(1)
+        try:
+            with urllib.request.urlopen(f'{self.SERVER}/leases',
+                                        timeout=5) as r:
+                leases = json.load(r)
+        except Exception:
+            leases = []
+        hit = next((lease for lease in leases
+                    if token.startswith(lease.get('token_prefix', '')
+                                        .rstrip('.'))), None)
+        if hit:
+            delay = min(float(hit.get('expires_in_s', 0)) + 5.0, 300.0)
+        else:
+            delay = self.FOREIGN_LEASE_FALLBACK_WAIT_S
+        if delay > 0:
+            self._log(
+                f'  (waiting {delay:.0f}s for foreign lease {token[:8]})')
+            time.sleep(delay)
 
     def _lease_released_in_attempt(self, extract_dir):
         """Return True if the attempt consumed its lease token."""
@@ -628,7 +696,9 @@ class Runner:
 
     def _release_failed_attempt_lease(self, extract_dir, plan_text):
         """Release a freshly claimed lease from a failed retry attempt."""
-        if 'lease:claim' not in plan_text or 'lease:release' in plan_text:
+        if 'lease:claim' not in plan_text:
+            return
+        if self._lease_released_in_attempt(extract_dir):
             return
         manifest = extract_dir / 'manifest.json'
         if not manifest.exists():

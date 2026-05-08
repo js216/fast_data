@@ -128,6 +128,220 @@ def check(extract_dir):
     return isinstance(ip, str) and bool(ip.strip())
 ```
 
+### Keep Linux boot arguments in board DTS
+
+Remove the forced kernel command line from the STM32MP135 Linux config
+and keep the SD-card root and clock workaround in the board device tree
+`/chosen/bootargs`. This preserves the current boot fix without
+hardcoding DTS-expressible board policy into the kernel image.
+
+Build:
+
+```
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=stm32mp135f-dk dtb
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/config/linux.conf
+stm32mp135_test_board/config/stm32mp135f-dk.dts
+stm32mp135_test_board/linux/.config
+stm32mp135_test_board/linux/arch/arm/boot/dts/stm32mp135f-dk.dtb
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    linux_conf = Path("stm32mp135_test_board/config/linux.conf").read_text()
+    if 'CONFIG_CMDLINE="root=/dev/mmcblk0p3 clk_ignore_unused"' in linux_conf:
+        return False
+    if "CONFIG_CMDLINE_FORCE=y" in linux_conf:
+        return False
+
+    board_dts = Path("stm32mp135_test_board/config/stm32mp135f-dk.dts").read_text()
+    return 'bootargs = "root=/dev/mmcblk0p3 clk_ignore_unused";' in board_dts
+```
+
+### Provision SD image with SSH keys
+
+Build the STM32MP135 EVB Linux SD image from the tracked Buildroot
+overlay, then write and verify it on the board's SD card through the
+bootloader MSC interface. This ensures the later SSH reachability probe
+boots an image that contains the bench public key in
+`/root/.ssh/authorized_keys`, the deterministic Dropbear host key, and
+the network/dropbear startup configuration needed for key-only root SSH.
+The kernel image must not force a built-in command line; boot arguments
+remain in the selected DTS `/chosen/bootargs`.
+
+Build:
+
+```
+make -C stm32mp135_test_board br
+make -C stm32mp135_test_board patch
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=stm32mp135f-dk dtb
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (max 15 min):
+
+```
+lease:claim devices="bench_mcu.0,mp135.evb,ssh.target" duration_s=900 auto_release_on_session_end=true
+bench_mcu:reset_dut
+delay ms=2000
+inventory refresh=true verify=false
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@sdcard.img offset_lba=0
+msc.evb:verify data=@sdcard.img offset_lba=0
+lease:release
+mark tag=stream_ws_provision_sd
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    kernel_config = Path("stm32mp135_test_board/config/linux.conf").read_text()
+    if 'CONFIG_CMDLINE="root=' in kernel_config:
+        return False
+    if "CONFIG_CMDLINE_FORCE=y" in kernel_config:
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return (Verification.op_succeeded(ops, "msc.evb", "write") and
+            Verification.op_succeeded(ops, "msc.evb", "verify"))
+```
+
+### Boot Linux for SSH reachability
+
+Reset the EVB, DFU-load the bootloader, interrupt autoload, and boot the
+provisioned SD-card Linux image far enough to reach the `login:` prompt.
+This establishes the live target state required before any `ssh.target`
+operation; it does not rewrite the SD card.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test (max 4 min):
+
+```
+lease:claim devices="bench_mcu.0,mp135.evb,ssh.target" duration_s=600
+bench_mcu:reset_dut
+delay ms=2000
+inventory refresh=true verify=false
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_write data="two\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=15000
+mp135.evb:uart_write data="jump"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=60000
+mp135.evb:uart_close
+mark tag=stream_ws_boot_linux
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(
+        extract_dir, "mp135.uart", encoding="utf-8")
+    return "login:" in uart and "STM32MP135" in uart
+```
+
+### SSH exec reaches the live target
+
+Confirm `ssh.target` can execute one command on the running STM32MP135
+Linux image. This is a reachability probe only; it must not upload
+files, start services, or modify the target filesystem. It resumes the
+lease from the boot step so the SSH command runs against the board state
+that just reached Linux.
+
+Build: nothing required.
+
+Test (max 90 s):
+
+```
+lease:resume token="{{LEASE_TOKEN}}"
+delay ms=30000
+ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu stm32mp135-evb-recovery"
+ssh.target:exec command="printf %s stream_ws_ssh_reachable"
+lease:release token="{{LEASE_TOKEN}}"
+mark tag=stream_ws_ssh_exec
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    try:
+        out = Verification.load_stream_text(
+            extract_dir, "ssh.exec", encoding="utf-8")
+    except FileNotFoundError:
+        return False
+
+    return "stream_ws_ssh_reachable" in out.splitlines()
+```
+
 ## WIP
 
 ## Planned Mission Arc
