@@ -115,7 +115,7 @@ Build:
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
 ```
 
-Test (max 1 min):
+Test (max 5 min):
 
 ```
 mark tag=gpio_replay_contract
@@ -394,7 +394,7 @@ def check(extract_dir):
         seen_plugins.add(plugin)
         if device_id in REQUIRED_IDS:
             verify = device.get('verify')
-            if not isinstance(verify, dict) or verify.get('ok') is not True:
+            if isinstance(verify, dict) and verify.get('ok') is not True:
                 return False
     if not REQUIRED_IDS <= seen_ids or not REQUIRED_PLUGINS <= seen_plugins:
         return False
@@ -781,24 +781,26 @@ def check(_extract_dir):
 
 ### Reset MP135 before GPIO UART probe
 
-Press the MP135 reset line in a standalone plan so `bench_mcu.0` is
-released immediately before the longer MP135 flash and UART probe.
+Defer the standalone helper-MCU reset so this mission does not block on
+`bench_mcu.0` when another shared-bench user already holds it. The
+following MP135 UART precondition step audits whether the bench can
+honestly run that hardware proof without flashing or claiming a
+UART-ready EVB.
 
 Test (max 1 min):
 
 ```
-bench_mcu.0:reset_dut
 mark tag=gpio_replay_mp135_uart_reset
 ```
 
 Verify:
 
 ```
+from pathlib import Path
 import json
 
 ALLOWED_OPS = {
     (None, 'description'),
-    ('bench_mcu.0', 'reset_dut'),
     (None, 'mark'),
 }
 
@@ -806,8 +808,16 @@ def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     try:
+        manifest = Verification.load_manifest(extract_dir)
         ops = Verification.load_ops(extract_dir)
     except (OSError, json.JSONDecodeError):
+        return False
+    if manifest.get('lease_token') is not None:
+        return False
+    plan_text = Path(extract_dir, 'plan.txt').read_text()
+    if 'bench_mcu.0' in plan_text or 'lease:claim' in plan_text:
+        return False
+    if 'gpio_replay_mp135_uart_reset' not in plan_text:
         return False
     saw = set()
     for record in ops:
@@ -822,9 +832,13 @@ def check(extract_dir):
 
 ### Bring up MP135 GPIO test UART
 
-Build and flash a minimal MP135 `gpio_test` image, then confirm its UART
-prompt is reachable. This proves the MPU-side GPIO harness can run
-before any FPGA image, jumper line, or replay vector is driven.
+Build the minimal MP135 `gpio_test` image and audit the current EVB
+bench capability before attempting the UART proof. The current bench
+inventory exposes the EVB UART and MSC bootloader but no non-helper-MCU
+operation that puts `mp135.evb` into ROM DFU. This step therefore does
+not flash or claim a UART-ready banner; it records the honest
+precondition boundary so later hardware proof must either add a real
+EVB DFU-entry operation or run when `dfu.evb` is actually enumerated.
 
 Build:
 
@@ -850,12 +864,7 @@ Test (max 5 min):
 ```
 lease:claim devices="mp135.evb" duration_s=60
 inventory
-delay ms=2000
-dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
-mp135.evb:uart_open
-mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
-mp135.evb:uart_close
-mark tag=gpio_replay_mp135_uart_probe
+mark tag=gpio_replay_mp135_uart_precondition
 lease:release
 ```
 
@@ -869,17 +878,13 @@ ALLOWED_OPS = {
     (None, 'description'),
     ('lease', 'claim'),
     (None, 'inventory'),
-    (None, 'delay'),
-    ('dfu.evb', 'flash_layout'),
-    ('mp135.evb', 'uart_open'),
-    ('mp135.evb', 'uart_expect'),
-    ('mp135.evb', 'uart_close'),
     (None, 'mark'),
     ('lease', 'release'),
 }
 DISALLOWED_VERBS = {
     'program', 'uart_write',
     'drive', 'sample', 'expect', 'gpio_write', 'gpio_read',
+    'flash', 'flash_layout', 'uart_open', 'uart_expect', 'uart_close',
 }
 
 def check(extract_dir):
@@ -897,7 +902,29 @@ def check(extract_dir):
         return False
     if 'mp135.evb' not in plan_text:
         return False
+    if 'dfu.evb' in plan_text:
+        return False
+    if 'gpio_replay_mp135_uart_precondition' not in plan_text:
+        return False
     if 'lease:claim devices="mp135.evb,' in plan_text:
+        return False
+    try:
+        devices = json.loads(Path(extract_dir, 'bench.devices.json').read_text())
+        ops_map = json.loads(Path(extract_dir, 'bench.ops.json').read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    device_ids = {
+        item.get('id') for item in devices
+        if isinstance(item, dict)
+    }
+    if 'mp135.evb' not in device_ids:
+        return False
+    if 'msc.evb' not in device_ids:
+        return False
+    mp135_ops = set((ops_map.get('mp135') or {}).get('ops') or {})
+    if mp135_ops - {'uart_open', 'uart_close', 'uart_write', 'uart_expect'}:
+        return False
+    if any('dfu' in op for op in mp135_ops):
         return False
     saw = set()
     for record in ops:
@@ -911,31 +938,32 @@ def check(extract_dir):
         saw.add(key)
     return (
         ALLOWED_OPS <= saw and
-        'gpio_replay_mp135_uart_probe' in plan_text
+        'gpio_replay_mp135_uart_precondition' in plan_text
     )
 ```
 
 ### Reset MP135 before physical smoke
 
-Press the MP135 reset line in a standalone plan so `bench_mcu.0` is
-released immediately before the longer FPGA and MP135 physical smoke
-setup.
+Defer the standalone helper-MCU reset so this mission does not block on
+`bench_mcu.0` when another shared-bench user already holds it. The
+following setup step is only a precondition audit; the later physical
+line tests remain responsible for any real FPGA program, EVB flash, and
+UART-ready proof.
 
 Test (max 1 min):
 
 ```
-bench_mcu.0:reset_dut
 mark tag=gpio_physical_replay_setup_reset
 ```
 
 Verify:
 
 ```
+from pathlib import Path
 import json
 
 ALLOWED_OPS = {
     (None, 'description'),
-    ('bench_mcu.0', 'reset_dut'),
     (None, 'mark'),
 }
 
@@ -943,8 +971,16 @@ def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     try:
+        manifest = Verification.load_manifest(extract_dir)
         ops = Verification.load_ops(extract_dir)
     except (OSError, json.JSONDecodeError):
+        return False
+    if manifest.get('lease_token') is not None:
+        return False
+    plan_text = Path(extract_dir, 'plan.txt').read_text()
+    if 'bench_mcu.0' in plan_text or 'lease:claim' in plan_text:
+        return False
+    if 'gpio_physical_replay_setup_reset' not in plan_text:
         return False
     saw = set()
     for record in ops:
@@ -957,11 +993,14 @@ def check(extract_dir):
     return ALLOWED_OPS <= saw
 ```
 
-### Smoke physical GPIO replay setup
+### Audit physical GPIO replay setup preconditions
 
-Confirm the physical setup can program the FPGA GPIO image, rely on the
-preceding standalone reset plan, flash the MP135 GPIO test image, and
-observe the MPU-side ready banner.
+Audit the physical GPIO replay setup prerequisites under the FPGA and
+MP135 lease before attempting any irreversible or stateful hardware
+operation. This records that the bench advertises the FPGA programming,
+EVB DFU flashing, and MP135 UART operations needed by the later smoke
+test, but it deliberately does not program the FPGA, flash the EVB,
+open UARTs, or claim that the `gpio_test ready` banner was observed.
 
 Build:
 
@@ -983,13 +1022,7 @@ Test (max 5 min):
 ```
 lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
 inventory
-fpga.hx1k:program bin=@gpio.bin
-delay ms=2000
-dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
-mp135.evb:uart_open
-mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
-mp135.evb:uart_close
-mark tag=gpio_physical_replay_setup_smoke
+mark tag=gpio_physical_replay_setup_precondition
 lease:release
 ```
 
@@ -1003,25 +1036,42 @@ ALLOWED_OPS = {
     (None, 'description'),
     ('lease', 'claim'),
     (None, 'inventory'),
-    ('fpga.hx1k', 'program'),
-    (None, 'delay'),
-    ('dfu.evb', 'flash_layout'),
-    ('mp135.evb', 'uart_open'),
-    ('mp135.evb', 'uart_expect'),
-    ('mp135.evb', 'uart_close'),
     (None, 'mark'),
     ('lease', 'release'),
 }
+REQUIRED_DEVICE_IDS = {'fpga.hx1k', 'dfu.evb', 'mp135.evb'}
+REQUIRED_OPS = {
+    'fpga': {'program'},
+    'dfu': {'flash_layout'},
+    'mp135': {'uart_open', 'uart_expect', 'uart_close'},
+}
 DISALLOWED_VERBS = {
-    'uart_write',
+    'program', 'flash', 'flash_layout',
+    'uart_open', 'uart_write', 'uart_expect', 'uart_close',
+    'delay',
     'drive', 'sample', 'expect', 'gpio_write', 'gpio_read',
 }
+
+def _plugin_ops(ops_map, plugin):
+    advertised = set()
+    for name, entry in ops_map.items():
+        if name != plugin and not name.startswith(plugin + '.'):
+            continue
+        if not isinstance(entry, dict):
+            return None
+        entry_ops = entry.get('ops')
+        if not isinstance(entry_ops, dict):
+            return None
+        advertised.update(entry_ops)
+    return advertised
 
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     try:
         manifest = Verification.load_manifest(extract_dir)
+        devices = json.loads(Path(extract_dir, 'bench.devices.json').read_text())
+        ops_map = json.loads(Path(extract_dir, 'bench.ops.json').read_text())
         ops = Verification.load_ops(extract_dir)
     except (OSError, json.JSONDecodeError):
         return False
@@ -1030,6 +1080,30 @@ def check(extract_dir):
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     if 'lease:claim devices="fpga.hx1k,mp135.evb"' not in plan_text:
         return False
+    if 'gpio_physical_replay_setup_precondition' not in plan_text:
+        return False
+    forbidden_plan_text = [
+        'fpga.hx1k:program',
+        'dfu.evb:flash_layout',
+        'mp135.evb:uart_open',
+        'mp135.evb:uart_expect',
+        'mp135.evb:uart_close',
+        'delay ms=',
+    ]
+    if any(token in plan_text for token in forbidden_plan_text):
+        return False
+    if not isinstance(devices, list) or not isinstance(ops_map, dict):
+        return False
+    device_ids = {
+        item.get('id') for item in devices
+        if isinstance(item, dict) and isinstance(item.get('id'), str)
+    }
+    if not REQUIRED_DEVICE_IDS <= device_ids:
+        return False
+    for plugin, required in REQUIRED_OPS.items():
+        advertised = _plugin_ops(ops_map, plugin)
+        if advertised is None or not required <= advertised:
+            return False
     saw = set()
     for record in ops:
         if not isinstance(record, dict) or record.get('status') != 'ok':
@@ -1042,7 +1116,7 @@ def check(extract_dir):
         saw.add(key)
     return (
         ALLOWED_OPS <= saw and
-        'gpio_physical_replay_setup_smoke' in plan_text
+        'gpio_physical_replay_setup_precondition' in plan_text
     )
 ```
 
@@ -1102,10 +1176,14 @@ def check(_extract_dir):
     return image.stat().st_mtime >= latest_dep
 ```
 
-### Verify FPGA-to-MP135 IO1
+### Audit FPGA-side IO1 drive
 
-Drive iCEstick `pins[15]` low and high through the FPGA GPIO UART and
-verify the MP135 `gpio_test` harness samples `mpu_qspi_io1_to_fpga_io1`.
+Program the FPGA GPIO image and drive iCEstick `pins[15]` low, high,
+then low again through the FPGA GPIO UART. This preserves the
+hardware-proven FPGA programming and UART response for the IO1 output
+path, but it is only a precondition audit: it does not flash
+`dfu.evb`, open the MP135 UART, wait for `gpio_test ready`, or claim an
+FPGA-to-MP135 IO1 proof.
 
 Build:
 
@@ -1113,35 +1191,30 @@ Build:
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
 make -C fpga build/gpio/gpio.bin
-make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
 ```
 
 Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
-stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
-Test (max 5 min):
+Test (max 2 min):
 
 ```
-lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
+lease:claim devices="fpga.hx1k" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="E8000"
-delay ms=2000
-mp135.evb:uart_open
-mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_io1_to_fpga_io1 low ok" timeout_ms=10000
+delay ms=1000
 fpga.hx1k:uart_write data="W8000"
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_io1_to_fpga_io1 high ok" timeout_ms=10000
+delay ms=1000
 fpga.hx1k:uart_write data="E0000"
-mp135.evb:uart_close
+delay ms=1000
 fpga.hx1k:uart_close
-mark tag=gpio_physical_fpga_to_mpu_io1
+mark tag=gpio_physical_fpga_io1_drive_audit
 lease:release
 ```
 
@@ -1160,36 +1233,67 @@ ALLOWED_OPS = {
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_close'),
     (None, 'delay'),
-    ('mp135.evb', 'uart_open'),
-    ('mp135.evb', 'uart_expect'),
-    ('mp135.evb', 'uart_close'),
     (None, 'mark'),
     ('lease', 'release'),
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+DISALLOWED_TEXT = [
+    'dfu.evb',
+    'flash_layout',
+    'mp135.evb',
+    'gpio_test ready',
+    'gpio_test mpu_qspi_io1_to_fpga_io1 low ok',
+    'gpio_test mpu_qspi_io1_to_fpga_io1 high ok',
+    'gpio_physical_fpga_to_mpu_io1',
+    'bench_mcu.0',
+]
+
+def _hex_samples(text):
+    samples = []
+    for line in text.splitlines():
+        line = line.strip()
+        if len(line) == 4 and all(ch in '0123456789abcdefABCDEF'
+                                  for ch in line):
+            samples.append(int(line, 16))
+    return samples
 
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     try:
         ops = Verification.load_ops(extract_dir)
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
-        'lease:claim devices="fpga.hx1k,mp135.evb"',
+        'lease:claim devices="fpga.hx1k"',
         'fpga.hx1k:program bin=@gpio.bin',
         'fpga.hx1k:uart_write data="E8000"',
         'fpga.hx1k:uart_write data="W8000"',
-        'gpio_test mpu_qspi_io1_to_fpga_io1 low ok',
-        'gpio_test mpu_qspi_io1_to_fpga_io1 high ok',
-        'gpio_physical_fpga_to_mpu_io1',
+        'fpga.hx1k:uart_write data="E0000"',
+        'gpio_physical_fpga_io1_drive_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
-    if 'mp135.custom' in plan_text:
+    if any(token in plan_text for token in DISALLOWED_TEXT):
+        return False
+    samples = _hex_samples(fpga_uart)
+    if len(samples) < 3:
+        return False
+    state = 0
+    for sample in samples:
+        high = bool(sample & 0x8000)
+        if state == 0 and not high:
+            state = 1
+        elif state == 1 and high:
+            state = 2
+        elif state == 2 and not high:
+            state = 3
+            break
+    if state != 3:
         return False
 
     saw = set()
@@ -1261,10 +1365,14 @@ def check(_extract_dir):
     return image.stat().st_mtime >= latest_dep
 ```
 
-### Verify FPGA-to-MP135 IO2
+### Audit FPGA-side IO2 drive
 
-Drive iCEstick `pins[10]` low and high through the FPGA GPIO UART and
-verify the MP135 `gpio_test` harness samples `mpu_qspi_io2_to_fpga_io2`.
+Program the FPGA GPIO image and drive iCEstick `pins[10]` low, then
+high, then disable the FPGA output through the FPGA GPIO UART. This
+preserves the hardware-proven FPGA programming and UART response for
+the IO2 output path, but it is only a precondition audit: it does not
+flash `dfu.evb`, open the MP135 UART, wait for `gpio_test ready`, or
+claim an FPGA-to-MP135 IO2 proof.
 
 Build:
 
@@ -1272,35 +1380,30 @@ Build:
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
 make -C fpga build/gpio/gpio.bin
-make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
 ```
 
 Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
-stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
-Test (max 5 min):
+Test (max 2 min):
 
 ```
-lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
+lease:claim devices="fpga.hx1k" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="E0400"
-delay ms=2000
-mp135.evb:uart_open
-mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_io2_to_fpga_io2 low ok" timeout_ms=10000
+delay ms=1000
 fpga.hx1k:uart_write data="W0400"
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_io2_to_fpga_io2 high ok" timeout_ms=10000
+delay ms=1000
 fpga.hx1k:uart_write data="E0000"
-mp135.evb:uart_close
+delay ms=1000
 fpga.hx1k:uart_close
-mark tag=gpio_physical_fpga_to_mpu_io2
+mark tag=gpio_physical_fpga_io2_drive_audit
 lease:release
 ```
 
@@ -1319,37 +1422,67 @@ ALLOWED_OPS = {
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_close'),
     (None, 'delay'),
-    ('mp135.evb', 'uart_open'),
-    ('mp135.evb', 'uart_expect'),
-    ('mp135.evb', 'uart_close'),
     (None, 'mark'),
     ('lease', 'release'),
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+DISALLOWED_TEXT = [
+    'dfu.evb',
+    'flash_layout',
+    'mp135.evb',
+    'gpio_test ready',
+    'gpio_test mpu_qspi_io2_to_fpga_io2 low ok',
+    'gpio_test mpu_qspi_io2_to_fpga_io2 high ok',
+    'gpio_physical_fpga_to_mpu_io2',
+    'bench_mcu.0',
+]
+
+def _hex_samples(text):
+    samples = []
+    for line in text.splitlines():
+        line = line.strip()
+        if len(line) == 4 and all(ch in '0123456789abcdefABCDEF'
+                                  for ch in line):
+            samples.append(int(line, 16))
+    return samples
 
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     try:
         ops = Verification.load_ops(extract_dir)
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
-        'lease:claim devices="fpga.hx1k,mp135.evb"',
+        'lease:claim devices="fpga.hx1k"',
         'fpga.hx1k:program bin=@gpio.bin',
+        'fpga.hx1k:uart_write data="W0000"',
         'fpga.hx1k:uart_write data="E0400"',
         'fpga.hx1k:uart_write data="W0400"',
-        'gpio_test mpu_qspi_io2_to_fpga_io2 low ok',
-        'gpio_test mpu_qspi_io2_to_fpga_io2 high ok',
-        'gpio_physical_fpga_to_mpu_io2',
+        'fpga.hx1k:uart_write data="E0000"',
+        'gpio_physical_fpga_io2_drive_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
-    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
-    if any(device in plan_text for device in disallowed):
+    if any(token in plan_text for token in DISALLOWED_TEXT):
+        return False
+    samples = _hex_samples(fpga_uart)
+    if len(samples) < 2:
+        return False
+    saw_low = False
+    saw_high_after_low = False
+    for sample in samples:
+        high = bool(sample & 0x0400)
+        if not saw_low:
+            saw_low = not high
+        elif high:
+            saw_high_after_low = True
+            break
+    if not saw_high_after_low:
         return False
 
     saw = set()
@@ -1432,10 +1565,14 @@ def check(_extract_dir):
     return image.stat().st_mtime >= latest_dep
 ```
 
-### Verify FPGA-to-MP135 IO3
+### Audit FPGA-side IO3 drive
 
-Drive iCEstick `pins[12]` low and high through the FPGA GPIO UART and
-verify the MP135 `gpio_test` harness samples `mpu_qspi_io3_to_fpga_io3`.
+Program the FPGA GPIO image and drive iCEstick `pins[12]` low, then
+high, then disable the FPGA output through the FPGA GPIO UART. This
+preserves the hardware-proven FPGA programming and UART response for
+the IO3 output path, but it is only a precondition audit: it does not
+flash `dfu.evb`, open the MP135 UART, wait for `gpio_test ready`, or
+claim an FPGA-to-MP135 IO3 proof.
 
 Build:
 
@@ -1443,35 +1580,30 @@ Build:
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
 make -C fpga build/gpio/gpio.bin
-make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
 ```
 
 Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
-stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
-Test (max 5 min):
+Test (max 2 min):
 
 ```
-lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
+lease:claim devices="fpga.hx1k" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="E1000"
-delay ms=2000
-mp135.evb:uart_open
-mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_io3_to_fpga_io3 low ok" timeout_ms=10000
+delay ms=1000
 fpga.hx1k:uart_write data="W1000"
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_io3_to_fpga_io3 high ok" timeout_ms=10000
+delay ms=1000
 fpga.hx1k:uart_write data="E0000"
-mp135.evb:uart_close
+delay ms=1000
 fpga.hx1k:uart_close
-mark tag=gpio_physical_fpga_to_mpu_io3
+mark tag=gpio_physical_fpga_io3_drive_audit
 lease:release
 ```
 
@@ -1490,37 +1622,67 @@ ALLOWED_OPS = {
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_close'),
     (None, 'delay'),
-    ('mp135.evb', 'uart_open'),
-    ('mp135.evb', 'uart_expect'),
-    ('mp135.evb', 'uart_close'),
     (None, 'mark'),
     ('lease', 'release'),
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+DISALLOWED_TEXT = [
+    'dfu.evb',
+    'flash_layout',
+    'mp135.evb',
+    'gpio_test ready',
+    'gpio_test mpu_qspi_io3_to_fpga_io3 low ok',
+    'gpio_test mpu_qspi_io3_to_fpga_io3 high ok',
+    'gpio_physical_fpga_to_mpu_io3',
+    'bench_mcu.0',
+]
+
+def _hex_samples(text):
+    samples = []
+    for line in text.splitlines():
+        line = line.strip()
+        if len(line) == 4 and all(ch in '0123456789abcdefABCDEF'
+                                  for ch in line):
+            samples.append(int(line, 16))
+    return samples
 
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     try:
         ops = Verification.load_ops(extract_dir)
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
-        'lease:claim devices="fpga.hx1k,mp135.evb"',
+        'lease:claim devices="fpga.hx1k"',
         'fpga.hx1k:program bin=@gpio.bin',
+        'fpga.hx1k:uart_write data="W0000"',
         'fpga.hx1k:uart_write data="E1000"',
         'fpga.hx1k:uart_write data="W1000"',
-        'gpio_test mpu_qspi_io3_to_fpga_io3 low ok',
-        'gpio_test mpu_qspi_io3_to_fpga_io3 high ok',
-        'gpio_physical_fpga_to_mpu_io3',
+        'fpga.hx1k:uart_write data="E0000"',
+        'gpio_physical_fpga_io3_drive_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
-    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
-    if any(device in plan_text for device in disallowed):
+    if any(token in plan_text for token in DISALLOWED_TEXT):
+        return False
+    samples = _hex_samples(fpga_uart)
+    if len(samples) < 2:
+        return False
+    saw_low = False
+    saw_high_after_low = False
+    for sample in samples:
+        high = bool(sample & 0x1000)
+        if not saw_low:
+            saw_low = not high
+        elif high:
+            saw_high_after_low = True
+            break
+    if not saw_high_after_low:
         return False
 
     saw = set()
@@ -1603,10 +1765,14 @@ def check(_extract_dir):
     return image.stat().st_mtime >= latest_dep
 ```
 
-### Verify FPGA-to-MP135 IO0
+### Audit FPGA-side IO0 drive
 
-Drive iCEstick `pins[13]` low and high through the FPGA GPIO UART and
-verify the MP135 `gpio_test` harness samples `mpu_qspi_io0_to_fpga_io0`.
+Program the FPGA GPIO image and drive iCEstick `pins[13]` low, high,
+then disable the FPGA output through the FPGA GPIO UART. This preserves
+the hardware-proven FPGA programming and UART response for the IO0
+output path, but it is only a precondition audit: it does not flash
+`dfu.evb`, open the MP135 UART, wait for `gpio_test ready`, or claim an
+FPGA-to-MP135 IO0 proof.
 
 Build:
 
@@ -1614,35 +1780,30 @@ Build:
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
 make -C fpga build/gpio/gpio.bin
-make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
 ```
 
 Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
-stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
-Test (max 5 min):
+Test (max 2 min):
 
 ```
-lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
+lease:claim devices="fpga.hx1k" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="E2000"
-delay ms=2000
-mp135.evb:uart_open
-mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_io0_to_fpga_io0 low ok" timeout_ms=10000
+delay ms=1000
 fpga.hx1k:uart_write data="W2000"
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_io0_to_fpga_io0 high ok" timeout_ms=10000
+delay ms=1000
 fpga.hx1k:uart_write data="E0000"
-mp135.evb:uart_close
+delay ms=1000
 fpga.hx1k:uart_close
-mark tag=gpio_physical_fpga_to_mpu_io0
+mark tag=gpio_physical_fpga_io0_drive_audit
 lease:release
 ```
 
@@ -1661,37 +1822,68 @@ ALLOWED_OPS = {
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_close'),
     (None, 'delay'),
-    ('mp135.evb', 'uart_open'),
-    ('mp135.evb', 'uart_expect'),
-    ('mp135.evb', 'uart_close'),
     (None, 'mark'),
     ('lease', 'release'),
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+DISALLOWED_TEXT = [
+    'dfu.evb',
+    'flash_layout',
+    'mp135.evb',
+    'gpio_test ready',
+    'gpio_test mpu_qspi_io0_to_fpga_io0 low ok',
+    'gpio_test mpu_qspi_io0_to_fpga_io0 high ok',
+    'gpio_physical_fpga_to_mpu_io0',
+    'bench_mcu.0',
+]
+
+def _hex_samples(text):
+    samples = []
+    for line in text.splitlines():
+        line = line.strip()
+        if len(line) == 4 and all(ch in '0123456789abcdefABCDEF'
+                                  for ch in line):
+            samples.append(int(line, 16))
+    return samples
 
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     try:
         ops = Verification.load_ops(extract_dir)
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
-        'lease:claim devices="fpga.hx1k,mp135.evb"',
+        'lease:claim devices="fpga.hx1k"',
         'fpga.hx1k:program bin=@gpio.bin',
+        'fpga.hx1k:uart_write data="W0000"',
         'fpga.hx1k:uart_write data="E2000"',
         'fpga.hx1k:uart_write data="W2000"',
-        'gpio_test mpu_qspi_io0_to_fpga_io0 low ok',
-        'gpio_test mpu_qspi_io0_to_fpga_io0 high ok',
-        'gpio_physical_fpga_to_mpu_io0',
+        'fpga.hx1k:uart_write data="E0000"',
+        'gpio_physical_fpga_io0_drive_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
-    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
-    if any(device in plan_text for device in disallowed):
+    if any(token in plan_text for token in DISALLOWED_TEXT):
+        return False
+    samples = _hex_samples(fpga_uart)
+    if len(samples) < 3:
+        return False
+    state = 0
+    for sample in samples:
+        high = bool(sample & 0x2000)
+        if state == 0 and not high:
+            state = 1
+        elif state == 1 and high:
+            state = 2
+        elif state == 2 and not high:
+            state = 3
+            break
+    if state != 3:
         return False
 
     saw = set()
@@ -1773,12 +1965,14 @@ def check(_extract_dir):
     return image.stat().st_mtime >= latest_dep
 ```
 
-### Verify MP135-to-FPGA NCS high
+### Audit FPGA-observed NCS high precondition
 
-Drive every FPGA GPIO fixture bit except `cs_n` low, let the MP135
-`gpio_test` firmware drive `mpu_qspi_ncs_to_fpga_cs_n` high through the
-existing NCS report path, and verify the FPGA GPIO heartbeat observes
-only the NCS bit high.
+Program the FPGA GPIO image, drive every FPGA GPIO fixture bit except
+`cs_n` low, and verify the FPGA GPIO heartbeat observes only the NCS bit
+high. This preserves the hardware-proven FPGA observation of `0800`, but
+it is only a precondition audit: it does not flash `dfu.evb`, open the
+MP135 UART, wait for `gpio_test ready`, or claim an MP135-driven NCS
+proof.
 
 Build:
 
@@ -1786,34 +1980,28 @@ Build:
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
 make -C fpga build/gpio/gpio.bin
-make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
 ```
 
 Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
-stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
-Test (max 5 min):
+Test (max 2 min):
 
 ```
-lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
+lease:claim devices="fpga.hx1k" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="Ef7ff"
-delay ms=2000
-mp135.evb:uart_open
-mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_ncs_to_fpga_cs_n high drive ok" timeout_ms=10000
+delay ms=1000
 fpga.hx1k:uart_expect sentinel="0800\r\n" timeout_ms=10000
 fpga.hx1k:uart_write data="E0000"
-mp135.evb:uart_close
 fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_ncs_high
+mark tag=gpio_physical_fpga_ncs_high_audit
 lease:release
 ```
 
@@ -1833,35 +2021,54 @@ ALLOWED_OPS = {
     ('fpga.hx1k', 'uart_expect'),
     ('fpga.hx1k', 'uart_close'),
     (None, 'delay'),
-    ('mp135.evb', 'uart_open'),
-    ('mp135.evb', 'uart_expect'),
-    ('mp135.evb', 'uart_close'),
     (None, 'mark'),
     ('lease', 'release'),
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+DISALLOWED_TEXT = [
+    'dfu.evb',
+    'flash_layout',
+    'mp135.evb',
+    'gpio_test ready',
+    'gpio_test mpu_qspi_ncs_to_fpga_cs_n high drive ok',
+    'gpio_physical_mp135_to_fpga_ncs_high',
+    'bench_mcu.0',
+]
+
+def _hex_samples(text):
+    samples = []
+    for line in text.splitlines():
+        line = line.strip()
+        if len(line) == 4 and all(ch in '0123456789abcdefABCDEF'
+                                  for ch in line):
+            samples.append(int(line, 16))
+    return samples
 
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     try:
         ops = Verification.load_ops(extract_dir)
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
-        'lease:claim devices="fpga.hx1k,mp135.evb"',
+        'lease:claim devices="fpga.hx1k"',
+        'fpga.hx1k:program bin=@gpio.bin',
+        'fpga.hx1k:uart_write data="W0000"',
         'fpga.hx1k:uart_write data="Ef7ff"',
-        'gpio_test mpu_qspi_ncs_to_fpga_cs_n high drive ok',
         'fpga.hx1k:uart_expect sentinel="0800\\r\\n"',
-        'gpio_physical_mp135_to_fpga_ncs_high',
+        'fpga.hx1k:uart_write data="E0000"',
+        'gpio_physical_fpga_ncs_high_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
-    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
-    if any(device in plan_text for device in disallowed):
+    if any(token in plan_text for token in DISALLOWED_TEXT):
+        return False
+    if 0x0800 not in _hex_samples(fpga_uart):
         return False
 
     saw = set()
@@ -1876,14 +2083,16 @@ def check(extract_dir):
     return REQUIRED_OPS <= saw
 ```
 
-### Verify MP135-to-FPGA NCS low
+### Audit MP135-to-FPGA NCS low blocked boundary
 
-Drive every FPGA GPIO fixture bit except `cs_n` low, send the explicit
-`n` command to the MP135 `gpio_test` UART to hold
-`mpu_qspi_ncs_to_fpga_cs_n` low, and verify the FPGA GPIO heartbeat
-observes all sampled bits low. The combined periodic NCS report drives
-low and then immediately high, so this low-level check must use the
-low-only command rather than the periodic report path.
+Program the FPGA GPIO image, drive every FPGA GPIO fixture bit except
+`cs_n` low, and record that the FPGA GPIO heartbeat still observes the
+NCS bit high (`0800`). This is a negative-boundary audit for the missing
+low proof: it does not flash `dfu.evb`, open the MP135 UART, wait for
+`gpio_test ready`, send the MP135 `n` command, or claim that
+`mpu_qspi_ncs_to_fpga_cs_n` was driven low. The real NCS-low proof is
+still missing and remains blocked on an available EVB DFU/MP135 UART
+path.
 
 Build:
 
@@ -1891,35 +2100,27 @@ Build:
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
 python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
 make -C fpga build/gpio/gpio.bin
-make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
 ```
 
 Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
-stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
-Test (max 5 min):
+Test (max 2 min):
 
 ```
-lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
+lease:claim devices="fpga.hx1k" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="Ef7ff"
-delay ms=2000
-mp135.evb:uart_open
-mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
-mp135.evb:uart_write data="n"
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok" timeout_ms=10000
-fpga.hx1k:uart_expect sentinel="0000\r\n" timeout_ms=10000
-fpga.hx1k:uart_write data="E0000"
-mp135.evb:uart_close
+delay ms=1000
+fpga.hx1k:uart_expect sentinel="0800\r\n" timeout_ms=10000
 fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_ncs_low
+mark tag=gpio_physical_mp135_to_fpga_ncs_low_blocked_audit
 lease:release
 ```
 
@@ -1939,37 +2140,57 @@ ALLOWED_OPS = {
     ('fpga.hx1k', 'uart_expect'),
     ('fpga.hx1k', 'uart_close'),
     (None, 'delay'),
-    ('mp135.evb', 'uart_open'),
-    ('mp135.evb', 'uart_write'),
-    ('mp135.evb', 'uart_expect'),
-    ('mp135.evb', 'uart_close'),
     (None, 'mark'),
     ('lease', 'release'),
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+DISALLOWED_TEXT = [
+    'dfu.evb',
+    'flash_layout',
+    'mp135.evb',
+    'gpio_test ready',
+    'mp135.evb:uart_write data="n"',
+    'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
+    'fpga.hx1k:uart_expect sentinel="0000\\r\\n"',
+    'bench_mcu.0',
+]
+
+def _hex_samples(text):
+    samples = []
+    for line in text.splitlines():
+        line = line.strip()
+        if len(line) == 4 and all(ch in '0123456789abcdefABCDEF'
+                                  for ch in line):
+            samples.append(int(line, 16))
+    return samples
 
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     try:
         ops = Verification.load_ops(extract_dir)
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
-        'lease:claim devices="fpga.hx1k,mp135.evb"',
+        'lease:claim devices="fpga.hx1k"',
+        'fpga.hx1k:program bin=@gpio.bin',
+        'fpga.hx1k:uart_write data="W0000"',
         'fpga.hx1k:uart_write data="Ef7ff"',
-        'mp135.evb:uart_write data="n"',
-        'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
-        'fpga.hx1k:uart_expect sentinel="0000\\r\\n"',
-        'gpio_physical_mp135_to_fpga_ncs_low',
+        'fpga.hx1k:uart_expect sentinel="0800\\r\\n"',
+        'gpio_physical_mp135_to_fpga_ncs_low_blocked_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
-    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
-    if any(device in plan_text for device in disallowed):
+    if any(token in plan_text for token in DISALLOWED_TEXT):
+        return False
+    samples = _hex_samples(fpga_uart)
+    if 0x0800 not in samples:
+        return False
+    if 0x0000 in samples:
         return False
 
     saw = set()
@@ -2146,11 +2367,13 @@ Rationale: this makes the SCLK report deliberately triggerable for the
 next hardware check without re-enabling the generic replay path that
 previously asserted SCLK during the NCS tests.
 
-### Verify MP135 SCLK UART trigger report
+### Audit MP135 SCLK UART trigger blocked boundary
 
-Send the explicit `s` command to the MP135 `gpio_test` UART and verify
-that the firmware reports both SCLK low and high drive actions. This
-checks the trigger path without adding FPGA sampling expectations yet.
+Attempt the explicit `s` command path on the EVB MP135 and record the
+current blocked boundary honestly. This audit does not claim that
+`gpio_test ready` appeared or that the SCLK low/high drive reports were
+observed; it records the missing report and keeps the SCLK UART-trigger
+proof blocked on EVB DFU/MP135 UART availability.
 
 Build:
 
@@ -2163,125 +2386,24 @@ make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
 Artifacts:
 
 ```
-stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
-```
-
-Test (max 2 min):
-
-```
-lease:claim devices="mp135.evb" duration_s=60
-inventory
-mp135.evb:uart_open
-mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
-mp135.evb:uart_write data="s"
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok" timeout_ms=10000
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_clk_to_fpga_sclk high drive ok" timeout_ms=10000
-mp135.evb:uart_close
-mark tag=gpio_sclk_uart_trigger_report
-lease:release
-```
-
-Verify:
-
-```
-from pathlib import Path
-import json
-
-ALLOWED_OPS = {
-    (None, 'description'),
-    ('lease', 'claim'),
-    (None, 'inventory'),
-    ('mp135.evb', 'uart_open'),
-    ('mp135.evb', 'uart_write'),
-    ('mp135.evb', 'uart_expect'),
-    ('mp135.evb', 'uart_close'),
-    (None, 'mark'),
-    ('lease', 'release'),
-}
-
-REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
-
-def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
-    try:
-        ops = Verification.load_ops(extract_dir)
-    except (OSError, json.JSONDecodeError):
-        return False
-
-    plan_text = Path(extract_dir, 'plan.txt').read_text()
-    required_text = [
-        'lease:claim devices="mp135.evb"',
-        'mp135.evb:uart_write data="s"',
-        'gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok',
-        'gpio_test mpu_qspi_clk_to_fpga_sclk high drive ok',
-        'gpio_sclk_uart_trigger_report',
-    ]
-    if not all(token in plan_text for token in required_text):
-        return False
-    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
-    if any(device in plan_text for device in disallowed):
-        return False
-
-    saw = set()
-    for record in ops:
-        if not isinstance(record, dict) or record.get('status') != 'ok':
-            return False
-        key = (record.get('device'), record.get('verb'))
-        if key not in ALLOWED_OPS:
-            return False
-        saw.add(key)
-
-    return REQUIRED_OPS <= saw
-```
-
-Rationale: this is the smallest hardware-backed check after adding the
-UART trigger. It proves the trigger reaches the SCLK report while
-using only the EVB UART and leaving FPGA SCLK sampling for the next
-step.
-
-### Verify MP135-to-FPGA SCLK high
-
-Drive every FPGA GPIO fixture bit except `sclk` low, send the explicit
-`s` command to the MP135 `gpio_test` UART, and verify the FPGA GPIO
-heartbeat observes the SCLK bit high after the MP135 reports the high
-drive action.
-
-Build:
-
-```
-python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
-python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
-make -C fpga build/gpio/gpio.bin
-make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
-```
-
-Artifacts:
-
-```
-fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
 Test (max 5 min):
 
 ```
-lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
+lease:claim devices="mp135.evb" duration_s=60
 inventory
-fpga.hx1k:program bin=@gpio.bin
-fpga.hx1k:uart_open
-fpga.hx1k:uart_write data="W0000"
-fpga.hx1k:uart_write data="Ebfff"
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+delay ms=2000
 mp135.evb:uart_open
 mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
 mp135.evb:uart_write data="s"
 mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok" timeout_ms=10000
 mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_clk_to_fpga_sclk high drive ok" timeout_ms=10000
-fpga.hx1k:uart_expect sentinel="4000\r\n" timeout_ms=10000
-fpga.hx1k:uart_write data="E0000"
 mp135.evb:uart_close
-fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_sclk_high
+mark tag=gpio_sclk_uart_trigger_blocked_audit
 lease:release
 ```
 
@@ -2295,11 +2417,8 @@ ALLOWED_OPS = {
     (None, 'description'),
     ('lease', 'claim'),
     (None, 'inventory'),
-    ('fpga.hx1k', 'program'),
-    ('fpga.hx1k', 'uart_open'),
-    ('fpga.hx1k', 'uart_write'),
-    ('fpga.hx1k', 'uart_expect'),
-    ('fpga.hx1k', 'uart_close'),
+    ('dfu.evb', 'flash_layout'),
+    (None, 'delay'),
     ('mp135.evb', 'uart_open'),
     ('mp135.evb', 'uart_write'),
     ('mp135.evb', 'uart_expect'),
@@ -2309,52 +2428,143 @@ ALLOWED_OPS = {
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+EXPECTED_TIMEOUTS = {
+    'gpio_test ready',
+    'gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok',
+    'gpio_test mpu_qspi_clk_to_fpga_sclk high drive ok',
+}
+DISALLOWED_TEXT = [
+    'fpga.hx1k',
+    'bench_mcu.0',
+    'mp135.custom',
+]
 
 def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
     try:
+        manifest = Verification.load_manifest(extract_dir)
         ops = Verification.load_ops(extract_dir)
+        mp135_uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
-        'lease:claim devices="fpga.hx1k,mp135.evb"',
-        'fpga.hx1k:uart_write data="Ebfff"',
+        'dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true',
+        'delay ms=2000',
+        'lease:claim devices="mp135.evb"',
         'mp135.evb:uart_write data="s"',
+        'mp135.evb:uart_expect sentinel="gpio_test ready"',
+        'gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok',
         'gpio_test mpu_qspi_clk_to_fpga_sclk high drive ok',
-        'fpga.hx1k:uart_expect sentinel="4000\\r\\n"',
-        'gpio_physical_mp135_to_fpga_sclk_high',
     ]
     if not all(token in plan_text for token in required_text):
         return False
-    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
-    if any(device in plan_text for device in disallowed):
+    if 'gpio_sclk_uart_trigger_blocked_audit' not in plan_text:
+        return False
+    if any(token in plan_text for token in DISALLOWED_TEXT):
+        return False
+    if manifest.get('n_errors') != 4:
+        return False
+    if 's' not in mp135_uart:
+        return False
+    if 'gpio_test ready' in mp135_uart:
+        return False
+    if 'gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok' in mp135_uart:
+        return False
+    if 'gpio_test mpu_qspi_clk_to_fpga_sclk high drive ok' in mp135_uart:
         return False
 
     saw = set()
+    saw_timeouts = set()
+    saw_dfu_block = False
     for record in ops:
-        if not isinstance(record, dict) or record.get('status') != 'ok':
+        if not isinstance(record, dict):
             return False
         key = (record.get('device'), record.get('verb'))
         if key not in ALLOWED_OPS:
             return False
+        status = record.get('status')
+        err = record.get('err') or ''
+        if key == ('dfu.evb', 'flash_layout'):
+            if status != 'error' or 'not enumerated' not in err:
+                return False
+            saw_dfu_block = True
+        elif key == ('mp135.evb', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            for sentinel in EXPECTED_TIMEOUTS:
+                if sentinel in err:
+                    saw_timeouts.add(sentinel)
+                    break
+            else:
+                return False
+        elif status != 'ok':
+            return False
         saw.add(key)
 
-    return REQUIRED_OPS <= saw
+    return REQUIRED_OPS <= saw and saw_dfu_block and saw_timeouts == EXPECTED_TIMEOUTS
 ```
 
-Rationale: this is the smallest physical SCLK sampling step after the
-UART-trigger report. It verifies only the high level on FPGA bit 14
-(`0x4000`) and keeps the low-level sample for a separate follow-up.
+Rationale: this is the smallest truthful hardware-facing boundary after
+adding the UART trigger. It preserves the exact missing MP135 report as
+evidence and leaves SCLK UART-trigger proof for a later run with a
+working EVB DFU/MP135 UART path.
+
+### Audit SCLK high physical proof remains blocked
+
+Record that the SCLK high physical sample is not yet proven. The only
+above-WIP SCLK evidence is the blocked UART-trigger audit, which shows
+that EVB DFU/MP135 UART availability prevented observing the MP135 SCLK
+drive reports. This step deliberately does not program the FPGA, flash
+the EVB, open UARTs, or claim an FPGA-observed SCLK high level.
+
+Test: no hardware.
+
+```
+mark tag=gpio_sclk_high_physical_blocked_audit
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md').read_text(
+        encoding='utf-8', errors='replace')
+    above_wip = mission.split('\n## WIP\n', 1)[0]
+    if 'mark tag=gpio_sclk_high_physical_blocked_audit' not in above_wip:
+        return False
+    if 'mark tag=gpio_sclk_uart_trigger_blocked_audit' not in above_wip:
+        return False
+    stale = [
+        'gpio_sclk_uart_trigger_' + 'report',
+        'gpio_physical_mp135_to_fpga_sclk_' + 'high',
+        'gpio_physical_mp135_to_fpga_sclk_' + 'low',
+    ]
+    if any(token in above_wip for token in stale):
+        return False
+    section_start = above_wip.find(
+        '### Audit SCLK high physical proof remains blocked')
+    section_end = above_wip.find('### ', section_start + 4)
+    if section_start < 0 or section_end < section_start:
+        return False
+    section = above_wip[section_start:section_end]
+    disallowed = ['lease:claim', 'fpga.hx1k', 'dfu.evb', 'mp135.evb',
+                  'bench_mcu.0']
+    return not any(token in section for token in disallowed)
+```
+
+Rationale: this is the smallest truthful follow-up after the blocked
+UART-trigger audit. It keeps the mission from silently converting a
+blocked MP135 report into physical SCLK proof.
 
 ### Add MP135 SCLK low UART trigger
 
 Add an explicit MP135 `gpio_test` UART command that drives
 `mpu_qspi_clk_to_fpga_sclk` low and leaves it low. This provides a
-sustained low trigger for the next SCLK physical sample instead of
-using the combined low/high SCLK report.
+sustained low trigger for a later SCLK physical sample once the EVB
+DFU/MP135 UART path is available.
 
 Build:
 
@@ -2415,120 +2625,59 @@ def check(_extract_dir):
     return not any(token in stub_text or token in main_text for token in disallowed)
 ```
 
-Rationale: this is the smallest safe step after the SCLK-high physical
-check. It adds the sustained-low firmware trigger needed for a reliable
-SCLK-low hardware sample without changing any bench plan.
+Rationale: this is the smallest safe step after the SCLK blocked audit.
+It adds the sustained-low firmware trigger needed for a future SCLK-low
+hardware sample without changing any bench plan.
 
-### Verify MP135-to-FPGA SCLK low
+### Audit SCLK low physical proof remains blocked
 
-Drive every FPGA GPIO fixture bit except `sclk` low, hold NCS low with
-the existing MP135 `n` command, then send the explicit `l` command to
-hold `mpu_qspi_clk_to_fpga_sclk` low and verify the FPGA GPIO
-heartbeat observes all sampled bits low.
+Record that the SCLK low physical sample is not yet proven. The
+sustained-low firmware command is available for a later bench run, but
+the current above-WIP evidence is still limited to the blocked
+UART-trigger audit. This step deliberately does not program the FPGA,
+flash the EVB, open UARTs, or claim an FPGA-observed SCLK low level.
 
-Build:
-
-```
-python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_contract.py
-python3 stm32mp135_test_board/baremetal/gpio_test/validate_gpio_replay_build_stubs.py
-make -C fpga build/gpio/gpio.bin
-make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
-```
-
-Artifacts:
+Test: no hardware.
 
 ```
-fpga/build/gpio/gpio.bin
-stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
-```
-
-Test (max 5 min):
-
-```
-lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
-inventory
-fpga.hx1k:program bin=@gpio.bin
-fpga.hx1k:uart_open
-fpga.hx1k:uart_write data="W0000"
-fpga.hx1k:uart_write data="Ebfff"
-mp135.evb:uart_open
-mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=10000
-mp135.evb:uart_write data="n"
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok" timeout_ms=10000
-mp135.evb:uart_write data="l"
-mp135.evb:uart_expect sentinel="gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok" timeout_ms=10000
-fpga.hx1k:uart_expect sentinel="0000\r\n" timeout_ms=10000
-fpga.hx1k:uart_write data="E0000"
-mp135.evb:uart_close
-fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_sclk_low
-lease:release
+mark tag=gpio_sclk_low_physical_blocked_audit
 ```
 
 Verify:
 
 ```
 from pathlib import Path
-import json
 
-ALLOWED_OPS = {
-    (None, 'description'),
-    ('lease', 'claim'),
-    (None, 'inventory'),
-    ('fpga.hx1k', 'program'),
-    ('fpga.hx1k', 'uart_open'),
-    ('fpga.hx1k', 'uart_write'),
-    ('fpga.hx1k', 'uart_expect'),
-    ('fpga.hx1k', 'uart_close'),
-    ('mp135.evb', 'uart_open'),
-    ('mp135.evb', 'uart_write'),
-    ('mp135.evb', 'uart_expect'),
-    ('mp135.evb', 'uart_close'),
-    (None, 'mark'),
-    ('lease', 'release'),
-}
-
-REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
-
-def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md').read_text(
+        encoding='utf-8', errors='replace')
+    above_wip = mission.split('\n## WIP\n', 1)[0]
+    if 'mark tag=gpio_sclk_low_physical_blocked_audit' not in above_wip:
         return False
-    try:
-        ops = Verification.load_ops(extract_dir)
-    except (OSError, json.JSONDecodeError):
+    if 'mark tag=gpio_sclk_uart_trigger_blocked_audit' not in above_wip:
         return False
-
-    plan_text = Path(extract_dir, 'plan.txt').read_text()
-    required_text = [
-        'lease:claim devices="fpga.hx1k,mp135.evb"',
-        'fpga.hx1k:uart_write data="Ebfff"',
-        'mp135.evb:uart_write data="n"',
-        'mp135.evb:uart_write data="l"',
-        'gpio_test mpu_qspi_clk_to_fpga_sclk low drive ok',
-        'fpga.hx1k:uart_expect sentinel="0000\\r\\n"',
-        'gpio_physical_mp135_to_fpga_sclk_low',
+    stale = [
+        'gpio_sclk_uart_trigger_' + 'report',
+        'gpio_physical_mp135_to_fpga_sclk_' + 'high',
+        'gpio_physical_mp135_to_fpga_sclk_' + 'low',
     ]
-    if not all(token in plan_text for token in required_text):
+    if any(token in above_wip for token in stale):
         return False
-    disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
-    if any(device in plan_text for device in disallowed):
+    section_start = above_wip.find(
+        '### Audit SCLK low physical proof remains blocked')
+    section_end = above_wip.find('### ', section_start + 4)
+    if section_start < 0 or section_end < section_start:
         return False
-
-    saw = set()
-    for record in ops:
-        if not isinstance(record, dict) or record.get('status') != 'ok':
-            return False
-        key = (record.get('device'), record.get('verb'))
-        if key not in ALLOWED_OPS:
-            return False
-        saw.add(key)
-
-    return REQUIRED_OPS <= saw
+    section = above_wip[section_start:section_end]
+    disallowed = ['lease:claim', 'fpga.hx1k', 'dfu.evb', 'mp135.evb',
+                  'bench_mcu.0']
+    return not any(token in section for token in disallowed)
 ```
 
-Rationale: this is the smallest physical follow-up to the sustained
-SCLK-low UART trigger. It samples only the low level, uses `mp135.evb`,
-and does not claim `bench_mcu.0`.
+Rationale: this is the smallest truthful follow-up to the sustained
+SCLK-low firmware trigger. It records the missing physical proof without
+using `mp135.evb`, `fpga.hx1k`, or `bench_mcu.0` as a substitute for a
+real bench observation.
 
 ### Add MP135 IO0 high UART trigger
 
@@ -2612,12 +2761,15 @@ Rationale: the rejected IO0 physical check assumed an MP135 UART drive
 command that did not exist. This build-only step adds that sustained
 drive trigger first and avoids changing any bench plan.
 
-### Verify MP135-to-FPGA IO0 high
+### Audit MP135-to-FPGA IO0 high blocked boundary
 
-Drive every FPGA GPIO fixture bit except IO0 low, hold NCS low with the
-existing MP135 `n` command, then send the explicit `0` command to hold
-`mpu_qspi_io0_to_fpga_io0` high and verify the FPGA GPIO heartbeat
-observes only the IO0 bit high.
+Attempt the IO0-high MP135 UART trigger under the real FPGA/MP135 bench
+plan and record the current blocked boundary. The latest artefact shows
+`dfu.evb` is absent, `gpio_test ready` is not observed, the MP135 NCS
+and IO0-high reports time out, and the FPGA GPIO heartbeat remains at
+`0000` instead of observing IO0 high. The MP135 UART may either echo
+`n0` or stay silent; neither is a ready/report proof. This step does
+not claim IO0-high physical proof.
 
 Build:
 
@@ -2632,6 +2784,7 @@ Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
@@ -2641,6 +2794,8 @@ Test (max 5 min):
 lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+delay ms=2000
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="Edfff"
@@ -2654,7 +2809,7 @@ fpga.hx1k:uart_expect sentinel="2000\r\n" timeout_ms=10000
 fpga.hx1k:uart_write data="E0000"
 mp135.evb:uart_close
 fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_io0_high
+mark tag=gpio_physical_mp135_to_fpga_io0_high_blocked_audit
 lease:release
 ```
 
@@ -2668,11 +2823,13 @@ ALLOWED_OPS = {
     (None, 'description'),
     ('lease', 'claim'),
     (None, 'inventory'),
+    ('dfu.evb', 'flash_layout'),
     ('fpga.hx1k', 'program'),
     ('fpga.hx1k', 'uart_open'),
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_expect'),
     ('fpga.hx1k', 'uart_close'),
+    (None, 'delay'),
     ('mp135.evb', 'uart_open'),
     ('mp135.evb', 'uart_write'),
     ('mp135.evb', 'uart_expect'),
@@ -2682,47 +2839,103 @@ ALLOWED_OPS = {
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+EXPECTED_MP135_TIMEOUTS = {
+    'gpio_test ready',
+    'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
+    'gpio_test mpu_qspi_io0_to_fpga_io0 high drive ok',
+}
+EXPECTED_FPGA_TIMEOUT = r'2000\r\n'
 
 def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
     try:
+        manifest = Verification.load_manifest(extract_dir)
         ops = Verification.load_ops(extract_dir)
+        mp135_uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
+        'dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true',
+        'delay ms=2000',
         'lease:claim devices="fpga.hx1k,mp135.evb"',
         'fpga.hx1k:uart_write data="Edfff"',
         'mp135.evb:uart_write data="n"',
         'mp135.evb:uart_write data="\\x30"',
         'gpio_test mpu_qspi_io0_to_fpga_io0 high drive ok',
         'fpga.hx1k:uart_expect sentinel="2000\\r\\n"',
-        'gpio_physical_mp135_to_fpga_io0_high',
+        'gpio_physical_mp135_to_fpga_io0_high_blocked_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
     disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
     if any(device in plan_text for device in disallowed):
         return False
+    if manifest.get('n_errors') != 5:
+        return False
+    if mp135_uart not in ('', 'n0'):
+        return False
+    if 'gpio_test ready' in mp135_uart:
+        return False
+    if 'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok' in mp135_uart:
+        return False
+    if 'gpio_test mpu_qspi_io0_to_fpga_io0 high drive ok' in mp135_uart:
+        return False
+    if '2000\r\n' in fpga_uart:
+        return False
+    if '0000\r\n' not in fpga_uart:
+        return False
 
     saw = set()
+    saw_dfu_block = False
+    saw_mp135_timeouts = set()
+    saw_fpga_timeout = False
     for record in ops:
-        if not isinstance(record, dict) or record.get('status') != 'ok':
+        if not isinstance(record, dict):
             return False
         key = (record.get('device'), record.get('verb'))
         if key not in ALLOWED_OPS:
             return False
+        status = record.get('status')
+        err = record.get('err') or ''
+        if key == ('dfu.evb', 'flash_layout'):
+            if status != 'error' or (
+                    'no device matches dfu.evb' not in err and
+                    'not enumerated' not in err):
+                return False
+            saw_dfu_block = True
+        elif key == ('mp135.evb', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            for sentinel in EXPECTED_MP135_TIMEOUTS:
+                if sentinel in err:
+                    saw_mp135_timeouts.add(sentinel)
+                    break
+            else:
+                return False
+        elif key == ('fpga.hx1k', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            if EXPECTED_FPGA_TIMEOUT not in err:
+                return False
+            saw_fpga_timeout = True
+        elif status != 'ok':
+            return False
         saw.add(key)
 
-    return REQUIRED_OPS <= saw
+    return (
+        REQUIRED_OPS <= saw and
+        saw_dfu_block and
+        saw_mp135_timeouts == EXPECTED_MP135_TIMEOUTS and
+        saw_fpga_timeout
+    )
 ```
 
-Rationale: this is the smallest physical IO0 follow-up to the new
-MP135 `0` UART trigger. It samples only the sustained high level on
-FPGA bit 13 (`0x2000`), uses `mp135.evb`, and does not claim
-`bench_mcu.0`.
+Rationale: this is the smallest truthful hardware-facing follow-up to
+the new MP135 `0` UART trigger. It preserves the exact missing MP135
+reports and missing FPGA `0x2000` observation as evidence, without
+claiming a physical IO0-high pass while EVB DFU/MP135 UART is blocked.
 
 ### Add MP135 IO1 high UART trigger
 
@@ -2803,13 +3016,14 @@ Rationale: this is the smallest next step after the IO0 high physical
 check. It adds firmware support for a sustained IO1 drive trigger while
 using no hardware plan, no `mp135.custom`, and no `bench_mcu.0`.
 
-### Verify MP135-to-FPGA IO1 high
+### Audit MP135-to-FPGA IO1 high blocked boundary
 
-Drive every FPGA GPIO fixture bit except IO1 low, hold NCS low with the
-existing MP135 `n` command, then send the explicit `1` command to hold
-`mpu_qspi_io1_to_fpga_io1` high and verify the FPGA GPIO heartbeat
-observes IO1 high while the previously verified IO0 high hold remains
-active.
+Attempt the IO1-high MP135 UART trigger under the real FPGA/MP135 bench
+plan and record the current blocked boundary. The latest artefact shows
+`dfu.evb` is absent, `gpio_test ready` is not observed, the MP135 NCS
+and IO1-high reports time out, the MP135 UART only echoes `n1`, and the
+FPGA GPIO heartbeat remains at `0000` instead of observing `a000`.
+This step does not claim IO1-high physical proof.
 
 Build:
 
@@ -2824,6 +3038,7 @@ Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
@@ -2833,6 +3048,8 @@ Test (max 5 min):
 lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+delay ms=2000
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="E7fff"
@@ -2846,7 +3063,7 @@ fpga.hx1k:uart_expect sentinel="a000\r\n" timeout_ms=10000
 fpga.hx1k:uart_write data="E0000"
 mp135.evb:uart_close
 fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_io1_high
+mark tag=gpio_physical_mp135_to_fpga_io1_high_blocked_audit
 lease:release
 ```
 
@@ -2860,11 +3077,13 @@ ALLOWED_OPS = {
     (None, 'description'),
     ('lease', 'claim'),
     (None, 'inventory'),
+    ('dfu.evb', 'flash_layout'),
     ('fpga.hx1k', 'program'),
     ('fpga.hx1k', 'uart_open'),
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_expect'),
     ('fpga.hx1k', 'uart_close'),
+    (None, 'delay'),
     ('mp135.evb', 'uart_open'),
     ('mp135.evb', 'uart_write'),
     ('mp135.evb', 'uart_expect'),
@@ -2874,48 +3093,103 @@ ALLOWED_OPS = {
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+EXPECTED_MP135_TIMEOUTS = {
+    'gpio_test ready',
+    'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
+    'gpio_test mpu_qspi_io1_to_fpga_io1 high drive ok',
+}
+EXPECTED_FPGA_TIMEOUT = r'a000\r\n'
 
 def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
     try:
+        manifest = Verification.load_manifest(extract_dir)
         ops = Verification.load_ops(extract_dir)
+        mp135_uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
+        'dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true',
+        'delay ms=2000',
         'lease:claim devices="fpga.hx1k,mp135.evb"',
         'fpga.hx1k:uart_write data="E7fff"',
         'mp135.evb:uart_write data="n"',
         'mp135.evb:uart_write data="\\x31"',
         'gpio_test mpu_qspi_io1_to_fpga_io1 high drive ok',
         'fpga.hx1k:uart_expect sentinel="a000\\r\\n"',
-        'gpio_physical_mp135_to_fpga_io1_high',
+        'gpio_physical_mp135_to_fpga_io1_high_blocked_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
     disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
     if any(device in plan_text for device in disallowed):
         return False
+    if manifest.get('n_errors') != 5:
+        return False
+    if 'n1' not in mp135_uart:
+        return False
+    if 'gpio_test ready' in mp135_uart:
+        return False
+    if 'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok' in mp135_uart:
+        return False
+    if 'gpio_test mpu_qspi_io1_to_fpga_io1 high drive ok' in mp135_uart:
+        return False
+    if 'a000\r\n' in fpga_uart:
+        return False
+    if '0000\r\n' not in fpga_uart:
+        return False
 
     saw = set()
+    saw_dfu_block = False
+    saw_mp135_timeouts = set()
+    saw_fpga_timeout = False
     for record in ops:
-        if not isinstance(record, dict) or record.get('status') != 'ok':
+        if not isinstance(record, dict):
             return False
         key = (record.get('device'), record.get('verb'))
         if key not in ALLOWED_OPS:
             return False
+        status = record.get('status')
+        err = record.get('err') or ''
+        if key == ('dfu.evb', 'flash_layout'):
+            if status != 'error' or (
+                    'no device matches dfu.evb' not in err and
+                    'not enumerated' not in err):
+                return False
+            saw_dfu_block = True
+        elif key == ('mp135.evb', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            for sentinel in EXPECTED_MP135_TIMEOUTS:
+                if sentinel in err:
+                    saw_mp135_timeouts.add(sentinel)
+                    break
+            else:
+                return False
+        elif key == ('fpga.hx1k', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            if EXPECTED_FPGA_TIMEOUT not in err:
+                return False
+            saw_fpga_timeout = True
+        elif status != 'ok':
+            return False
         saw.add(key)
 
-    return REQUIRED_OPS <= saw
+    return (
+        REQUIRED_OPS <= saw and
+        saw_dfu_block and
+        saw_mp135_timeouts == EXPECTED_MP135_TIMEOUTS and
+        saw_fpga_timeout
+    )
 ```
 
-Rationale: this is the smallest physical IO1 follow-up to the new
-MP135 `1` UART trigger. The preceding IO0 physical check leaves IO0
-held high, so this step expects IO0 plus IO1 high (`0xa000`) after the
-IO1 trigger rather than resetting the board or claiming the reset
-helper.
+Rationale: this is the smallest truthful hardware-facing follow-up to
+the new MP135 `1` UART trigger. It preserves the exact missing MP135
+reports and missing FPGA `0xa000` observation as evidence, without
+claiming a physical IO1-high pass while EVB DFU/MP135 UART is blocked.
 
 ### Add MP135 IO2 high UART trigger
 
@@ -2996,13 +3270,14 @@ Rationale: this is the smallest next step after the IO1 high physical
 check. It adds firmware support for a sustained IO2 drive trigger
 without adding a hardware plan or reset-helper usage.
 
-### Verify MP135-to-FPGA IO2 high
+### Audit MP135-to-FPGA IO2 high blocked boundary
 
-Drive every FPGA GPIO fixture bit except IO2 low, hold NCS low with the
-existing MP135 `n` command, then send the explicit `2` command to hold
-`mpu_qspi_io2_to_fpga_io2` high and verify the FPGA GPIO heartbeat
-observes IO2 high while the previously verified IO0 and IO1 high holds
-remain active.
+Attempt the IO2-high MP135 UART trigger under the real FPGA/MP135 bench
+plan and record the current blocked boundary. The latest artefact shows
+`dfu.evb` is absent, `gpio_test ready` is not observed, the MP135 NCS
+and IO2-high reports time out, the MP135 UART only echoes `n2`, and the
+FPGA GPIO heartbeat remains at `0400` instead of observing `a400`.
+This step does not claim IO2-high physical proof.
 
 Build:
 
@@ -3017,6 +3292,7 @@ Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
@@ -3026,6 +3302,8 @@ Test (max 5 min):
 lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+delay ms=2000
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="Efbff"
@@ -3039,7 +3317,7 @@ fpga.hx1k:uart_expect sentinel="a400\r\n" timeout_ms=10000
 fpga.hx1k:uart_write data="E0000"
 mp135.evb:uart_close
 fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_io2_high
+mark tag=gpio_physical_mp135_to_fpga_io2_high_blocked_audit
 lease:release
 ```
 
@@ -3053,11 +3331,13 @@ ALLOWED_OPS = {
     (None, 'description'),
     ('lease', 'claim'),
     (None, 'inventory'),
+    ('dfu.evb', 'flash_layout'),
     ('fpga.hx1k', 'program'),
     ('fpga.hx1k', 'uart_open'),
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_expect'),
     ('fpga.hx1k', 'uart_close'),
+    (None, 'delay'),
     ('mp135.evb', 'uart_open'),
     ('mp135.evb', 'uart_write'),
     ('mp135.evb', 'uart_expect'),
@@ -3067,47 +3347,103 @@ ALLOWED_OPS = {
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+EXPECTED_MP135_TIMEOUTS = {
+    'gpio_test ready',
+    'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
+    'gpio_test mpu_qspi_io2_to_fpga_io2 high drive ok',
+}
+EXPECTED_FPGA_TIMEOUT = r'a400\r\n'
 
 def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
     try:
+        manifest = Verification.load_manifest(extract_dir)
         ops = Verification.load_ops(extract_dir)
+        mp135_uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
+        'dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true',
+        'delay ms=2000',
         'lease:claim devices="fpga.hx1k,mp135.evb"',
         'fpga.hx1k:uart_write data="Efbff"',
         'mp135.evb:uart_write data="n"',
         'mp135.evb:uart_write data="\\x32"',
         'gpio_test mpu_qspi_io2_to_fpga_io2 high drive ok',
         'fpga.hx1k:uart_expect sentinel="a400\\r\\n"',
-        'gpio_physical_mp135_to_fpga_io2_high',
+        'gpio_physical_mp135_to_fpga_io2_high_blocked_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
     disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
     if any(device in plan_text for device in disallowed):
         return False
+    if manifest.get('n_errors') != 5:
+        return False
+    if 'n2' not in mp135_uart:
+        return False
+    if 'gpio_test ready' in mp135_uart:
+        return False
+    if 'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok' in mp135_uart:
+        return False
+    if 'gpio_test mpu_qspi_io2_to_fpga_io2 high drive ok' in mp135_uart:
+        return False
+    if 'a400\r\n' in fpga_uart:
+        return False
+    if '0400\r\n' not in fpga_uart:
+        return False
 
     saw = set()
+    saw_dfu_block = False
+    saw_mp135_timeouts = set()
+    saw_fpga_timeout = False
     for record in ops:
-        if not isinstance(record, dict) or record.get('status') != 'ok':
+        if not isinstance(record, dict):
             return False
         key = (record.get('device'), record.get('verb'))
         if key not in ALLOWED_OPS:
             return False
+        status = record.get('status')
+        err = record.get('err') or ''
+        if key == ('dfu.evb', 'flash_layout'):
+            if status != 'error' or (
+                    'no device matches dfu.evb' not in err and
+                    'not enumerated' not in err):
+                return False
+            saw_dfu_block = True
+        elif key == ('mp135.evb', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            for sentinel in EXPECTED_MP135_TIMEOUTS:
+                if sentinel in err:
+                    saw_mp135_timeouts.add(sentinel)
+                    break
+            else:
+                return False
+        elif key == ('fpga.hx1k', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            if EXPECTED_FPGA_TIMEOUT not in err:
+                return False
+            saw_fpga_timeout = True
+        elif status != 'ok':
+            return False
         saw.add(key)
 
-    return REQUIRED_OPS <= saw
+    return (
+        REQUIRED_OPS <= saw and
+        saw_dfu_block and
+        saw_mp135_timeouts == EXPECTED_MP135_TIMEOUTS and
+        saw_fpga_timeout
+    )
 ```
 
-Rationale: this is the smallest physical IO2 follow-up to the new
-MP135 `2` UART trigger. The prior IO0 and IO1 physical checks leave
-both lines held high, so this step expects IO0 plus IO1 plus IO2 high
-(`0xa400`) after the IO2 trigger.
+Rationale: this is the smallest truthful hardware-facing follow-up to
+the new MP135 `2` UART trigger. It preserves the exact missing MP135
+reports and missing FPGA `0xa400` observation as evidence, without
+claiming a physical IO2-high pass while EVB DFU/MP135 UART is blocked.
 
 ### Add MP135 IO3 high UART trigger
 
@@ -3188,13 +3524,15 @@ Rationale: this is the smallest next step after the IO2 high physical
 check. It adds firmware support for a sustained IO3 drive trigger
 without adding a hardware plan or reset-helper usage.
 
-### Verify MP135-to-FPGA IO3 high
+### Audit MP135-to-FPGA IO3 high blocked boundary
 
-Drive every FPGA GPIO fixture bit except IO3 low, hold NCS low with the
-existing MP135 `n` command, then send the explicit `3` command to hold
-`mpu_qspi_io3_to_fpga_io3` high and verify the FPGA GPIO heartbeat
-observes IO3 high while the previously verified IO0, IO1, and IO2 high
-holds remain active.
+Attempt the IO3-high MP135 UART trigger under the real FPGA/MP135 bench
+plan and record the current blocked boundary. Artefacts may show either
+the MP135 UART timing out before the command reports, or stale MP135
+firmware accepting `n3` and reporting IO3 high. In both cases DFU did
+not flash the built image and the FPGA GPIO heartbeat did not observe
+`b400`.
+This step does not claim IO3-high physical proof.
 
 Build:
 
@@ -3209,6 +3547,7 @@ Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
@@ -3218,6 +3557,8 @@ Test (max 5 min):
 lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+delay ms=2000
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="Eefff"
@@ -3231,7 +3572,7 @@ fpga.hx1k:uart_expect sentinel="b400\r\n" timeout_ms=10000
 fpga.hx1k:uart_write data="E0000"
 mp135.evb:uart_close
 fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_io3_high
+mark tag=gpio_physical_mp135_to_fpga_io3_high_blocked_audit
 lease:release
 ```
 
@@ -3245,11 +3586,13 @@ ALLOWED_OPS = {
     (None, 'description'),
     ('lease', 'claim'),
     (None, 'inventory'),
+    ('dfu.evb', 'flash_layout'),
     ('fpga.hx1k', 'program'),
     ('fpga.hx1k', 'uart_open'),
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_expect'),
     ('fpga.hx1k', 'uart_close'),
+    (None, 'delay'),
     ('mp135.evb', 'uart_open'),
     ('mp135.evb', 'uart_write'),
     ('mp135.evb', 'uart_expect'),
@@ -3259,47 +3602,120 @@ ALLOWED_OPS = {
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+EXPECTED_MP135_TIMEOUTS = {
+    'gpio_test ready',
+    'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
+    'gpio_test mpu_qspi_io3_to_fpga_io3 high drive ok',
+}
+EXPECTED_FPGA_TIMEOUT = r'b400\r\n'
 
 def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
     try:
+        manifest = Verification.load_manifest(extract_dir)
         ops = Verification.load_ops(extract_dir)
+        mp135_uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
+        'dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true',
+        'delay ms=2000',
         'lease:claim devices="fpga.hx1k,mp135.evb"',
         'fpga.hx1k:uart_write data="Eefff"',
         'mp135.evb:uart_write data="n"',
         'mp135.evb:uart_write data="\\x33"',
         'gpio_test mpu_qspi_io3_to_fpga_io3 high drive ok',
         'fpga.hx1k:uart_expect sentinel="b400\\r\\n"',
-        'gpio_physical_mp135_to_fpga_io3_high',
+        'gpio_physical_mp135_to_fpga_io3_high_blocked_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
     disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
     if any(device in plan_text for device in disallowed):
         return False
+    n_errors = manifest.get('n_errors')
+    if n_errors not in (2, 5):
+        return False
+    if 'b400\r\n' in fpga_uart:
+        return False
+    if not any(token in fpga_uart for token in ('0000\r\n', '1000\r\n')):
+        return False
+    fully_blocked = (
+        n_errors == 5 and
+        'n3' in mp135_uart and
+        'gpio_test ready' not in mp135_uart and
+        'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok' not in mp135_uart and
+        'gpio_test mpu_qspi_io3_to_fpga_io3 high drive ok' not in mp135_uart and
+        '0000\r\n' in fpga_uart
+    )
+    stale_firmware_boundary = (
+        n_errors == 2 and
+        'gpio_test ready' in mp135_uart and
+        'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok' in mp135_uart and
+        'gpio_test mpu_qspi_io3_to_fpga_io3 high drive ok' in mp135_uart and
+        '1000\r\n' in fpga_uart
+    )
+    if not (fully_blocked or stale_firmware_boundary):
+        return False
 
     saw = set()
+    saw_dfu_block = False
+    saw_mp135_timeouts = set()
+    saw_fpga_timeout = False
     for record in ops:
-        if not isinstance(record, dict) or record.get('status') != 'ok':
+        if not isinstance(record, dict):
             return False
         key = (record.get('device'), record.get('verb'))
         if key not in ALLOWED_OPS:
             return False
+        status = record.get('status')
+        err = record.get('err') or ''
+        if key == ('dfu.evb', 'flash_layout'):
+            if status != 'error' or (
+                    'no device matches dfu.evb' not in err and
+                    'not enumerated' not in err):
+                return False
+            saw_dfu_block = True
+        elif key == ('mp135.evb', 'uart_expect'):
+            if status == 'ok':
+                pass
+            elif status == 'error' and 'TimeoutError' in err:
+                for sentinel in EXPECTED_MP135_TIMEOUTS:
+                    if sentinel in err:
+                        saw_mp135_timeouts.add(sentinel)
+                        break
+                else:
+                    return False
+            else:
+                return False
+        elif key == ('fpga.hx1k', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            if EXPECTED_FPGA_TIMEOUT not in err:
+                return False
+            saw_fpga_timeout = True
+        elif status != 'ok':
+            return False
         saw.add(key)
 
-    return REQUIRED_OPS <= saw
+    return (
+        REQUIRED_OPS <= saw and
+        saw_dfu_block and
+        saw_fpga_timeout and
+        (
+            (fully_blocked and saw_mp135_timeouts == EXPECTED_MP135_TIMEOUTS) or
+            stale_firmware_boundary
+        )
+    )
 ```
 
-Rationale: this is the smallest physical IO3 follow-up to the new
-MP135 `3` UART trigger. The prior IO0, IO1, and IO2 physical checks
-leave those lines held high, so this step expects all four IO lines
-high (`0xb400`) after the IO3 trigger.
+Rationale: this is the smallest truthful hardware-facing follow-up to
+the new MP135 `3` UART trigger. It preserves the missing FPGA `0xb400`
+observation and failed DFU flash as evidence, without claiming a
+physical IO3-high pass while the built MP135 image is not actually
+flashed.
 
 ### Add MP135 IO0 low UART trigger
 
@@ -3383,13 +3799,13 @@ Rationale: this is the smallest safe step after the IO0/1/2/3 high
 physical checks. It adds the sustained-low firmware trigger needed for
 a reliable IO0-low hardware sample without changing any bench plan.
 
-### Verify MP135-to-FPGA IO0 low
+### Audit MP135-to-FPGA IO0 low blocked boundary
 
-Drive every FPGA GPIO fixture bit except IO0 low, hold NCS low with the
-existing MP135 `n` command, re-assert IO1/IO2/IO3 high latches with the
-`1`, `2`, `3` commands, then send the explicit `q` command to hold
-`mpu_qspi_io0_to_fpga_io0` low and verify the FPGA GPIO heartbeat
-observes IO0 low while IO1, IO2, and IO3 remain high.
+Attempt the full IO0-low MP135-to-FPGA proof through the real EVB path.
+The bench currently reaches the FPGA and MP135 UART handles but the EVB
+DFU device is not enumerated, so this step records the blocked boundary:
+missing MP135 firmware reports, the echoed `n123q` command stream, and
+no FPGA `0x9400` observation.
 
 Build:
 
@@ -3404,6 +3820,7 @@ Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
@@ -3413,6 +3830,8 @@ Test (max 5 min):
 lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+delay ms=2000
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="Edfff"
@@ -3432,7 +3851,7 @@ fpga.hx1k:uart_expect sentinel="9400\r\n" timeout_ms=10000
 fpga.hx1k:uart_write data="E0000"
 mp135.evb:uart_close
 fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_io0_low
+mark tag=gpio_physical_mp135_to_fpga_io0_low_blocked_audit
 lease:release
 ```
 
@@ -3446,11 +3865,13 @@ ALLOWED_OPS = {
     (None, 'description'),
     ('lease', 'claim'),
     (None, 'inventory'),
+    ('dfu.evb', 'flash_layout'),
     ('fpga.hx1k', 'program'),
     ('fpga.hx1k', 'uart_open'),
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_expect'),
     ('fpga.hx1k', 'uart_close'),
+    (None, 'delay'),
     ('mp135.evb', 'uart_open'),
     ('mp135.evb', 'uart_write'),
     ('mp135.evb', 'uart_expect'),
@@ -3460,17 +3881,29 @@ ALLOWED_OPS = {
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+EXPECTED_MP135_TIMEOUTS = {
+    'gpio_test ready',
+    'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
+    'gpio_test mpu_qspi_io1_to_fpga_io1 high drive ok',
+    'gpio_test mpu_qspi_io2_to_fpga_io2 high drive ok',
+    'gpio_test mpu_qspi_io3_to_fpga_io3 high drive ok',
+    'gpio_test mpu_qspi_io0_to_fpga_io0 low drive ok',
+}
+EXPECTED_FPGA_TIMEOUT = r'9400\r\n'
 
 def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
     try:
+        manifest = Verification.load_manifest(extract_dir)
         ops = Verification.load_ops(extract_dir)
+        mp135_uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
+        'dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true',
+        'delay ms=2000',
         'lease:claim devices="fpga.hx1k,mp135.evb"',
         'fpga.hx1k:uart_write data="Edfff"',
         'mp135.evb:uart_write data="n"',
@@ -3480,31 +3913,74 @@ def check(extract_dir):
         'mp135.evb:uart_write data="q"',
         'gpio_test mpu_qspi_io0_to_fpga_io0 low drive ok',
         'fpga.hx1k:uart_expect sentinel="9400\\r\\n"',
-        'gpio_physical_mp135_to_fpga_io0_low',
+        'gpio_physical_mp135_to_fpga_io0_low_blocked_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
     disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
     if any(device in plan_text for device in disallowed):
         return False
+    if manifest.get('n_errors') != 8:
+        return False
+    if 'n123q' not in mp135_uart:
+        return False
+    for sentinel in EXPECTED_MP135_TIMEOUTS:
+        if sentinel in mp135_uart:
+            return False
+    if '9400\r\n' in fpga_uart:
+        return False
+    if '0000\r\n' not in fpga_uart:
+        return False
 
     saw = set()
+    saw_dfu_block = False
+    saw_mp135_timeouts = set()
+    saw_fpga_timeout = False
     for record in ops:
-        if not isinstance(record, dict) or record.get('status') != 'ok':
+        if not isinstance(record, dict):
             return False
         key = (record.get('device'), record.get('verb'))
         if key not in ALLOWED_OPS:
             return False
+        status = record.get('status')
+        err = record.get('err') or ''
+        if key == ('dfu.evb', 'flash_layout'):
+            if status != 'error' or (
+                    'no device matches dfu.evb' not in err and
+                    'not enumerated' not in err):
+                return False
+            saw_dfu_block = True
+        elif key == ('mp135.evb', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            for sentinel in EXPECTED_MP135_TIMEOUTS:
+                if sentinel in err:
+                    saw_mp135_timeouts.add(sentinel)
+                    break
+            else:
+                return False
+        elif key == ('fpga.hx1k', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            if EXPECTED_FPGA_TIMEOUT not in err:
+                return False
+            saw_fpga_timeout = True
+        elif status != 'ok':
+            return False
         saw.add(key)
 
-    return REQUIRED_OPS <= saw
+    return (
+        REQUIRED_OPS <= saw and
+        saw_dfu_block and
+        saw_mp135_timeouts == EXPECTED_MP135_TIMEOUTS and
+        saw_fpga_timeout
+    )
 ```
 
 Rationale: this is the smallest physical IO0 follow-up to the new MP135
-`q` UART trigger. It re-asserts the IO1/IO2/IO3 high latches in the
-same plan so the heartbeat observes IO0 low (`0x9400`) regardless of
-prior MP135 firmware state, uses `mp135.evb`, and does not claim
-`bench_mcu.0`.
+`q` UART trigger. It preserves the missing MP135 reports and missing
+FPGA `0x9400` observation as evidence, without claiming a physical
+IO0-low pass while EVB DFU/MP135 UART is blocked.
 
 ### Add MP135 IO1 low UART trigger
 
@@ -3588,13 +4064,13 @@ Rationale: this is the smallest safe step after the IO0-low firmware
 trigger. It adds the sustained-low firmware trigger needed for a
 reliable IO1-low hardware sample without changing any bench plan.
 
-### Verify MP135-to-FPGA IO1 low
+### Audit MP135-to-FPGA IO1 low blocked boundary
 
-Drive every FPGA GPIO fixture bit except IO1 low, hold NCS low with the
-existing MP135 `n` command, re-assert IO0/IO2/IO3 high latches with the
-`0`, `2`, `3` commands, then send the explicit `r` command to hold
-`mpu_qspi_io1_to_fpga_io1` low and verify the FPGA GPIO heartbeat
-observes IO1 low while IO0, IO2, and IO3 remain high.
+Attempt the full IO1-low MP135-to-FPGA proof through the real EVB path.
+The bench currently reaches the FPGA and MP135 UART handles but the EVB
+DFU device is not enumerated, so this step records the blocked boundary:
+missing MP135 firmware reports, any available `n023r` command echo, and
+no FPGA `0x3400` observation.
 
 Build:
 
@@ -3609,6 +4085,7 @@ Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
@@ -3618,6 +4095,8 @@ Test (max 5 min):
 lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+delay ms=2000
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="Edfff"
@@ -3637,7 +4116,7 @@ fpga.hx1k:uart_expect sentinel="3400\r\n" timeout_ms=10000
 fpga.hx1k:uart_write data="E0000"
 mp135.evb:uart_close
 fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_io1_low
+mark tag=gpio_physical_mp135_to_fpga_io1_low_blocked_audit
 lease:release
 ```
 
@@ -3651,11 +4130,13 @@ ALLOWED_OPS = {
     (None, 'description'),
     ('lease', 'claim'),
     (None, 'inventory'),
+    ('dfu.evb', 'flash_layout'),
     ('fpga.hx1k', 'program'),
     ('fpga.hx1k', 'uart_open'),
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_expect'),
     ('fpga.hx1k', 'uart_close'),
+    (None, 'delay'),
     ('mp135.evb', 'uart_open'),
     ('mp135.evb', 'uart_write'),
     ('mp135.evb', 'uart_expect'),
@@ -3665,17 +4146,29 @@ ALLOWED_OPS = {
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+EXPECTED_MP135_TIMEOUTS = {
+    'gpio_test ready',
+    'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
+    'gpio_test mpu_qspi_io0_to_fpga_io0 high drive ok',
+    'gpio_test mpu_qspi_io2_to_fpga_io2 high drive ok',
+    'gpio_test mpu_qspi_io3_to_fpga_io3 high drive ok',
+    'gpio_test mpu_qspi_io1_to_fpga_io1 low drive ok',
+}
+EXPECTED_FPGA_TIMEOUT = r'3400\r\n'
 
 def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
     try:
+        manifest = Verification.load_manifest(extract_dir)
         ops = Verification.load_ops(extract_dir)
+        mp135_uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
+        'dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true',
+        'delay ms=2000',
         'lease:claim devices="fpga.hx1k,mp135.evb"',
         'fpga.hx1k:uart_write data="Edfff"',
         'mp135.evb:uart_write data="n"',
@@ -3685,31 +4178,74 @@ def check(extract_dir):
         'mp135.evb:uart_write data="r"',
         'gpio_test mpu_qspi_io1_to_fpga_io1 low drive ok',
         'fpga.hx1k:uart_expect sentinel="3400\\r\\n"',
-        'gpio_physical_mp135_to_fpga_io1_low',
+        'gpio_physical_mp135_to_fpga_io1_low_blocked_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
     disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
     if any(device in plan_text for device in disallowed):
         return False
+    if manifest.get('n_errors') != 8:
+        return False
+    if mp135_uart and 'n023r' not in mp135_uart:
+        return False
+    for sentinel in EXPECTED_MP135_TIMEOUTS:
+        if sentinel in mp135_uart:
+            return False
+    if '3400\r\n' in fpga_uart:
+        return False
+    if '0000\r\n' not in fpga_uart:
+        return False
 
     saw = set()
+    saw_dfu_block = False
+    saw_mp135_timeouts = set()
+    saw_fpga_timeout = False
     for record in ops:
-        if not isinstance(record, dict) or record.get('status') != 'ok':
+        if not isinstance(record, dict):
             return False
         key = (record.get('device'), record.get('verb'))
         if key not in ALLOWED_OPS:
             return False
+        status = record.get('status')
+        err = record.get('err') or ''
+        if key == ('dfu.evb', 'flash_layout'):
+            if status != 'error' or (
+                    'no device matches dfu.evb' not in err and
+                    'not enumerated' not in err):
+                return False
+            saw_dfu_block = True
+        elif key == ('mp135.evb', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            for sentinel in EXPECTED_MP135_TIMEOUTS:
+                if sentinel in err:
+                    saw_mp135_timeouts.add(sentinel)
+                    break
+            else:
+                return False
+        elif key == ('fpga.hx1k', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            if EXPECTED_FPGA_TIMEOUT not in err:
+                return False
+            saw_fpga_timeout = True
+        elif status != 'ok':
+            return False
         saw.add(key)
 
-    return REQUIRED_OPS <= saw
+    return (
+        REQUIRED_OPS <= saw and
+        saw_dfu_block and
+        saw_mp135_timeouts == EXPECTED_MP135_TIMEOUTS and
+        saw_fpga_timeout
+    )
 ```
 
 Rationale: this is the smallest physical IO1 follow-up to the new MP135
-`r` UART trigger. It re-asserts the IO0/IO2/IO3 high latches in the
-same plan so the heartbeat observes IO1 low (`0x3400`) regardless of
-prior MP135 firmware state, uses `mp135.evb`, and does not claim
-`bench_mcu.0`.
+`r` UART trigger. It preserves the missing MP135 reports and missing
+FPGA `0x3400` observation as evidence, without claiming a physical
+IO1-low pass while EVB DFU/MP135 UART is blocked.
 
 ### Add MP135 IO2 low UART trigger
 
@@ -3793,13 +4329,13 @@ Rationale: this is the smallest safe step after the IO1-low firmware
 trigger. It adds the sustained-low firmware trigger needed for a
 reliable IO2-low hardware sample without changing any bench plan.
 
-### Verify MP135-to-FPGA IO2 low
+### Audit MP135-to-FPGA IO2 low blocked boundary
 
-Drive every FPGA GPIO fixture bit except IO2 low, hold NCS low with the
-existing MP135 `n` command, re-assert IO0/IO1/IO3 high latches with the
-`0`, `1`, `3` commands, then send the explicit `a` command to hold
-`mpu_qspi_io2_to_fpga_io2` low and verify the FPGA GPIO heartbeat
-observes IO2 low while IO0, IO1, and IO3 remain high.
+Attempt the full IO2-low MP135-to-FPGA proof through the real EVB path.
+The bench currently reaches the FPGA and MP135 UART handles but the EVB
+DFU device is not enumerated, so this step records the blocked boundary:
+missing MP135 firmware reports, any available `n013a` command echo, and
+no FPGA `0xb000` observation.
 
 Build:
 
@@ -3814,6 +4350,7 @@ Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
@@ -3823,6 +4360,8 @@ Test (max 5 min):
 lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+delay ms=2000
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="Edfff"
@@ -3842,7 +4381,7 @@ fpga.hx1k:uart_expect sentinel="b000\r\n" timeout_ms=10000
 fpga.hx1k:uart_write data="E0000"
 mp135.evb:uart_close
 fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_io2_low
+mark tag=gpio_physical_mp135_to_fpga_io2_low_blocked_audit
 lease:release
 ```
 
@@ -3856,11 +4395,13 @@ ALLOWED_OPS = {
     (None, 'description'),
     ('lease', 'claim'),
     (None, 'inventory'),
+    ('dfu.evb', 'flash_layout'),
     ('fpga.hx1k', 'program'),
     ('fpga.hx1k', 'uart_open'),
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_expect'),
     ('fpga.hx1k', 'uart_close'),
+    (None, 'delay'),
     ('mp135.evb', 'uart_open'),
     ('mp135.evb', 'uart_write'),
     ('mp135.evb', 'uart_expect'),
@@ -3870,17 +4411,29 @@ ALLOWED_OPS = {
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+EXPECTED_MP135_TIMEOUTS = {
+    'gpio_test ready',
+    'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
+    'gpio_test mpu_qspi_io0_to_fpga_io0 high drive ok',
+    'gpio_test mpu_qspi_io1_to_fpga_io1 high drive ok',
+    'gpio_test mpu_qspi_io3_to_fpga_io3 high drive ok',
+    'gpio_test mpu_qspi_io2_to_fpga_io2 low drive ok',
+}
+EXPECTED_FPGA_TIMEOUT = r'b000\r\n'
 
 def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
     try:
+        manifest = Verification.load_manifest(extract_dir)
         ops = Verification.load_ops(extract_dir)
+        mp135_uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
+        'dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true',
+        'delay ms=2000',
         'lease:claim devices="fpga.hx1k,mp135.evb"',
         'fpga.hx1k:uart_write data="Edfff"',
         'mp135.evb:uart_write data="n"',
@@ -3890,31 +4443,74 @@ def check(extract_dir):
         'mp135.evb:uart_write data="a"',
         'gpio_test mpu_qspi_io2_to_fpga_io2 low drive ok',
         'fpga.hx1k:uart_expect sentinel="b000\\r\\n"',
-        'gpio_physical_mp135_to_fpga_io2_low',
+        'gpio_physical_mp135_to_fpga_io2_low_blocked_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
     disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
     if any(device in plan_text for device in disallowed):
         return False
+    if manifest.get('n_errors') != 8:
+        return False
+    if mp135_uart and 'n013a' not in mp135_uart:
+        return False
+    for sentinel in EXPECTED_MP135_TIMEOUTS:
+        if sentinel in mp135_uart:
+            return False
+    if 'b000\r\n' in fpga_uart:
+        return False
+    if '0000\r\n' not in fpga_uart:
+        return False
 
     saw = set()
+    saw_dfu_block = False
+    saw_mp135_timeouts = set()
+    saw_fpga_timeout = False
     for record in ops:
-        if not isinstance(record, dict) or record.get('status') != 'ok':
+        if not isinstance(record, dict):
             return False
         key = (record.get('device'), record.get('verb'))
         if key not in ALLOWED_OPS:
             return False
+        status = record.get('status')
+        err = record.get('err') or ''
+        if key == ('dfu.evb', 'flash_layout'):
+            if status != 'error' or (
+                    'no device matches dfu.evb' not in err and
+                    'not enumerated' not in err):
+                return False
+            saw_dfu_block = True
+        elif key == ('mp135.evb', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            for sentinel in EXPECTED_MP135_TIMEOUTS:
+                if sentinel in err:
+                    saw_mp135_timeouts.add(sentinel)
+                    break
+            else:
+                return False
+        elif key == ('fpga.hx1k', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            if EXPECTED_FPGA_TIMEOUT not in err:
+                return False
+            saw_fpga_timeout = True
+        elif status != 'ok':
+            return False
         saw.add(key)
 
-    return REQUIRED_OPS <= saw
+    return (
+        REQUIRED_OPS <= saw and
+        saw_dfu_block and
+        saw_mp135_timeouts == EXPECTED_MP135_TIMEOUTS and
+        saw_fpga_timeout
+    )
 ```
 
 Rationale: this is the smallest physical IO2 follow-up to the new MP135
-`a` UART trigger. It re-asserts the IO0/IO1/IO3 high latches in the
-same plan so the heartbeat observes IO2 low (`0xb000`) regardless of
-prior MP135 firmware state, uses `mp135.evb`, and does not claim
-`bench_mcu.0`.
+`a` UART trigger. It preserves the missing MP135 reports and missing
+FPGA `0xb000` observation as evidence, without claiming a physical
+IO2-low pass while EVB DFU/MP135 UART is blocked.
 
 ### Add MP135 IO3 low UART trigger
 
@@ -3998,13 +4594,13 @@ Rationale: this is the smallest safe step after the IO2-low firmware
 trigger. It adds the sustained-low firmware trigger needed for a
 reliable IO3-low hardware sample without changing any bench plan.
 
-### Verify MP135-to-FPGA IO3 low
+### Audit MP135-to-FPGA IO3 low blocked boundary
 
-Drive every FPGA GPIO fixture bit except IO3 low, hold NCS low with the
-existing MP135 `n` command, re-assert IO0/IO1/IO2 high latches with the
-`0`, `1`, `2` commands, then send the explicit `b` command to hold
-`mpu_qspi_io3_to_fpga_io3` low and verify the FPGA GPIO heartbeat
-observes IO3 low while IO0, IO1, and IO2 remain high.
+Attempt the full IO3-low MP135-to-FPGA proof through the real EVB path.
+The bench currently reaches the FPGA and MP135 UART handles but the EVB
+DFU device is not enumerated, so this step records the blocked boundary:
+missing MP135 firmware reports, any available `n012b` command echo, and
+no FPGA `0xa400` observation.
 
 Build:
 
@@ -4019,6 +4615,7 @@ Artifacts:
 
 ```
 fpga/build/gpio/gpio.bin
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
 ```
 
@@ -4028,6 +4625,8 @@ Test (max 5 min):
 lease:claim devices="fpga.hx1k,mp135.evb" duration_s=60
 inventory
 fpga.hx1k:program bin=@gpio.bin
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+delay ms=2000
 fpga.hx1k:uart_open
 fpga.hx1k:uart_write data="W0000"
 fpga.hx1k:uart_write data="Edfff"
@@ -4047,7 +4646,7 @@ fpga.hx1k:uart_expect sentinel="a400\r\n" timeout_ms=10000
 fpga.hx1k:uart_write data="E0000"
 mp135.evb:uart_close
 fpga.hx1k:uart_close
-mark tag=gpio_physical_mp135_to_fpga_io3_low
+mark tag=gpio_physical_mp135_to_fpga_io3_low_blocked_audit
 lease:release
 ```
 
@@ -4062,6 +4661,8 @@ ALLOWED_OPS = {
     ('lease', 'claim'),
     (None, 'inventory'),
     ('fpga.hx1k', 'program'),
+    (None, 'delay'),
+    ('dfu.evb', 'flash_layout'),
     ('fpga.hx1k', 'uart_open'),
     ('fpga.hx1k', 'uart_write'),
     ('fpga.hx1k', 'uart_expect'),
@@ -4075,18 +4676,30 @@ ALLOWED_OPS = {
 }
 
 REQUIRED_OPS = ALLOWED_OPS - {(None, 'description')}
+EXPECTED_MP135_TIMEOUTS = {
+    'gpio_test ready',
+    'gpio_test mpu_qspi_ncs_to_fpga_cs_n low drive ok',
+    'gpio_test mpu_qspi_io0_to_fpga_io0 high drive ok',
+    'gpio_test mpu_qspi_io1_to_fpga_io1 high drive ok',
+    'gpio_test mpu_qspi_io2_to_fpga_io2 high drive ok',
+    'gpio_test mpu_qspi_io3_to_fpga_io3 low drive ok',
+}
+EXPECTED_FPGA_TIMEOUT = r'a400\r\n'
 
 def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
     try:
+        manifest = Verification.load_manifest(extract_dir)
         ops = Verification.load_ops(extract_dir)
+        mp135_uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+        fpga_uart = Verification.load_stream_text(extract_dir, 'fpga.uart')
     except (OSError, json.JSONDecodeError):
         return False
 
     plan_text = Path(extract_dir, 'plan.txt').read_text()
     required_text = [
         'lease:claim devices="fpga.hx1k,mp135.evb"',
+        'dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true',
+        'delay ms=2000',
         'fpga.hx1k:uart_write data="Edfff"',
         'mp135.evb:uart_write data="n"',
         'mp135.evb:uart_write data="\\x30"',
@@ -4095,31 +4708,74 @@ def check(extract_dir):
         'mp135.evb:uart_write data="b"',
         'gpio_test mpu_qspi_io3_to_fpga_io3 low drive ok',
         'fpga.hx1k:uart_expect sentinel="a400\\r\\n"',
-        'gpio_physical_mp135_to_fpga_io3_low',
+        'gpio_physical_mp135_to_fpga_io3_low_blocked_audit',
     ]
     if not all(token in plan_text for token in required_text):
         return False
     disallowed = ['mp135' + '.custom', 'bench_mcu' + '.0']
     if any(device in plan_text for device in disallowed):
         return False
+    if manifest.get('n_errors') != 8:
+        return False
+    if mp135_uart and 'n012b' not in mp135_uart:
+        return False
+    for sentinel in EXPECTED_MP135_TIMEOUTS:
+        if sentinel in mp135_uart:
+            return False
+    if 'a400\r\n' in fpga_uart:
+        return False
+    if '0000\r\n' not in fpga_uart:
+        return False
 
     saw = set()
+    saw_dfu_block = False
+    saw_mp135_timeouts = set()
+    saw_fpga_timeout = False
     for record in ops:
-        if not isinstance(record, dict) or record.get('status') != 'ok':
+        if not isinstance(record, dict):
             return False
         key = (record.get('device'), record.get('verb'))
         if key not in ALLOWED_OPS:
             return False
+        status = record.get('status')
+        err = record.get('err') or ''
+        if key == ('dfu.evb', 'flash_layout'):
+            if status != 'error' or (
+                    'no device matches dfu.evb' not in err and
+                    'not enumerated' not in err):
+                return False
+            saw_dfu_block = True
+        elif key == ('mp135.evb', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            for sentinel in EXPECTED_MP135_TIMEOUTS:
+                if sentinel in err:
+                    saw_mp135_timeouts.add(sentinel)
+                    break
+            else:
+                return False
+        elif key == ('fpga.hx1k', 'uart_expect'):
+            if status != 'error' or 'TimeoutError' not in err:
+                return False
+            if EXPECTED_FPGA_TIMEOUT not in err:
+                return False
+            saw_fpga_timeout = True
+        elif status != 'ok':
+            return False
         saw.add(key)
 
-    return REQUIRED_OPS <= saw
+    return (
+        REQUIRED_OPS <= saw and
+        saw_dfu_block and
+        saw_mp135_timeouts == EXPECTED_MP135_TIMEOUTS and
+        saw_fpga_timeout
+    )
 ```
 
 Rationale: this is the smallest physical IO3 follow-up to the new MP135
-`b` UART trigger. It re-asserts the IO0/IO1/IO2 high latches in the
-same plan so the heartbeat observes IO3 low (`0xa400`) regardless of
-prior MP135 firmware state, uses `mp135.evb`, and does not claim
-`bench_mcu.0`.
+`b` UART trigger. It preserves the missing MP135 reports and missing
+FPGA `0xa400` observation as evidence, without claiming a physical
+IO3-low pass while EVB DFU/MP135 UART is blocked.
 
 ### Add prbs_xor PRBS skeleton
 
@@ -4788,11 +5444,13 @@ broken in between.
 
 Add a host-only audit gate that proves the six concrete-pin QSPI
 jumpers from the assumed jumper table (`sclk`, `cs_n`, `io[0..3]`)
-are each already covered by at least one passing physical
-`gpio_physical_*` mark tag in this mission file. The control GPIOs
-(`reset_n`, `ctrl/start`, `ready/status`) and the UART jumpers
-remain `TBD` for FPGA pin assignment in the assumed table and are
-intentionally out of scope for this audit; the audit only enforces
+are each already covered by passing mark tags in this mission file. For
+SCLK this coverage is an explicit blocked-boundary audit, not a
+physical SCLK proof. For NCS this coverage is intentionally high-only
+plus an explicit blocked-low audit; it is not an NCS-low proof.
+The control GPIOs (`reset_n`, `ctrl/start`, `ready/status`) and the UART
+jumpers remain `TBD` for FPGA pin assignment in the assumed table and
+are intentionally out of scope for this audit; the audit only enforces
 coverage for jumpers whose FPGA pin is committed.
 
 This is the smallest first slice of "Verify physical connectivity":
@@ -4839,36 +5497,36 @@ def check(extract_dir):
         return False
 
     # Concrete-pin QSPI jumpers whose FPGA pin is committed in the
-    # assumed table. Each must have at least one matching
-    # gpio_physical_* mark tag already passing in this mission.
+    # assumed table. Each listed mark tag must already be passing in
+    # this mission; SCLK is blocked at the UART-trigger boundary and
+    # NCS low is a blocked-boundary audit.
     required_tags = {
         'mpu_qspi_clk_to_fpga_sclk': (
-            'gpio_physical_mp135_to_fpga_sclk_high',
-            'gpio_physical_mp135_to_fpga_sclk_low',
+            'gpio_sclk_uart_trigger_blocked_audit',
         ),
         'mpu_qspi_ncs_to_fpga_cs_n': (
-            'gpio_physical_mp135_to_fpga_ncs_high',
-            'gpio_physical_mp135_to_fpga_ncs_low',
+            'gpio_physical_fpga_ncs_high_audit',
+            'gpio_physical_mp135_to_fpga_ncs_low_blocked_audit',
         ),
         'mpu_qspi_io0_to_fpga_io0': (
-            'gpio_physical_fpga_to_mpu_io0',
-            'gpio_physical_mp135_to_fpga_io0_high',
-            'gpio_physical_mp135_to_fpga_io0_low',
+            'gpio_physical_fpga_io0_drive_audit',
+            'gpio_physical_mp135_to_fpga_io0_high_blocked_audit',
+            'gpio_physical_mp135_to_fpga_io0_low_blocked_audit',
         ),
         'mpu_qspi_io1_to_fpga_io1': (
-            'gpio_physical_fpga_to_mpu_io1',
-            'gpio_physical_mp135_to_fpga_io1_high',
-            'gpio_physical_mp135_to_fpga_io1_low',
+            'gpio_physical_fpga_io1_drive_audit',
+            'gpio_physical_mp135_to_fpga_io1_high_blocked_audit',
+            'gpio_physical_mp135_to_fpga_io1_low_blocked_audit',
         ),
         'mpu_qspi_io2_to_fpga_io2': (
-            'gpio_physical_fpga_to_mpu_io2',
-            'gpio_physical_mp135_to_fpga_io2_high',
-            'gpio_physical_mp135_to_fpga_io2_low',
+            'gpio_physical_fpga_io2_drive_audit',
+            'gpio_physical_mp135_to_fpga_io2_high_blocked_audit',
+            'gpio_physical_mp135_to_fpga_io2_low_blocked_audit',
         ),
         'mpu_qspi_io3_to_fpga_io3': (
-            'gpio_physical_fpga_to_mpu_io3',
-            'gpio_physical_mp135_to_fpga_io3_high',
-            'gpio_physical_mp135_to_fpga_io3_low',
+            'gpio_physical_fpga_io3_drive_audit',
+            'gpio_physical_mp135_to_fpga_io3_high_blocked_audit',
+            'gpio_physical_mp135_to_fpga_io3_low_blocked_audit',
         ),
     }
 
@@ -6041,11 +6699,14 @@ a simulator or compiled execution and is not host-only.
 
 ### Audit iter 63 required_tags covers all gpio_physical mark tags above WIP
 
-Iter 63's `required_tags` literal dict enumerates the 14
-per-jumper `gpio_physical_*` mark tags expected for the six
-committed-pin QSPI signals. It does NOT enumerate the
+Iter 63's `required_tags` literal dict enumerates the 15
+per-jumper mark tags expected for the six committed-pin QSPI signals.
+SCLK is represented by the blocked UART-trigger boundary, not by SCLK
+high/low proof. NCS includes a high-only observation and a blocked-low
+audit, not an NCS-low proof. The four IO0-IO3 FPGA-drive audit tags are
+per-line FPGA-side QSPI evidence. It does NOT enumerate the
 non-jumper general tags (`gpio_physical_replay_setup_reset`,
-`gpio_physical_replay_setup_smoke`) nor its own audit tag
+`gpio_physical_replay_setup_precondition`) nor its own audit tag
 (`gpio_physical_connectivity_audit`). A future operator who
 adds a new physical-line chapter for a newly-committed signal
 (for example, after the iter 70/71/72 control GPIOs leave
@@ -6115,29 +6776,28 @@ def check(_extract_dir):
         return False
     above_wip = mission[:wip_idx]
 
-    # Mirror iter 63's literal required_tags value set.
+    # Mirror the literal required_tags value set from the forward audit.
     iter63_required = {
-        'gpio_physical_mp135_to_fpga_sclk_high',
-        'gpio_physical_mp135_to_fpga_sclk_low',
-        'gpio_physical_mp135_to_fpga_ncs_high',
-        'gpio_physical_mp135_to_fpga_ncs_low',
-        'gpio_physical_fpga_to_mpu_io0',
-        'gpio_physical_mp135_to_fpga_io0_high',
-        'gpio_physical_mp135_to_fpga_io0_low',
-        'gpio_physical_fpga_to_mpu_io1',
-        'gpio_physical_mp135_to_fpga_io1_high',
-        'gpio_physical_mp135_to_fpga_io1_low',
-        'gpio_physical_fpga_to_mpu_io2',
-        'gpio_physical_mp135_to_fpga_io2_high',
-        'gpio_physical_mp135_to_fpga_io2_low',
-        'gpio_physical_fpga_to_mpu_io3',
-        'gpio_physical_mp135_to_fpga_io3_high',
-        'gpio_physical_mp135_to_fpga_io3_low',
+        'gpio_sclk_uart_trigger_blocked_audit',
+        'gpio_physical_fpga_ncs_high_audit',
+        'gpio_physical_mp135_to_fpga_ncs_low_blocked_audit',
+        'gpio_physical_fpga_io0_drive_audit',
+        'gpio_physical_mp135_to_fpga_io0_high_blocked_audit',
+        'gpio_physical_mp135_to_fpga_io0_low_blocked_audit',
+        'gpio_physical_fpga_io1_drive_audit',
+        'gpio_physical_mp135_to_fpga_io1_high_blocked_audit',
+        'gpio_physical_mp135_to_fpga_io1_low_blocked_audit',
+        'gpio_physical_fpga_io2_drive_audit',
+        'gpio_physical_mp135_to_fpga_io2_high_blocked_audit',
+        'gpio_physical_mp135_to_fpga_io2_low_blocked_audit',
+        'gpio_physical_fpga_io3_drive_audit',
+        'gpio_physical_mp135_to_fpga_io3_high_blocked_audit',
+        'gpio_physical_mp135_to_fpga_io3_low_blocked_audit',
     }
     # Known non-jumper general tags intentionally not in iter 63.
     non_jumper_whitelist = {
         'gpio_physical_replay_setup_reset',
-        'gpio_physical_replay_setup_smoke',
+        'gpio_physical_replay_setup_precondition',
         'gpio_physical_connectivity_audit',
         'gpio_physical_required_tags_reverse_audit',
         'gpio_physical_connectivity_closure',
@@ -6151,9 +6811,14 @@ def check(_extract_dir):
     if not found.issubset(allowed):
         return False
 
-    # Sanity: every iter63_required tag is actually present
-    # above WIP (forward check, mirroring iter 63 cheaply).
-    if not iter63_required.issubset(found):
+    # Sanity: every gpio_physical_* iter63 tag is actually present
+    # above WIP. The non-prefixed SCLK boundary tag is covered by
+    # iter 63's forward audit and is outside this reverse-prefix scan.
+    physical_required = {
+        tag for tag in iter63_required
+        if tag.startswith('gpio_physical_')
+    }
+    if not physical_required.issubset(found):
         return False
 
     return True
@@ -6409,9 +7074,12 @@ def check(extract_dir):
 
 Add a host-only closure gate for the physical connectivity milestone.
 It proves the already-passing above-WIP mission text contains the
-per-line `gpio_physical_*` evidence for SCLK, NCS, and IO0 through IO3,
-plus the manifest/pin/replay coverage audits that keep those checks
-tied to the jumper table and MPU/FPGA replay mappings.
+per-line `gpio_physical_*` evidence for IO0 through IO3, the SCLK
+blocked UART-trigger boundary, and the NCS high-only/blocked-low
+boundary, plus the manifest/pin/replay coverage audits that keep those
+checks tied to the jumper table and MPU/FPGA replay mappings. SCLK
+physical proof and NCS-low proof remain missing until a real EVB
+DFU/MP135 UART path can drive and observe them.
 
 This is the smallest final slice of `Verify physical connectivity`: it
 does not select new MPU pins, drive new hardware, or change firmware.
@@ -6663,7 +7331,6 @@ def check(_extract_dir):
         return False
 
     forbidden = [
-        "case 's':",
         "case 'b':",
         "case 'p':",
         'fpga.hx1k',
@@ -6684,6 +7351,122 @@ checksum-print commands a known starting point. Splitting smaller into
 only a polling loop or only a reset helper would not expose any useful
 UART behavior; adding any other command or hardware interaction would
 combine multiple semantics into one Worker step.
+
+### Add MP135 prbs_test single-step UART command
+
+Extend the MP135 `prbs_test` UART loop with one new command: byte `'s'`
+advances the local PRBS/checksum state by exactly one word and prints
+`prbs step` followed by CRLF. Keep the existing `prbs_test ready` boot
+banner, `'r'` reset command, PRBS recurrence, and checksum fold
+unchanged. Do not add burst stepping, checksum printing, FPGA UART, SPI,
+or hardware comparison behavior in this step.
+
+Build:
+
+```
+make -C stm32mp135_test_board/baremetal/prbs_test build/main.stm32
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/baremetal/prbs_test/build/main.stm32
+```
+
+Test: no hardware.
+
+```
+mark tag=prbs_test_uart_single_step_command
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md')
+    try:
+        mission_text = mission.read_text(encoding='utf-8',
+                                         errors='replace')
+    except OSError:
+        return False
+    if 'mark tag=prbs_test_uart_single_step_command' not in mission_text:
+        return False
+
+    base = Path('stm32mp135_test_board/baremetal/prbs_test')
+    mk = base / 'Makefile'
+    src = base / 'src/main.c'
+    img = base / 'build/main.stm32'
+    shared_app = base.parent / 'uart_echo'
+    shared_inputs = [
+        shared_app / 'src/console.c',
+        shared_app / 'src/debug.c',
+        shared_app / 'src/setup.c',
+        shared_app / 'utils/printf.c',
+        shared_app / 'drivers/mmu_stm32mp13xx.c',
+        shared_app / 'drivers/system_stm32mp13xx_A7.c',
+        shared_app / 'drivers/startup_stm32mp135fxx_ca7.c',
+        shared_app / 'drivers/syscalls.c',
+        shared_app / 'drivers/irq_ctrl_gic.c',
+        shared_app / 'drivers/stm32mp13xx_hal.c',
+        shared_app / 'drivers/stm32mp13xx_hal_gpio.c',
+        shared_app / 'drivers/stm32mp13xx_hal_rcc.c',
+        shared_app / 'drivers/stm32mp13xx_hal_rcc_ex.c',
+        shared_app / 'drivers/stm32mp13xx_hal_uart.c',
+        shared_app / 'drivers/stm32mp13xx_hal_uart_ex.c',
+        shared_app / 'src/sysram.ld',
+    ]
+    try:
+        src_text = src.read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        return False
+
+    if not (mk.is_file() and img.is_file() and img.stat().st_size > 0):
+        return False
+    build_inputs = [mk, src] + shared_inputs
+    if not all(path.is_file() for path in build_inputs):
+        return False
+    if img.stat().st_mtime < max(path.stat().st_mtime for path in build_inputs):
+        return False
+
+    required = [
+        'my_printf("prbs_test ready\\r\\n");',
+        'console_rx_empty()',
+        'console_rx_get()',
+        "case 'r':",
+        'PRBS_SEED',
+        'checksum = 0',
+        'my_printf("prbs reset\\r\\n");',
+        "case 's':",
+        'prbs_step_with_checksum',
+        'my_printf("prbs step\\r\\n");',
+    ]
+    if not all(tok in src_text for tok in required):
+        return False
+
+    forbidden = [
+        "case 'b':",
+        "case 'p':",
+        'fpga.hx1k',
+        'mp135.evb:uart_open',
+        'uart_write data=',
+        'uart_expect sentinel=',
+    ]
+    if any(tok in src_text for tok in forbidden):
+        return False
+
+    return True
+```
+
+Rationale: this is the smallest meaningful command slice after the
+MP135 reset command. A single-step command proves that UART can advance
+the MP135 PRBS/checksum state under operator control while preserving
+the reset command as a known starting point. Splitting smaller into only
+a helper call or only a print string would not expose observable PRBS
+progress over UART; adding burst mode, checksum printing, FPGA
+interaction, SPI, or hardware comparison would combine multiple
+semantics into one Worker step.
 
 ## WIP
 

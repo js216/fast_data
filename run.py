@@ -90,6 +90,7 @@ class Runner:
     # attempt has no wait. Total worst-case extra wait per FAIL is
     # the sum of the non-zero entries.
     RETRY_BACKOFF_S = (0, 3, 10, 30)
+    LEASE_RETRY_BACKOFF_S = (0, 15, 45, 90, 180, 300, 450, 600)
     NO_HARDWARE_TEST = '__NO_HARDWARE__'
 
     def __init__(self, md_path):
@@ -264,11 +265,11 @@ class Runner:
         if the plan body's first op is `lease:resume`, description goes
         AFTER that op so prescan still binds the token. Returns
         ``(rc, digest)``. When ``max_s`` is set, X-Test-Runtime caps the
-        bench session at that budget; the agent backstops with a
-        slightly larger subprocess timeout in case the bench fails to
-        enforce. When ``line_prefix`` is given and stdout is a TTY,
-        in-place \\r updates show queued/running status with a
-        countdown against ``max_s`` while submit.py runs."""
+        bench session at that budget; the overall ``submit.py --wait``
+        remains generous because shared-bench lock wait is not part of
+        the session runtime. When ``line_prefix`` is given and stdout is
+        a TTY, in-place \\r updates show queued/running status while
+        submit.py runs."""
         nonce = time.time_ns()
         description = f'{self.user}: {description} [{nonce}]'
         if self.LEASE_PLACEHOLDER in plan_text:
@@ -358,13 +359,12 @@ class Runner:
         stdout is a TTY, render a queued/running countdown on the line
         BELOW the head so the head never wraps; the countdown line is
         cleared and the cursor restored to end-of-head before
-        returning. Enforces an agent-side watchdog just beyond
-        ``submit.py --wait`` so queued shared-bench jobs are not killed
-        before the server has a chance to run them. Returns the
-        subprocess return code."""
+        returning. The server enforces ``--runtime`` after device locks
+        are acquired; run.py must not cancel merely because a picked-up
+        job is waiting behind another bench user. Returns the subprocess
+        return code."""
         live = (line_prefix is not None and sys.stdout.isatty())
         started_at = time.monotonic()
-        run_deadline = (max_s + 60) if max_s else None
         running_since = None
         countdown_open = False
         rc = None
@@ -385,21 +385,6 @@ class Runner:
                 None)
             if hit and hit['status'] == 'running' and running_since is None:
                 running_since = hit.get('picked_up_at') or time.time()
-            if (run_deadline and running_since is not None
-                    and (time.time() - running_since) > run_deadline):
-                digest = self._find_active_job_digest(description)
-                self.cancel_job(digest)
-                proc.terminate()
-                try:
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                log_fh.write(b'  (agent watchdog: submit.py exceeded '
-                             b'budget; killed)\n')
-                self._log('  (agent watchdog: submit.py exceeded '
-                          'budget; killed)')
-                rc = proc.poll() or 1
-                break
             if live:
                 if hit and hit['status'] == 'queued':
                     elapsed = int(time.monotonic() - started_at)
@@ -574,7 +559,11 @@ class Runner:
         last_extract = None
         last_log = None
         digest = None
-        for attempt, backoff in enumerate(self.RETRY_BACKOFF_S):
+        backoffs = list(self.RETRY_BACKOFF_S)
+        lease_retries_added = False
+        attempt = 0
+        while attempt < len(backoffs):
+            backoff = backoffs[attempt]
             if backoff:
                 time.sleep(backoff)
             attempt_dir = work_dir / f'attempt_{attempt}'
@@ -589,6 +578,12 @@ class Runner:
                 self._release_failed_attempt_lease(extract, test)
                 if self._released_external_lease_in_attempt(extract, test):
                     break
+                if self._lease_contention_in_attempt(extract):
+                    if not lease_retries_added:
+                        backoffs.extend(self.LEASE_RETRY_BACKOFF_S[1:])
+                        lease_retries_added = True
+                    last_reason = '   shared bench lease contention'
+                attempt += 1
                 continue
             try:
                 ok = self.run_verify(verify, artifacts, extract, item)
@@ -597,15 +592,40 @@ class Runner:
                 self._release_failed_attempt_lease(extract, test)
                 if self._released_external_lease_in_attempt(extract, test):
                     break
+                if self._lease_contention_in_attempt(extract):
+                    if not lease_retries_added:
+                        backoffs.extend(self.LEASE_RETRY_BACKOFF_S[1:])
+                        lease_retries_added = True
+                    last_reason = '   shared bench lease contention'
+                attempt += 1
                 continue
             if not ok:
                 last_reason = '   verify check() returned False'
                 self._release_failed_attempt_lease(extract, test)
                 if self._released_external_lease_in_attempt(extract, test):
                     break
+                if self._lease_contention_in_attempt(extract):
+                    if not lease_retries_added:
+                        backoffs.extend(self.LEASE_RETRY_BACKOFF_S[1:])
+                        lease_retries_added = True
+                    last_reason = '   shared bench lease contention'
+                attempt += 1
                 continue
             return True, digest, None, extract, log
         return False, digest, last_reason, last_extract, last_log
+
+    def _lease_contention_in_attempt(self, extract_dir):
+        """True when test_serv rejected a device held by another lease."""
+        errors = extract_dir / 'errors.log'
+        if not errors.exists():
+            return False
+        text = errors.read_text(errors='replace')
+        patterns = [
+            (r"\bis leased to '[^']+'; resume that lease or wait for it "
+             r"to expire\b"),
+            r"\bis leased to another token \(expires in \d+s\)",
+        ]
+        return any(re.search(pattern, text) for pattern in patterns)
 
     def _released_external_lease_in_attempt(self, extract_dir, plan_text):
         """Return True when retrying would reuse a consumed lease token.
