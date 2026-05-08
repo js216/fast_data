@@ -722,6 +722,48 @@ def check(extract_dir):
 
 ## WIP
 
+### cces draft 025edc5d checksum
+
+Validate the first CCES-built draft artifact in the csmith draft hardware
+sweep before returning to the full foreach. Keep this step scoped to
+`cctest_csmith_025edc5d` and the CCES-built artifact's hardware
+checksum behavior. Do not rewrite the expected checksum, delete the
+draft, weaken the foreach test, or replace this with the full draft
+sweep.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_025edc5d.0x2634135d.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_025edc5d.0x2634135d.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_025edc5d.0x2634135d.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0x2634135d
+```
+
 # Selache csmith draft regression sweep
 
 Validate randomly-generated cctest candidates in
