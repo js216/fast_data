@@ -411,8 +411,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### Userland smoke set under Qemu
 
 Drives the live shell from the previous section's setup through a
@@ -466,6 +464,8 @@ def check(extract_dir):
         return False              # wc /etc/passwd
     return 'sh' in tail and 'login' in tail  # ls /bin had the basics
 ```
+
+## WIP
 
 ### Pipes and redirection under Qemu
 
