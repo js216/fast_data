@@ -132,7 +132,8 @@ bytes may be zero padding. This step depends on configfs availability.
 It may leave no gadget, or an unbound gadget with no functions, or
 only `mass_storage.usbtmc` either unlinked or linked into
 `c.1/mass_storage.usbtmc`; the assertion tolerates either no configs
-symlinks or that single expected link, since UDC must remain empty.
+symlinks or that single expected link, and accepts either an empty UDC
+or one bound to `49000000.usb` since later steps bind the gadget.
 
 Build:
 
@@ -218,7 +219,7 @@ mp135.evb:uart_write data='cs=BAD;test -d $g/configs&&cs="$(find $g/configs -typ
 mp135.evb:uart_expect sentinel="MSCB_C" timeout_ms=3000
 mp135.evb:uart_write data='udc=BAD;test -f $g/UDC&&udc="$(cat $g/UDC)";printf MSCB_D;echo\r'
 mp135.evb:uart_expect sentinel="MSCB_D" timeout_ms=3000
-mp135.evb:uart_write data='test "$fs" = ""&&fok=1;test "$fs" = "$want"&&fok=1;test "$cs" = ""&&cok=1;test "$cs" = "$g/configs/c.1/mass_storage.usbtmc"&&cok=1;test "$udc" = ""&&uok=1;printf MSCB_E;echo\r'
+mp135.evb:uart_write data='test "$fs" = ""&&fok=1;test "$fs" = "$want"&&fok=1;test "$cs" = ""&&cok=1;test "$cs" = "$g/configs/c.1/mass_storage.usbtmc"&&cok=1;test "$udc" = ""&&uok=1;test "$udc" = "49000000.usb"&&uok=1;printf MSCB_E;echo\r'
 mp135.evb:uart_expect sentinel="MSCB_E" timeout_ms=3000
 mp135.evb:uart_write data='test "$cok$uok" = 11&&ok=1;printf MSCB_F;echo\r'
 mp135.evb:uart_expect sentinel="MSCB_F" timeout_ms=3000
@@ -253,11 +254,12 @@ def check(extract_dir):
 Create only the target-side configfs gadget directory, device
 descriptors, and English strings for the EVB Linux mass-storage
 baseline. This step validates the descriptors and strings while allowing
-either no gadget functions or only an unlinked, unbound
+either no gadget functions or only an unlinked
 `mass_storage.usbtmc` function. The configs check tolerates either an
 empty `$g/configs` directory or exactly the expected `c.1` configuration
 directory (which holds the `mass_storage.usbtmc` symlink in later
-steps). Do not create a UDC binding in this step.
+steps). The UDC check accepts either an empty UDC file or one already
+bound to `49000000.usb`, since later steps bind the gadget at boot.
 
 Build:
 
@@ -353,7 +355,7 @@ mp135.evb:uart_write data='cs="$(LS_COLORS= ls -A --color=never $g/configs 2>/de
 mp135.evb:uart_expect sentinel="GADGET_NO_CONFIGS_OK" timeout_ms=5000
 mp135.evb:uart_write data='udc=BAD;test -f $g/UDC&&udc="$(cat $g/UDC)";echo\r'
 mp135.evb:uart_expect sentinel="# " timeout_ms=3000
-mp135.evb:uart_write data='udcok=0;test -z "$udc"&&udcok=1;echo\r'
+mp135.evb:uart_write data='udcok=0;test -z "$udc"&&udcok=1;test "$udc" = "49000000.usb"&&udcok=1;echo\r'
 mp135.evb:uart_expect sentinel="# " timeout_ms=3000
 mp135.evb:uart_write data='test $udcok = 1&&{ printf GAD;printf GET_UDC_;printf EMPTY_OK;};echo\r'
 mp135.evb:uart_expect sentinel="GADGET_UDC_EMPTY_OK" timeout_ms=5000
@@ -392,8 +394,9 @@ LUN 0 to use `/var/lib/usbtmc/msc-backing.bin` as read-only media. The
 gadget directory, descriptors, strings, and backing file already exist
 from previous steps. This step validates the function while allowing
 either no configuration symlinks or only the expected
-`c.1/mass_storage.usbtmc` link from the next step. Do not bind the
-gadget to the UDC in this step.
+`c.1/mass_storage.usbtmc` link from the next step. The UDC check accepts
+either an empty UDC file or one already bound to `49000000.usb`, since
+later steps bind the gadget at boot.
 
 Build:
 
@@ -477,7 +480,7 @@ mp135.evb:uart_write data='ok=0;ls=$(find $g/configs -type l 2>/dev/null);test -
 mp135.evb:uart_expect sentinel="MSC_FUNCTION_UNLINKED_OK" timeout_ms=5000
 mp135.evb:uart_write data='udc=BAD;test -f $g/UDC&&udc="$(cat $g/UDC)";echo\r'
 mp135.evb:uart_expect sentinel="# " timeout_ms=3000
-mp135.evb:uart_write data='udcok=0;test -z "$udc"&&udcok=1;echo\r'
+mp135.evb:uart_write data='udcok=0;test -z "$udc"&&udcok=1;test "$udc" = "49000000.usb"&&udcok=1;echo\r'
 mp135.evb:uart_expect sentinel="# " timeout_ms=3000
 mp135.evb:uart_write data='test $udcok = 1&&{ printf MSC;printf _FUNCTION_UDC_;printf EMPTY_OK;};echo\r'
 mp135.evb:uart_expect sentinel="MSC_FUNCTION_UDC_EMPTY_OK" timeout_ms=5000
@@ -514,8 +517,9 @@ under the existing EVB Linux gadget, populate its `MaxPower` attribute
 with the standard value `0`, and symlink the existing mass-storage
 function `mass_storage.usbtmc` into it. The gadget directory,
 descriptors, strings, backing file, and mass-storage function already
-exist from previous steps. Do not bind the gadget to the UDC in this
-step; the UDC file must remain empty.
+exist from previous steps. The UDC check accepts either an empty UDC
+file or one already bound to `49000000.usb`, since the next step binds
+the gadget at boot.
 
 Build:
 
@@ -599,7 +603,7 @@ mp135.evb:uart_write data='case "$tgt" in *functions/mass_storage.usbtmc) printf
 mp135.evb:uart_expect sentinel="MSC_CONFIG_LINK_TARGET_OK" timeout_ms=5000
 mp135.evb:uart_write data='udc=BAD;test -f $g/UDC&&udc="$(cat $g/UDC)";echo\r'
 mp135.evb:uart_expect sentinel="# " timeout_ms=3000
-mp135.evb:uart_write data='udcok=0;test -z "$udc"&&udcok=1;echo\r'
+mp135.evb:uart_write data='udcok=0;test -z "$udc"&&udcok=1;test "$udc" = "49000000.usb"&&udcok=1;echo\r'
 mp135.evb:uart_expect sentinel="# " timeout_ms=3000
 mp135.evb:uart_write data='test $udcok = 1&&{ printf MSC;printf _CONFIG_UDC_;printf EMPTY_OK;};echo\r'
 mp135.evb:uart_expect sentinel="MSC_CONFIG_UDC_EMPTY_OK" timeout_ms=5000
@@ -629,14 +633,14 @@ def check(extract_dir):
             'MSC_CONFIG_FAIL' not in out)
 ```
 
-## WIP
-
 ### EVB Linux MSC UDC binding
 
 Bind the already configured EVB Linux mass-storage gadget to the UDC.
 This step adds only the final target-side UDC binding after configfs,
 the backing file, the mass-storage function, and the configuration link
-already exist.
+already exist. The boot-time init script must write the OTG controller
+name (e.g. `49000000.usb`) into `$GADGET/UDC` so that the gadget is
+attached to a real UDC controller before userspace login.
 
 Build:
 
@@ -649,12 +653,89 @@ make -C stm32mp135_test_board br
 make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
 ```
 
-Test: boot the EVB Linux image through the existing DFU/MSC/SD path,
-wait for userspace, and capture target-side evidence that the gadget
-`UDC` file contains a non-empty controller name.
+Artifacts:
 
-Verify: Linux reached userspace and the captured target artefact shows
-the mass-storage gadget was bound after Linux boot.
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (max 15 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@sdcard.img offset_lba=0
+msc.evb:verify data=@sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=5000
+mp135.evb:uart_write data="two\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=15000
+mp135.evb:uart_write data="jump"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.evb:uart_expect sentinel="Welcome to STM32MP135 EVB" timeout_ms=10000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=15000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="Password:" timeout_ms=5000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=5000
+mp135.evb:uart_write data="dmesg -n 1 2>/dev/null;true\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+delay ms=2000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data="g=/sys/kernel/config/usb_gadget/usbtmc\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='test -s $g/UDC&&{ printf MSC;printf _UDC_;printf BOUND_OK;};echo\r'
+mp135.evb:uart_expect sentinel="MSC_UDC_BOUND_OK" timeout_ms=5000
+mp135.evb:uart_write data='udc=BAD;test -s $g/UDC&&udc="$(cat $g/UDC)";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='case "$udc" in 49000000.usb*) printf MSC;printf _UDC_;printf NAME_OK;; esac;echo\r'
+mp135.evb:uart_expect sentinel="MSC_UDC_NAME_OK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=evb_msc_udc_binding
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    out = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    lines = out.replace('\r', '\n').splitlines()
+    return (Verification.op_succeeded(ops, 'dfu.evb', 'flash_layout') and
+            Verification.op_succeeded(ops, 'msc.evb', 'verify') and
+            Verification.op_succeeded(ops, 'mp135.evb', 'uart_expect') and
+            'Welcome to STM32MP135 EVB' in out and
+            'MSC_UDC_BOUND_OK' in lines and
+            'MSC_UDC_NAME_OK' in lines and
+            'MSC_UDC_FAIL' not in out)
+```
+
+## WIP
 
 ### EVB Linux MSC gadget descriptor smoke
 
