@@ -990,6 +990,61 @@ def check(extract_dir):
     return bool(got) and int(got[-1], 16) == 0x43b56a8
 ```
 
+### cces csmith 2d9c82c1 checksum
+
+Fix the next focused draft runtime mismatch from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_2d9c82c1.0x70afff72.ldr`
+boots on the DSP but reports `got 3964c5cd`, not the source's expected
+checksum `/* @expect 0x70afff72 */`. CCES diagnoses the same class of
+packed struct / bitfield layout incompatibility here as in the
+precedent `cctest_csmith_07baaacc`, `cctest_csmith_025edc5d`,
+`cctest_csmith_3f5ea6f7`, `cctest_csmith_0e0cf3fc`,
+`cctest_csmith_126ec2e5`, and `cctest_csmith_2375a576` steps, so keep
+this step scoped to removing the nonportable `#pragma pack` wrappers
+from this single draft for all toolchains. The wrappers live in
+`selache/xtest/draft_cases/cctest_csmith_2d9c82c1.c` at one push/pop
+pair (around lines 793-803) and bracket `struct S0`, which contains
+bitfields. Host gcc and host clang already produce `0x70afff72` both
+with and without those wrappers (verified with the xtest `CFLAGS_HOST =
+-m32 -funsigned-char -std=c99 -w -O0` against the xtest
+`host_wrap.c`), so the removal is checksum-preserving for the reference
+toolchains. Do not rewrite the expected checksum, delete the draft, or
+duplicate the full sweep. The corrected CCES-built draft must report
+the expected checksum on hardware.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_2d9c82c1.0x70afff72.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_2d9c82c1.0x70afff72.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_2d9c82c1.0x70afff72.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0x70afff72
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
