@@ -1477,6 +1477,77 @@ def check(extract_dir):
     return bool(got) and int(got[-1], 16) == 0xfb5641c8
 ```
 
+### selcc sub-word interior addr file-scope init
+
+Fix the next link in the sub-word file-scope initializer chain: the
+`Expr::Index` / `Expr::Member` arm of `eval_init_word` in
+`selache/selcc/src/emit_asm.rs` previously hard-errored on every
+file-scope `&array[N]` / `&obj.field` initializer whose folded byte
+offset was not a multiple of four with `address-of <root> interior at
+byte N is not word-aligned; sub-word interior addresses in file-scope
+initializers are not supported`. The error was emitted but selcc
+continued compilation, leaving the offending pointer slot
+uninitialised; many csmith drafts (>=20 of 100, e.g.
+`cctest_csmith_4f71e6ee`, `cctest_csmith_09e1ca71`, `cctest_csmith_0e0cf3fc`,
+`cctest_csmith_0f5f2d52`, `cctest_csmith_06711af2`, `cctest_csmith_126ec2e5`)
+therefore produced wrong code whenever they took the address of a
+char- or short-typed interior of a packed aggregate.
+
+Replace the up-front rejection with a sub-word interior label whose
+address is materialised through a new `.SET label = <slot_owner> +
+<byte_in_word>;` alias instead of a fresh `.VAR` slot. Selas's `.SET`
+parser is extended with a `parse_sym_plus_offset` helper that
+decomposes the value into a `(base_symbol, signed_addend)` pair and
+folds the constant offset into the alias's symbol-table value at link
+time, so the `R_SHARC_ADDR32` against the alias still resolves to a
+single byte address. Word-aligned interior addresses keep the existing
+`.VAR` slot-owner path unchanged.
+
+Scope this iteration narrowly:
+- The interior chain must still be a constant-index `Expr::Index` /
+  `Expr::Member` rooted at a named global; non-constant or non-rooted
+  chains keep the existing numeric `eval_const_expr` fallback.
+- The byte offset is folded into the `.SET` value as a positive
+  decimal constant; negative offsets (which only arise from `-` on
+  the right of the addend) keep the bare-name path because the
+  interior address chain only produces non-negative byte offsets.
+- The local-scope twin in `selache/selcc/src/lower.rs` stays
+  untouched; this iteration only touches file-scope pointer
+  initialisers.
+
+Build:
+
+```
+cd selache && cargo build --release
+cd selache && cargo test -p selcc --release sub_word_interior_addr_global_init -- --nocapture
+cd selache && cargo test -p selas --release sym_plus_offset -- --nocapture
+cd selache && cargo clippy --all-targets --release -- -D warnings
+make -C selache/xtest build/drafts/sel/cctest_csmith_4f71e6ee.0xfb5641c8.ldr -j$(nproc)
+```
+
+The new `sub_word_interior_addr_global_init` test must live in
+`selache/selcc/src/emit_asm.rs` alongside the other `#[test]` items.
+It compiles a minimal source like
+
+```c
+static signed char g_root[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+static signed char *g_interior = &g_root[1];
+```
+
+and asserts the emitted asm contains the `.SET .addrof_g_root_b1. =
+g_root. + 1;` alias and the pointer slot `.VAR g_interior. =
+.addrof_g_root_b1.;` reference. The test must fail before the fix and
+pass after it.
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    return True
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
