@@ -360,8 +360,6 @@ def check(extract_dir):
     return bool(re.search(r'mem = [1-9]\d{2,}', log))
 ```
 
-## WIP
-
 ### Login and shell prompt under Qemu
 
 First interactive section. Drives the qemu serial console through an
@@ -412,6 +410,8 @@ def check(extract_dir):
         return False
     return True
 ```
+
+## WIP
 
 ### Userland smoke set under Qemu
 
