@@ -7856,6 +7856,104 @@ running `nextpnr`, producing a `.bin`, programming the iCEstick,
 adding a test bench, running a formal flow, or comparing FPGA and
 MPU checksums) would combine multiple semantics in one step.
 
+### Add prbs_xor_top iCEstick pcf tangle gate
+
+Extend the existing `fpga/src/prbs_xor.nw` with a new noweb chunk
+`<<prbs_xor_top.pcf>>=` that lists the iCEstick (iCE40-HX1K-EVB) pin
+assignments for the three top-level ports of `prbs_xor_top` (`clk`,
+`rx`, `tx`), and extend the same chapter's Makefile fragment with a
+tangle rule that emits `verilog/prbs_xor_top.pcf` from the `.nw`
+source. The pin numbers mirror the existing `verilog/uart_hx1k.pcf`
+(clk on pin 21, rx on pin 9, tx on pin 8) so the wrapper drops onto
+the same iCEstick UART headers used by the previously-passing `uart`
+chapter; `prbs_xor_top` has no LED port, so no LED `set_io` lines are
+needed. No `nextpnr` invocation, no `.asc`, no `.bin`, no programming
+step, and no bench hardware in this step --- this gate-checks only
+that the `.pcf` tangle is wired into the chapter's Makefile fragment
+and produces a non-empty file with the three expected `set_io` lines.
+
+Build:
+
+```
+make -C fpga verilog/prbs_xor_top.pcf
+```
+
+Artifacts:
+
+```
+fpga/verilog/prbs_xor_top.pcf
+```
+
+Test: no hardware.
+
+```
+mark tag=prbs_xor_top_pcf_tangle
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md')
+    try:
+        mission_text = mission.read_text(encoding='utf-8',
+                                         errors='replace')
+    except OSError:
+        return False
+    if 'mark tag=prbs_xor_top_pcf_tangle' not in mission_text:
+        return False
+
+    nw  = Path('fpga/src/prbs_xor.nw')
+    pcf = Path('fpga/verilog/prbs_xor_top.pcf')
+    if not (nw.is_file() and nw.stat().st_size > 0):
+        return False
+    if not (pcf.is_file() and pcf.stat().st_size > 0):
+        return False
+    if pcf.stat().st_mtime < nw.stat().st_mtime:
+        return False
+
+    nw_text = nw.read_text(encoding='utf-8', errors='replace')
+    required_nw = [
+        '<<prbs_xor_top.pcf>>=',
+        'set_io clk',
+        'set_io rx',
+        'set_io tx',
+        'verilog/prbs_xor_top.pcf',
+    ]
+    for tok in required_nw:
+        if tok not in nw_text:
+            return False
+
+    pcf_text = pcf.read_text(encoding='utf-8', errors='replace')
+    required_pcf = [
+        'set_io clk    21',
+        'set_io rx     9',
+        'set_io tx     8',
+    ]
+    for tok in required_pcf:
+        if tok not in pcf_text:
+            return False
+
+    return True
+```
+
+Rationale: this is the smallest meaningful next FPGA-side step after
+the `prbs_xor_top` yosys synth gate. A `.pcf` tangle gate proves that
+the chapter's noweb source carries the iCEstick pin map for the three
+top-level ports and that the chapter's Makefile fragment knows how to
+emit the file, before any later step layers on a `nextpnr-ice40`
+place + route, an `icepack` bitstream, an iceprog programming step,
+or a bench UART ready-banner check. Splitting smaller into only a
+noweb chunk edit (with no Makefile rule) or only a Makefile rule
+edit (with no chunk to tangle from) would yield zero progress because
+neither half produces a verifiable `verilog/prbs_xor_top.pcf` artefact.
+Bundling more (running `nextpnr-ice40` to produce an `.asc`, running
+`icepack` to produce a `.bin`, programming the iCEstick, opening a
+UART, or comparing FPGA and MPU checksums) would combine multiple
+semantics in one step.
+
 ## WIP
 
 ### PRBS, UART, Checksum

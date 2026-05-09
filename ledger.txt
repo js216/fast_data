@@ -1005,3 +1005,10 @@
 2026-05-09T13:07:03 fpga-spi Verifier pass none
 2026-05-09T14:18:20 fpga-spi Tester pass 85
 2026-05-09T14:19:13 fpga-spi Worker pass
+2026-05-09T14:19:46 fpga-spi Orchestrator pass 94
+2026-05-09T14:21:20 fpga-spi Manager pass prbs_xor_top hx1k pcf tangle gate
+2026-05-09T14:22:21 fpga-spi Minimizer pass chunk+mk rule both required for pcf artefact
+2026-05-09T14:24:49 fpga-spi Worker pass
+2026-05-09T14:26:42 fpga-spi Verifier pass none
+2026-05-09T15:31:53 fpga-spi Tester pass 86
+2026-05-09T15:35:51 fpga-spi Worker pass
