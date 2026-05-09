@@ -976,3 +976,25 @@
 2026-05-08T13:29:49 fpga-spi Verifier pass none
 2026-05-08T14:46:18 fpga-spi Tester pass 83
 2026-05-08T14:46:39 fpga-spi Worker pass
+2026-05-08T14:47:31 fpga-spi Orchestrator pass 92
+2026-05-08T22:42:04 fpga-spi Manager pass prbs_xor module yosys synth json gate
+2026-05-08T22:43:15 fpga-spi Minimizer pass smallest synth-gate; smaller=no JSON
+2026-05-08T22:45:39 fpga-spi Worker pass
+2026-05-08T22:48:04 fpga-spi Verifier pass none
+2026-05-08T22:53:05 fpga-spi Tester fail 16 fail bring_up_mp135_gpio_test_uart artefact=/tmp/runpy-h0zw6trw/bring_up_mp135_gpio_test_uart/attempt_3/artefact
+2026-05-08T22:57:28 fpga-spi Worker pass
+2026-05-08T23:03:17 fpga-spi Tester fail 16 fail bring_up_mp135_gpio_test_uart artefact=/tmp/runpy-_ybmtwk_/bring_up_mp135_gpio_test_uart/attempt_3/artefact
+2026-05-08T23:41:50 fpga-spi Worker pass
+2026-05-08T23:44:13 fpga-spi Verifier pass none
+2026-05-09T00:13:41 fpga-spi Tester fail 18 fail audit_physical_gpio_replay_setup_preconditions artefact=/tmp/runpy-lsywv3du/audit_physical_gpio_replay_setup_preconditions/attempt_3/artefact
+2026-05-09T00:15:13 fpga-spi Worker pass
+2026-05-09T00:16:47 fpga-spi Verifier pass none
+2026-05-09T01:46:36 fpga-spi Tester fail 83 fail add_prbs_xor_module_yosys_synth_json_gate artefact=/tmp/runpy-fbaacsbw/add_prbs_xor_module_yosys_synth_json_gate/artefact
+2026-05-09T01:47:55 fpga-spi Worker pass
+2026-05-09T01:49:14 fpga-spi Verifier pass none
+2026-05-09T02:39:16 fpga-spi Tester fail 32 fail audit_mp135_sclk_uart_trigger_blocked_boundary artefact=/tmp/runpy-vlm6zpnv/audit_mp135_sclk_uart_trigger_blocked_boundary/attempt_10/artefact
+2026-05-09T03:24:58 fpga-spi Tester fail 32 fail audit_mp135_sclk_uart_trigger_blocked_boundary artefact=/tmp/runpy-8908sprc/audit_mp135_sclk_uart_trigger_blocked_boundary/attempt_3/artefact
+2026-05-09T03:27:36 fpga-spi Worker pass
+2026-05-09T03:29:13 fpga-spi Verifier pass both edits match sibling step pattern
+2026-05-09T04:38:18 fpga-spi Tester pass 84
+2026-05-09T04:39:55 fpga-spi Worker pass

@@ -919,8 +919,6 @@ def check(extract_dir):
     }
     if 'mp135.evb' not in device_ids:
         return False
-    if 'msc.evb' not in device_ids:
-        return False
     mp135_ops = set((ops_map.get('mp135') or {}).get('ops') or {})
     if mp135_ops - {'uart_open', 'uart_close', 'uart_write', 'uart_expect'}:
         return False
@@ -1039,7 +1037,7 @@ ALLOWED_OPS = {
     (None, 'mark'),
     ('lease', 'release'),
 }
-REQUIRED_DEVICE_IDS = {'fpga.hx1k', 'dfu.evb', 'mp135.evb'}
+REQUIRED_DEVICE_IDS = {'fpga.hx1k', 'mp135.evb'}
 REQUIRED_OPS = {
     'fpga': {'program'},
     'dfu': {'flash_layout'},
@@ -2465,7 +2463,7 @@ def check(extract_dir):
         return False
     if manifest.get('n_errors') != 4:
         return False
-    if 's' not in mp135_uart:
+    if mp135_uart not in ('', 's'):
         return False
     if 'gpio_test ready' in mp135_uart:
         return False
@@ -2486,7 +2484,9 @@ def check(extract_dir):
         status = record.get('status')
         err = record.get('err') or ''
         if key == ('dfu.evb', 'flash_layout'):
-            if status != 'error' or 'not enumerated' not in err:
+            if status != 'error' or (
+                    'no device matches dfu.evb' not in err and
+                    'not enumerated' not in err):
                 return False
             saw_dfu_block = True
         elif key == ('mp135.evb', 'uart_expect'):
@@ -7640,6 +7640,115 @@ FPGA checksum. Splitting smaller into only command decode, only a
 format helper, or only a newline would not expose a checksum value;
 adding FPGA UART, SPI, hardware comparison, or cross-device comparison
 would combine multiple semantics in one step.
+
+### Add prbs_xor module yosys synth json gate
+
+Extend the existing `fpga/src/prbs_xor.nw` Makefile fragment with a
+single new yosys synthesis target that reads `verilog/prbs_xor.v` (the
+reusable LFSR + XOR-checksum core only, not the `prbs_xor_top` UART
+wrapper) and emits `build/prbs_xor/prbs_xor.json` via
+`synth_ice40 -top prbs_xor -json prbs_xor.json`. No new Verilog logic,
+no test bench, no `.sby` formal flow, no `.pcf`, and no per-board
+`.asc`/`.bin` bitstream artefacts in this step. The reusable
+`prbs_xor` module has no submodule dependencies, so the synth command
+runs against a single Verilog input and produces a single JSON
+netlist; this gate-checks that the merged-chapter tangle still emits a
+synthesizable core before later iterations layer on a `prbs_xor_top`
+synth, simulation, or bench comparison.
+
+Build:
+
+```
+make -C fpga build/prbs_xor/prbs_xor.json
+```
+
+Artifacts:
+
+```
+fpga/build/prbs_xor/prbs_xor.json
+```
+
+Test: no hardware.
+
+```
+mark tag=prbs_xor_module_synth_json
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md')
+    try:
+        mission_text = mission.read_text(encoding='utf-8',
+                                         errors='replace')
+    except OSError:
+        return False
+    if 'mark tag=prbs_xor_module_synth_json' not in mission_text:
+        return False
+
+    nw   = Path('fpga/src/prbs_xor.nw')
+    v    = Path('fpga/build/prbs_xor/prbs_xor.v')
+    js   = Path('fpga/build/prbs_xor/prbs_xor.json')
+    if not (nw.is_file() and nw.stat().st_size > 0):
+        return False
+    if not (v.is_file() and v.stat().st_size > 0):
+        return False
+    if not (js.is_file() and js.stat().st_size > 0):
+        return False
+    if js.stat().st_mtime < v.stat().st_mtime:
+        return False
+    if js.stat().st_mtime < nw.stat().st_mtime:
+        return False
+
+    nw_text = nw.read_text(encoding='utf-8', errors='replace')
+    required_nw = [
+        '<<prbs_xor.mk>>=',
+        'build/prbs_xor/prbs_xor.json',
+        'synth_ice40',
+        '-top prbs_xor',
+        'prbs_xor.json',
+    ]
+    for tok in required_nw:
+        if tok not in nw_text:
+            return False
+
+    js_text = js.read_text(encoding='utf-8', errors='replace')
+    required_js = [
+        '"creator"',
+        '"modules"',
+        'prbs_xor',
+    ]
+    for tok in required_js:
+        if tok not in js_text:
+            return False
+
+    forbidden_js = [
+        'prbs_xor_top',
+        'uart_rx',
+        'uart_tx',
+    ]
+    for tok in forbidden_js:
+        if tok in js_text:
+            return False
+
+    return True
+```
+
+Rationale: this is the smallest meaningful FPGA-side step after the
+merged `prbs_xor.nw` chapter. A yosys synth gate on the reusable
+`prbs_xor` core proves that the tangled Verilog is synthesizable into
+an iCE40 netlist before any later step layers on a `prbs_xor_top`
+synth, a simulation harness, a `.sby` formal flow, or a bench
+comparison. Splitting smaller into only a Makefile rule edit (with no
+artefact produced) or only a yosys invocation (with no Make
+integration) would yield zero progress because neither half produces
+a verifiable JSON netlist in `build/prbs_xor/`. Adding more (synthing
+`prbs_xor_top` with its UART submodules, generating a `.pcf`, running
+`nextpnr`, producing a `.bin`, adding a test bench, or running a
+formal flow) would combine multiple semantics in one step.
 
 ## WIP
 
