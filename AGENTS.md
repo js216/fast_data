@@ -143,7 +143,7 @@ batch as a whole; in the common single-step case `steps_advanced` has
 length 1 and the counts apply directly. Per-step approximations divide
 counts by `len(steps_advanced)`. The file is the time-to-feature
 record; median/p95 advance duration and per-mission throughput are
-derivable from it.
+derivable from it. Times are all in the Pacific time zone.
 
 **`mission_status.md`** — a single-snapshot file rewritten by the
 Orchestrator at three moments: (a) top of each iteration, (b)
