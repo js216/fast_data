@@ -205,3 +205,9 @@
 2026-05-08T23:41:32 kernel-clock-bringup Verifier pass none
 2026-05-09T00:31:30 kernel-clock-bringup Tester pass 6
 2026-05-09T00:46:27 kernel-clock-bringup Worker pass
+2026-05-09T00:48:00 kernel-clock-bringup Orchestrator pass 12
+2026-05-09T00:49:13 kernel-clock-bringup Manager pass name post-mdma next clock
+2026-05-09T07:49:51 kernel-clock-bringup Minimizer pass single post-mdma next latch + sentinel
+2026-05-09T00:53:00 kernel-clock-bringup Worker pass
+2026-05-09T00:54:24 kernel-clock-bringup Verifier pass none
+2026-05-09T01:42:30 kernel-clock-bringup Tester pass 7
