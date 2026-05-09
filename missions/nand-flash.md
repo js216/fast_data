@@ -2226,7 +2226,7 @@ DDR at `DEF_LINUX_ADDR` and before `boot_mark_loaded()`. The entire
 block is wrapped in `#if BLOAD_KERNEL_HASH_CHECK ... #endif`, so the
 preprocessor strips it while the macro stays at 0, and the
 bootloader binary md5 must remain
-`7ea4e5960445ffb078f79ac8a328d5cf` (byte-identical to the prior 30
+`7ea4e5960445ffb078f79ac8a328d5cf` (byte-identical to the prior 31
 preflight sections).
 
 Inside the gate, the call hashes
@@ -2294,6 +2294,75 @@ for m in open_re.finditer(body):
 assert ok, "gated call+sentinel not inside fmc_bload"
 b = os.path.join(root, "build/main.stm32")
 assert os.path.getsize(b) > 0, "main.stm32 missing or empty"
+```
+
+### Kernel hash contract preflight: real SHA-256 body inside gated stub in fmc.c
+
+The gated `bload_kernel_sha256_compute(...)` in
+`stm32mp135_test_board/bootloader/src/fmc.c` is no longer a no-op:
+inside the existing `#if BLOAD_KERNEL_HASH_CHECK ... #endif`
+block it now contains a full FIPS 180-4 SHA-256 implementation
+(round-constant table, init/update/final/compress helpers).
+`BLOAD_KERNEL_HASH_CHECK` stays at 0 so the preprocessor strips
+the entire block, the call site in `fmc_bload`, and the K[] /
+H(0) tables; the production binary md5 stays
+`7ea4e5960445ffb078f79ac8a328d5cf`. This pins the algorithm
+in source so the next mission step can flip the macro and the
+hash check actually rejects mismatches.
+
+The preflight finds the gated block that contains
+`bload_kernel_sha256_compute` and asserts the block also
+contains SHA-256-specific magic numbers: `0x428a2f98U` (first
+K[] round constant), `0x6a09e667U` (first H(0) initial hash
+value), and `0x71374491U` (second K[] round constant). These
+constants are unique to SHA-256; a stub or a partial
+implementation cannot produce them by accident.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+```
+
+Verify:
+
+```python
+import re, os, hashlib
+root = "stm32mp135_test_board/bootloader"
+src = open(os.path.join(root, "src/fmc.c")).read()
+open_re  = re.compile(r'#\s*if\s+BLOAD_KERNEL_HASH_CHECK\b')
+endif_re = re.compile(r'#\s*endif\b')
+any_if   = re.compile(r'#\s*if(?:def|ndef)?\b')
+func_re  = re.compile(
+   r'static\s+void\s+bload_kernel_sha256_compute\s*\(')
+ok = False
+for m in open_re.finditer(src):
+    j = m.end()
+    depth = 1
+    while j < len(src) and depth > 0:
+        n_if  = any_if.search(src, j)
+        n_end = endif_re.search(src, j)
+        if n_end is None:
+            break
+        if n_if is not None and n_if.start() < n_end.start():
+            depth += 1
+            j = n_if.end()
+        else:
+            depth -= 1
+            j = n_end.end()
+    inner = src[m.end():j]
+    if depth == 0 and func_re.search(inner) \
+       and "0x428a2f98" in inner \
+       and "0x6a09e667" in inner \
+       and "0x71374491" in inner:
+        ok = True
+        break
+assert ok, "real SHA-256 markers not in gated block"
+b = os.path.join(root, "build/main.stm32")
+assert os.path.getsize(b) > 0, "main.stm32 missing or empty"
+md5 = hashlib.md5(open(b, "rb").read()).hexdigest()
+assert md5 == "7ea4e5960445ffb078f79ac8a328d5cf", \
+   "binary md5 changed: " + md5
 ```
 
 ## WIP
