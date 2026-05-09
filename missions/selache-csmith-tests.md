@@ -1220,6 +1220,63 @@ def check(extract_dir):
     return bool(got) and int(got[-1], 16) == 0xb5b16be2
 ```
 
+### cces csmith 41369044 boot timeout
+
+Fix the next focused draft bench failure from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_41369044.0xbcb226c6.ldr`
+times out during `dsp:boot` and produces no UART output, and once
+booting succeeds the embedded toolchain miscompiles a packed-bitfield
+read of `g_402.f5` so the CRC disagrees with gcc/clang. Apply a small
+per-draft source rewrite (kept in
+`selache/xtest/filter_csmith_41369044.py`, wired into the xtest
+Makefile as the rule for this one .ldr) that does two things: move the
+big load-time-initialized aggregate `static const union U4 g_47[4][2][5]`
+to BSS plus a runtime initializer at the top of `test_main` (so the
+boot transfer no longer hangs on that .rodata block), and drop the
+`#pragma pack(1)` wrapper around `struct S2` (so the embedded toolchain
+falls back to a default bitfield layout that agrees with gcc on the
+read of `g_402.f5`). The rewrite is reference-preserving: gcc on the
+rewritten source still reports the source's expected checksum. The
+expected hex is still derived from `awk '$(EXPECT_AWK)'` on the
+original draft source. Keep this step scoped to this single
+CCES-built draft; do not rewrite the expected checksum, delete the
+draft, weaken the foreach test, or replace this with a full
+draft-sweep fix. The corrected CCES-built draft must boot on hardware
+and report the source's expected checksum.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_41369044.0xbcb226c6.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_41369044.0xbcb226c6.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_41369044.0xbcb226c6.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0xbcb226c6
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
