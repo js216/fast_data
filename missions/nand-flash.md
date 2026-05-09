@@ -1736,8 +1736,6 @@ def check(_extract_dir):
     return 'bitflip' in text and 'stm32_fmc2_nand.c' in text
 ```
 
-## WIP
-
 The sections below are production-hardening regression tests requested
 by an adversarial audit. Each section names a concrete data-loss path
 and proves end-to-end that the system either (a) detects and refuses
@@ -1746,7 +1744,7 @@ corruption. Every test must FAIL on the current bootloader code and
 PASS only after the corresponding fix lands; a test that passes today
 on the unfixed code is, by construction, not exercising the fix.
 
-Tests below assume the prior 23 sections have left a freshly
+Tests below assume the prior 24 sections have left a freshly
 provisioned NAND. Each new section re-flashes `nand.img` at its start
 so a deliberately-corrupted run cannot leak into the next section.
 They also tolerate a degraded final state by re-flashing on Verify if
@@ -1811,23 +1809,23 @@ delay ms=200
 mp135.custom:uart_write data="cat >/tmp/bch_probe.sh <<'EOF'\r"
 mp135.custom:uart_write data="#!/bin/sh\r"
 mp135.custom:uart_write data="set -eu\r"
-mp135.custom:uart_write data="tag(){ printf '___BCH_%s___\\n' \"$1\"; }\r"
-mp135.custom:uart_write data="fail(){ tag \"FAIL_$1\"; exit 1; }\r"
+mp135.custom:uart_write data="tag(){ printf '___BCH_%s___\\n' $1; }\r"
+mp135.custom:uart_write data="fail(){ tag FAIL_$1; exit 1; }\r"
 mp135.custom:uart_write data="trap 'stty echo 2>/dev/null || true' EXIT\r"
 mp135.custom:uart_write data="tag RUN_BEGIN\r"
-mp135.custom:uart_write data="mtd=$(awk -F: '/\"rootfs\"/{print $1; exit}' /proc/mtd)\r"
-mp135.custom:uart_write data="[ -n \"$mtd\" ] || fail NO_ROOTFS\r"
+mp135.custom:uart_write data="mtd=$(awk -F: '/rootfs/{print $1; exit}' /proc/mtd)\r"
+mp135.custom:uart_write data="[ ${#mtd} -gt 0 ] || fail NO_ROOTFS\r"
 mp135.custom:uart_write data="base=/sys/class/mtd/$mtd\r"
-mp135.custom:uart_write data="[ -r \"$base/writesize\" ] || fail NO_WRITESIZE\r"
+mp135.custom:uart_write data="[ -r $base/writesize ] || fail NO_WRITESIZE\r"
 mp135.custom:uart_write data="command -v flash_erase >/dev/null 2>&1 || fail NO_ERASE\r"
 mp135.custom:uart_write data="command -v nandwrite >/dev/null 2>&1 || fail NO_WRITE\r"
 mp135.custom:uart_write data="command -v nandflipbits >/dev/null 2>&1 || fail NO_FLIP\r"
-mp135.custom:uart_write data="pgsz=$(cat \"$base/writesize\")\r"
-mp135.custom:uart_write data="peb=$(cat \"$base/erasesize\")\r"
-mp135.custom:uart_write data="size=$(cat \"$base/size\")\r"
+mp135.custom:uart_write data="pgsz=$(cat $base/writesize)\r"
+mp135.custom:uart_write data="peb=$(cat $base/erasesize)\r"
+mp135.custom:uart_write data="size=$(cat $base/size)\r"
 mp135.custom:uart_write data="blocks=$((size / peb))\r"
 mp135.custom:uart_write data="good=$((blocks - 8))\r"
-mp135.custom:uart_write data="[ \"$good\" -gt 0 ] || fail BAD_GEOM\r"
+mp135.custom:uart_write data="[ $good -gt 0 ] || fail BAD_GEOM\r"
 mp135.custom:uart_write data="off=$((good * peb))\r"
 mp135.custom:uart_write data="page=$((off / pgsz))\r"
 mp135.custom:uart_write data="echo BCH_GEOM mtd=$mtd pgsz=$pgsz off=$off page=$page\r"
@@ -1910,6 +1908,8 @@ def check(extract_dir):
         return False
     return 'tail-erased' in uart
 ```
+
+## WIP
 
 ### Hardened kernel image: bootloader refuses to jump on hash mismatch
 
