@@ -1047,8 +1047,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### V7-isms under Qemu
 
 Tests the 1979 behaviours that are NOT modern-Unix behaviours:
@@ -1204,6 +1202,8 @@ def check(extract_dir):
         return False
     return True
 ```
+
+## WIP
 
 ### `ed` editor end-to-end under Qemu
 
