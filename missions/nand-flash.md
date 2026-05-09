@@ -2159,6 +2159,65 @@ def check(_extract_dir):
     return False
 ```
 
+### Kernel hash contract preflight: gated SHA-256 stub function in fmc.c
+
+This is a comment/macro contract step that adds a no-op SHA-256 stub
+function inside `stm32mp135_test_board/bootloader/src/fmc.c`,
+wrapped entirely in `#if BLOAD_KERNEL_HASH_CHECK ... #endif`. With
+the macro at its current value of 0 the entire function is removed
+by the preprocessor, so the bootloader binary md5 must remain
+`7ea4e5960445ffb078f79ac8a328d5cf` (byte-identical to the prior 29
+preflight sections).
+
+The stub establishes the function signature
+`bload_kernel_sha256_compute(const uint8_t *data, uint32_t len,
+uint8_t out[32])` so a subsequent iteration can wire the call site
+inside `fmc_bload` before swapping in a real SHA-256 implementation
+(e.g. picosha2 single-file header).
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+```
+
+Verify:
+
+```python
+import re, os
+root = "stm32mp135_test_board/bootloader"
+src = open(os.path.join(root, "src/fmc.c")).read()
+# Find a `#if BLOAD_KERNEL_HASH_CHECK` block that contains the stub
+# function declaration. Walk nested #if/#endif so we close on the
+# matching directive.
+open_re  = re.compile(r'#\s*if\s+BLOAD_KERNEL_HASH_CHECK\b')
+endif_re = re.compile(r'#\s*endif\b')
+any_if   = re.compile(r'#\s*if(?:def|ndef)?\b')
+decl_re  = re.compile(
+    r'\bstatic\s+void\s+bload_kernel_sha256_compute\s*\(')
+ok = False
+for m in open_re.finditer(src):
+    i = m.end()
+    depth = 1
+    while i < len(src) and depth > 0:
+        n_if  = any_if.search(src, i)
+        n_end = endif_re.search(src, i)
+        if n_end is None:
+            break
+        if n_if is not None and n_if.start() < n_end.start():
+            depth += 1
+            i = n_if.end()
+        else:
+            depth -= 1
+            i = n_end.end()
+    if depth == 0 and decl_re.search(src[m.end():i]):
+        ok = True
+        break
+assert ok, "stub decl not inside #if BLOAD_KERNEL_HASH_CHECK block"
+b = os.path.join(root, "build/main.stm32")
+assert os.path.getsize(b) > 0, "main.stm32 missing or empty"
+```
+
 ## WIP
 
 ### Hardened kernel image: bootloader refuses to jump on hash mismatch
