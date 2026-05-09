@@ -7954,6 +7954,115 @@ Bundling more (running `nextpnr-ice40` to produce an `.asc`, running
 UART, or comparing FPGA and MPU checksums) would combine multiple
 semantics in one step.
 
+### Add prbs_xor_top iCEstick nextpnr asc gate
+
+Extend the existing `fpga/src/prbs_xor.nw` Makefile fragment with a
+single new `nextpnr-ice40` place-and-route rule that consumes
+`build/prbs_xor_top/prbs_xor_top.json` (from the prior synth gate)
+together with `verilog/prbs_xor_top.pcf` (from the prior pcf tangle
+gate) and emits `build/prbs_xor_top/prbs_xor_top.asc` for the iCEstick
+target (`--hx1k --package tq144 --freq 12`). The chapter's name is
+`prbs_xor` (not `prbs_xor_top`), so the Makefile's legacy
+single-target generic rule (`build/$(1)/$(1).asc`) does not auto-fire
+for the `prbs_xor_top` artefact path; the chapter must declare an
+explicit nextpnr rule. No `icepack` invocation, no `.bin` artefact,
+no programming step, and no bench hardware in this gate --- this
+gate-checks only that place-and-route succeeds against the merged
+synth + pcf tangles and produces a non-empty `.asc` whose mtime is
+newer than both inputs.
+
+Build:
+
+```
+make -C fpga build/prbs_xor_top/prbs_xor_top.asc
+```
+
+Artifacts:
+
+```
+fpga/build/prbs_xor_top/prbs_xor_top.asc
+```
+
+Test: no hardware.
+
+```
+mark tag=prbs_xor_top_pnr_asc
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md')
+    try:
+        mission_text = mission.read_text(encoding='utf-8',
+                                         errors='replace')
+    except OSError:
+        return False
+    if 'mark tag=prbs_xor_top_pnr_asc' not in mission_text:
+        return False
+
+    nw  = Path('fpga/src/prbs_xor.nw')
+    js  = Path('fpga/build/prbs_xor_top/prbs_xor_top.json')
+    pcf = Path('fpga/verilog/prbs_xor_top.pcf')
+    asc = Path('fpga/build/prbs_xor_top/prbs_xor_top.asc')
+    if not (nw.is_file() and nw.stat().st_size > 0):
+        return False
+    if not (js.is_file() and js.stat().st_size > 0):
+        return False
+    if not (pcf.is_file() and pcf.stat().st_size > 0):
+        return False
+    if not (asc.is_file() and asc.stat().st_size > 0):
+        return False
+    if asc.stat().st_mtime < js.stat().st_mtime:
+        return False
+    if asc.stat().st_mtime < pcf.stat().st_mtime:
+        return False
+
+    nw_text = nw.read_text(encoding='utf-8', errors='replace')
+    required_nw = [
+        '<<prbs_xor.mk>>=',
+        'build/prbs_xor_top/prbs_xor_top.asc',
+        'nextpnr-ice40',
+        '--hx1k',
+        '--package tq144',
+        'prbs_xor_top.json',
+        'prbs_xor_top.pcf',
+        'prbs_xor_top.asc',
+    ]
+    for tok in required_nw:
+        if tok not in nw_text:
+            return False
+
+    asc_text = asc.read_text(encoding='utf-8', errors='replace')
+    required_asc = [
+        '.device',
+        '.io_tile',
+    ]
+    for tok in required_asc:
+        if tok not in asc_text:
+            return False
+
+    return True
+```
+
+Rationale: this is the smallest meaningful next FPGA-side step after
+the `prbs_xor_top` `.pcf` tangle gate. A nextpnr place-and-route gate
+proves that the synth netlist and the iCEstick pin map fit together
+on the `--hx1k --package tq144` target before any later step layers
+on an `icepack` bitstream, an iceprog programming step, a bench UART
+ready-banner check, or a host-side checksum comparison. Splitting
+smaller into only a Makefile rule edit (with no invocation) or only
+a one-shot nextpnr command (with no Make integration) would yield
+zero progress because neither half produces a verifiable
+`prbs_xor_top.asc` artefact tied to the chapter's noweb source.
+Bundling more (running `icepack` to produce a `.bin`, programming the
+iCEstick, opening a UART, comparing FPGA and MPU checksums, or
+adding a second board target) would combine multiple semantics in
+one step.
+
 ## WIP
 
 ### PRBS, UART, Checksum

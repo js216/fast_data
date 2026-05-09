@@ -1012,3 +1012,14 @@
 2026-05-09T14:26:42 fpga-spi Verifier pass none
 2026-05-09T15:31:53 fpga-spi Tester pass 86
 2026-05-09T15:35:51 fpga-spi Worker pass
+2026-05-09T15:36:41 fpga-spi Orchestrator pass 95
+2026-05-09T15:38:42 fpga-spi Manager pass prbs_xor_top iCEstick nextpnr asc gate
+2026-05-09T15:39:44 fpga-spi Minimizer pass single nextpnr rule, no rule exists yet
+2026-05-09T15:41:44 fpga-spi Worker pass
+2026-05-09T15:43:04 fpga-spi Verifier pass none
+2026-05-09T18:01:34 fpga-spi Tester fail 47 fail audit_mp135_to_fpga_io1_low_blocked_boundary artefact=/tmp/runpy-m7r8d0o6/audit_mp135_to_fpga_io1_low_blocked_boundary/attempt_10/artefact
+2026-05-09T19:05:43 fpga-spi Tester fail 43 fail audit_mp135_to_fpga_io3_high_blocked_boundary artefact=/tmp/runpy-2c0bcl2o/audit_mp135_to_fpga_io3_high_blocked_boundary/attempt_10/artefact
+2026-05-09T20:13:00 fpga-spi Tester fail 45 fail audit_mp135_to_fpga_io0_low_blocked_boundary artefact=/tmp/runpy-p0ov5daa/audit_mp135_to_fpga_io0_low_blocked_boundary/attempt_10/artefact
+2026-05-09T20:59:42 fpga-spi Tester fail 32 fail audit_mp135_sclk_uart_trigger_blocked_boundary artefact=/tmp/runpy-azki3qkj/audit_mp135_sclk_uart_trigger_blocked_boundary/attempt_3/artefact
+2026-05-09T22:56:12 fpga-spi Tester pass 87
+2026-05-09T22:57:15 fpga-spi Worker pass
