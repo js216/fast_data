@@ -1744,7 +1744,7 @@ corruption. Every test must FAIL on the current bootloader code and
 PASS only after the corresponding fix lands; a test that passes today
 on the unfixed code is, by construction, not exercising the fix.
 
-Tests below assume the prior 25 sections have left a freshly
+Tests below assume the prior 26 sections have left a freshly
 provisioned NAND. Each new section re-flashes `nand.img` at its start
 so a deliberately-corrupted run cannot leak into the next section.
 They also tolerate a degraded final state by re-flashing on Verify if
@@ -1957,6 +1957,62 @@ def check(_extract_dir):
     if 'kernel_sha256[32]' not in pt_text:
         return False
     return 'kernel: hash mismatch' in pt_text
+```
+
+### Kernel hash contract preflight: fmc_bload source references future hash check
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+import re
+
+def check(_extract_dir):
+    fmc = Path('stm32mp135_test_board/bootloader/src/fmc.c')
+    image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
+    if not fmc.is_file():
+        return False
+    if not image.is_file() or image.stat().st_size == 0:
+        return False
+    text = fmc.read_text(encoding='utf-8', errors='replace')
+    # Locate the fmc_bload definition and inspect its body.
+    m = re.search(r'\nvoid\s+fmc_bload\s*\([^)]*\)\s*\{', text)
+    if not m:
+        return False
+    # Walk braces to find the matching close.
+    i = m.end() - 1
+    depth = 0
+    end = -1
+    while i < len(text):
+        c = text[i]
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+        i += 1
+    if end < 0:
+        return False
+    body = text[m.end():end]
+    # Both contract tokens must appear inside fmc_bload (in comments or
+    # code) so the next preflight step can wire the stub call here.
+    return ('kernel_sha256' in body) and ('kernel: hash mismatch' in body)
 ```
 
 ## WIP
