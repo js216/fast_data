@@ -114,3 +114,94 @@
 2026-05-08T04:24:31 kernel-clock-bringup Verifier pass no-issues
 2026-05-08T04:26:10 kernel-clock-bringup Enemy pass no-issues
 2026-05-08T04:27:08 kernel-clock-bringup Worker pass
+2026-05-08T04:28:22 kernel-clock-bringup Orchestrator pass 10
+2026-05-08T04:29:07 kernel-clock-bringup Manager pass mdma-after-marker
+2026-05-08T04:30:45 kernel-clock-bringup Minimizer pass mdma_guard+after_marker_indivisible
+2026-05-08T04:33:02 kernel-clock-bringup Worker pass
+2026-05-08T04:34:49 kernel-clock-bringup Verifier pass no-issues
+2026-05-08T04:52:28 kernel-clock-bringup Tester fail 1
+2026-05-08T04:53:38 kernel-clock-bringup Worker pass
+2026-05-08T04:55:13 kernel-clock-bringup Verifier pass no-issues
+2026-05-08T05:23:45 kernel-clock-bringup Tester fail 3
+2026-05-08T05:25:06 kernel-clock-bringup Worker pass
+2026-05-08T05:26:11 kernel-clock-bringup Verifier pass no-issues
+2026-05-08T05:34:04 kernel-clock-bringup Tester fail 1
+2026-05-08T05:34:39 kernel-clock-bringup Worker pass
+2026-05-08T05:36:07 kernel-clock-bringup Verifier pass none
+2026-05-08T06:07:22 kernel-clock-bringup Tester fail 1
+2026-05-08T06:07:55 kernel-clock-bringup Worker pass
+2026-05-08T06:08:46 kernel-clock-bringup Verifier pass none
+2026-05-08T07:07:49 kernel-clock-bringup Tester fail 5
+2026-05-08T07:08:23 kernel-clock-bringup Worker pass
+2026-05-08T07:09:31 kernel-clock-bringup Verifier pass none
+2026-05-08T07:12:31 kernel-clock-bringup Tester fail 0
+2026-05-08T07:13:00 kernel-clock-bringup Worker pass
+2026-05-08T07:14:12 kernel-clock-bringup Verifier pass none
+2026-05-08T08:17:25 kernel-clock-bringup Tester fail 5
+2026-05-08T08:18:00 kernel-clock-bringup Worker pass
+2026-05-08T08:19:21 kernel-clock-bringup Verifier pass none
+2026-05-08T08:22:05 kernel-clock-bringup Tester fail 0
+2026-05-08T08:22:55 kernel-clock-bringup Worker pass
+2026-05-08T08:24:06 kernel-clock-bringup Verifier pass none
+2026-05-08T09:16:03 kernel-clock-bringup Tester fail 3
+2026-05-08T09:16:44 kernel-clock-bringup Worker pass
+2026-05-08T09:17:40 kernel-clock-bringup Verifier pass none
+2026-05-08T09:47:41 kernel-clock-bringup Tester fail 2
+2026-05-08T09:48:03 kernel-clock-bringup Worker pass
+2026-05-08T09:49:15 kernel-clock-bringup Verifier pass none
+2026-05-08T09:52:08 kernel-clock-bringup Tester fail 0
+2026-05-08T09:52:49 kernel-clock-bringup Worker pass
+2026-05-08T09:53:57 kernel-clock-bringup Verifier pass none
+2026-05-08T10:21:56 kernel-clock-bringup Tester fail 2
+2026-05-08T10:22:40 kernel-clock-bringup Worker pass
+2026-05-08T10:23:44 kernel-clock-bringup Verifier pass none
+2026-05-08T10:29:00 kernel-clock-bringup Tester fail 0
+2026-05-08T10:29:33 kernel-clock-bringup Worker pass
+2026-05-08T10:30:39 kernel-clock-bringup Verifier pass none
+2026-05-08T10:49:26 kernel-clock-bringup Tester fail 1
+2026-05-08T10:50:01 kernel-clock-bringup Worker pass
+2026-05-08T10:51:00 kernel-clock-bringup Verifier pass none
+2026-05-08T11:22:57 kernel-clock-bringup Tester fail 4
+2026-05-08T11:23:32 kernel-clock-bringup Worker pass
+2026-05-08T11:24:33 kernel-clock-bringup Verifier pass none
+2026-05-08T11:47:33 kernel-clock-bringup Tester fail 1
+2026-05-08T11:48:18 kernel-clock-bringup Worker pass
+2026-05-08T11:49:17 kernel-clock-bringup Verifier pass clean_mdma_patch
+2026-05-08T11:52:12 kernel-clock-bringup Tester fail 0
+2026-05-08T11:52:46 kernel-clock-bringup Worker pass
+2026-05-08T11:53:38 kernel-clock-bringup Verifier pass clean_mdma_patch
+2026-05-08T12:00:25 kernel-clock-bringup Tester fail 1
+2026-05-08T12:01:09 kernel-clock-bringup Worker pass
+2026-05-08T12:02:12 kernel-clock-bringup Verifier pass post_cleanup_clean
+2026-05-08T12:05:55 kernel-clock-bringup Tester fail 0
+2026-05-08T12:06:38 kernel-clock-bringup Worker pass
+2026-05-08T12:07:49 kernel-clock-bringup Verifier pass post_cleanup_ok
+2026-05-08T12:28:05 kernel-clock-bringup Tester fail 1
+2026-05-08T12:28:51 kernel-clock-bringup Worker pass
+2026-05-08T12:29:59 kernel-clock-bringup Verifier pass clean_mdma_patch
+2026-05-08T12:37:38 kernel-clock-bringup Tester fail 1
+2026-05-08T12:38:17 kernel-clock-bringup Worker pass
+2026-05-08T12:39:21 kernel-clock-bringup Verifier pass clean_mdma_patch
+2026-05-08T13:25:15 kernel-clock-bringup Tester fail 3
+2026-05-08T13:25:36 kernel-clock-bringup Worker pass
+2026-05-08T13:27:09 kernel-clock-bringup Verifier pass clean_mdma_patch
+2026-05-08T13:47:55 kernel-clock-bringup Tester fail 1
+2026-05-08T13:48:44 kernel-clock-bringup Worker pass
+2026-05-08T13:49:59 kernel-clock-bringup Verifier pass clean_mdma_patch
+2026-05-08T14:20:27 kernel-clock-bringup Tester fail 3
+2026-05-08T16:02:01 kernel-clock-bringup Orchestrator pass 11
+2026-05-08T16:06:39 kernel-clock-bringup Worker pass
+2026-05-08T16:07:50 kernel-clock-bringup Verifier pass none
+2026-05-08T16:31:30 kernel-clock-bringup Tester fail 2
+2026-05-08T16:42:36 kernel-clock-bringup Tester fail 1
+2026-05-08T17:03:30 kernel-clock-bringup Tester fail 0
+2026-05-08T17:29:05 kernel-clock-bringup Tester fail 1
+2026-05-08T17:51:14 kernel-clock-bringup Tester fail 2
+2026-05-08T17:51:30 kernel-clock-bringup Worker pass
+2026-05-08T18:39:10 kernel-clock-bringup Tester fail 2
+2026-05-08T21:19:30 kernel-clock-bringup Tester fail 2
+2026-05-08T23:32:00 kernel-clock-bringup Tester fail 5
+2026-05-08T23:40:02 kernel-clock-bringup Worker pass
+2026-05-08T23:41:32 kernel-clock-bringup Verifier pass none
+2026-05-09T00:31:30 kernel-clock-bringup Tester pass 6
+2026-05-09T00:46:27 kernel-clock-bringup Worker pass
