@@ -1688,6 +1688,54 @@ def check(_extract_dir):
     return all(re.search(p, text, re.M) for p in needed)
 ```
 
+### Linux-side BCH preflight: stm32_fmc2_nand prints bitflip on correction
+
+The on-bench BCH bit-flip correction test below scrapes UART dmesg
+for `(?i)(bitflip|corrected\s+\d+\s+(errors|bitflips))` to confirm
+that a hardware-corrected ECC sector was actually observed by the
+kernel. Upstream `drivers/mtd/nand/raw/stm32_fmc2_nand.c` is silent
+on a successful BCH correction: it only bumps
+`mtd->ecc_stats.corrected` and returns `max_bitflips`, with no
+`pr_warn`/`dev_warn` carrying the literal substring `bitflip`.
+Without a kernel-side print the dmesg sentinel can never match, and
+the test below is unprovable regardless of bench reliability.
+
+This preflight pins the contract by adding a `dev_warn` hunk to
+`stm32mp135_test_board/config/patch.linux` so that
+`make -C stm32mp135_test_board patch` injects the print into the
+BCH read-page success path of `stm32_fmc2_nfc_seq_correct`. The
+verify block is a static text inspection of the tracked patch file
+only; it does not run `make patch` and does not consume a bench
+cycle. The next section is the end-to-end proof that BCH actually
+corrects the injected flip and that the new print fires.
+
+Build:
+
+```
+true
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/config/patch.linux
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    patch = Path('stm32mp135_test_board/config/patch.linux')
+    if not patch.is_file():
+        return False
+    text = patch.read_text(encoding='utf-8', errors='replace')
+    return 'bitflip' in text and 'stm32_fmc2_nand.c' in text
+```
+
 ## WIP
 
 The sections below are production-hardening regression tests requested
@@ -1698,7 +1746,7 @@ corruption. Every test must FAIL on the current bootloader code and
 PASS only after the corresponding fix lands; a test that passes today
 on the unfixed code is, by construction, not exercising the fix.
 
-Tests below assume the prior 22 sections have left a freshly
+Tests below assume the prior 23 sections have left a freshly
 provisioned NAND. Each new section re-flashes `nand.img` at its start
 so a deliberately-corrupted run cannot leak into the next section.
 They also tolerate a degraded final state by re-flashing on Verify if
