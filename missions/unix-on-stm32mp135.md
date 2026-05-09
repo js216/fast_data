@@ -256,8 +256,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### Kernel reaches startup banner under Qemu
 
 First boot gate. Runs `qemu-system-arm -machine virt -cpu cortex-a7
@@ -361,6 +359,8 @@ def check(extract_dir):
         return False
     return bool(re.search(r'mem = [1-9]\d{2,}', log))
 ```
+
+## WIP
 
 ### Login and shell prompt under Qemu
 
