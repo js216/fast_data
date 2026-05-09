@@ -13,3 +13,6 @@
 [submodule "test_serv"]
 	path = test_serv
 	url = git@github.com:js216/test_serv.git
+[submodule "unix-v7-c99"]
+	path = unix-v7-c99
+	url = git@github.com:js216/unix-v7-c99.git
