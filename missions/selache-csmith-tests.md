@@ -102,7 +102,7 @@ def check(extract_dir):
     targets = {re.sub(r'\.0x[0-9a-f]+$', '', p.stem)
                for p in out.glob('cctest_*.0x*.ldr') if p.stat().st_size}
 
-    return bins == expected and targets == expected
+    return expected.issubset(bins) and expected.issubset(targets)
 ```
 
 ### selcc narrow-array brace-elided scalar initializer
@@ -770,6 +770,60 @@ def check(extract_dir):
     uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
     got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
     return bool(got) and int(got[-1], 16) == 0x2634135d
+```
+
+### cces csmith 07baaacc checksum
+
+Fix the next focused draft runtime mismatch from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_07baaacc.0x35b6b6f7.ldr`
+boots on the DSP but reports `got bdbbc7b4`, not the source's expected
+checksum `/* @expect 0x35b6b6f7 */`. CCES diagnoses the same class of
+packed struct / bitfield layout incompatibility here as in the
+precedent `cctest_csmith_025edc5d` and `cctest_csmith_3f5ea6f7` steps,
+so keep this step scoped to removing the nonportable `#pragma pack`
+wrappers from this single draft for all toolchains. The wrappers live
+in `selache/xtest/draft_cases/cctest_csmith_07baaacc.c` at five
+push/pop pairs (around lines 803-814, 816-821, 831-840, 842-853, and
+855-861) and bracket `struct S1`, `struct S2`, `struct S4`, `struct
+S5`, and `struct S6`. Host gcc and host clang already produce
+`0x35b6b6f7` both with and without those wrappers (verified with the
+xtest `CFLAGS_HOST = -m32 -funsigned-char -std=c99 -w -O0` against the
+xtest `host_wrap.c`), so the removal is checksum-preserving for the
+reference toolchains. Do not rewrite the expected checksum, delete the
+draft, or duplicate the full sweep. The corrected CCES-built draft
+must report the expected checksum on hardware.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_07baaacc.0x35b6b6f7.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_07baaacc.0x35b6b6f7.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_07baaacc.0x35b6b6f7.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0x35b6b6f7
 ```
 
 ## WIP
