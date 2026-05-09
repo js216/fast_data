@@ -146,8 +146,6 @@ def check(extract_dir):
     return 0 < s_isize < s_fsize <= len(img) // 512
 ```
 
-## WIP
-
 ### Original-diffs discipline holds (snapshot ratchet)
 
 Run `unix-v7-c99/tools/original-diffs.sh` and compare per-file
@@ -257,6 +255,8 @@ def check(extract_dir):
 
     return True
 ```
+
+## WIP
 
 ### Kernel reaches startup banner under Qemu
 
