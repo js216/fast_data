@@ -89,7 +89,7 @@ class Runner:
     # retry sequence is the wait BEFORE the i-th attempt; the first
     # attempt has no wait. Total worst-case extra wait per FAIL is
     # the sum of the non-zero entries.
-    RETRY_BACKOFF_S = (0, 3, 10, 30)
+    RETRY_BACKOFF_S = (0, 30, 90, 300, 900)
     NO_HARDWARE_TEST = '__NO_HARDWARE__'
 
     def __init__(self, md_path):
