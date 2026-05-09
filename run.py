@@ -799,6 +799,19 @@ class Runner:
                 f'{holder[:8]}')
             return False, busy_started, busy_retries, reason
 
+        # If the busy holder is the lease we captured from the prior
+        # section (which used `lease:claim` without `lease:release`),
+        # the next section's fresh `lease:claim` will deadlock until
+        # the 1-hour duration expires. Release it ourselves so the
+        # next attempt can claim cleanly.
+        if holder and holder == self.lease_token:
+            if self._release_ghost(
+                    holder, wait_s=self.FAILED_ATTEMPT_LEASE_RELEASE_WAIT_S):
+                self.lease_token = None
+                if self.LEASE_STATE_FILE.exists():
+                    self.LEASE_STATE_FILE.unlink()
+                return True, busy_started, busy_retries, None
+
         now = time.monotonic()
         prior_holder = getattr(self, '_busy_retry_holder', None)
         other_user_active = self._other_user_job_running()

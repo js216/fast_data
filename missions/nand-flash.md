@@ -422,12 +422,16 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/nand.img
 ```
 
-Test (max 2 min):
+Test (max 3 min):
 
 ```
 lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
-delay ms=2000
+delay ms=10000
+inventory refresh=true verify=false
+bench_mcu:reset_dut2
+delay ms=10000
+inventory refresh=true verify=false
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
 delay ms=300
@@ -1642,6 +1646,48 @@ def check(extract_dir):
     return len(pre) == 4 and pre == post
 ```
 
+### Linux-side BCH preflight: nandflipbits is built into the rootfs
+
+Before the on-bench BCH bit-flip correction test below can inject a
+correctable error, the booted Linux rootfs must contain the
+`nandflipbits` userspace utility, and the supporting `mtd-utils`
+binaries (`flash_erase`, `nandwrite`) it relies on. This preflight
+pins those packages in the buildroot configuration so a regression
+that disables them is caught without consuming a bench cycle. It
+intentionally does not run any hardware, mount any image, or boot
+Linux; the next section is the end-to-end proof that BCH actually
+corrects the injected flip.
+
+Build:
+
+```
+true
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/config/buildroot.conf
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+import re
+from pathlib import Path
+
+def check(_extract_dir):
+    cfg = Path('stm32mp135_test_board/config/buildroot.conf')
+    if not cfg.is_file():
+        return False
+    text = cfg.read_text(encoding='utf-8', errors='replace')
+    needed = (r'^BR2_PACKAGE_MTD=y\s*$',
+              r'^BR2_PACKAGE_MTD_NANDFLIPBITS=y\s*$')
+    return all(re.search(p, text, re.M) for p in needed)
+```
+
 ## WIP
 
 The sections below are production-hardening regression tests requested
@@ -1652,7 +1698,7 @@ corruption. Every test must FAIL on the current bootloader code and
 PASS only after the corresponding fix lands; a test that passes today
 on the unfixed code is, by construction, not exercising the fix.
 
-Tests below assume the prior 21 sections have left a freshly
+Tests below assume the prior 22 sections have left a freshly
 provisioned NAND. Each new section re-flashes `nand.img` at its start
 so a deliberately-corrupted run cannot leak into the next section.
 They also tolerate a degraded final state by re-flashing on Verify if
