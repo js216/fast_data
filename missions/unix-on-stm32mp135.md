@@ -634,8 +634,6 @@ def check(extract_dir):
             or 'baud' in head.lower())
 ```
 
-## WIP
-
 ### Signals and tty interrupts under Qemu
 
 Drives the live shell through V7's signal facility (`sys/sig.c`,
@@ -691,6 +689,8 @@ def check(extract_dir):
         return False
     return True
 ```
+
+## WIP
 
 ### Text-processing pipelines under Qemu
 
