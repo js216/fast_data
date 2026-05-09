@@ -998,3 +998,10 @@
 2026-05-09T03:29:13 fpga-spi Verifier pass both edits match sibling step pattern
 2026-05-09T04:38:18 fpga-spi Tester pass 84
 2026-05-09T04:39:55 fpga-spi Worker pass
+2026-05-09T04:41:06 fpga-spi Orchestrator pass 93
+2026-05-09T13:01:38 fpga-spi Manager pass prbs_xor_top synth json gate
+2026-05-09T13:02:45 fpga-spi Minimizer pass top+3 submodules synth=one JSON, splits emit none
+2026-05-09T13:05:07 fpga-spi Worker pass
+2026-05-09T13:07:03 fpga-spi Verifier pass none
+2026-05-09T14:18:20 fpga-spi Tester pass 85
+2026-05-09T14:19:13 fpga-spi Worker pass

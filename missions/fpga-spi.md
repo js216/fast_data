@@ -7750,6 +7750,112 @@ a verifiable JSON netlist in `build/prbs_xor/`. Adding more (synthing
 `nextpnr`, producing a `.bin`, adding a test bench, or running a
 formal flow) would combine multiple semantics in one step.
 
+### Add prbs_xor_top yosys synth json gate
+
+Extend the existing `fpga/src/prbs_xor.nw` Makefile fragment with a
+single new yosys synthesis target that reads `verilog/prbs_xor_top.v`
+together with its three submodule sources (`verilog/prbs_xor.v`,
+`verilog/uart_rx.v`, `verilog/uart_tx.v`) and emits
+`build/prbs_xor_top/prbs_xor_top.json` via
+`synth_ice40 -top prbs_xor_top -json prbs_xor_top.json`. No new
+Verilog logic, no test bench, no `.sby` formal flow, no `.pcf`, no
+`nextpnr` step, and no `.asc`/`.bin` bitstream artefact in this
+step. The `prbs_xor_top` UART command wrapper instantiates
+`prbs_xor`, `uart_rx`, and `uart_tx`, so the synth command runs
+against four Verilog inputs and produces a single JSON netlist; this
+gate-checks that the merged-chapter tangle still emits a synthesizable
+top before later iterations layer on a `.pcf`, a `nextpnr` place +
+route, an `icepack` bitstream, or a bench programming step.
+
+Build:
+
+```
+make -C fpga build/prbs_xor_top/prbs_xor_top.json
+```
+
+Artifacts:
+
+```
+fpga/build/prbs_xor_top/prbs_xor_top.json
+```
+
+Test: no hardware.
+
+```
+mark tag=prbs_xor_top_synth_json
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md')
+    try:
+        mission_text = mission.read_text(encoding='utf-8',
+                                         errors='replace')
+    except OSError:
+        return False
+    if 'mark tag=prbs_xor_top_synth_json' not in mission_text:
+        return False
+
+    nw  = Path('fpga/src/prbs_xor.nw')
+    top_v = Path('fpga/build/prbs_xor_top/prbs_xor_top.v')
+    js  = Path('fpga/build/prbs_xor_top/prbs_xor_top.json')
+    if not (nw.is_file() and nw.stat().st_size > 0):
+        return False
+    if not (top_v.is_file() and top_v.stat().st_size > 0):
+        return False
+    if not (js.is_file() and js.stat().st_size > 0):
+        return False
+    if js.stat().st_mtime < top_v.stat().st_mtime:
+        return False
+    if js.stat().st_mtime < nw.stat().st_mtime:
+        return False
+
+    nw_text = nw.read_text(encoding='utf-8', errors='replace')
+    required_nw = [
+        '<<prbs_xor.mk>>=',
+        'build/prbs_xor_top/prbs_xor_top.json',
+        'synth_ice40',
+        '-top prbs_xor_top',
+        'prbs_xor_top.json',
+        'uart_rx.v',
+        'uart_tx.v',
+    ]
+    for tok in required_nw:
+        if tok not in nw_text:
+            return False
+
+    js_text = js.read_text(encoding='utf-8', errors='replace')
+    required_js = [
+        '"creator"',
+        '"modules"',
+        'prbs_xor_top',
+    ]
+    for tok in required_js:
+        if tok not in js_text:
+            return False
+
+    return True
+```
+
+Rationale: this is the smallest meaningful FPGA-side step after the
+reusable `prbs_xor` core synth gate. A yosys synth gate on the
+`prbs_xor_top` UART wrapper proves that the four-file tangled design
+(`prbs_xor` + `uart_rx` + `uart_tx` + the `prbs_xor_top` glue)
+synthesises into an iCE40 netlist before any later step layers on a
+board `.pcf`, a `nextpnr-ice40` place + route, an `icepack`
+bitstream, a bench programming step, or a hardware comparison.
+Splitting smaller into only a Makefile rule edit (with no artefact
+produced) or only a yosys invocation (with no Make integration) would
+yield zero progress because neither half produces a verifiable JSON
+netlist in `build/prbs_xor_top/`. Adding more (generating a `.pcf`,
+running `nextpnr`, producing a `.bin`, programming the iCEstick,
+adding a test bench, running a formal flow, or comparing FPGA and
+MPU checksums) would combine multiple semantics in one step.
+
 ## WIP
 
 ### PRBS, UART, Checksum
