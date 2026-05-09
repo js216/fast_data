@@ -1550,6 +1550,50 @@ def check(extract_dir):
 
 ## WIP
 
+### cces csmith 51721a40 checksum
+
+Fix the next focused draft runtime mismatch from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_51721a40.0x5193ef1c.ldr`
+boots and prints `got 3646de28` on the DSP, but the source declares
+`/* @expect 0x5193ef1c */`. The embedded target compiler diagnoses
+packed-bitfield layout incompatibility, so keep this step scoped to
+removing the nonportable `#pragma pack` wrappers from this single draft
+for all toolchains, without changing the expected value or the
+remaining bitfield and aggregate stress.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_51721a40.0x5193ef1c.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_51721a40.0x5193ef1c.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_51721a40.0x5193ef1c.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0x5193ef1c
+```
+
 # Selache csmith draft regression sweep
 
 Validate randomly-generated cctest candidates in
