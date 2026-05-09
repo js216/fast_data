@@ -1203,8 +1203,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### `ed` editor end-to-end under Qemu
 
 Runs an `ed` script that creates a file, appends lines, performs
@@ -1326,6 +1324,8 @@ def check(extract_dir):
         return False
     return True
 ```
+
+## WIP
 
 ### Cross-build gate: `unix` ELF for STM32MP135 EVB
 
