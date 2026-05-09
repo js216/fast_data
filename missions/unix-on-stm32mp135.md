@@ -1325,8 +1325,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### Cross-build gate: `unix` ELF for STM32MP135 EVB
 
 Adds the EVB build configuration. No bench yet. Catches link-script
@@ -1384,6 +1382,8 @@ def check(extract_dir):
             seen_load = True
     return seen_load
 ```
+
+## WIP
 
 ### Kernel reaches UART banner on EVB
 
