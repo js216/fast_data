@@ -80,7 +80,21 @@ mp135.evb:uart_write data="root\r"
 mp135.evb:uart_expect sentinel="Password:" timeout_ms=5000
 mp135.evb:uart_write data="root\r"
 mp135.evb:uart_expect sentinel="# " timeout_ms=5000
-mp135.evb:uart_write data="if mountpoint -q /sys/kernel/config && grep -q ' /sys/kernel/config configfs ' /proc/mounts && test -d /sys/kernel/config/usb_gadget; then printf 'CONFIGFS_OK\\n'; printf 'configfs '; grep ' /sys/kernel/config configfs ' /proc/mounts; printf 'usb_gadget_dir '; ls -ld /sys/kernel/config/usb_gadget; else printf 'CONFIGFS_FAIL\\n'; cat /proc/mounts; ls -ld /sys/kernel/config /sys/kernel/config/usb_gadget; fi\r"
+mp135.evb:uart_write data="cf=/sys/kernel/config;ug=$cf/usb_gadget\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data="mok=0;gok=0;dok=0;echo\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data="mountpoint -q $cf&&mok=1;echo\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data="grep -q ' /sys/kernel/config configfs ' /proc/mounts&&gok=1;echo\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data="test -d $ug&&dok=1;echo\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='test "$mok$gok$dok" = 111&&printf CONFIGFS_&&printf OK;echo\r'
+mp135.evb:uart_expect sentinel="CONFIGFS_OK" timeout_ms=5000
+mp135.evb:uart_write data="printf configfs\ ;grep ' /sys/kernel/config configfs ' /proc/mounts\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data="printf usb_;printf gadget_dir\ ;ls -ld $ug\r"
 mp135.evb:uart_expect sentinel="usb_gadget_dir " timeout_ms=5000
 mp135.evb:uart_close
 mark tag=evb_configfs_usb_gadget
@@ -109,9 +123,10 @@ Add only the target-side boot-time creation of
 `/var/lib/usbtmc/msc-backing.bin`, a deterministic 4096-byte regular
 file that will later back the mass-storage function. The file content
 must begin with the ASCII marker `USBTMC EVB MSC BACKING\n`; remaining
-bytes may be zero padding. This step depends on configfs availability
-but must not create a gadget function, configuration link, or UDC
-binding.
+bytes may be zero padding. This step depends on configfs availability.
+It may leave no gadget, or an unlinked and unbound gadget with no
+functions or only `mass_storage.usbtmc`; it must not create a
+configuration or UDC binding.
 
 Build:
 
@@ -178,9 +193,25 @@ mp135.evb:uart_write data="test -f $p&&printf M&&printf SC_BACKING_FILE_OK;echo\
 mp135.evb:uart_expect sentinel="MSC_BACKING_FILE_OK" timeout_ms=5000
 mp135.evb:uart_write data='s=$(wc -c < $p 2>/dev/null);printf M;printf SC_BACKING_SIZE_%s "$s";echo\r'
 mp135.evb:uart_expect sentinel="MSC_BACKING_SIZE_4096" timeout_ms=5000
-mp135.evb:uart_write data='m=$(dd if=$p bs=22 count=1 2>/dev/null);printf M;printf SC_BACKING_MARKER_%s "$m";echo\r'
+mp135.evb:uart_write data='w="USBTMC EVB MSC BACKING";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='IFS= read -r m < $p;echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='test "$m" = "$w"&&echo MSC_BACKING_MARKER_$w;echo\r'
 mp135.evb:uart_expect sentinel="MSC_BACKING_MARKER_USBTMC EVB MSC BACKING" timeout_ms=5000
-mp135.evb:uart_write data='if test ! -d $g||{ test -d $g/functions&&test -z "$(ls -A $g/functions)"&&test -d $g/configs&&test -z "$(ls -A $g/configs)"&&test -f $g/UDC&&test -z "$(cat $g/UDC)";};then printf M;printf SC_BACKING_NO_EXPOSED_GADGET_OK;echo;fi\r'
+mp135.evb:uart_write data='ok=0;fok=0;cok=0;uok=0;want=mass_storage.usbtmc;printf MSCB_A;echo\r'
+mp135.evb:uart_expect sentinel="MSCB_A" timeout_ms=3000
+mp135.evb:uart_write data='test ! -d $g&&ok=1;fs=BAD;test -d $g/functions&&fs="$(ls -A $g/functions)";printf MSCB_B;echo\r'
+mp135.evb:uart_expect sentinel="MSCB_B" timeout_ms=3000
+mp135.evb:uart_write data='cs=BAD;test -d $g/configs&&cs="$(find $g/configs -type l -print -quit)";printf MSCB_C;echo\r'
+mp135.evb:uart_expect sentinel="MSCB_C" timeout_ms=3000
+mp135.evb:uart_write data='udc=BAD;test -f $g/UDC&&udc="$(cat $g/UDC)";printf MSCB_D;echo\r'
+mp135.evb:uart_expect sentinel="MSCB_D" timeout_ms=3000
+mp135.evb:uart_write data='test "$fs" = ""&&fok=1;test "$fs" = "$want"&&fok=1;test "$cs" = ""&&cok=1;test "$udc" = ""&&uok=1;printf MSCB_E;echo\r'
+mp135.evb:uart_expect sentinel="MSCB_E" timeout_ms=3000
+mp135.evb:uart_write data='test "$cok$uok" = 11&&ok=1;printf MSCB_F;echo\r'
+mp135.evb:uart_expect sentinel="MSCB_F" timeout_ms=3000
+mp135.evb:uart_write data='test $ok = 1&&printf M&&printf SC_BACKING_NO_&&printf EXPOSED_GADGET_OK;echo\r'
 mp135.evb:uart_expect sentinel="MSC_BACKING_NO_EXPOSED_GADGET_OK" timeout_ms=5000
 mp135.evb:uart_close
 mark tag=evb_msc_backing_file
@@ -210,8 +241,10 @@ def check(extract_dir):
 
 Create only the target-side configfs gadget directory, device
 descriptors, and English strings for the EVB Linux mass-storage
-baseline. Do not create any gadget function, configuration link, or UDC
-binding in this step.
+baseline. This step validates the descriptors and strings while allowing
+either no gadget functions or only an unlinked, unbound
+`mass_storage.usbtmc` function. Do not create a configuration link or
+UDC binding in this step.
 
 Build:
 
@@ -276,15 +309,37 @@ mp135.evb:uart_write data="s=$g/strings/0x409\r"
 mp135.evb:uart_expect sentinel="# " timeout_ms=3000
 mp135.evb:uart_write data="test -d $g&&printf GAD&&printf GET_DIR_OK;echo\r"
 mp135.evb:uart_expect sentinel="GADGET_DIR_OK" timeout_ms=5000
-mp135.evb:uart_write data='printf GAD;printf GET_IDS_;cat $g/idVendor $g/idProduct $g/bcdDevice $g/bcdUSB $g/bDeviceClass $g/bDeviceSubClass $g/bDeviceProtocol|tr "\n" " ";echo\r'
+mp135.evb:uart_write data='ids="$(cat $g/idVendor) $(cat $g/idProduct) ";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='ids="$ids$(cat $g/bcdDevice) $(cat $g/bcdUSB) ";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='ids="$ids$(cat $g/bDeviceClass) ";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='ids="$ids$(cat $g/bDeviceSubClass) $(cat $g/bDeviceProtocol) ";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='printf GAD;printf GET_IDS_;printf %s "$ids";echo\r'
 mp135.evb:uart_expect sentinel="GADGET_IDS_0x0483 0x571e 0x0100 0x0200 0x00 0x00 0x00 " timeout_ms=5000
-mp135.evb:uart_write data='printf GAD;printf GET_STRINGS_;cat $s/manufacturer $s/product $s/serialnumber|tr "\n" "|";echo\r'
+mp135.evb:uart_write data='man="$(cat $s/manufacturer)";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='prod="$(cat $s/product)";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='ser="$(cat $s/serialnumber)";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='printf GAD;printf GET_STRINGS_;printf %s "$man|$prod|$ser|";echo\r'
 mp135.evb:uart_expect sentinel="GADGET_STRINGS_Stanford Research Systems|STM32MP135 EVB Linux MSC|evb-linux-msc-0001|" timeout_ms=5000
-mp135.evb:uart_write data='test -d $g/functions&&test -z "$(ls -A $g/functions)"&&printf GAD&&printf GET_NO_FUNCTIONS_OK;echo\r'
-mp135.evb:uart_expect sentinel="GADGET_NO_FUNCTIONS_OK" timeout_ms=5000
-mp135.evb:uart_write data='test -d $g/configs&&test -z "$(ls -A $g/configs)"&&printf GAD&&printf GET_NO_CONFIGS_OK;echo\r'
+mp135.evb:uart_write data='fs="";test -d $g/functions&&fs=$(LS_COLORS= ls -A --color=never $g/functions 2>/dev/null|tr "\n" ",");printf GAD;printf GET_FUNCTIONS_LIST_;printf "[%s]" "$fs";echo\r'
+mp135.evb:uart_expect sentinel="GADGET_FUNCTIONS_LIST_" timeout_ms=5000
+mp135.evb:uart_write data='fs="";test -d $g/functions&&fs="$(LS_COLORS= ls -A --color=never $g/functions 2>/dev/null)";case "$fs" in ""|mass_storage.usbtmc) printf GAD;printf GET_FUNCTIONS_;printf UNLINKED_OK;; esac;echo\r'
+mp135.evb:uart_expect sentinel="GADGET_FUNCTIONS_UNLINKED_OK" timeout_ms=5000
+mp135.evb:uart_write data='cfgok=0;test -d $g/configs&&test -z "$(ls -A $g/configs)"&&cfgok=1;echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='test $cfgok = 1&&{ printf GAD;printf GET_NO_;printf CONFIGS_OK;};echo\r'
 mp135.evb:uart_expect sentinel="GADGET_NO_CONFIGS_OK" timeout_ms=5000
-mp135.evb:uart_write data='test -f $g/UDC&&test -z "$(cat $g/UDC)"&&printf GAD&&printf GET_UDC_EMPTY_OK;echo\r'
+mp135.evb:uart_write data='udc=BAD;test -f $g/UDC&&udc="$(cat $g/UDC)";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='udcok=0;test -z "$udc"&&udcok=1;echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='test $udcok = 1&&{ printf GAD;printf GET_UDC_;printf EMPTY_OK;};echo\r'
 mp135.evb:uart_expect sentinel="GADGET_UDC_EMPTY_OK" timeout_ms=5000
 mp135.evb:uart_close
 mark tag=evb_msc_gadget_descriptors
@@ -307,21 +362,20 @@ def check(extract_dir):
             'GADGET_DIR_OK' in lines and
             'GADGET_IDS_0x0483 0x571e 0x0100 0x0200 0x00 0x00 0x00 ' in lines and
             'GADGET_STRINGS_Stanford Research Systems|STM32MP135 EVB Linux MSC|evb-linux-msc-0001|' in lines and
-            'GADGET_NO_FUNCTIONS_OK' in lines and
+            'GADGET_FUNCTIONS_UNLINKED_OK' in lines and
             'GADGET_NO_CONFIGS_OK' in lines and
             'GADGET_UDC_EMPTY_OK' in lines and
             'GADGET_FAIL' not in out)
 ```
 
-## WIP
-
 ### EVB Linux MSC function creation
 
-Create only the target-side mass-storage function that points at the
-backing file as read-only media. The configfs gadget directory,
-descriptors, and strings already exist from the previous step. Do not
-link the function into a configuration or bind the gadget to the UDC in
-this step.
+Create only the target-side configfs mass-storage function
+`functions/mass_storage.usbtmc` for the existing EVB Linux gadget. Set
+LUN 0 to use `/var/lib/usbtmc/msc-backing.bin` as read-only media. The
+gadget directory, descriptors, strings, and backing file already exist
+from previous steps. Do not create a configuration link or bind the
+gadget to the UDC in this step.
 
 Build:
 
@@ -334,13 +388,105 @@ make -C stm32mp135_test_board br
 make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
 ```
 
-Test: boot the EVB Linux image through the existing DFU/MSC/SD path,
-wait for userspace, and capture target-side evidence that the
-mass-storage function exists and references the backing file in
-read-only mode.
+Artifacts:
 
-Verify: Linux reached userspace and the captured target artefact shows
-the mass-storage function was created but is not linked or bound.
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (max 15 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@sdcard.img offset_lba=0
+msc.evb:verify data=@sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=5000
+mp135.evb:uart_write data="two\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=15000
+mp135.evb:uart_write data="jump"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.evb:uart_expect sentinel="Welcome to STM32MP135 EVB" timeout_ms=10000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=15000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="Password:" timeout_ms=5000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=5000
+mp135.evb:uart_write data="g=/sys/kernel/config/usb_gadget/usbtmc\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data="f=$g/functions/mass_storage.usbtmc\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data="p=/var/lib/usbtmc/msc-backing.bin\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data="test -d $f&&printf MSC&&printf _FUNCTION_DIR_OK;echo\r"
+mp135.evb:uart_expect sentinel="MSC_FUNCTION_DIR_OK" timeout_ms=5000
+mp135.evb:uart_write data='fl=BAD;test -f $f/lun.0/file&&fl="$(cat $f/lun.0/file)";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='test $fl = $p&&{ printf MSC;printf _FUNCTION_;printf FILE_OK;};echo\r'
+mp135.evb:uart_expect sentinel="MSC_FUNCTION_FILE_OK" timeout_ms=5000
+mp135.evb:uart_write data='ro=BAD;test -f $f/lun.0/ro&&ro="$(cat $f/lun.0/ro)";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='test $ro = 1&&{ printf MSC;printf _FUNCTION_;printf RO_OK;};echo\r'
+mp135.evb:uart_expect sentinel="MSC_FUNCTION_RO_OK" timeout_ms=5000
+mp135.evb:uart_write data='lnok=1;test -d $g/configs&&find $g/configs -type l|grep -q .&&lnok=0;echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='test $lnok = 1&&{ printf MSC;printf _FUNCTION_;printf UNLINKED_OK;};echo\r'
+mp135.evb:uart_expect sentinel="MSC_FUNCTION_UNLINKED_OK" timeout_ms=5000
+mp135.evb:uart_write data='udc=BAD;test -f $g/UDC&&udc="$(cat $g/UDC)";echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='udcok=0;test -z "$udc"&&udcok=1;echo\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='test $udcok = 1&&{ printf MSC;printf _FUNCTION_UDC_;printf EMPTY_OK;};echo\r'
+mp135.evb:uart_expect sentinel="MSC_FUNCTION_UDC_EMPTY_OK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=evb_msc_function_creation
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    out = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    lines = out.replace('\r', '\n').splitlines()
+    return (Verification.op_succeeded(ops, 'dfu.evb', 'flash_layout') and
+            Verification.op_succeeded(ops, 'msc.evb', 'verify') and
+            Verification.op_succeeded(ops, 'mp135.evb', 'uart_expect') and
+            'Welcome to STM32MP135 EVB' in out and
+            'MSC_FUNCTION_DIR_OK' in lines and
+            'MSC_FUNCTION_FILE_OK' in lines and
+            'MSC_FUNCTION_RO_OK' in lines and
+            'MSC_FUNCTION_UNLINKED_OK' in lines and
+            'MSC_FUNCTION_UDC_EMPTY_OK' in lines and
+            'MSC_FUNCTION_FAIL' not in out)
+```
+
+## WIP
 
 ### EVB Linux MSC configuration link
 

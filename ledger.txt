@@ -80,3 +80,107 @@
 2026-05-07T21:50:25 usbtmc Verifier pass bench_contention_only
 2026-05-07T22:21:48 usbtmc Tester pass 3
 2026-05-07T22:23:42 usbtmc Worker pass
+2026-05-07T22:25:46 usbtmc Orchestrator pass 4
+2026-05-07T22:26:40 usbtmc Manager pass create readonly MSC function
+2026-05-07T22:28:19 usbtmc Minimizer pass function needs dir,file,ro together
+2026-05-07T22:29:51 usbtmc Worker pass
+2026-05-07T22:31:32 usbtmc Worker pass
+2026-05-07T22:33:36 usbtmc Verifier fail mass_storage_config_missing
+2026-05-07T22:35:00 usbtmc Worker pass
+2026-05-07T22:36:46 usbtmc Verifier pass none
+2026-05-07T22:39:44 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-07T22:41:51 usbtmc Worker pass
+2026-05-07T23:03:56 usbtmc Tester fail 1 backing_allows_function
+2026-05-07T23:05:58 usbtmc Worker pass
+2026-05-07T23:08:27 usbtmc Verifier fail add_WIP_Artifacts_block
+2026-05-07T23:09:10 usbtmc Worker pass
+2026-05-07T23:11:16 usbtmc Verifier fail descriptor_prose_allow_unlinked_fn
+2026-05-07T23:12:14 usbtmc Worker pass
+2026-05-07T23:13:37 usbtmc Verifier pass none
+2026-05-07T23:16:47 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-07T23:26:59 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-07T23:48:13 usbtmc Tester fail 1 uart_line_wrap
+2026-05-07T23:49:29 usbtmc Worker pass
+2026-05-07T23:52:12 usbtmc Verifier pass none
+2026-05-07T23:55:37 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-07T23:59:33 usbtmc Worker pass
+2026-05-08T00:02:04 usbtmc Verifier pass none
+2026-05-08T00:10:40 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T00:29:31 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T00:49:16 usbtmc Tester fail 1 mp135_evb_leased
+2026-05-08T01:04:33 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T01:27:03 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T01:54:10 usbtmc Tester fail 1 mp135_evb_leased
+2026-05-08T02:02:41 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T02:04:43 usbtmc Worker pass
+2026-05-08T02:17:42 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T02:55:08 usbtmc Tester fail 1 mp135_evb_leased
+2026-05-08T02:56:27 usbtmc Worker pass
+2026-05-08T02:59:36 usbtmc Verifier pass none
+2026-05-08T03:12:48 usbtmc Tester fail 0 lease_unknown_msc_evb
+2026-05-08T03:13:39 usbtmc Worker pass
+2026-05-08T03:16:15 usbtmc Verifier pass none
+2026-05-08T03:26:13 usbtmc Tester fail 0 lease_unknown_dfu_evb
+2026-05-08T03:26:40 usbtmc Worker pass
+2026-05-08T03:29:44 usbtmc Verifier pass none
+2026-05-08T03:53:41 usbtmc Tester fail 1 lease_expired
+2026-05-08T03:54:10 usbtmc Worker pass
+2026-05-08T03:55:46 usbtmc Verifier fail clean_linux_worktree
+2026-05-08T03:56:37 usbtmc Worker pass
+2026-05-08T03:58:08 usbtmc Verifier pass none
+2026-05-08T04:14:06 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T04:25:51 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T04:53:21 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T04:59:50 usbtmc Tester fail 0 mp135_evb_leased
+2026-05-08T05:27:56 usbtmc Tester fail 1 test_serv_unreachable
+2026-05-08T06:03:15 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T06:22:37 usbtmc Tester fail 1 mp135_evb_leased
+2026-05-08T06:57:48 usbtmc Tester fail 1 backing_no_exposed_gadget
+2026-05-08T07:00:16 usbtmc Worker pass backing_probe_sentinels
+2026-05-08T07:01:59 usbtmc Verifier pass none
+2026-05-08T07:12:54 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T07:33:59 usbtmc Tester fail 1 mp135_evb_leased
+2026-05-08T08:27:13 usbtmc Tester fail 1 backing_probe_condition
+2026-05-08T08:29:25 usbtmc Worker pass
+2026-05-08T08:31:56 usbtmc Verifier pass linux_dirty_cleanup_pending
+2026-05-08T09:21:49 usbtmc Tester fail 2 bench_mcu_leased
+2026-05-08T09:46:19 usbtmc Tester fail 2 bench_mcu_leased
+2026-05-08T10:04:30 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T10:29:21 usbtmc Tester fail 2 bench_mcu_leased
+2026-05-08T10:51:55 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-08T11:17:32 usbtmc Tester fail 1 backing_marker_uart_wrap
+2026-05-08T11:18:22 usbtmc Worker pass
+2026-05-08T11:20:10 usbtmc Verifier pass linux_dirty_cleanup_pending
+2026-05-08T11:23:26 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-08T11:47:58 usbtmc Tester fail 2 bench_mcu_leased
+2026-05-08T12:04:45 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T12:41:03 usbtmc Tester fail 2 bench_mcu_leased
+2026-05-08T13:18:03 usbtmc Tester fail 2 descriptor_function_sentinel
+2026-05-08T13:19:25 usbtmc Worker pass
+2026-05-08T13:21:09 usbtmc Verifier pass none
+2026-05-08T14:03:17 usbtmc Tester fail 2 mp135_evb_leased
+2026-05-08T14:15:41 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T14:27:32 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-08T14:34:12 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-08T15:12:25 usbtmc Tester fail 2 descriptor_function_sentinel
+2026-05-08T23:03:54 usbtmc Orchestrator pass 5
+2026-05-08T23:04:30 usbtmc Worker pass
+2026-05-08T23:05:30 usbtmc Verifier fail case_pattern_double_comma_no_match
+2026-05-08T23:06:30 usbtmc Worker pass
+2026-05-08T23:07:30 usbtmc Verifier pass none
+2026-05-08T23:32:03 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-08T23:36:35 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-08T23:49:18 usbtmc Tester fail 0 msc_evb_enum_missing
+2026-05-08T23:53:14 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-08T23:59:57 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-09T01:00:22 usbtmc Tester fail 1 monitor_timeout
+2026-05-09T01:03:53 usbtmc Tester fail 0 bench_mcu_leased
+2026-05-09T03:05:15 usbtmc Tester fail 0 monitor_pgrep_self_match
+2026-05-09T03:33:30 usbtmc Tester fail 1 bench_mcu_leased
+2026-05-09T03:55:30 usbtmc Tester fail 2 ls_ansi_color_codes
+2026-05-09T04:17:30 usbtmc Worker pass
+2026-05-09T04:18:30 usbtmc Verifier fail busybox find lacks -printf option
+2026-05-09T04:19:30 usbtmc Worker pass
+2026-05-09T04:20:30 usbtmc Verifier pass none
+2026-05-09T04:51:30 usbtmc Tester pass 4
+2026-05-09T04:53:00 usbtmc Worker pass
