@@ -720,16 +720,24 @@ def check(extract_dir):
     return bool(got) and int(got[-1], 16) == 0x39f2cfc
 ```
 
-## WIP
+### cces csmith 025edc5d checksum
 
-### cces draft 025edc5d checksum
-
-Validate the first CCES-built draft artifact in the csmith draft hardware
-sweep before returning to the full foreach. Keep this step scoped to
-`cctest_csmith_025edc5d` and the CCES-built artifact's hardware
-checksum behavior. Do not rewrite the expected checksum, delete the
-draft, weaken the foreach test, or replace this with the full draft
-sweep.
+Fix the next focused draft runtime mismatch from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_025edc5d.0x2634135d.ldr`
+boots on the DSP but does not report the source's expected checksum
+`/* @expect 0x2634135d */`. CCES diagnoses the same class of packed
+struct / bitfield layout incompatibility here as in the precedent
+`cctest_csmith_3f5ea6f7` step, so keep this step scoped to removing the
+nonportable `#pragma pack` wrappers from this single draft for all
+toolchains. The wrappers live at lines 793-794 and 801 of
+`selache/xtest/draft_cases/cctest_csmith_025edc5d.c` and currently
+bracket only `struct S0`. Host gcc and host clang already produce
+`0x2634135d` both with and without those wrappers (verified with the
+xtest `CFLAGS_HOST = -m32 -funsigned-char -std=c99 -w -O0`), so the
+removal is checksum-preserving for the reference toolchains. Do not
+rewrite the expected checksum, delete the draft, or duplicate the full
+sweep. The corrected CCES-built draft must report the expected
+checksum on hardware.
 
 Build:
 
@@ -763,6 +771,8 @@ def check(extract_dir):
     got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
     return bool(got) and int(got[-1], 16) == 0x2634135d
 ```
+
+## WIP
 
 # Selache csmith draft regression sweep
 
