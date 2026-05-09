@@ -1548,8 +1548,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### cces csmith 51721a40 checksum
 
 Fix the next focused draft runtime mismatch from the full foreach sweep:
@@ -1592,6 +1590,52 @@ def check(extract_dir):
     uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
     got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
     return bool(got) and int(got[-1], 16) == 0x5193ef1c
+```
+
+## WIP
+
+### cces csmith 52be655e checksum
+
+Fix the next focused draft runtime mismatch from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_52be655e.0xc3f598b0.ldr`
+boots and prints `got cd489b6c` on the DSP, but the source declares
+`/* @expect 0xc3f598b0 */`. The embedded target compiler diagnoses
+packed-bitfield layout incompatibility, so keep this step scoped to
+removing the nonportable `#pragma pack` wrappers from this single draft
+for all toolchains, without changing the expected value or the
+remaining bitfield and aggregate stress.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_52be655e.0xc3f598b0.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_52be655e.0xc3f598b0.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_52be655e.0xc3f598b0.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0xc3f598b0
 ```
 
 # Selache csmith draft regression sweep
