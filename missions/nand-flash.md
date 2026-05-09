@@ -2226,7 +2226,7 @@ DDR at `DEF_LINUX_ADDR` and before `boot_mark_loaded()`. The entire
 block is wrapped in `#if BLOAD_KERNEL_HASH_CHECK ... #endif`, so the
 preprocessor strips it while the macro stays at 0, and the
 bootloader binary md5 must remain
-`7ea4e5960445ffb078f79ac8a328d5cf` (byte-identical to the prior 31
+`7ea4e5960445ffb078f79ac8a328d5cf` (byte-identical to the prior 32
 preflight sections).
 
 Inside the gate, the call hashes
@@ -2363,6 +2363,65 @@ assert os.path.getsize(b) > 0, "main.stm32 missing or empty"
 md5 = hashlib.md5(open(b, "rb").read()).hexdigest()
 assert md5 == "7ea4e5960445ffb078f79ac8a328d5cf", \
    "binary md5 changed: " + md5
+```
+
+### Kernel hash contract preflight: nandimage.py partition-table pack is macro-aware
+
+`stm32mp135_test_board/bootloader/scripts/nandimage.py` now reads
+`BLOAD_KERNEL_HASH_CHECK` from `bootloader/src/nand_pt.h` and matches
+the C struct layout in both macro states. When the macro is 0 (current
+bench reality) the produced partition-table block is unchanged at
+212 bytes; when it is 1 the script packs a 32-byte
+`hashlib.sha256(kernel_payload).digest()` between `parts` and the
+trailing checksum, mirroring the gated `kernel_sha256[32]` field in
+`nand_pt_t`. The `make_partition_table` signature gains an optional
+`kernel_payload=` keyword and the caller in `main()` threads the
+kernel bytes through; passing `None` is fine while the macro is 0
+(the conditional pack branch is dead at runtime). This means the next
+mission step can flip the macro and immediately have the on-flash PT
+struct contain the digest the bootloader will compare against, with
+no further Python edits.
+
+The preflight checks `nandimage.py` for three independent markers:
+a `_read_macro_value(` helper that pulls the integer out of the
+header, a `hashlib.sha256(` call that produces the digest, and a
+`!= 0` (or `== 1`) guard around the SHA pack. Together they prove
+the script is macro-aware (not unconditional). The preflight then
+imports the script and calls `make_partition_table` to confirm the
+runtime output is still exactly 212 bytes at macro=0, so no bench
+job that builds `nand.img` can regress.
+
+Verify:
+
+```python
+import re, sys, struct, importlib.util
+from pathlib import Path
+root = Path("stm32mp135_test_board/bootloader")
+script = root / "scripts/nandimage.py"
+src = script.read_text()
+assert re.search(r'def\s+_read_macro_value\s*\(', src), \
+   "macro-reader helper missing"
+assert "hashlib.sha256(" in src, "sha256 call missing"
+assert re.search(
+   r"BLOAD_KERNEL_HASH_CHECK[^\n]*\)\s*!=\s*0|"
+   r"BLOAD_KERNEL_HASH_CHECK[^\n]*\)\s*==\s*1", src), \
+   "macro guard missing"
+spec = importlib.util.spec_from_file_location("nandimage", script)
+mod = importlib.util.module_from_spec(spec)
+sys.modules["nandimage"] = mod
+spec.loader.exec_module(mod)
+parts = [('bootloader', 0, 2), ('dtb', 3, 1),
+         ('kernel', 4, 64), ('rootfs', 68, 100), ('ptable', 2, 1)]
+pt = mod.make_partition_table(168, parts, kernel_payload=None)
+assert len(pt) == 212, f"PT block size regressed: {len(pt)}"
+# also exercise the kwarg-with-payload path at macro=0; payload ignored
+pt2 = mod.make_partition_table(168, parts, kernel_payload=b"x" * 4096)
+assert len(pt2) == 212, f"PT block size regressed with payload: {len(pt2)}"
+# header (nand_pt.h) macro must still be 0 so this is the live state
+hdr = (root / "src/nand_pt.h").read_text()
+m = re.search(r'#\s*define\s+BLOAD_KERNEL_HASH_CHECK\s+(\d+)', hdr)
+assert m and int(m.group(1)) == 0, \
+   "BLOAD_KERNEL_HASH_CHECK no longer 0; preflight needs update"
 ```
 
 ## WIP
