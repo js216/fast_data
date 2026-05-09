@@ -99,8 +99,6 @@ The ratchet has **three** stacked checks, not just one:
 Drivers (`dev/*`) and `arch/*` remain exempt by directory; the
 discipline only governs the portable kernel core.
 
-## WIP
-
 ### Cross-compile gate: `unix` ELF and `root.img` build clean
 
 Smallest meaningful step: prove the C99 cross build still works after
@@ -147,6 +145,8 @@ def check(extract_dir):
     s_fsize = struct.unpack('<H', img[514:516])[0]
     return 0 < s_isize < s_fsize <= len(img) // 512
 ```
+
+## WIP
 
 ### Original-diffs discipline holds (snapshot ratchet)
 
