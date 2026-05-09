@@ -184,3 +184,22 @@
 2026-05-09T04:20:30 usbtmc Verifier pass none
 2026-05-09T04:51:30 usbtmc Tester pass 4
 2026-05-09T04:53:00 usbtmc Worker pass
+2026-05-09T04:54:41 usbtmc Orchestrator pass 6
+2026-05-09T04:55:30 usbtmc Manager pass create config link only
+2026-05-09T04:56:30 usbtmc Minimizer pass dir+MaxPower+link is atomic
+2026-05-09T04:57:30 usbtmc Worker pass
+2026-05-09T04:58:30 usbtmc Verifier fail S52 link breaks MSC_FUNCTION_UNLINKED_OK
+2026-05-09T04:59:30 usbtmc Worker pass
+2026-05-09T05:00:30 usbtmc Verifier pass none
+2026-05-09T05:34:02 usbtmc Tester fail 2 backing_marker_printk_race
+2026-05-09T05:35:30 usbtmc Worker pass
+2026-05-09T05:36:30 usbtmc Verifier pass none
+2026-05-09T05:53:04 usbtmc Tester fail 1 backing_no_exposed_regression
+2026-05-09T06:25:30 usbtmc Worker pass
+2026-05-09T06:26:30 usbtmc Verifier fail unrelated step edits beyond scope
+2026-05-09T06:27:30 usbtmc Verifier pass none
+2026-05-09T07:09:13 usbtmc Tester fail 3 descriptors_no_configs_regression
+2026-05-09T07:10:00 usbtmc Worker pass
+2026-05-09T07:11:00 usbtmc Verifier pass none
+2026-05-09T07:53:08 usbtmc Tester pass 5
+2026-05-09T07:55:00 usbtmc Worker pass
