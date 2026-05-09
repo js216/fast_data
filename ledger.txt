@@ -212,3 +212,10 @@
 2026-05-09T00:54:24 kernel-clock-bringup Verifier pass none
 2026-05-09T01:42:30 kernel-clock-bringup Tester pass 7
 2026-05-09T02:02:48 kernel-clock-bringup Worker pass
+2026-05-09T02:04:00 kernel-clock-bringup Orchestrator pass 13
+2026-05-09T02:05:38 kernel-clock-bringup Manager pass mark after eth1tx skip
+2026-05-09T02:06:15 kernel-clock-bringup Minimizer pass paired sentinel after eth1tx
+2026-05-09T02:08:37 kernel-clock-bringup Worker pass
+2026-05-09T02:10:17 kernel-clock-bringup Verifier pass none
+2026-05-09T02:55:30 kernel-clock-bringup Tester pass 8
+2026-05-09T02:57:19 kernel-clock-bringup Worker pass
