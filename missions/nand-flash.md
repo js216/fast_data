@@ -2218,6 +2218,84 @@ b = os.path.join(root, "build/main.stm32")
 assert os.path.getsize(b) > 0, "main.stm32 missing or empty"
 ```
 
+### Kernel hash contract preflight: gated call site in fmc_bload
+
+This preflight wires the call site for the SHA-256 stub inside
+`fmc_bload`, immediately after the kernel partition is loaded into
+DDR at `DEF_LINUX_ADDR` and before `boot_mark_loaded()`. The entire
+block is wrapped in `#if BLOAD_KERNEL_HASH_CHECK ... #endif`, so the
+preprocessor strips it while the macro stays at 0, and the
+bootloader binary md5 must remain
+`7ea4e5960445ffb078f79ac8a328d5cf` (byte-identical to the prior 30
+preflight sections).
+
+Inside the gate, the call hashes
+`kern_p->num_blocks * BLOCK_BYTES` bytes starting at `DEF_LINUX_ADDR`
+and `memcmp`'s the 32-byte digest against `pt->kernel_sha256`. On
+mismatch it logs `kernel: hash mismatch` and `bload: refused` on
+UART and `return`s, so `boot_mark_loaded()` is skipped and a
+subsequent `jump` will print `jump: no kernel loaded`. This is the
+exact contract section 31 (the next live mission) will exercise on
+hardware once the macro flips to 1 and a real SHA-256 implementation
+replaces the stub.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+```
+
+Verify:
+
+```python
+import re, os
+root = "stm32mp135_test_board/bootloader"
+src = open(os.path.join(root, "src/fmc.c")).read()
+# Find the body of `void fmc_bload(...)`. Brace-balance from the
+# opening '{' after the signature.
+sig = re.search(r'\bvoid\s+fmc_bload\s*\([^)]*\)\s*\{', src)
+assert sig, "fmc_bload signature not found"
+i = sig.end()
+depth = 1
+while i < len(src) and depth > 0:
+    c = src[i]
+    if c == '{':
+        depth += 1
+    elif c == '}':
+        depth -= 1
+    i += 1
+body = src[sig.end():i - 1]
+# Inside the body, find a `#if BLOAD_KERNEL_HASH_CHECK` block and
+# require it to call the stub plus emit the literal sentinel.
+open_re  = re.compile(r'#\s*if\s+BLOAD_KERNEL_HASH_CHECK\b')
+endif_re = re.compile(r'#\s*endif\b')
+any_if   = re.compile(r'#\s*if(?:def|ndef)?\b')
+call_re  = re.compile(r'\bbload_kernel_sha256_compute\s*\(')
+sent_re  = re.compile(r'"kernel:\s*hash\s*mismatch')
+ok = False
+for m in open_re.finditer(body):
+    j = m.end()
+    depth = 1
+    while j < len(body) and depth > 0:
+        n_if  = any_if.search(body, j)
+        n_end = endif_re.search(body, j)
+        if n_end is None:
+            break
+        if n_if is not None and n_if.start() < n_end.start():
+            depth += 1
+            j = n_if.end()
+        else:
+            depth -= 1
+            j = n_end.end()
+    inner = body[m.end():j]
+    if depth == 0 and call_re.search(inner) and sent_re.search(inner):
+        ok = True
+        break
+assert ok, "gated call+sentinel not inside fmc_bload"
+b = os.path.join(root, "build/main.stm32")
+assert os.path.getsize(b) > 0, "main.stm32 missing or empty"
+```
+
 ## WIP
 
 ### Hardened kernel image: bootloader refuses to jump on hash mismatch
