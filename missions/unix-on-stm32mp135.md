@@ -573,8 +573,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### Tty line discipline (sgtty) under Qemu
 
 Exercises V7's pre-termios sgtty interface: `dev/tty.c`,
@@ -635,6 +633,8 @@ def check(extract_dir):
     return ('erase' in head.lower() or 'speed' in head.lower()
             or 'baud' in head.lower())
 ```
+
+## WIP
 
 ### Signals and tty interrupts under Qemu
 
