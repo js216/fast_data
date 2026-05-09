@@ -465,8 +465,6 @@ def check(extract_dir):
     return 'sh' in tail and 'login' in tail  # ls /bin had the basics
 ```
 
-## WIP
-
 ### Pipes and redirection under Qemu
 
 Drives the live shell through a focused pipe/redirect script.
@@ -521,6 +519,8 @@ def check(extract_dir):
         return False
     return True
 ```
+
+## WIP
 
 ### Filesystem mutation round-trip under Qemu
 
