@@ -690,8 +690,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### Text-processing pipelines under Qemu
 
 Drives a richer pipeline workout against `/etc/passwd` and
@@ -748,6 +746,8 @@ def check(extract_dir):
         return False
     return True
 ```
+
+## WIP
 
 ### Process control and signals under Qemu
 
