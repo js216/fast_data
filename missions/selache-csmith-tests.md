@@ -310,6 +310,89 @@ def check(extract_dir):
     return True
 ```
 
+### selcc nested aggregate sub-word struct field global init
+
+Lift the next link in the sub-word struct-field chain: the
+`eval_subword_const_int` helper in
+`selache/selcc/src/emit_asm.rs` rejected every nested-aggregate
+initializer (`Expr::InitList`) at a sub-word offset with `field
+<name>: nested aggregate initializer at sub-word offset; sub-word
+struct fields in global initializers must be constant integers`.
+Csmith drafts `cctest_csmith_3bc5e01c` (g_248 field f1, g_2340 field
+f1), `cctest_csmith_63d3a9b0` (g_409 field f0), and
+`cctest_csmith_9350e486` (g_145 field f1) all mix sub-word packed
+fields with nested-aggregate initializers, so any global initializer
+for those structs trips the precedent constant-int sub-word rejection
+even after the bitfield packing fix landed.
+
+Replace the up-front `Expr::InitList` rejection in
+`eval_subword_const_int` with a recursive walk that flattens the
+nested aggregate's leaves into a single 32-bit value at their
+containing-word-relative byte offsets. The new helper
+`flatten_subword_aggregate_const_int` walks struct/union fields
+through `crate::types::struct_field_layout_ctx` and array elements
+through `size_bytes_ctx`, then masks each leaf to its leaf width
+(1 or 2 bytes) and ORs it into the accumulator at `(byte_off * 8)`.
+The combined value is the same `u32` the caller already shifts by
+`bin * 8` and ORs into the containing word's `InitWord::Num`.
+
+Scope this iteration narrowly:
+- Inner aggregate must total `<= 4` bytes (the field is sub-word, so
+  it already fits in one 32-bit word); larger aggregates keep a hard
+  error.
+- Inner leaves must be 1- or 2-byte constant ints (`int8_t`,
+  `uint8_t`, `int16_t`, `uint16_t`); leaves of other widths keep a
+  hard error.
+- No nested-nested aggregates inside the inner aggregate, no
+  bitfields inside the inner aggregate, no string literals inside,
+  no `&sym` inside; each of those keeps its own hard error so the
+  fix stays auditable.
+- Word-aligned non-packed fields keep their existing recursive
+  per-word emission unchanged.
+- The local-scope twin in `selache/selcc/src/lower.rs` stays
+  untouched (a later iteration will mirror the fix there if needed).
+
+This unblocks the three csmith drafts above so they no longer emit
+the "nested aggregate initializer at sub-word offset" error during
+selcc compilation; the remaining downstream errors on those drafts
+(e.g. sub-word interior `&sym` addresses) belong to separate
+iterations.
+
+Build:
+
+```
+cd selache && cargo build --release
+cd selache && cargo test --all-targets
+cd selache && cargo test -p selcc --release nested_aggregate_subword_struct_field_global_init -- --nocapture
+cd selache && cargo clippy --all-targets --release -- -D warnings
+```
+
+The new `nested_aggregate_subword_struct_field_global_init` test
+must live in `selache/selcc/src/emit_asm.rs` alongside the other
+`#[test]` items. It should call `selcc::compile_to_asm` (with
+`cli::Options { char_size: 8, ..Default::default() }`) on a minimal
+source that places a small nested aggregate at a sub-word offset of
+its containing struct, e.g.
+
+```c
+struct Inner { signed char a; signed char b; };
+struct Outer { signed char pad; struct Inner inner; signed char tail; };
+struct Outer g = { 0x12, { 0x34, 0x56 }, 0x78 };
+```
+
+and assert the call returns `Ok` (and ideally that the emitted asm
+contains the packed first word `0x78563412`). The test must fail
+before the fix and pass after it.
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    return True
+```
+
 ### selcc cap block0 helper spill against L1 budget
 
 When the csmith root is too large for block0 (`root_instrs > 24_000`),
