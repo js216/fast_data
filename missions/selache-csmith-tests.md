@@ -881,6 +881,60 @@ def check(extract_dir):
     return bool(got) and int(got[-1], 16) == 0x53424b5c
 ```
 
+### cces csmith 126ec2e5 checksum
+
+Fix the next focused draft runtime mismatch from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_126ec2e5.0x9ab6c2e8.ldr`
+boots on the DSP but reports `got 4bc11295`, not the source's expected
+checksum `/* @expect 0x9ab6c2e8 */`. CCES diagnoses the same class of
+packed struct / bitfield layout incompatibility here as in the
+precedent `cctest_csmith_07baaacc`, `cctest_csmith_025edc5d`,
+`cctest_csmith_3f5ea6f7`, and `cctest_csmith_0e0cf3fc` steps, so keep
+this step scoped to removing the nonportable `#pragma pack` wrappers
+from this single draft for all toolchains. The wrappers live in
+`selache/xtest/draft_cases/cctest_csmith_126ec2e5.c` at one push/pop
+pair (around lines 793-805) and bracket `struct S0`, which contains
+bitfields. Host gcc and host clang already produce `0x9ab6c2e8` both
+with and without those wrappers (verified with the xtest `CFLAGS_HOST =
+-m32 -funsigned-char -std=c99 -w -O0` against the xtest
+`host_wrap.c`), so the removal is checksum-preserving for the reference
+toolchains. Do not rewrite the expected checksum, delete the draft, or
+duplicate the full sweep. The corrected CCES-built draft must report
+the expected checksum on hardware.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_126ec2e5.0x9ab6c2e8.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_126ec2e5.0x9ab6c2e8.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_126ec2e5.0x9ab6c2e8.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0x9ab6c2e8
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
