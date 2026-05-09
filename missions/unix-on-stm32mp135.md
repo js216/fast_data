@@ -747,8 +747,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### Process control and signals under Qemu
 
 Exercises `fork`, `wait`, `kill`, and exit-status propagation
@@ -859,6 +857,8 @@ def check(extract_dir):
         return False
     return True
 ```
+
+## WIP
 
 ### Mount and umount round-trip under Qemu
 
