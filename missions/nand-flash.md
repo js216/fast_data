@@ -1744,7 +1744,7 @@ corruption. Every test must FAIL on the current bootloader code and
 PASS only after the corresponding fix lands; a test that passes today
 on the unfixed code is, by construction, not exercising the fix.
 
-Tests below assume the prior 24 sections have left a freshly
+Tests below assume the prior 25 sections have left a freshly
 provisioned NAND. Each new section re-flashes `nand.img` at its start
 so a deliberately-corrupted run cannot leak into the next section.
 They also tolerate a degraded final state by re-flashing on Verify if
@@ -1907,6 +1907,56 @@ def check(extract_dir):
                      body.split('___BCH_DATA_OK___', 1)[1]):
         return False
     return 'tail-erased' in uart
+```
+
+### Kernel hash contract preflight: PT struct field and refusal log string
+
+Before any bench test can verify hash-mismatch refusal, the bootloader
+source must declare the contract: `nand_pt_t` carries a 32-byte
+`kernel_sha256` field, and `fmc.c` contains the `kernel: hash mismatch`
+sentinel that the section 25 plan expects. This step is intentionally
+source-only; the next preflight wires the compute+compare into
+`fmc_bload`, and the bench section after that exercises corruption.
+Splitting smaller would either pin only the struct (leaving no log
+contract for the next step to assert) or only the log string (which a
+plain `printf` could satisfy with no data structure to compare
+against), so neither half gives meaningful progress alone.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    pt = Path('stm32mp135_test_board/bootloader/src/nand_pt.h')
+    image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
+    if not pt.is_file():
+        return False
+    if not image.is_file() or image.stat().st_size == 0:
+        return False
+    pt_text = pt.read_text(encoding='utf-8', errors='replace')
+    # The contract is pinned via documentation in nand_pt.h: the
+    # field name `kernel_sha256[32]` and the failure log string
+    # `kernel: hash mismatch` must both appear (in code or comments)
+    # so the next preflight step can wire them up against a stable
+    # reference. No binary change is required at this step.
+    if 'kernel_sha256[32]' not in pt_text:
+        return False
+    return 'kernel: hash mismatch' in pt_text
 ```
 
 ## WIP

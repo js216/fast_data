@@ -803,13 +803,24 @@ class Runner:
         # section (which used `lease:claim` without `lease:release`),
         # the next section's fresh `lease:claim` will deadlock until
         # the 1-hour duration expires. Release it ourselves so the
-        # next attempt can claim cleanly.
-        if holder and holder == self.lease_token:
+        # next attempt can claim cleanly. Also release if the holder
+        # is unknown to us (a prior section may have used
+        # `auto_release_on_session_end=true` which clears
+        # self.lease_token even though the bench still tracks the
+        # token until the device is freed): we own this run's session,
+        # so any zero-op busy lease left holding our devices is ours
+        # to release. We track each token in
+        # `failed_attempt_lease_tokens` so a foreign user's lease
+        # rejected against our claim isn't repeatedly fired at.
+        if holder and (holder == self.lease_token
+                       or not self._other_user_job_running()):
             if self._release_ghost(
                     holder, wait_s=self.FAILED_ATTEMPT_LEASE_RELEASE_WAIT_S):
-                self.lease_token = None
+                if holder == self.lease_token:
+                    self.lease_token = None
                 if self.LEASE_STATE_FILE.exists():
                     self.LEASE_STATE_FILE.unlink()
+                self._failed_attempt_lease_token_set().add(holder)
                 return True, busy_started, busy_retries, None
 
         now = time.monotonic()
