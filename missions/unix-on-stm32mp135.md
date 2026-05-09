@@ -921,8 +921,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### Filesystem integrity (icheck/dcheck/ncheck) under Qemu
 
 Runs V7's fsck-equivalents -- `icheck`, `dcheck`, `ncheck` --
@@ -1048,6 +1046,8 @@ def check(extract_dir):
         pos = i + len(marker)
     return True
 ```
+
+## WIP
 
 ### V7-isms under Qemu
 
