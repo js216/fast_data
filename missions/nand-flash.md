@@ -1744,7 +1744,7 @@ corruption. Every test must FAIL on the current bootloader code and
 PASS only after the corresponding fix lands; a test that passes today
 on the unfixed code is, by construction, not exercising the fix.
 
-Tests below assume the prior 26 sections have left a freshly
+Tests below assume the prior 27 sections have left a freshly
 provisioned NAND. Each new section re-flashes `nand.img` at its start
 so a deliberately-corrupted run cannot leak into the next section.
 They also tolerate a degraded final state by re-flashing on Verify if
@@ -2013,6 +2013,61 @@ def check(_extract_dir):
     # Both contract tokens must appear inside fmc_bload (in comments or
     # code) so the next preflight step can wire the stub call here.
     return ('kernel_sha256' in body) and ('kernel: hash mismatch' in body)
+```
+
+### Kernel hash contract preflight: build-time gate macro reserved
+
+Before any C code that computes or compares kernel SHA-256 can land,
+the bootloader needs a build-time gate so the hash-check path is
+compiled out by default and cannot regress the existing autoboot path
+(see iter-44 fmc_bload regression). This step reserves the gate
+symbol `BLOAD_KERNEL_HASH_CHECK` in `nand_pt.h` with the value `0` so
+future preflights can wrap the real compute+compare in
+`#if BLOAD_KERNEL_HASH_CHECK ... #endif`. The gate value stays `0`
+until the bench preflight that actually wires the SHA-256 routine
+flips it. No executable code is added by this step.
+
+Splitting smaller (a comment-only mention of the gate name) leaves no
+preprocessor symbol the next step can `#if` against, so the next step
+would have to introduce both the macro and its first use at once.
+Splitting larger (adding the `#if BLOAD_KERNEL_HASH_CHECK` block now
+with stub bodies) re-opens the iter-44 regression class because any
+new C inside `fmc_bload` risks layout/ABI shifts even when guarded.
+This step is therefore the smallest meaningful pre-stage.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+import re
+
+def check(_extract_dir):
+    pt = Path('stm32mp135_test_board/bootloader/src/nand_pt.h')
+    image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
+    if not pt.is_file():
+        return False
+    if not image.is_file() or image.stat().st_size == 0:
+        return False
+    text = pt.read_text(encoding='utf-8', errors='replace')
+    # The gate macro must be defined with the literal value 0 so the
+    # default build keeps the hash-check path compiled out. The macro
+    # name is fixed so future preflights can `#if` against it.
+    m = re.search(r'#\s*define\s+BLOAD_KERNEL_HASH_CHECK\s+0\b', text)
+    return m is not None
 ```
 
 ## WIP
