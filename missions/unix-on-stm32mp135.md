@@ -858,8 +858,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### Mount and umount round-trip under Qemu
 
 Exercises the V7 `smount` / `sumount` syscalls (21/22) and the
@@ -922,6 +920,8 @@ def check(extract_dir):
         return False
     return True
 ```
+
+## WIP
 
 ### Filesystem integrity (icheck/dcheck/ncheck) under Qemu
 
