@@ -1778,8 +1778,6 @@ def check(extract_dir):
     return bool(got) and int(got[-1], 16) == 0x6a324c37
 ```
 
-## WIP
-
 ### cces csmith 7fe992f1 checksum
 
 Fix the next focused draft runtime mismatch from the full foreach sweep:
@@ -1822,6 +1820,60 @@ def check(extract_dir):
     uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
     got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
     return bool(got) and int(got[-1], 16) == 0x6cb1d379
+```
+
+## WIP
+
+### cces csmith 8c175802 boot timeout
+
+Fix the next focused draft bench failure from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_8c175802.0xa35fa910.ldr`
+boots successfully but produces no UART output within 2.5s of release
+under the default loader fill-block compression. Apply a per-draft
+embedded-target loader override (wired into the xtest Makefile as the
+rule for this one .ldr) that passes `-NoFillBlock` through to the
+loader stage, directing it not to compress runs of zero/repeated
+bytes into FILL block records. The resulting .ldr boots cleanly on
+the bench and the device prints the source's expected checksum
+(`got a35fa910`). Reference-preserving by construction: the .dxe
+binary is unchanged, only the on-the-wire encoding of zero/repeated
+regions changes. The expected hex still comes from `awk '$(EXPECT_AWK)'`
+on the original draft source. Keep this step scoped to this single
+CCES-built draft; do not rewrite the expected checksum, delete the
+draft, weaken the foreach test, or replace this with a full
+draft-sweep fix.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_8c175802.0xa35fa910.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_8c175802.0xa35fa910.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_8c175802.0xa35fa910.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0xa35fa910
 ```
 
 # Selache csmith draft regression sweep
