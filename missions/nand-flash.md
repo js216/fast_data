@@ -19,7 +19,7 @@ broken and the code must be fixed.
 
 Provisioning & first boot:
 
-- [Temporary: fix stale UBI rootfs tail panic](#temporary-fix-stale-ubi-rootfs-tail-panic)
+- [NAND provisioning erases stale UBI rootfs tail](#nand-provisioning-erases-stale-ubi-rootfs-tail)
 - [NAND image round-trip: write -> fmc_flush -> poison -> fmc_load -> diff](#nand-image-round-trip-write---fmc_flush---poison---fmc_load---diff)
 - [Full end-to-end: DFU -> NAND write+commit -> boot Linux console](#full-end-to-end-dfu---nand-writecommit---boot-linux-console)
 - [NAND reboot persistence: Linux reboot -> bootloader reload -> second NAND boot](#nand-reboot-persistence-linux-reboot---bootloader-reload---second-nand-boot)
@@ -53,12 +53,13 @@ Production-hardening regressions (WIP):
 - [Crash recovery: power-cut mid-write leaves UBIFS mountable](#crash-recovery-power-cut-mid-write-leaves-ubifs-mountable)
 - [Round-trip: full-image diff between MSC write and `fmc_load` readback](#round-trip-full-image-diff-between-msc-write-and-fmc_load-readback)
 - [Wear-leveling stress: 100 cycles of full-volume churn, even erase counts](#wear-leveling-stress-100-cycles-of-full-volume-churn-even-erase-counts)
+- [Final speed characterization: bootloader and Linux verified read/write table](#final-speed-characterization-bootloader-and-linux-verified-readwrite-table)
 
-### Temporary: fix stale UBI rootfs tail panic
+### NAND provisioning erases stale UBI rootfs tail
 
-The current NAND boot reaches Linux but panics while mounting UBIFS
-because UBI sees stale eraseblocks after the newly written image. The
-observed signature was:
+Regression guard for a prior failure where NAND boot reached Linux but
+panicked while mounting UBIFS because UBI saw stale eraseblocks after
+the newly written image. The observed signature was:
 
 ```
 ubi0: attaching mtd4
@@ -70,11 +71,11 @@ Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)
 
 At the time, `fmc_flush` reported `FMC flush: 114 blocks`; the rootfs
 partition starts at block 68, so UBI PEB 46 maps to physical block 114,
-the first block after the flushed image. The next fix should make NAND
-provisioning erase or otherwise invalidate the rootfs tail after
-`nand.img` while preserving the factory/runtime bad-block OOB markers.
-Do not solve this by bulk-erasing bad-block metadata or lowering MSC
-rate requirements.
+the first block after the flushed image. This test keeps NAND
+provisioning from regressing: the rootfs tail after `nand.img` must be
+erased or otherwise invalidated while preserving the factory/runtime
+bad-block OOB markers. Do not solve this by bulk-erasing bad-block
+metadata or lowering MSC rate requirements.
 
 Build:
 
@@ -95,12 +96,16 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/nand.img
 ```
 
-Test (max 3 min):
+Test (max 4 min):
 
 ```
 lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
-delay ms=2000
+delay ms=10000
+inventory refresh=true verify=false
+bench_mcu:reset_dut2
+delay ms=10000
+inventory refresh=true verify=false
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
 delay ms=300
@@ -114,7 +119,7 @@ mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_close
 delay ms=2000
-inventory refresh=true verify=false
+inventory
 msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
 mp135.custom:uart_open
 delay ms=300
@@ -122,7 +127,7 @@ mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
-mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
+mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=60000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_write data="fmc_bload\r"
 mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
@@ -141,6 +146,8 @@ mark tag=stale_ubi_tail_panic_fixed
 Verify:
 
 ```
+import re
+
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -166,6 +173,8 @@ mark tag=inventory_smoke
 Verify:
 
 ```
+import re
+
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -228,12 +237,16 @@ stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
 ```
 
-Test (max 30 s):
+Test (max 1 min):
 
 ```
 lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
-delay ms=2000
+delay ms=10000
+inventory refresh=true verify=false
+bench_mcu:reset_dut2
+delay ms=10000
+inventory refresh=true verify=false
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
 delay ms=300
@@ -250,6 +263,8 @@ mark tag=dfu_nand_flash
 Verify:
 
 ```
+import re
+
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -260,19 +275,36 @@ def check(extract_dir):
 
 ### Bootloader hold via UART
 
-Inherits the DFU-loaded NAND bootloader state and confirms it is still
-parked at `> `.
+Claims a fresh lease, physically resets the board, reloads the NAND
+bootloader over DFU, and confirms UART can stop autoboot at `> `. This
+proves the test can reliably re-enter a known bootloader state instead
+of depending on stale UART state from the previous job.
 
 Build: nothing required.
 
-Test (max 15 s):
+Artifacts:
 
 ```
-lease:resume token="{{LEASE_TOKEN}}"
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test (max 30 s):
+
+```
+lease:claim devices="mp135.custom" duration_s=3600
+bench_mcu:reset_dut2
+delay ms=10000
+inventory refresh=true verify=false
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
 delay ms=300
-mp135.custom:uart_write data="\r"
-mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
 mp135.custom:uart_close
 mark tag=bootloader_hold
 ```
@@ -284,32 +316,60 @@ def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     ops = Verification.load_ops(extract_dir)
-    return Verification.op_succeeded(ops, 'mp135.custom', 'uart_expect')
+    return (Verification.op_succeeded(ops, 'dfu.custom', 'flash_layout')
+            and Verification.op_succeeded(ops, 'mp135.custom', 'uart_expect'))
 ```
 
 ### MSC + NAND probe smoke
 
-Inherits the bootloader-at-`> ` state. Refresh inventory so
-`msc.custom` shows up, read 1 MiB from the DDR window, and run
-`fmc_test_boot` to confirm the FMC controller is initialised. The
-3 MB/s MSC read floor is a hard requirement; failing it means the
-bootloader path is broken, not that the test threshold should be
-reduced.
+Re-enters bootloader hold from a fresh DUT reset and re-flash so this
+section does not depend on however long the bench was held earlier in
+the run. Refresh inventory so `msc.custom` shows up, read 1 MiB from the
+DDR window, and run `fmc_test_boot` to confirm the FMC controller is
+initialised and can probe the NAND boot image. The command must produce
+a real probe marker before the test accepts the returned prompt; a stale
+pre-command prompt does not prove that `fmc_test_boot` ran. The 3 MB/s
+MSC read floor is a hard requirement; failing it means the bootloader
+path is broken, not that the test threshold should be reduced.
 
 Build: nothing required.
 
-Test (max 30 s):
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test (max 1 min):
 
 ```
 lease:resume token="{{LEASE_TOKEN}}"
-inventory
+bench_mcu:reset_dut2
+delay ms=10000
+inventory refresh=true verify=false
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_close
+delay ms=2000
+inventory refresh=true verify=false
 msc.custom:read n=1048576 offset_lba=0 min_rate_Bps=3000000
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_test_boot\r"
-mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_expect sentinel="FDT magic" timeout_ms=5000
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_close
 mark tag=msc_nand_smoke
 lease:release token="{{LEASE_TOKEN}}"
@@ -325,20 +385,23 @@ def check(extract_dir):
         return False
     uart = Verification.load_stream(
         extract_dir, 'mp135.uart').decode('utf-8', 'replace')
-    return 'FDT magic' in uart or 'partition' in uart or 'FMC' in uart
+    return 'FDT magic' in uart or 'partition table:' in uart
 ```
 
 ### NAND image round-trip: write -> fmc_flush -> poison -> fmc_load -> diff
 
 Write `nand.img` to DDR via MSC, `fmc_flush` to NAND, `fmc_load` back
-into DDR, MSC-read and offline-diff the leading bytes. Before
-`fmc_load`, overwrite the leading DDR staging window with deterministic
-zeroes and verify the poison landed, so a no-op `fmc_load` cannot pass by
-reading back the original MSC write. The image build can outlive an
-in-memory bench lease if the poller restarts, so this step claims a
-fresh lease after the build and re-enters the bootloader state it
-needs. The 3 MB/s MSC write and read floors are hard requirements for
-NAND provisioning; sub-3 MB/s results are code failures.
+into DDR, MSC-read and offline-diff the leading bytes. This step waits
+for `fmc_flush` to finish; it does not require a nonzero tail erase
+count because stale-tail coverage lives in the dedicated provisioning
+regression above. Before `fmc_load`, overwrite the leading DDR staging
+window with deterministic zeroes and verify the poison landed, so a
+no-op `fmc_load` cannot pass by reading back the original MSC write.
+The image build can outlive an in-memory bench lease if the poller
+restarts, so this step claims a fresh lease after the build and
+re-enters the bootloader state it needs. The 3 MB/s MSC write and read
+floors are hard requirements for NAND provisioning; sub-3 MB/s results
+are code failures.
 
 Build:
 
@@ -377,6 +440,7 @@ mp135.custom:uart_expect sentinel="> " timeout_ms=8000
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_close
+delay ms=2000
 inventory
 msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
 mp135.custom:uart_open
@@ -385,7 +449,7 @@ mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
-mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
+mp135.custom:uart_expect sentinel="new-bad" timeout_ms=60000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
 msc.custom:write_zeroes n=4194304 offset_lba=0 min_rate_Bps=3000000
@@ -413,8 +477,14 @@ def check(extract_dir):
         return False
     img = Path(artifacts['nand.img']).read_bytes()
     got = Verification.load_stream(extract_dir, 'msc.read')
-    n = min(len(img), len(got), 4194304)
-    return got[:n] == img[:n]
+    if len(got) != 4194304:
+        return False
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    if not all(s in uart for s in ('FMC flush:', 'done:',
+                                   'FMC load:', 'rd errs')):
+        return False
+    return got == img[:len(got)]
 ```
 
 ### NAND health (bootloader-side)
@@ -442,6 +512,7 @@ mp135.custom:uart_write data="fmc_test_boot\r"
 mp135.custom:uart_expect sentinel="FDT magic OK" timeout_ms=10000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
+lease:release token="{{LEASE_TOKEN}}"
 mark tag=nand_health
 ```
 
@@ -470,9 +541,11 @@ def check(extract_dir):
 
 ### NAND + UBI health (Linux-side via UART)
 
-Inherits the bootloader-at-`> ` state from the previous test, boots
-Linux from NAND with `fmc_bload` + `jump`, then talks to Linux over the
-serial console. Logs in as `root`/`root`, prints
+Claims a fresh bench lease and reloads the NAND bootloader so this
+check does not depend on a still-live cross-section lease token. It
+boots Linux from the already-provisioned NAND contents with
+`fmc_bload` + `jump`, then talks to Linux over the serial console. Logs
+in as `root`/`root`, prints
 `/proc/mtd`, `ubinfo -a`, `mtdinfo -a`, and a filtered `dmesg`.
 Asserts the expected partitions are present, UBI reports zero corrupted
 PEBs, factory bad PEBs stay within a board-realistic bound, and `dmesg`
@@ -480,14 +553,34 @@ is clear of UBI/UBIFS/ECC errors.
 Requires `BR2_PACKAGE_MTD=y` in `config/buildroot.conf` for the
 mtd-utils binaries.
 
-Build: nothing required.
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+```
 
 Test (max 1 min):
 
 ```
-lease:resume token="{{LEASE_TOKEN}}"
+lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
+bench_mcu:reset_dut2
+delay ms=2000
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
 delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_bload\r"
@@ -508,7 +601,7 @@ mp135.custom:uart_write data="echo ___MTD___; cat /proc/mtd; echo ___UBI___; ubi
 mp135.custom:uart_expect sentinel="___END___" timeout_ms=15000
 mp135.custom:uart_expect sentinel="# " timeout_ms=3000
 mp135.custom:uart_close
-lease:release token="{{LEASE_TOKEN}}"
+lease:release
 mark tag=nand_health_linux
 ```
 
@@ -710,7 +803,7 @@ stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
 ```
 
-Test (max 3 min):
+Test (max 4 min):
 
 ```
 lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
@@ -729,6 +822,8 @@ mp135.custom:uart_expect sentinel="___STATE_REBOOT___" timeout_ms=5000
 mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=15000
 mp135.custom:uart_close
 delay ms=12000
+bench_mcu:reset_dut2
+delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
 delay ms=300
@@ -974,12 +1069,21 @@ def check(extract_dir):
 
 The combined writable rootfs must survive repeated large writes and
 same-image reboots, not just a tiny marker file. This stress test loops
-five times with `Foreach`. Each iteration starts from the authenticated
-UART shell left by the previous section or previous loop iteration,
+five times with `Foreach`. Each iteration first reloads only the
+bootloader through DFU, boots from the existing NAND contents, logs in,
 checks an existing `/root/bigfile` against `/root/bigfile.sha256` when
 present, writes a fresh 50 MiB random file on `/`, stores its checksum
 beside it, reboots Linux, reloads only the bootloader through DFU, boots
-from the same NAND contents, logs in, and verifies the checksum again.
+from the same NAND contents, logs in, emits a fresh verify-phase shell
+sentinel, and verifies the checksum again. The post-reboot login path
+must not rely on generic UART sentinels already emitted by the first
+boot in the same plan: after the second `jump`, it waits for Linux to
+finish booting, sends the login exchange without matching stale
+`login:`/`Password:`/`# ` text, then requires a unique verify-phase
+echo before the checksum check. After Linux reaches `Restarting
+system`, the bench reset line must drive the board back into ROM DFU
+before the second bootloader-only flash; waiting on the Linux reboot
+tail alone is not a reliable DFU entry condition.
 The rootfs UBI volume is intentionally the operating-system volume; do
 not replace this with a separate scratch volume.
 
@@ -998,23 +1102,13 @@ Foreach:
 loop in count(5)
 ```
 
-Test (max 8 min):
+Test (max 12 min):
 
 ```
 lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
-mp135.custom:uart_open
-delay ms=300
-mp135.custom:uart_write data="\r"
-mp135.custom:uart_expect sentinel="# " timeout_ms=5000
-mp135.custom:uart_write data="echo ___ROOT_LOOP_START___; mount -o remount,rw /; if [ -f /root/bigfile ] && [ -f /root/bigfile.sha256 ]; then sha256sum -c /root/bigfile.sha256 || echo ___ROOT_LOOP_PRECHECK_FAIL___; else echo ___ROOT_LOOP_NO_PRECHECK___; fi; echo ___ROOT_LOOP_DD_BEGIN___; rm -f /root/bigfile /root/bigfile.sha256; dd if=/dev/urandom of=/root/bigfile bs=1M count=50; rc=$?; echo ___ROOT_LOOP_DD_RC_${rc}___; sha256sum /root/bigfile >/root/bigfile.sha256; cat /root/bigfile.sha256; sync; mount -o remount,ro /; echo ___ROOT_LOOP_REBOOT___; sync; reboot\r"
-mp135.custom:uart_expect sentinel="___ROOT_LOOP_START___" timeout_ms=5000
-mp135.custom:uart_expect sentinel="___ROOT_LOOP_DD_BEGIN___" timeout_ms=30000
-mp135.custom:uart_expect sentinel="___ROOT_LOOP_DD_RC_0___" timeout_ms=240000
-mp135.custom:uart_expect sentinel="/root/bigfile" timeout_ms=120000
-mp135.custom:uart_expect sentinel="___ROOT_LOOP_REBOOT___" timeout_ms=10000
-mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=30000
-mp135.custom:uart_close
-delay ms=12000
+bench_mcu:reset_dut2
+delay ms=10000
+inventory refresh=true verify=false
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
 delay ms=300
@@ -1039,10 +1133,48 @@ mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
 mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=5000
-mp135.custom:uart_write data="echo ___ROOT_LOOP_VERIFY___; sha256sum -c /root/bigfile.sha256; dmesg | grep -iE 'UBI|UBIFS|ECC|uncorrect|panic' || true; echo ___ROOT_LOOP_END___\r"
-mp135.custom:uart_expect sentinel="___ROOT_LOOP_VERIFY___" timeout_ms=5000
-mp135.custom:uart_expect sentinel="/root/bigfile: OK" timeout_ms=120000
-mp135.custom:uart_expect sentinel="___ROOT_LOOP_END___" timeout_ms=15000
+mp135.custom:uart_write data="echo ___ROOT_LOOP_START___; mount -o remount,rw /; if [ -f /root/bigfile ] && [ -f /root/bigfile.sha256 ]; then sha256sum -c /root/bigfile.sha256 || echo ___ROOT_LOOP_PRECHECK_''FAIL___; else echo ___ROOT_LOOP_NO_PRECHECK___; fi; echo ___ROOT_LOOP_DD_BEGIN___; rm -f /root/bigfile /root/bigfile.sha256; dd if=/dev/urandom of=/root/bigfile bs=1M count=50; rc=$?; echo ___ROOT_LOOP_DD_RC_${rc}___; sha256sum /root/bigfile >/root/bigfile.sha256; cat /root/bigfile.sha256; sync; mount -o remount,ro /; echo ___ROOT_LOOP_REBOOT___; sync; reboot\r"
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_START___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_DD_BEGIN___" timeout_ms=30000
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_DD_RC_0___" timeout_ms=240000
+mp135.custom:uart_expect sentinel="/root/bigfile" timeout_ms=120000
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_REBOOT___" timeout_ms=10000
+mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=30000
+mp135.custom:uart_close
+delay ms=12000
+bench_mcu:reset_dut2
+delay ms=10000
+inventory refresh=true verify=false
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="fmc_bload\r"
+mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="jump"
+delay ms=200
+mp135.custom:uart_write data="\r"
+delay ms=45000
+mp135.custom:uart_write data="\r"
+delay ms=1000
+mp135.custom:uart_write data="root\r"
+delay ms=1000
+mp135.custom:uart_write data="root\r"
+delay ms=3000
+mp135.custom:uart_write data="echo ___ROOT_LOOP_VERIFY_LOGIN_READY___\r"
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_VERIFY_LOGIN_READY___" timeout_ms=10000
+mp135.custom:uart_write data="echo ___ROOT_LOOP_VERIFY_BEGIN___; sha256sum -c /root/bigfile.sha256 && echo ___ROOT_LOOP_VERIFY_SHA_OK___; dmesg | grep -iE 'UBI|UBIFS|ECC|uncorrect|panic' || true; echo ___ROOT_LOOP_VERIFY_END___\r"
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_VERIFY_BEGIN___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_VERIFY_SHA_OK___" timeout_ms=120000
+mp135.custom:uart_expect sentinel="___ROOT_LOOP_VERIFY_END___" timeout_ms=15000
 mp135.custom:uart_close
 lease:release
 mark tag=nand_writable_rootfs_50m_reboot_loop
@@ -1064,26 +1196,109 @@ def check(extract_dir, loop):
            r'/root/bigfile: FAILED',
            r'No space left on device')
     return ('___ROOT_LOOP_DD_RC_0___' in uart
-            and '/root/bigfile: OK' in uart
-            and '___ROOT_LOOP_END___' in uart
+            and '___ROOT_LOOP_VERIFY_LOGIN_READY___' in uart
+            and '___ROOT_LOOP_VERIFY_SHA_OK___' in uart
+            and '___ROOT_LOOP_VERIFY_END___' in uart
             and not any(re.search(p, uart, re.I) for p in bad))
 ```
 
-## WIP
+### ECC read status branch preflight
 
-The sections below are production-hardening regression tests requested
-by an adversarial audit. Each section names a concrete data-loss path
-and proves end-to-end that the system either (a) detects and refuses
-to act on corrupted state or (b) survives the failure with no silent
-corruption. Every test must FAIL on the current bootloader code and
-PASS only after the corresponding fix lands; a test that passes today
-on the unfixed code is, by construction, not exercising the fix.
+Before the bootloader can reject corrupted NAND data, its low-level
+page-read path must stop ignoring the HAL ECC status. Add the smallest
+bootloader-side contract first: `read_page` must call the HAL ECC
+statistics API after each page read and contain an explicit
+`BadSectorCount > 0` failure branch. This step intentionally does not
+require the production UART sentinel or `fmc_bload` abort behavior; the
+next preflight wires that detected read failure into the higher boot
+path.
 
-Tests below assume the prior 16 sections have left a freshly
-provisioned NAND. Each new section re-flashes `nand.img` at its start
-so a deliberately-corrupted run cannot leak into the next section.
-They also tolerate a degraded final state by re-flashing on Verify if
-needed (covered in each section's plan).
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+import re
+from pathlib import Path
+
+def check(_extract_dir):
+    fmc = Path('stm32mp135_test_board/bootloader/src/fmc.c')
+    image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
+    if not fmc.is_file() or not image.is_file() or image.stat().st_size == 0:
+        return False
+    text = fmc.read_text(encoding='utf-8', errors='replace')
+    start = text.find('static HAL_StatusTypeDef read_page(')
+    end = text.find('static HAL_StatusTypeDef write_page(', start)
+    if start < 0 or end < 0:
+        return False
+    body = text[start:end]
+    return ('HAL_NAND_ECC_GetStatistics' in body
+            and 'BadSectorCount' in body
+            and bool(re.search(r'BadSectorCount\s*>\s*0', body)))
+```
+
+### ECC read status propagation preflight
+
+Before injecting raw NAND corruption on hardware, add the bootloader-side
+contract that makes uncorrectable ECC observable to the higher boot
+path. The bootloader NAND page-read path must inspect the HAL ECC
+status for each page read, treat any uncorrectable sector count as a
+hard read failure, and emit the production sentinel
+`fmc: ECC unrecoverable` from the real FMC read path. This step is
+limited to making that read failure impossible to silently ignore; the
+following end-to-end section still proves that `fmc_bload` refuses the
+kernel and that `jump` does not enter Linux after deliberate NAND
+corruption.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+import re
+from pathlib import Path
+
+def check(_extract_dir):
+    fmc = Path('stm32mp135_test_board/bootloader/src/fmc.c')
+    image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
+    if not fmc.is_file() or not image.is_file() or image.stat().st_size == 0:
+        return False
+    text = fmc.read_text(encoding='utf-8', errors='replace')
+    start = text.find('static HAL_StatusTypeDef read_page(')
+    end = text.find('static HAL_StatusTypeDef write_page(', start)
+    if start < 0 or end < 0:
+        return False
+    body = text[start:end]
+    needed = ('HAL_NAND_ECC_GetStatistics', 'BadSectorCount',
+              'fmc: ECC unrecoverable')
+    if not all(s in body for s in needed):
+        return False
+    return bool(re.search(r'BadSectorCount\s*>\s*0', body))
+```
 
 ### Hardened ECC: refuse to jump on uncorrectable kernel page
 
@@ -1100,13 +1315,13 @@ Today's bootloader (`bootloader/src/fmc.c:read_page`) discards
 propagates uncorrectable-ECC up through `read_block` and `fmc_bload`,
 and `fmc_bload` aborts on first uncorrectable kernel page.
 
-The corruption uses `mtd_debug write` (or `nandwrite --raw --noecc`)
-on the kernel mtd partition. Linux must keep `mtdX` for the kernel
-slot (currently kernel is at NAND blocks 4..67 per `nand_pt.h`); if
-the kernel partition is not exposed as an mtd device, the bootloader
-must add a debug command (`fmc_corrupt_ecc blk=N`) to do the
-corruption from `> ` instead — the test plan should accommodate
-either path.
+The corruption uses `nandflipbits` on the kernel mtd partition. It
+flips 9 bits in one 512-byte ECC sector of the third kernel page, which
+exceeds BCH-8 correction while avoiding the first two pages whose OOB
+bytes are used as bad-block markers. Linux must keep `mtdX` for the
+kernel slot (currently kernel is at NAND blocks 4..67 per
+`nand_pt.h`). The test must only reboot after `nandflipbits` succeeds;
+a failed injection is a test failure, not permission to continue.
 
 After the verify, re-flash `nand.img` so subsequent sections start
 clean.
@@ -1138,7 +1353,7 @@ mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=5000
-mp135.custom:uart_write data="echo ___ECC_INJECT___; mtd=$(grep -E '\"kernel\"' /proc/mtd | cut -d: -f1); echo MTD=$mtd; dd if=/dev/urandom of=/tmp/page.bin bs=2048 count=1; mtd_debug write /dev/$mtd 0 2048 /tmp/page.bin; sync; echo ___ECC_REBOOT___; sync; reboot\r"
+mp135.custom:uart_write data="echo ___ECC_INJECT___; mtd=$(grep kernel /proc/mtd | cut -d: -f1); rc=1; if test x$mtd != x && test -r /sys/class/mtd/$mtd/writesize && command -v nandflipbits >/dev/null 2>&1; then pgsz=$(cat /sys/class/mtd/$mtd/writesize); off=$((2 * pgsz)); echo MTD=$mtd PGSZ=$pgsz OFF=$off; nandflipbits -q /dev/$mtd 0@$off 1@$off 2@$off 3@$off 4@$off 5@$off 6@$off 7@$off 0@$((off + 1)); rc=$?; else echo ___ECC_INJECT_PREREQ_FAIL___; fi; if test x$rc = x0; then sync; echo ___ECC_REBOOT___; sync; reboot; else echo ___ECC_INJECT_FAIL_${rc}___; fi\r"
 mp135.custom:uart_expect sentinel="___ECC_INJECT___" timeout_ms=5000
 mp135.custom:uart_expect sentinel="___ECC_REBOOT___" timeout_ms=15000
 mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=30000
@@ -1163,7 +1378,9 @@ mp135.custom:uart_write data="jump\r"
 mp135.custom:uart_expect sentinel="jump: no kernel loaded" timeout_ms=3000
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_close
+delay ms=5000
 inventory refresh=true verify=false
+delay ms=1000
 msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
 mp135.custom:uart_open
 delay ms=300
@@ -1218,7 +1435,15 @@ HAL_OK on every program-fail. The test passes only after every
 program/erase op reads the NAND status register and runtime-marks
 bad on FAIL.
 
-Build, Artifacts: same as the prior section.
+Build: same as the prior section.
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/nand.img
+```
 
 Test (max 3 min):
 
@@ -1248,11 +1473,18 @@ mp135.custom:uart_expect sentinel="pgm: blk 1500 status FAIL" timeout_ms=10000
 mp135.custom:uart_expect sentinel="bad: blk 1500 runtime-marked" timeout_ms=3000
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_scan\r"
+delay ms=1500
 mp135.custom:uart_expect sentinel="bad: blk 1500" timeout_ms=60000
 mp135.custom:uart_expect sentinel="scan done:" timeout_ms=5000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_close
+delay ms=2000
 inventory refresh=true verify=false
 msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
@@ -1298,7 +1530,24 @@ covers 4, so the test fails. The fix is either to bump
 across `fmc_flush`. Either way, the on-flash BBT must round-trip
 identically.
 
-Build, Artifacts: same as the prior section.
+Build:
+
+```
+make -C stm32mp135_test_board patch
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=custom-nand dtb
+make -C stm32mp135_test_board br
+make -C stm32mp135_test_board DTS=custom-nand nand
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/nand.img
+```
 
 Test (max 4 min):
 
@@ -1307,8 +1556,17 @@ lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=t
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="fmc_bload\r"
+mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="jump\r"
+mp135.custom:uart_expect sentinel="login:" timeout_ms=60000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
+mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=5000
-mp135.custom:uart_write data="echo ___BBT_SETUP___; nand=$(ls /sys/class/mtd | grep -E '^mtd[0-9]+$' | tail -1); pages=$(cat /sys/class/mtd/$nand/erasesize); blocks=$(( $(cat /sys/class/mtd/$nand/size) / pages )); for i in 1 2 3 4; do blk=$((blocks - i)); off=$((blk * pages)); printf 'BBT-%d-CANARY' $blk | dd of=/dev/$nand bs=$pages seek=$blk conv=notrunc 2>/dev/null; done; sync; sha256sum /dev/$nand | head -c 64; echo; (for i in 1 2 3 4; do blk=$((blocks - i)); dd if=/dev/$nand bs=$pages skip=$blk count=1 2>/dev/null | sha256sum | head -c 64; echo; done) > /tmp/bbt_pre.txt; cat /tmp/bbt_pre.txt; echo ___BBT_PRE_DONE___; sync; reboot\r"
+mp135.custom:uart_write data="echo ___BBT_''SETUP___; mount -o remount,rw /; nand=$(awk -F: '/rootfs/{print $1; exit}' /proc/mtd); pages=$(cat /sys/class/mtd/${nand}/erasesize); blocks=$(( $(cat /sys/class/mtd/${nand}/size) / pages )); for i in 1 2 3 4; do blk=$((blocks - i)); printf 'BBT-%d-CANARY' $blk | dd of=/dev/$nand bs=$pages seek=$blk conv=notrunc 2>/dev/null; done; sync; echo ___BBT_PRE_HASHES_BEGIN___; for i in 1 2 3 4; do blk=$((blocks - i)); dd if=/dev/$nand bs=$pages skip=$blk count=1 2>/dev/null | sha256sum | head -c 64; echo; done; echo ___BBT_PRE_HASHES_END___; echo ___BBT_PRE_''DONE___; sync; reboot\r"
 mp135.custom:uart_expect sentinel="___BBT_SETUP___" timeout_ms=5000
 mp135.custom:uart_expect sentinel="___BBT_PRE_DONE___" timeout_ms=20000
 mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=30000
@@ -1325,6 +1583,15 @@ mp135.custom:uart_write data="x"
 mp135.custom:uart_expect sentinel="> " timeout_ms=8000
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_close
+delay ms=2000
+inventory refresh=true verify=false
+delay ms=2000
+msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
@@ -1332,14 +1599,14 @@ mp135.custom:uart_write data="fmc_bload\r"
 mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_write data="jump\r"
-mp135.custom:uart_expect sentinel="login:" timeout_ms=60000
+delay ms=12000
 mp135.custom:uart_write data="root\r"
-mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
+delay ms=500
 mp135.custom:uart_write data="root\r"
-mp135.custom:uart_expect sentinel="# " timeout_ms=5000
-mp135.custom:uart_write data="echo ___BBT_VERIFY___; nand=$(ls /sys/class/mtd | grep -E '^mtd[0-9]+$' | tail -1); pages=$(cat /sys/class/mtd/$nand/erasesize); blocks=$(( $(cat /sys/class/mtd/$nand/size) / pages )); (for i in 1 2 3 4; do blk=$((blocks - i)); dd if=/dev/$nand bs=$pages skip=$blk count=1 2>/dev/null | sha256sum | head -c 64; echo; done) > /tmp/bbt_post.txt; diff /tmp/bbt_pre.txt /tmp/bbt_post.txt && echo ___BBT_MATCH___ || echo ___BBT_MISMATCH___; echo ___BBT_VERIFY_END___\r"
+delay ms=1000
+mp135.custom:uart_write data="echo ___BBT_''VERIFY___; nand=$(awk -F: '/rootfs/{print $1; exit}' /proc/mtd); pages=$(cat /sys/class/mtd/${nand}/erasesize); blocks=$(( $(cat /sys/class/mtd/${nand}/size) / pages )); echo ___BBT_POST_HASHES_BEGIN___; for i in 1 2 3 4; do blk=$((blocks - i)); dd if=/dev/$nand bs=$pages skip=$blk count=1 2>/dev/null | sha256sum | head -c 64; echo; done; echo ___BBT_POST_HASHES_END___; echo ___BBT_VERIFY_''END___\r"
 mp135.custom:uart_expect sentinel="___BBT_VERIFY___" timeout_ms=5000
-mp135.custom:uart_expect sentinel="___BBT_MATCH___" timeout_ms=15000
+mp135.custom:uart_expect sentinel="___BBT_POST_HASHES_END___" timeout_ms=15000
 mp135.custom:uart_expect sentinel="___BBT_VERIFY_END___" timeout_ms=5000
 mp135.custom:uart_close
 lease:release
@@ -1349,17 +1616,47 @@ mark tag=bbt_preserved_across_fmc_flush
 Verify:
 
 ```
+import re
+
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     uart = Verification.load_stream(
         extract_dir, 'mp135.uart').decode('utf-8', 'replace')
-    return ('___BBT_PRE_DONE___' in uart
-            and '___BBT_MATCH___' in uart
-            and '___BBT_MISMATCH___' not in uart
+    if not ('___BBT_PRE_DONE___' in uart
             and '___BBT_VERIFY_END___' in uart
-            and 'tail-erased' in uart)
+            and 'tail-erased' in uart):
+        return False
+
+    def hashes_between(start, end):
+        if start not in uart or end not in uart:
+            return []
+        # UART contains the submitted shell line before command output.
+        body = uart.rsplit(start, 1)[1].split(end, 1)[0]
+        return re.findall(r'(?m)^([0-9a-f]{64})\r?$', body)
+
+    pre = hashes_between('___BBT_PRE_HASHES_BEGIN___',
+                         '___BBT_PRE_HASHES_END___')
+    post = hashes_between('___BBT_POST_HASHES_BEGIN___',
+                          '___BBT_POST_HASHES_END___')
+    return len(pre) == 4 and pre == post
 ```
+
+## WIP
+
+The sections below are production-hardening regression tests requested
+by an adversarial audit. Each section names a concrete data-loss path
+and proves end-to-end that the system either (a) detects and refuses
+to act on corrupted state or (b) survives the failure with no silent
+corruption. Every test must FAIL on the current bootloader code and
+PASS only after the corresponding fix lands; a test that passes today
+on the unfixed code is, by construction, not exercising the fix.
+
+Tests below assume the prior 21 sections have left a freshly
+provisioned NAND. Each new section re-flashes `nand.img` at its start
+so a deliberately-corrupted run cannot leak into the next section.
+They also tolerate a degraded final state by re-flashing on Verify if
+needed (covered in each section's plan).
 
 ### ECC fault-injection visible in dmesg: bit-flip is corrected
 
@@ -1377,18 +1674,83 @@ correction path. The fix scope is small: it only requires
 `mtd-utils` in buildroot and a counter exposed by the BCH driver
 (both already present in mainline).
 
-Build, Artifacts: same as the prior section.
+Build:
 
-Test (max 3 min):
+```
+make -C stm32mp135_test_board patch
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=custom-nand dtb
+make -C stm32mp135_test_board br
+make -C stm32mp135_test_board DTS=custom-nand nand
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/nand.img
+```
+
+Test (max 4 min):
 
 ```
 lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="fmc_bload\r"
+mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="jump\r"
+mp135.custom:uart_expect sentinel="login:" timeout_ms=60000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
+mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=5000
-mp135.custom:uart_write data="echo ___BCH_PROBE___; mtd=$(grep -E '\"rootfs\"' /proc/mtd | cut -d: -f1); pgsz=$(cat /sys/class/mtd/$mtd/writesize); peb=$(cat /sys/class/mtd/$mtd/erasesize); blocks=$(( $(cat /sys/class/mtd/$mtd/size) / peb )); good=$((blocks - 8)); off=$((good * peb)); dd if=/dev/$mtd bs=$pgsz skip=$((off / pgsz)) count=1 of=/tmp/orig.bin 2>/dev/null; cp /tmp/orig.bin /tmp/flipped.bin; printf '\\x01' | dd of=/tmp/flipped.bin bs=1 seek=128 conv=notrunc 2>/dev/null; flash_erase /dev/$mtd $off 1; nandwrite -p -s $off --noskipbad /dev/$mtd /tmp/flipped.bin; dmesg -c >/dev/null; dd if=/dev/$mtd bs=$pgsz skip=$((off / pgsz)) count=1 of=/tmp/read.bin 2>/dev/null; cmp /tmp/orig.bin /tmp/read.bin && echo ___BCH_DATA_OK___ || echo ___BCH_DATA_MISMATCH___; dmesg | grep -iE 'bch|bitflip|corrected' | head -5; echo ___BCH_END___\r"
-mp135.custom:uart_expect sentinel="___BCH_PROBE___" timeout_ms=5000
+mp135.custom:uart_write data="echo ___BCH_LOGIN_READY___\r"
+mp135.custom:uart_expect sentinel="___BCH_LOGIN_READY___" timeout_ms=5000
+mp135.custom:uart_write data="stty -echo\r"
+delay ms=200
+mp135.custom:uart_write data="cat >/tmp/bch_probe.sh <<'EOF'\r"
+mp135.custom:uart_write data="#!/bin/sh\r"
+mp135.custom:uart_write data="set -eu\r"
+mp135.custom:uart_write data="tag(){ printf '___BCH_%s___\\n' \"$1\"; }\r"
+mp135.custom:uart_write data="fail(){ tag \"FAIL_$1\"; exit 1; }\r"
+mp135.custom:uart_write data="trap 'stty echo 2>/dev/null || true' EXIT\r"
+mp135.custom:uart_write data="tag RUN_BEGIN\r"
+mp135.custom:uart_write data="mtd=$(awk -F: '/\"rootfs\"/{print $1; exit}' /proc/mtd)\r"
+mp135.custom:uart_write data="[ -n \"$mtd\" ] || fail NO_ROOTFS\r"
+mp135.custom:uart_write data="base=/sys/class/mtd/$mtd\r"
+mp135.custom:uart_write data="[ -r \"$base/writesize\" ] || fail NO_WRITESIZE\r"
+mp135.custom:uart_write data="command -v flash_erase >/dev/null 2>&1 || fail NO_ERASE\r"
+mp135.custom:uart_write data="command -v nandwrite >/dev/null 2>&1 || fail NO_WRITE\r"
+mp135.custom:uart_write data="command -v nandflipbits >/dev/null 2>&1 || fail NO_FLIP\r"
+mp135.custom:uart_write data="pgsz=$(cat \"$base/writesize\")\r"
+mp135.custom:uart_write data="peb=$(cat \"$base/erasesize\")\r"
+mp135.custom:uart_write data="size=$(cat \"$base/size\")\r"
+mp135.custom:uart_write data="blocks=$((size / peb))\r"
+mp135.custom:uart_write data="good=$((blocks - 8))\r"
+mp135.custom:uart_write data="[ \"$good\" -gt 0 ] || fail BAD_GEOM\r"
+mp135.custom:uart_write data="off=$((good * peb))\r"
+mp135.custom:uart_write data="page=$((off / pgsz))\r"
+mp135.custom:uart_write data="echo BCH_GEOM mtd=$mtd pgsz=$pgsz off=$off page=$page\r"
+mp135.custom:uart_write data="dd if=/dev/$mtd bs=$pgsz skip=$page count=1 of=/tmp/bch.orig 2>/tmp/bch.err || fail DD_ORIG\r"
+mp135.custom:uart_write data="flash_erase /dev/$mtd $off 1 >/tmp/bch.erase 2>&1 || fail ERASE\r"
+mp135.custom:uart_write data="nandwrite -p -s $off --noskipbad /dev/$mtd /tmp/bch.orig >/tmp/bch.write 2>&1 || fail WRITE\r"
+mp135.custom:uart_write data="nandflipbits -q /dev/$mtd 0@$((off + 128)) >/tmp/bch.flip 2>&1 || fail FLIP\r"
+mp135.custom:uart_write data="dmesg -c >/dev/null || true\r"
+mp135.custom:uart_write data="dd if=/dev/$mtd bs=$pgsz skip=$page count=1 of=/tmp/bch.read 2>/tmp/bch.err || fail DD_READ\r"
+mp135.custom:uart_write data="cmp -s /tmp/bch.orig /tmp/bch.read || { tag DATA_MISMATCH; exit 1; }\r"
+mp135.custom:uart_write data="tag DATA_OK\r"
+mp135.custom:uart_write data="dmesg | grep -iE 'bch|bitflip|corrected' | head -10\r"
+mp135.custom:uart_write data="tag END\r"
+mp135.custom:uart_write data="EOF\r"
+mp135.custom:uart_write data="chmod +x /tmp/bch_probe.sh\r"
+mp135.custom:uart_write data="/tmp/bch_probe.sh\r"
+mp135.custom:uart_expect sentinel="___BCH_RUN_BEGIN___" timeout_ms=5000
 mp135.custom:uart_expect sentinel="___BCH_DATA_OK___" timeout_ms=30000
 mp135.custom:uart_expect sentinel="___BCH_END___" timeout_ms=5000
 mp135.custom:uart_close
@@ -1411,8 +1773,14 @@ mp135.custom:uart_write data="x"
 mp135.custom:uart_expect sentinel="> " timeout_ms=8000
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_close
 inventory refresh=true verify=false
 msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
+delay ms=2000
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
@@ -1431,14 +1799,20 @@ def check(extract_dir):
         return False
     uart = Verification.load_stream(
         extract_dir, 'mp135.uart').decode('utf-8', 'replace')
-    if '___BCH_DATA_OK___' not in uart:
+    if '___BCH_RUN_BEGIN___' not in uart or '___BCH_END___' not in uart:
         return False
-    if '___BCH_DATA_MISMATCH___' in uart:
+    body = uart.rsplit('___BCH_RUN_BEGIN___', 1)[1].split(
+        '___BCH_END___', 1)[0]
+    bad = (r'cat: can.t open', r'syntax error', r'not found',
+           r'No such file', r'cannot open', r'___BCH_FAIL_',
+           r'___BCH_DATA_MISMATCH___')
+    if any(re.search(p, body, re.I) for p in bad):
+        return False
+    if '___BCH_DATA_OK___' not in body:
         return False
     # dmesg must show at least one BCH/bitflip correction.
     if not re.search(r'(?i)(bitflip|corrected\s+\d+\s+(errors|bitflips))',
-                     uart.split('___BCH_DATA_OK___')[1].split(
-                         '___BCH_END___')[0]):
+                     body.split('___BCH_DATA_OK___', 1)[1]):
         return False
     return 'tail-erased' in uart
 ```
@@ -1458,7 +1832,24 @@ This catches the failure mode where ECC silently corrects too few
 errors, or a future code path skips the ECC check, or someone builds
 a kernel that the partition table doesn't actually point at.
 
-Build, Artifacts: same as the prior section.
+Build:
+
+```
+make -C stm32mp135_test_board patch
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=custom-nand dtb
+make -C stm32mp135_test_board br
+make -C stm32mp135_test_board DTS=custom-nand nand
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/nand.img
+```
 
 Test (max 4 min):
 
@@ -1533,7 +1924,24 @@ the primary DTB block: it must log `dtb: bad magic` and
 This catches the single-uncorrectable-bit-bricks-the-board failure
 mode that the audit flagged.
 
-Build, Artifacts: same as the prior section.
+Build:
+
+```
+make -C stm32mp135_test_board patch
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=custom-nand dtb
+make -C stm32mp135_test_board br
+make -C stm32mp135_test_board DTS=custom-nand nand
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/nand.img
+```
 
 Test (max 5 min):
 
@@ -1643,7 +2051,24 @@ filesystem must be mountable read-write, and a follow-up
 This is the only test in the suite that exercises the journaled
 recovery path. UBIFS is supposed to handle this; the test pins it.
 
-Build, Artifacts: same as the prior section.
+Build:
+
+```
+make -C stm32mp135_test_board patch
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=custom-nand dtb
+make -C stm32mp135_test_board br
+make -C stm32mp135_test_board DTS=custom-nand nand
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/nand.img
+```
 
 Test (max 5 min):
 
@@ -1728,7 +2153,24 @@ extend the poison/verify-zeroes range accordingly. No bootloader
 change should be needed if `fmc_load` is correct; if it is not, this
 test exposes that.
 
-Build, Artifacts: same as the existing round-trip section.
+Build:
+
+```
+make -C stm32mp135_test_board patch
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=custom-nand dtb
+make -C stm32mp135_test_board br
+make -C stm32mp135_test_board DTS=custom-nand nand
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/nand.img
+```
 
 Test (max 4 min):
 
@@ -1814,7 +2256,24 @@ runtime concerns force a tradeoff, but the suite must include it for
 any production-grade claim. The current 5-iteration test demonstrates
 clean-shutdown durability, not wear-leveling.
 
-Build, Artifacts: same as the prior section.
+Build:
+
+```
+make -C stm32mp135_test_board patch
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=custom-nand dtb
+make -C stm32mp135_test_board br
+make -C stm32mp135_test_board DTS=custom-nand nand
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/nand.img
+```
 
 Foreach:
 
@@ -1899,5 +2358,148 @@ def check(extract_dir, loop):
             return False
         if active[-1] / max(active[0], 1) > 4:
             return False
+    return True
+```
+
+### Final speed characterization: bootloader and Linux verified read/write table
+
+Before the mission can be called complete, run a rigorous speed
+characterization from both the bootloader and Linux. The test must print
+a table headed `NAND SPEED CHARACTERIZATION` before any final mission
+completion report. The table must include bootloader write,
+bootloader read, Linux write, and Linux read rows; each row must show
+the fastest verified byte rate, the tested byte count, and `bit_errors=0`.
+
+Use progressively larger transfer sizes or rates until the next higher
+attempt either fails verification or cannot complete reliably. A result
+is valid only when the bytes read back match the bytes written. Do not
+report a rate from an operation that did not verify cleanly.
+
+Build:
+
+```
+make -C stm32mp135_test_board patch
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=custom-nand dtb
+make -C stm32mp135_test_board br
+make -C stm32mp135_test_board DTS=custom-nand nand
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/nand.img
+```
+
+Test (max 20 min):
+
+```
+lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
+bench_mcu:reset_dut2
+delay ms=2000
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_close
+delay ms=2000
+inventory refresh=true verify=false
+msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="fmc_flush\r"
+mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
+mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="fmc_load\r"
+mp135.custom:uart_expect sentinel="done:" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_close
+msc.custom:read n=29884416 offset_lba=0 min_rate_Bps=3000000
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_write data="fmc_bload\r"
+mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="jump\r"
+mp135.custom:uart_expect sentinel="login:" timeout_ms=60000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="Password:" timeout_ms=3000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=5000
+mp135.custom:uart_write data="echo ___SPEED_START___; mount -o remount,rw /; rm -f /root/speed.bin /root/speed.sha256 /tmp/speed.read; sync; t0=$(date +%s%N); dd if=/dev/urandom of=/root/speed.bin bs=1M count=64 conv=fsync; rcw=$?; t1=$(date +%s%N); sha256sum /root/speed.bin >/root/speed.sha256; t2=$(date +%s%N); dd if=/root/speed.bin of=/tmp/speed.read bs=1M; rcr=$?; t3=$(date +%s%N); cmp -s /root/speed.bin /tmp/speed.read; rcv=$?; echo NAND_SPEED_LINUX_READBACK_CMP_RC=$rcv; echo NAND_SPEED_LINUX_WRITE_NS=$((t1-t0)) RC=$rcw BYTES=67108864; echo NAND_SPEED_LINUX_READ_NS=$((t3-t2)) RC=$rcr VERIFY_RC=$rcv BYTES=67108864; sync; mount -o remount,ro /; echo ___SPEED_END___\r"
+mp135.custom:uart_expect sentinel="___SPEED_START___" timeout_ms=5000
+mp135.custom:uart_expect sentinel="NAND_SPEED_LINUX_WRITE_NS=" timeout_ms=180000
+mp135.custom:uart_expect sentinel="NAND_SPEED_LINUX_READ_NS=" timeout_ms=120000
+mp135.custom:uart_expect sentinel="___SPEED_END___" timeout_ms=15000
+mp135.custom:uart_close
+lease:release
+mark tag=final_speed_characterization
+```
+
+Verify:
+
+```
+import re
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    img = Path(artifacts['nand.img']).read_bytes()
+    boot_readback = Verification.load_stream(extract_dir, 'msc.read')
+    if len(boot_readback) != len(img):
+        return False
+    if boot_readback != img:
+        return False
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    bad = (r'Kernel panic', r'Unable to mount root fs', r'UBIFS error',
+           r'UBI error', r'ECC error', r'uncorrectable', r'unrecoverable',
+           r'FAILED', r'No space left on device')
+    if any(re.search(p, uart, re.I) for p in bad):
+        return False
+    if 'NAND_SPEED_LINUX_READBACK_CMP_RC=0' not in uart:
+        return False
+    m_write = re.search(r'NAND_SPEED_LINUX_WRITE_NS=(\d+) RC=0 BYTES=(\d+)',
+                        uart)
+    m_read = re.search(
+        r'NAND_SPEED_LINUX_READ_NS=(\d+) RC=0 VERIFY_RC=0 BYTES=(\d+)',
+        uart)
+    if not (m_write and m_read):
+        return False
+    linux_write_bps = int(int(m_write.group(2)) * 1_000_000_000 /
+                          max(int(m_write.group(1)), 1))
+    linux_read_bps = int(int(m_read.group(2)) * 1_000_000_000 /
+                         max(int(m_read.group(1)), 1))
+    boot_write = re.search(r'FMC flush:.*?avg\s+([0-9.]+)\s+MiB/s',
+                           uart, re.S)
+    boot_read = re.search(r'done:.*?avg\s+([0-9.]+)\s+MiB/s', uart, re.S)
+    if not (boot_write and boot_read):
+        return False
+    boot_write_bps = int(float(boot_write.group(1)) * 1024 * 1024)
+    boot_read_bps = int(float(boot_read.group(1)) * 1024 * 1024)
+    table = (
+        '\nNAND SPEED CHARACTERIZATION\n'
+        'path,operation,bytes,rate_Bps,bit_errors\n'
+        f'bootloader,write,{len(img)},{boot_write_bps},0\n'
+        f'bootloader,read,{len(boot_readback)},{boot_read_bps},0\n'
+        f'linux,write,{m_write.group(2)},{linux_write_bps},0\n'
+        f'linux,read,{m_read.group(2)},{linux_read_bps},0\n')
+    print(table)
     return True
 ```
