@@ -1744,7 +1744,7 @@ corruption. Every test must FAIL on the current bootloader code and
 PASS only after the corresponding fix lands; a test that passes today
 on the unfixed code is, by construction, not exercising the fix.
 
-Tests below assume the prior 27 sections have left a freshly
+Tests below assume the prior 28 sections have left a freshly
 provisioned NAND. Each new section re-flashes `nand.img` at its start
 so a deliberately-corrupted run cannot leak into the next section.
 They also tolerate a degraded final state by re-flashing on Verify if
@@ -2068,6 +2068,95 @@ def check(_extract_dir):
     # name is fixed so future preflights can `#if` against it.
     m = re.search(r'#\s*define\s+BLOAD_KERNEL_HASH_CHECK\s+0\b', text)
     return m is not None
+```
+
+### Kernel hash contract preflight: gated kernel_sha256[32] field declared in nand_pt_t
+
+With `BLOAD_KERNEL_HASH_CHECK` reserved at value `0`, the next smallest
+meaningful step is to declare the actual storage for the digest inside
+`nand_pt_t`, but wrap the field inside `#if BLOAD_KERNEL_HASH_CHECK`
+so the struct layout is byte-identical to today's layout when the gate
+is `0`. This pins the field name (`kernel_sha256[32]`) at the exact
+offset future code will use (just before `checksum`), and gives the
+next preflight a real lvalue to read without yet shifting the on-flash
+PT layout. Because the `#if` evaluates to `0` at compile time, the
+preprocessor drops the new field entirely; `sizeof(nand_pt_t)`,
+`offsetof(checksum)`, and every existing memcpy/checksum loop stay at
+their iter-43 values, so section 1 (`pt: checksum mismatch` regression
+class) and section 11 (silent `fmc_bload` regression class from iter
+44) cannot regress. The field declaration uses the canonical token
+`uint8_t kernel_sha256[32];` so a regex preflight can confirm it is
+inside the gated block.
+
+Splitting smaller (e.g. only a typedef alias for the digest length)
+leaves no struct member the next step can read; splitting larger
+(populating the field from `nandimage.py` or wiring the compute path
+in `fmc_bload`) re-opens the iter-44 regression class because either
+side would have to change behavior while the gate is still `0`. This
+declaration-only step is therefore the smallest pre-stage that adds
+real C state.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/build/main.stm32
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+import re
+
+def check(_extract_dir):
+    pt = Path('stm32mp135_test_board/bootloader/src/nand_pt.h')
+    image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
+    if not pt.is_file():
+        return False
+    if not image.is_file() or image.stat().st_size == 0:
+        return False
+    text = pt.read_text(encoding='utf-8', errors='replace')
+    # The gate macro must still be defined as 0 so the default build
+    # keeps the hash-check path compiled out and the on-flash PT
+    # layout unchanged.
+    if not re.search(r'#\s*define\s+BLOAD_KERNEL_HASH_CHECK\s+0\b', text):
+        return False
+    # Locate every `#if BLOAD_KERNEL_HASH_CHECK` block (matched with
+    # its `#endif`) and require that at least one such block contains
+    # the canonical field declaration `uint8_t kernel_sha256[32];`.
+    # Walking by index keeps nested `#if` directives honest.
+    field_re = re.compile(r'\buint8_t\s+kernel_sha256\s*\[\s*32\s*\]\s*;')
+    if_re = re.compile(r'#\s*if\s+BLOAD_KERNEL_HASH_CHECK\b')
+    endif_re = re.compile(r'#\s*endif\b')
+    for m in if_re.finditer(text):
+        i = m.end()
+        depth = 1
+        # Scan forward, tracking nested `#if`/`#endif` so we close on
+        # the matching directive.
+        any_if = re.compile(r'#\s*if(?:def|ndef)?\b')
+        while i < len(text) and depth > 0:
+            n_if = any_if.search(text, i)
+            n_end = endif_re.search(text, i)
+            if n_end is None:
+                return False
+            if n_if is not None and n_if.start() < n_end.start():
+                depth += 1
+                i = n_if.end()
+            else:
+                depth -= 1
+                i = n_end.end()
+        block = text[m.end():i]
+        if field_re.search(block):
+            return True
+    return False
 ```
 
 ## WIP
