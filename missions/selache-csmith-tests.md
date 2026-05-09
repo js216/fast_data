@@ -1277,6 +1277,65 @@ def check(extract_dir):
     return bool(got) and int(got[-1], 16) == 0xbcb226c6
 ```
 
+### cces csmith 4d174e76 checksum
+
+Fix the next focused draft runtime failure from the full foreach sweep:
+`selache/xtest/build/drafts/cces/cctest_csmith_4d174e76.0x6ef1b6bd.ldr`
+on the embedded target. This draft has the same class of nonportable
+`#pragma pack` wrappers seen in `cctest_csmith_07baaacc`,
+`cctest_csmith_025edc5d`, `cctest_csmith_3f5ea6f7`,
+`cctest_csmith_0e0cf3fc`, `cctest_csmith_126ec2e5`,
+`cctest_csmith_2375a576`, `cctest_csmith_2d9c82c1`,
+`cctest_csmith_335e1acc`, `cctest_csmith_3f5d94de`, and
+`cctest_csmith_452232a4`. The wrappers live in
+`selache/xtest/draft_cases/cctest_csmith_4d174e76.c` at three
+push/pop pairs and bracket `struct S0`, `struct S2`, and `struct S3`;
+`struct S2` and `struct S3` contain bitfields whose packed layout
+diverges between the embedded toolchain and gcc/clang. Host gcc and
+host clang already produce `0x6ef1b6bd` both with and without those
+wrappers (verified with the xtest
+`CFLAGS_HOST = -m32 -funsigned-char -std=c99 -w -O0` against the xtest
+`host_wrap.c`), so the removal is checksum-preserving for the
+reference toolchains. Do not rewrite the expected checksum, delete the
+draft, weaken the foreach test, or replace this with a full draft-sweep
+fix. Keep this step scoped to removing the nonportable `#pragma pack`
+wrappers from this single draft for all toolchains. The corrected
+embedded-target-built draft must report the source's expected
+checksum on hardware.
+
+Build:
+
+```
+make -C selache/xtest build/drafts/cces/cctest_csmith_4d174e76.0x6ef1b6bd.ldr -j$(nproc)
+```
+
+Artifacts:
+
+```
+selache/xtest/build/drafts/cces/cctest_csmith_4d174e76.0x6ef1b6bd.ldr
+```
+
+Test (max 1 min):
+
+```
+dsp:reset
+dsp:uart_open
+dsp:boot ldr=@cctest_csmith_4d174e76.0x6ef1b6bd.ldr timeout_ms=2500
+dsp:uart_expect sentinel="got " timeout_ms=2500
+delay ms=2500
+dsp:uart_close
+mark tag=cctest_run
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    uart = Verification.load_stream_text(extract_dir, 'dsp.uart')
+    got = re.findall(r'got\s+([0-9a-fA-F]+)', uart)
+    return bool(got) and int(got[-1], 16) == 0x6ef1b6bd
+```
+
 ## WIP
 
 # Selache csmith draft regression sweep
