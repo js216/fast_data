@@ -520,8 +520,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### Filesystem mutation round-trip under Qemu
 
 Exercises the create/link/unlink paths the read-only smoke set
@@ -574,6 +572,8 @@ def check(extract_dir):
         return False
     return True
 ```
+
+## WIP
 
 ### Tty line discipline (sgtty) under Qemu
 
