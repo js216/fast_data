@@ -233,3 +233,16 @@
 2026-05-09T04:22:24 kernel-clock-bringup Verifier pass none
 2026-05-09T05:27:30 kernel-clock-bringup Tester pass 10
 2026-05-09T05:36:06 kernel-clock-bringup Worker pass
+2026-05-09T05:51:00 kernel-clock-bringup Orchestrator pass 16
+2026-05-09T06:02:51 kernel-clock-bringup Manager pass name clock after eth1rx
+2026-05-09T06:04:11 kernel-clock-bringup Minimizer pass one latch + sentinel; mirrors step 9
+2026-05-09T06:07:20 kernel-clock-bringup Worker pass
+2026-05-09T06:08:30 kernel-clock-bringup Verifier pass none
+2026-05-09T06:47:30 kernel-clock-bringup Tester fail 3
+2026-05-09T07:00:00 kernel-clock-bringup Worker pass
+2026-05-09T07:00:30 kernel-clock-bringup Verifier pass none
+2026-05-09T07:30:00 kernel-clock-bringup Tester fail 1
+2026-05-09T10:43:30 kernel-clock-bringup Tester fail 0
+2026-05-09T11:28:00 kernel-clock-bringup Tester fail 0
+2026-05-09T13:30:30 kernel-clock-bringup Tester fail 2
+2026-05-09T17:04:00 kernel-clock-bringup Worker pass
