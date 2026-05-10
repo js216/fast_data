@@ -99,6 +99,53 @@ The ratchet has **three** stacked checks, not just one:
 Drivers (`dev/*`) and `arch/*` remain exempt by directory; the
 discipline only governs the portable kernel core.
 
+Build:
+
+```
+test -x unix-v7-c99/tools/qemu-shell.sh
+test -d unix-v7-c99/tools/qemu
+```
+
+Artifacts:
+
+```
+unix-v7-c99/tools/qemu-shell.sh
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+import os
+import re
+from pathlib import Path
+
+def check(extract_dir):
+    wrapper = Path('unix-v7-c99/tools/qemu-shell.sh')
+    if not wrapper.exists() or not os.access(wrapper, os.X_OK):
+        return False
+    text = wrapper.read_text()
+    # Contract from the section above: <log-path> <script-name>,
+    # truncates the log, applies a wall-clock timeout overridable
+    # via QEMU_SHELL_TIMEOUT_S, and picks a fixture under
+    # tools/qemu/<script-name>.expect.
+    if not re.search(r'QEMU_SHELL_TIMEOUT_S', text):
+        return False
+    if not re.search(r':\s*>\s*"\$log_path"', text):
+        return False
+    if not re.search(r'tools/qemu/\$\{?script_name\}?\.expect|'
+                     r'qemu/\$script_name\.expect', text):
+        return False
+    # Every fixture under tools/qemu/ must end with the Ctrl-A x
+    # quit so happy-path sections don't sit on the timeout.
+    for f in Path('unix-v7-c99/tools/qemu').glob('*.expect'):
+        body = f.read_text()
+        if 'send "\\x01x"' not in body or 'expect eof' not in body:
+            return False
+    return True
+```
+
 ### Cross-compile gate: `unix` ELF and `root.img` build clean
 
 Smallest meaningful step: prove the C99 cross build still works after
