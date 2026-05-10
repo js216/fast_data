@@ -105,7 +105,8 @@ are always only run up to first failing step.
 Bench tests run through `test_serv`, a queued job server polled by the
 hardware pollers. `run.py`'s `Runner.submit_plan` prefixes every job's
 `description` field with `<user>: ` so jobs can be attributed to the
-operator that submitted them.
+operator that submitted them. Run `test_serv` inventory to learn how to
+operate and reset various devices.
 
 At the start of every iteration, before spawning Manager, Orchestrator
 sweeps `test_serv`: every job whose status is `queued` or `running` and
