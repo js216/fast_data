@@ -285,7 +285,7 @@ stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
 ```
 
-Test (max 4 min):
+Test (max 5 min):
 
 ```
 lease:claim devices="bench_mcu.0,mp135.evb,ssh.target" duration_s=600
@@ -311,6 +311,16 @@ mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
 mp135.evb:uart_expect sentinel="login:" timeout_ms=60000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="Password:" timeout_ms=10000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=15000
+delay ms=5000
+mp135.evb:uart_write data="killall -q -9 udhcpc\r"
+delay ms=300
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+mp135.evb:uart_write data="udhcpc -i eth0 -n -T 5 -t 6; echo dhcp_rc=$?\r"
+mp135.evb:uart_expect sentinel="dhcp_rc=0" timeout_ms=30000
 mp135.evb:uart_close
 mark tag=stream_ws_boot_linux
 ```
@@ -648,9 +658,20 @@ mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
 mp135.evb:uart_expect sentinel="login:" timeout_ms=60000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="Password:" timeout_ms=10000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=15000
+delay ms=5000
+mp135.evb:uart_write data="killall -q -9 udhcpc\r"
+delay ms=300
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+mp135.evb:uart_write data="udhcpc -i eth0 -n -T 5 -t 6; echo dhcp_rc=$?\r"
+mp135.evb:uart_expect sentinel="dhcp_rc=0" timeout_ms=30000
 mp135.evb:uart_close
-delay ms=60000
+delay ms=120000
 ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu stm32mp135-evb-recovery"
+ssh.target:exec command="echo stream_ws_ssh_warmup"
 ssh.target:put data=@tcp_hello path=/tmp/stream_ws_tcp_hello timeout_ms=60000
 ssh.target:exec command="sha256sum /tmp/stream_ws_tcp_hello && chmod 755 /tmp/stream_ws_tcp_hello && test -x /tmp/stream_ws_tcp_hello && echo stream_ws_tcp_hello_executable; rc=$?; rm -f /tmp/stream_ws_tcp_hello && test ! -e /tmp/stream_ws_tcp_hello || rc=$?; exit $rc"
 lease:release
@@ -686,6 +707,105 @@ def check(extract_dir):
 ```
 
 ## WIP
+
+### Run TCP hello service under SSH
+
+Boot the STM32MP135 Linux image, place the already built TCP hello
+service in `/tmp`, start it through `ssh:exec`, and verify from
+target-side command output that it reaches the TCP listen state. This is
+only a target-side execution check: it must not add a host TCP
+connection, use WebSocket receive, or change kernel command-line/root
+handling; boot arguments remain supplied by the board DTS and rootfs/test
+plan.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+build/stream-websockets/tcp_hello
+```
+
+Test (max 7 min):
+
+```
+lease:claim devices="bench_mcu.0,mp135.evb,ssh.target" duration_s=600 auto_release_on_session_end=true
+bench_mcu:reset_dut
+delay ms=2000
+inventory refresh=true verify=false
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_write data="two\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=15000
+mp135.evb:uart_write data="jump"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=60000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="Password:" timeout_ms=10000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=15000
+delay ms=5000
+mp135.evb:uart_write data="killall -q -9 udhcpc\r"
+delay ms=300
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+mp135.evb:uart_write data="udhcpc -i eth0 -n -T 5 -t 6; echo dhcp_rc=$?\r"
+mp135.evb:uart_expect sentinel="dhcp_rc=0" timeout_ms=30000
+mp135.evb:uart_close
+delay ms=120000
+ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu stm32mp135-evb-recovery"
+ssh.target:exec command="echo stream_ws_ssh_warmup"
+ssh.target:put data=@tcp_hello path=/tmp/stream_ws_tcp_hello timeout_ms=60000
+ssh.target:exec command="pid=; cleanup() { test -z $pid || kill $pid 2>/dev/null || true; rm -f /tmp/stream_ws_tcp_hello /tmp/stream_ws_tcp_hello.out; }; trap cleanup EXIT; chmod 755 /tmp/stream_ws_tcp_hello; rm -f /tmp/stream_ws_tcp_hello.out; /tmp/stream_ws_tcp_hello >/tmp/stream_ws_tcp_hello.out 2>&1 & pid=$!; ok=0; for i in 1 2 3 4 5; do if grep -Eq '^[[:space:]]*[0-9]+: [0-9A-Fa-f]{8}:223D [0-9A-Fa-f]{8}:[0-9A-Fa-f]{4} 0A ' /proc/net/tcp; then ok=1; break; fi; sleep 1; done; test $ok = 1 && echo stream_ws_tcp_hello_listening"
+lease:release
+mark tag=stream_ws_run_tcp_hello
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    linux_conf = Path("stm32mp135_test_board/config/linux.conf").read_text()
+    if 'CONFIG_CMDLINE="root=' in linux_conf:
+        return False
+    if "CONFIG_CMDLINE_FORCE=y" in linux_conf:
+        return False
+
+    ops = Verification.load_ops(extract_dir)
+    if not Verification.op_succeeded(ops, "ssh.target", "put"):
+        return False
+    if not Verification.op_succeeded(ops, "ssh.target", "exec"):
+        return False
+    if any((o.get("device") or "").split(".", 1)[0] in {"tcp", "ws"}
+           for o in ops):
+        return False
+
+    out = Verification.load_stream_text(
+        extract_dir, "ssh.exec", encoding="utf-8")
+    return "stream_ws_tcp_hello_listening" in out.splitlines()
+```
 
 ## Planned Mission Arc
 

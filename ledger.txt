@@ -177,3 +177,45 @@
 2026-05-08T10:35:59 stream-websockets Verifier pass none
 2026-05-08T10:53:01 stream-websockets Tester pass 12
 2026-05-08T10:54:48 stream-websockets Enemy pass none
+2026-05-08T10:56:08 stream-websockets Orchestrator pass 10
+2026-05-08T10:57:40 stream-websockets Manager pass run tcp hello via ssh
+2026-05-08T10:59:16 stream-websockets Minimizer pass run_listen_min_after_upload
+2026-05-08T11:03:33 stream-websockets Worker pass
+2026-05-08T11:05:35 stream-websockets Verifier pass none
+2026-05-08T11:55:48 stream-websockets Tester fail 11 bench_mcu_lease_stuck
+2026-05-08T11:57:09 stream-websockets Worker pass
+2026-05-08T11:58:37 stream-websockets Verifier pass foreign_lease
+2026-05-08T12:38:23 stream-websockets Tester fail 6 ssh_no_route
+2026-05-08T12:40:38 stream-websockets Worker pass
+2026-05-08T12:42:17 stream-websockets Verifier pass host-route-missing
+2026-05-08T13:46:37 stream-websockets Tester fail 6 ssh_conn_closed
+2026-05-08T13:53:03 stream-websockets Worker pass
+2026-05-08T13:54:41 stream-websockets Verifier pass none
+2026-05-08T14:37:03 stream-websockets Tester fail 6 ssh_conn_closed
+2026-05-08T15:52:29 stream-websockets Worker pass
+2026-05-08T15:53:58 stream-websockets Verifier pass none
+2026-05-08T16:16:28 stream-websockets Tester fail 11 step12_ssh_conn_closed
+2026-05-08T16:18:55 stream-websockets Worker pass
+2026-05-08T16:20:13 stream-websockets Verifier pass none
+2026-05-08T17:08:18 stream-websockets Tester fail 6 step7_no_route_to_host
+2026-05-09T00:15:04 stream-websockets Worker pass
+2026-05-08T17:16:25 stream-websockets Verifier pass none
+2026-05-08T18:00:43 stream-websockets Tester fail 4 step5_foreign_lease_hold
+2026-05-08T20:44:57 stream-websockets Tester fail 11 step12_ssh_conn_closed_again
+2026-05-08T20:47:00 stream-websockets Worker pass
+2026-05-08T20:48:36 stream-websockets Verifier pass none
+2026-05-08T21:21:15 stream-websockets Tester fail 6 step7_killall_sigterm_deconfig
+2026-05-08T21:22:06 stream-websockets Worker pass
+2026-05-08T21:23:25 stream-websockets Verifier pass none
+2026-05-08T21:53:05 stream-websockets Tester fail 6 step7_uart_input_overrun
+2026-05-08T21:54:20 stream-websockets Worker pass
+2026-05-08T21:56:30 stream-websockets Verifier pass none
+2026-05-08T22:16:32 stream-websockets Tester fail 6 step7_ssh_hang_or_lease_expire
+2026-05-09T06:00:42 stream-websockets Worker pass
+2026-05-09T06:01:57 stream-websockets Verifier pass none
+2026-05-09T06:23:41 stream-websockets Worker pass
+2026-05-09T06:23:41 stream-websockets Verifier pass none
+2026-05-09T07:12:39 stream-websockets Tester fail 6 dhcp_sentinel_echo_false_positive
+2026-05-09T07:28:21 stream-websockets Worker pass
+2026-05-09T07:28:21 stream-websockets Verifier pass none
+2026-05-09T07:58:34 stream-websockets Tester fail 6 step7_ssh_conn_closed_again
