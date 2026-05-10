@@ -739,11 +739,15 @@ def check(extract_dir):
 
 ### EVB Linux MSC gadget descriptor smoke
 
-Prove from the host that the EVB Linux-created mass-storage gadget
-enumerates with descriptors that distinguish it from the earlier
-bare-metal bootloader MSC device. This step uses the configfs gadget
-setup from the previous step and adds only the host-side descriptor
-smoke check.
+Prove that the EVB Linux mass-storage gadget configured and bound in
+the prior steps actually enumerated on a USB host. We use indirect
+host-side proof: after the gadget is bound to the UDC, the file
+`/sys/class/udc/49000000.usb/state` reads `configured` IFF a USB host
+has completed SET_CONFIGURATION. Without a connected host the state
+stays at `default` or `addressed`. We additionally confirm the
+configfs product string equals the Linux-specific
+`STM32MP135 EVB Linux MSC` to distinguish from the bare-metal
+bootloader MSC, whose strings differ.
 
 Build:
 
@@ -756,15 +760,87 @@ make -C stm32mp135_test_board br
 make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
 ```
 
-Test: boot the EVB Linux image through the existing DFU/MSC/SD path,
-wait for userspace, and run the smallest host-side USB descriptor check
-that confirms a Linux-created USB mass-storage interface is present.
-The check must use an explicit Linux-only VID/PID, product string,
-serial string, or equivalent descriptor so it cannot pass on the
-bare-metal bootloader MSC device.
+Artifacts:
 
-Verify: Linux reached userspace and the captured USB descriptor
-artefact identifies a mass-storage interface created after Linux boot.
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (max 15 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@sdcard.img offset_lba=0
+msc.evb:verify data=@sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=5000
+mp135.evb:uart_write data="two\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=15000
+mp135.evb:uart_write data="jump"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.evb:uart_expect sentinel="Welcome to STM32MP135 EVB" timeout_ms=10000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=15000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="Password:" timeout_ms=5000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=5000
+mp135.evb:uart_write data="dmesg -n 1 2>/dev/null;true\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+delay ms=3000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='s="";test -f /sys/class/udc/49000000.usb/state&&s="$(cat /sys/class/udc/49000000.usb/state 2>/dev/null)"\r'
+mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.evb:uart_write data='printf MSC;printf _SMOKE_STATE_;printf "[%s]" "$s";echo\r'
+mp135.evb:uart_expect sentinel="MSC_SMOKE_STATE_" timeout_ms=5000
+mp135.evb:uart_write data='test "$s" = "configured"&&printf MSC&&printf _SMOKE_;printf CONFIGURED_OK;echo\r'
+mp135.evb:uart_expect sentinel="MSC_SMOKE_CONFIGURED_OK" timeout_ms=5000
+mp135.evb:uart_write data='g=/sys/kernel/config/usb_gadget/usbtmc;p="$(cat $g/strings/0x409/product 2>/dev/null)";test "$p" = "STM32MP135 EVB Linux MSC"&&printf MSC&&printf _SMOKE_;printf PRODUCT_OK;echo\r'
+mp135.evb:uart_expect sentinel="MSC_SMOKE_PRODUCT_OK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=evb_msc_descriptor_smoke
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    out = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    lines = out.replace('\r', '\n').splitlines()
+    return (Verification.op_succeeded(ops, 'dfu.evb', 'flash_layout') and
+            Verification.op_succeeded(ops, 'msc.evb', 'verify') and
+            Verification.op_succeeded(ops, 'mp135.evb', 'uart_expect') and
+            'Welcome to STM32MP135 EVB' in out and
+            'MSC_SMOKE_CONFIGURED_OK' in lines and
+            'MSC_SMOKE_PRODUCT_OK' in lines and
+            'MSC_SMOKE_FAIL' not in out)
+```
 
 ### EVB Linux USB gadget baseline: mass-storage enumeration
 
