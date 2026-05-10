@@ -1383,8 +1383,6 @@ def check(extract_dir):
     return seen_load
 ```
 
-## WIP
-
 ### Kernel reaches UART banner on EVB
 
 First bench section. Reuses the same DFU+autoload-stop+`two`+`jump`
@@ -1441,13 +1439,23 @@ inventory refresh=true verify=false
 msc.evb:write data=@unix-sdcard.img offset_lba=0
 msc.evb:verify data=@unix-sdcard.img offset_lba=0
 mp135.evb:uart_open
-delay ms=300
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
 mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="two\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=15000
-mp135.evb:uart_write data="jump"
-delay ms=200
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.evb:uart_expect sentinel="mem = " timeout_ms=15000
@@ -1477,6 +1485,8 @@ def check(extract_dir):
         return False
     return bool(re.search(r'mem = [1-9]\d{2,}', uart[i_mem:]))
 ```
+
+## WIP
 
 ### Userspace reaches login: on EVB
 
@@ -1528,13 +1538,23 @@ inventory refresh=true verify=false
 msc.evb:write data=@unix-sdcard.img offset_lba=0
 msc.evb:verify data=@unix-sdcard.img offset_lba=0
 mp135.evb:uart_open
-delay ms=300
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
 mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="two\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=15000
-mp135.evb:uart_write data="jump"
-delay ms=200
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.evb:uart_expect sentinel="mem = " timeout_ms=15000
@@ -1617,13 +1637,23 @@ inventory refresh=true verify=false
 msc.evb:write data=@unix-sdcard.img offset_lba=0
 msc.evb:verify data=@unix-sdcard.img offset_lba=0
 mp135.evb:uart_open
-delay ms=300
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
 mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="two\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=15000
-mp135.evb:uart_write data="jump"
-delay ms=200
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
 mp135.evb:uart_write data="root\r"
@@ -1713,13 +1743,23 @@ inventory refresh=true verify=false
 msc.evb:write data=@unix-sdcard.img offset_lba=0
 msc.evb:verify data=@unix-sdcard.img offset_lba=0
 mp135.evb:uart_open
-delay ms=300
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
 mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="two\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=15000
-mp135.evb:uart_write data="jump"
-delay ms=200
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
 mp135.evb:uart_write data="root\r"
@@ -1806,13 +1846,23 @@ inventory refresh=true verify=false
 msc.evb:write data=@unix-sdcard.img offset_lba=0
 msc.evb:verify data=@unix-sdcard.img offset_lba=0
 mp135.evb:uart_open
-delay ms=300
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
 mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="two\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=15000
-mp135.evb:uart_write data="jump"
-delay ms=200
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
 mp135.evb:uart_write data="dmr\r"
@@ -1909,13 +1959,23 @@ inventory refresh=true verify=false
 msc.evb:write data=@unix-sdcard.img offset_lba=0
 msc.evb:verify data=@unix-sdcard.img offset_lba=0
 mp135.evb:uart_open
-delay ms=300
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
 mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="two\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=15000
-mp135.evb:uart_write data="jump"
-delay ms=200
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.evb:uart_expect sentinel="mem = " timeout_ms=15000
