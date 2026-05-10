@@ -763,3 +763,197 @@ def check(extract_dir):
 
     return True
 ```
+
+## WIP
+
+### Prove upgraded kernel reaches userspace over SSH on the custom board
+
+UART `login:` shows a getty was spawned but does not prove userspace is
+network-reachable or that the running kernel is the upgraded build. Boot the
+upgraded SD image through the local single-stage bootloader, then register the
+dropbear host key and run `ssh.custom:exec uname -a` to read the live kernel
+release string. The verifier asserts that the SSH output names the upgraded
+6.6 kernel series and the `armv7l` machine, and that the boot log is free of
+TF-A / OP-TEE / U-Boot / PSCI artefacts. SSH is the ultimate gate.
+
+Build:
+```
+make -C stm32mp135_test_board boot patch kernel dtb br sd
+```
+
+Artifacts:
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (max 10 min):
+```
+lease:claim devices="bench_mcu.0,mp135.custom,ssh.custom" duration_s=900 auto_release_on_session_end=true
+bench_mcu:reset_dut2
+delay ms=10000
+inventory refresh=true verify=false
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.custom:write data=@sdcard.img offset_lba=0
+msc.custom:verify data=@sdcard.img offset_lba=0
+mp135.custom:uart_open
+delay ms=300
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="two\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=15000
+mp135.custom:uart_write data="jump"
+delay ms=200
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
+mp135.custom:uart_close
+delay ms=15000
+ssh.custom:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu kernel-upgrade-rootfs"
+ssh.custom:exec command="uname -a"
+mark tag=kernel_ssh_custom
+```
+
+Verify:
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    for forbidden in [
+        'U-Boot',
+        'OP-TEE',
+        'TF-A',
+        'PSCI: failed',
+        'Unable to handle kernel',
+        'Kernel panic',
+    ]:
+        if forbidden in uart:
+            raise AssertionError('boot log contains forbidden/fatal text: ' + forbidden)
+    for required in ['Linux version', 'login:']:
+        if required not in uart:
+            raise AssertionError('boot log missing: ' + required)
+
+    ssh_out = Verification.load_stream_text(extract_dir, 'ssh.exec')
+    if 'Linux' not in ssh_out:
+        raise AssertionError('ssh uname output missing Linux banner')
+    if 'armv7l' not in ssh_out:
+        raise AssertionError('ssh uname output missing armv7l machine')
+    if '6.6.' not in ssh_out:
+        raise AssertionError(
+            'ssh uname output does not name upgraded 6.6 kernel: ' + ssh_out.strip())
+
+    return True
+```
+
+### Prove upgraded kernel reaches userspace over SSH on the eval board
+
+Mirror the custom-board ultimate gate on the eval board (`mp135.evb`,
+`msc.evb`, `ssh.target`). Boot the SAME upgraded SD image through the local
+single-stage bootloader path, register the dropbear host key, and run
+`ssh.target:exec uname -a` to read the live kernel release string. The
+verifier asserts the SSH output names the upgraded 6.6 kernel and the
+`armv7l` machine, and that the boot log is free of TF-A / OP-TEE / U-Boot /
+PSCI artefacts. SSH is the ultimate gate; passing on both boards proves the
+upgraded kernel binary is portable across the bench.
+
+Build:
+```
+make -C stm32mp135_test_board boot patch kernel dtb br sd
+```
+
+Artifacts:
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (max 15 min):
+```
+lease:claim devices="bench_mcu.0,mp135.evb,ssh.target" duration_s=1200 auto_release_on_session_end=true
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@sdcard.img offset_lba=0
+msc.evb:verify data=@sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=5000
+mp135.evb:uart_write data="two\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=15000
+mp135.evb:uart_write data="jump"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=180000
+mp135.evb:uart_close
+delay ms=15000
+ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOxB/ZYPInH4jKwBq8tciowGWEl7NNVhXriVp4ylIxRu kernel-upgrade-rootfs"
+ssh.target:exec command="uname -a"
+mark tag=kernel_ssh_evb
+```
+
+Verify:
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    for forbidden in [
+        'U-Boot',
+        'OP-TEE',
+        'TF-A',
+        'PSCI: failed',
+        'Unable to handle kernel',
+        'Kernel panic',
+    ]:
+        if forbidden in uart:
+            raise AssertionError('boot log contains forbidden/fatal text: ' + forbidden)
+    for required in ['Linux version', 'login:']:
+        if required not in uart:
+            raise AssertionError('boot log missing: ' + required)
+
+    ssh_out = Verification.load_stream_text(extract_dir, 'ssh.exec')
+    if 'Linux' not in ssh_out:
+        raise AssertionError('ssh uname output missing Linux banner')
+    if 'armv7l' not in ssh_out:
+        raise AssertionError('ssh uname output missing armv7l machine')
+    if '6.6.' not in ssh_out:
+        raise AssertionError(
+            'ssh uname output does not name upgraded 6.6 kernel: ' + ssh_out.strip())
+
+    return True
+```

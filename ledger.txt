@@ -362,3 +362,50 @@
 2026-05-08T23:45:30 kernel-upgrade Tester pass 14
 2026-05-08T23:46:57 kernel-upgrade Enemy pass none
 2026-05-08T23:49:06 kernel-upgrade Worker pass
+2026-05-08T23:50:31 kernel-upgrade Stopper pass mission accomplished
+2026-05-09T00:14:44 kernel-upgrade Orchestrator pass 7
+2026-05-09T00:17:17 kernel-upgrade Manager pass ssh.custom uname gate on upgraded kernel
+2026-05-09T00:18:54 kernel-upgrade Minimizer pass real uname over SSH; smaller breaks proof
+2026-05-09T00:21:36 kernel-upgrade Worker pass
+2026-05-09T00:22:47 kernel-upgrade Verifier pass none
+2026-05-09T00:42:00 kernel-upgrade Tester fail 14
+2026-05-09T01:30:00 kernel-upgrade Tester fail 14
+2026-05-09T01:46:30 kernel-upgrade Tester fail 14
+2026-05-09T01:48:07 kernel-upgrade Worker pass
+2026-05-09T01:49:26 kernel-upgrade Verifier pass none
+2026-05-09T01:56:00 kernel-upgrade Tester fail 9
+2026-05-09T01:57:00 kernel-upgrade Worker pass
+2026-05-09T02:21:30 kernel-upgrade Worker pass
+2026-05-09T02:35:00 kernel-upgrade Tester fail 14
+2026-05-09T02:48:19 kernel-upgrade Worker pass
+2026-05-09T03:14:30 kernel-upgrade Tester fail 14
+2026-05-09T03:35:00 kernel-upgrade Manager pass restore custom clock driver
+2026-05-09T14:49:04 kernel-upgrade Worker pass
+2026-05-09T14:52:44 kernel-upgrade Verifier pass none
+2026-05-09T15:30:00 kernel-upgrade Tester fail 14
+2026-05-09T15:31:15 kernel-upgrade Worker pass
+2026-05-09T16:00:00 kernel-upgrade Tester fail 14
+2026-05-09T16:01:00 kernel-upgrade Worker pass
+2026-05-09T16:25:00 kernel-upgrade Tester fail 14
+2026-05-09T16:25:30 kernel-upgrade Worker pass
+2026-05-09T16:46:00 kernel-upgrade Tester fail 14
+2026-05-09T16:46:30 kernel-upgrade Worker pass
+2026-05-09T17:18:00 kernel-upgrade Tester fail 14
+2026-05-09T17:18:30 kernel-upgrade Worker pass
+2026-05-09T17:42:00 kernel-upgrade Tester fail 14
+2026-05-09T17:42:30 kernel-upgrade Worker pass
+2026-05-09T18:00:00 kernel-upgrade Worker pass
+2026-05-09T18:35:00 kernel-upgrade Tester fail 11
+2026-05-09T18:35:30 kernel-upgrade Worker pass
+2026-05-09T18:55:00 kernel-upgrade Tester fail 11
+2026-05-09T18:55:30 kernel-upgrade Worker pass
+2026-05-09T19:25:00 kernel-upgrade Worker pass
+2026-05-09T19:30:00 kernel-upgrade Tester fail 10
+2026-05-09T20:30:00 kernel-upgrade Tester fail 14
+2026-05-09T20:30:30 kernel-upgrade Worker pass
+2026-05-09T21:30:00 kernel-upgrade Tester fail 14
+2026-05-09T21:30:30 kernel-upgrade Worker pass
+2026-05-09T22:10:00 kernel-upgrade Tester pass 15
+2026-05-09T22:10:30 kernel-upgrade Worker pass
+2026-05-09T23:15:00 kernel-upgrade Tester fail 15
+2026-05-09T23:15:30 kernel-upgrade Worker pass
