@@ -1023,3 +1023,10 @@
 2026-05-09T20:59:42 fpga-spi Tester fail 32 fail audit_mp135_sclk_uart_trigger_blocked_boundary artefact=/tmp/runpy-azki3qkj/audit_mp135_sclk_uart_trigger_blocked_boundary/attempt_3/artefact
 2026-05-09T22:56:12 fpga-spi Tester pass 87
 2026-05-09T22:57:15 fpga-spi Worker pass
+2026-05-09T22:57:55 fpga-spi Orchestrator pass 96
+2026-05-09T22:59:26 fpga-spi Manager pass Add prbs_xor_top iCEstick icepack bin gate
+2026-05-09T23:00:29 fpga-spi Minimizer pass icepack rule+invocation indivisible
+2026-05-09T23:02:20 fpga-spi Worker pass
+2026-05-09T23:03:21 fpga-spi Verifier pass none
+2026-05-10T00:05:02 fpga-spi Tester pass 88 (Worker+Verifier replay; run.py tester killed by operator)
+2026-05-10T00:05:02 fpga-spi Worker pass

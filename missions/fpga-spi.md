@@ -8063,6 +8063,99 @@ iCEstick, opening a UART, comparing FPGA and MPU checksums, or
 adding a second board target) would combine multiple semantics in
 one step.
 
+### Add prbs_xor_top iCEstick icepack bin gate
+
+Extend the existing `fpga/src/prbs_xor.nw` Makefile fragment with a
+single new `icepack` rule that consumes
+`build/prbs_xor_top/prbs_xor_top.asc` (from the prior nextpnr gate)
+and emits `build/prbs_xor_top/prbs_xor_top.bin`, the packed iCEstick
+bitstream. The chapter's name is `prbs_xor` (not `prbs_xor_top`), so
+the Makefile's legacy single-target generic rule
+(`build/$(1)/$(1).bin`) does not auto-fire for the `prbs_xor_top`
+artefact path; the chapter must declare an explicit `icepack` rule.
+No `iceprog` invocation, no programming step, and no bench hardware
+in this gate --- this gate-checks only that `icepack` succeeds
+against the place-and-routed `.asc` and produces a non-empty `.bin`
+whose mtime is newer than the `.asc` input.
+
+Build:
+
+```
+make -C fpga build/prbs_xor_top/prbs_xor_top.bin
+```
+
+Artifacts:
+
+```
+fpga/build/prbs_xor_top/prbs_xor_top.bin
+```
+
+Test: no hardware.
+
+```
+mark tag=prbs_xor_top_icepack_bin
+```
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    mission = Path('missions/fpga-spi.md')
+    try:
+        mission_text = mission.read_text(encoding='utf-8',
+                                         errors='replace')
+    except OSError:
+        return False
+    if 'mark tag=prbs_xor_top_icepack_bin' not in mission_text:
+        return False
+
+    nw  = Path('fpga/src/prbs_xor.nw')
+    asc = Path('fpga/build/prbs_xor_top/prbs_xor_top.asc')
+    bin = Path('fpga/build/prbs_xor_top/prbs_xor_top.bin')
+    if not (nw.is_file() and nw.stat().st_size > 0):
+        return False
+    if not (asc.is_file() and asc.stat().st_size > 0):
+        return False
+    if not (bin.is_file() and bin.stat().st_size > 0):
+        return False
+    if bin.stat().st_mtime < asc.stat().st_mtime:
+        return False
+    # HX1K bitstream is ~32 KB; allow a generous lower bound to catch
+    # truncated or empty packs without overfitting to a specific size.
+    if bin.stat().st_size < 8192:
+        return False
+
+    nw_text = nw.read_text(encoding='utf-8', errors='replace')
+    required_nw = [
+        '<<prbs_xor.mk>>=',
+        'build/prbs_xor_top/prbs_xor_top.bin',
+        'icepack',
+        'prbs_xor_top.asc',
+        'prbs_xor_top.bin',
+    ]
+    for tok in required_nw:
+        if tok not in nw_text:
+            return False
+
+    return True
+```
+
+Rationale: this is the smallest meaningful next FPGA-side step after
+the `prbs_xor_top` `.asc` nextpnr gate. An `icepack` gate proves
+that the place-and-routed `.asc` packs cleanly into a binary
+bitstream of the expected iCEstick size before any later step layers
+on an `iceprog` programming step, a bench UART ready-banner check,
+or a host-side checksum comparison. Splitting smaller into only a
+Makefile rule edit (with no invocation) or only a one-shot `icepack`
+command (with no Make integration) would yield zero progress because
+neither half produces a verifiable `prbs_xor_top.bin` artefact tied
+to the chapter's noweb source. Bundling more (programming the
+iCEstick over USB, opening a UART, comparing FPGA and MPU
+checksums, or adding a second board target) would combine multiple
+semantics in one step.
+
 ## WIP
 
 ### PRBS, UART, Checksum
