@@ -10,16 +10,13 @@ Usage: python3 run.py ssh.md
 import argparse
 import datetime
 import getpass
-import io
 import json
 import re
 import subprocess
 import sys
-import tarfile
 import tempfile
 import threading
 import time
-import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -82,6 +79,12 @@ class Runner:
     SUBMIT_PY = FAST_DATA / 'test_serv' / 'submit.py'
     SERVER = 'http://localhost:8080'
     WAIT_S = 1200                    # generous shared-bench upper bound
+    RUNTIME_GRACE_S = 60             # agent watchdog/upload slack
+    INFLIGHT_FALLBACK_S = 60         # bound missing/stale /inflight data
+    BUSY_RETRY_DEADLINE_S = WAIT_S   # bound zero-op lease/busy retries
+    LONG_BUSY_RETRY_DEADLINE_S = 3600
+    FAILED_ATTEMPT_LEASE_RELEASE_WAIT_S = 300
+    LONG_BUSY_RETRY_MISSIONS = {'nand-flash.md'}
     LEASE_PLACEHOLDER = '{{LEASE_TOKEN}}'
     # Persists the most recent captured lease token across run.py
     # invocations so a crashed run that never reached its mission's
@@ -93,9 +96,6 @@ class Runner:
     # attempt has no wait. Total worst-case extra wait per FAIL is
     # the sum of the non-zero entries.
     RETRY_BACKOFF_S = (0, 3, 10, 30)
-    FOREIGN_LEASE_FALLBACK_WAIT_S = 60
-    WATCHDOG_CANCEL_RETRY_BACKOFF_S = 60
-    CANCEL_DRAIN_WAIT_S = 30
     NO_HARDWARE_TEST = '__NO_HARDWARE__'
 
     def __init__(self, md_path):
@@ -104,12 +104,14 @@ class Runner:
         self.log_path = Path.cwd() / 'log.txt'
         self.log_fh = None
         self.user = getpass.getuser()
+        self.busy_retry_deadline_s = self._busy_retry_deadline_for_md(
+            self.md_path)
+        self.failed_attempt_lease_tokens = set()
         # Most recent lease token captured from a section's
         # manifest.json, used to substitute {{LEASE_TOKEN}} in
         # subsequent sections. Cleared when a section's plan contains
         # lease:release.
         self.lease_token = None
-        self._last_watchdog_cancel = False
         # Defensive ghost-lease cleanup: a prior run that crashed
         # before its mission's lease:release fired would leave the
         # bench locked for the full duration_s. Best-effort release.
@@ -120,7 +122,7 @@ class Runner:
                 self._release_ghost(ghost)
             self.LEASE_STATE_FILE.unlink()
 
-    def _release_ghost(self, token):
+    def _release_ghost(self, token, wait_s=30):
         """Best-effort release of a stale lease token left over from a
         prior run. Submits the canonical resume+release pair; failures
         are swallowed (the lease may have already expired)."""
@@ -135,11 +137,12 @@ class Runner:
         log = section / 'run.log'
         cmd = ['python3', str(self.SUBMIT_PY),
                '--server', self.SERVER,
-               '--wait', '30',
+               '--wait', str(int(wait_s)),
                str(plan_path)]
         with log.open('wb') as f:
-            subprocess.run(cmd, cwd=self.FAST_DATA, stdout=f,
-                           stderr=subprocess.STDOUT)
+            result = subprocess.run(cmd, cwd=self.FAST_DATA, stdout=f,
+                                    stderr=subprocess.STDOUT)
+        return result.returncode == 0
 
     UNITS = {'s': 1, 'sec': 1, 'min': 60, 'm': 60, 'h': 3600}
 
@@ -186,43 +189,6 @@ class Runner:
     @staticmethod
     def is_no_hardware_test(test):
         return test == Runner.NO_HARDWARE_TEST
-
-    @staticmethod
-    def advance_wip_text(text):
-        """Move ## WIP past exactly one following ### section."""
-        wip_match = re.search(r'(?m)^## WIP[ \t]*\n?', text)
-        if wip_match is None:
-            return text
-
-        first_section = re.search(r'(?m)^### .+$', text[wip_match.end():])
-        if first_section is None:
-            return text
-        first_end = wip_match.end() + first_section.end()
-
-        next_section = re.search(r'(?m)^##(?:#)? .+$', text[first_end:])
-        insert_at = (len(text) if next_section is None
-                     else first_end + next_section.start())
-
-        remove_end = wip_match.end()
-        if remove_end < len(text) and text[remove_end] == '\n':
-            remove_end += 1
-        marker = text[wip_match.start():wip_match.end()].rstrip()
-        without_marker = text[:wip_match.start()] + text[remove_end:]
-        if insert_at > wip_match.start():
-            insert_at -= remove_end - wip_match.start()
-
-        before = without_marker[:insert_at].rstrip('\n')
-        after = without_marker[insert_at:].lstrip('\n')
-        if after:
-            return f'{before}\n\n{marker}\n\n{after}'
-        return f'{before}\n\n{marker}\n'
-
-    def advance_wip(self):
-        """Advance this mission's WIP marker one section after full PASS."""
-        text = self.md_path.read_text()
-        moved = self.advance_wip_text(text)
-        if moved != text:
-            self.md_path.write_text(moved)
 
     @staticmethod
     def parse_foreach(text):
@@ -339,19 +305,13 @@ class Runner:
         blob_args = []
         for name in sorted(artifacts):
             blob_args += ['--blob', f'{name}={artifacts[name]}']
-        wait_s = self.WAIT_S
-        if max_s is not None:
-            wait_s = max(wait_s, int(max_s) + 60)
+        wait_s, server_runtime_s = self._submit_time_budgets(max_s)
         cmd = ['python3', str(self.SUBMIT_PY),
                '--server', self.SERVER,
                '--wait', str(wait_s),
                '--extract', str(extract_dir)]
-        if max_s is not None:
-            # test_serv measures X-Test-Runtime from submission, so
-            # shared-bench queue time can otherwise expire a job before
-            # it acquires hardware. _watch_submit enforces the section
-            # budget after the job becomes running.
-            cmd += ['--runtime', str(int(wait_s))]
+        if server_runtime_s is not None:
+            cmd += ['--runtime', str(server_runtime_s)]
         cmd += [*blob_args, str(plan_path)]
         log_fh = log.open('ab')
         cmd_line = f'$ {" ".join(cmd)}'
@@ -368,22 +328,42 @@ class Runner:
                 args=(proc.stdout, log_fh),
                 daemon=True)
             tee_thread.start()
-        self._last_watchdog_cancel = False
         rc = self._watch_submit(proc, log_fh, description, max_s,
                                 line_prefix)
         if tee_thread is not None:
             tee_thread.join()
+        log_fh.close()
         digest = None
         if extract_dir.exists():
             tars = list(extract_dir.glob('*.tar'))
             if tars:
                 digest = tars[0].stem
-        if rc != 0 and digest is None:
-            digest = self._find_job_digest(description)
-            if self._recover_outputs(digest, extract_dir, log_fh):
-                rc = 0
-        log_fh.close()
         return rc, digest
+
+    @classmethod
+    def _submit_time_budgets(cls, max_s):
+        """Return (submit.py wait, server runtime) for one attempt.
+
+        ``max_s`` is the post-lock DUT budget from the mission. The
+        deployed poller starts X-Test-Runtime when it picks up the job,
+        before bench locks are acquired, so giving the server exactly
+        ``max_s`` can expire during lock contention. Run.py still
+        enforces the post-lock watchdog from the live LOCK-acquired
+        event; the server budget is only an outer cap for pickup plus
+        lock wait plus that watchdog.
+        """
+        if max_s is None:
+            return cls.WAIT_S, None
+        dut_budget_s = int(max_s) + cls.RUNTIME_GRACE_S
+        server_runtime_s = cls.WAIT_S + dut_budget_s
+        wait_s = server_runtime_s + cls.RUNTIME_GRACE_S
+        return wait_s, server_runtime_s
+
+    @classmethod
+    def _busy_retry_deadline_for_md(cls, md_path):
+        if Path(md_path).name in cls.LONG_BUSY_RETRY_MISSIONS:
+            return cls.LONG_BUSY_RETRY_DEADLINE_S
+        return cls.BUSY_RETRY_DEADLINE_S
 
     def run_verify(self, verify_text, artifacts, extract_dir, item=None):
         """Exec the verify block (with Verification, abs-path artifacts,
@@ -417,11 +397,14 @@ class Runner:
         subprocess return code."""
         live = (line_prefix is not None and sys.stdout.isatty())
         started_at = time.monotonic()
-        run_deadline = (max_s + 60) if max_s else None
+        run_deadline = (max_s + self.RUNTIME_GRACE_S) if max_s else None
         running_since = None
+        job_running_since = None
+        unresolved_inflight_since = None
+        last_inflight_elapsed_s = None
+        waiting_for_locks = False
         countdown_open = False
         rc = None
-        canceled_digest = None
         while True:
             rc = proc.poll()
             if rc is not None:
@@ -438,13 +421,48 @@ class Runner:
                  and j.get('status') in ('queued', 'running')),
                 None)
             if hit and hit['status'] == 'running' and running_since is None:
-                running_since = hit.get('picked_up_at') or time.time()
+                if job_running_since is None:
+                    job_running_since = hit.get('picked_up_at') or time.time()
+                active = self._find_inflight_job(hit.get('digest'))
+                acquired_t = self._lock_acquired_event_t(active)
+                if acquired_t is not None:
+                    elapsed_s = float(active.get('elapsed_s') or 0.0)
+                    running_since = time.time() - max(
+                        0.0, elapsed_s - acquired_t)
+                    waiting_for_locks = False
+                else:
+                    state = self._inflight_wait_state(
+                        active, last_inflight_elapsed_s,
+                        unresolved_inflight_since)
+                    last_inflight_elapsed_s = state['elapsed_s']
+                    unresolved_inflight_since = state['unresolved_since']
+                    if (state['fallback']
+                            and (time.time() - unresolved_inflight_since
+                                 >= self.INFLIGHT_FALLBACK_S)):
+                        running_since = job_running_since
+                        waiting_for_locks = False
+                        log_fh.write(
+                            b'  (agent watchdog: /inflight missing or stale; '
+                            b'using job running time)\n')
+                        log_fh.flush()
+                        self._log(
+                            '  (agent watchdog: /inflight missing or stale; '
+                            'using job running time)')
+                    elif not waiting_for_locks:
+                        waiting_for_locks = True
+                        log_fh.write(
+                            b'  (agent watchdog: waiting for bench locks; '
+                            b'test runtime budget starts after locks are '
+                            b'acquired)\n')
+                        log_fh.flush()
+                        self._log(
+                            '  (agent watchdog: waiting for bench locks; '
+                            'test runtime budget starts after locks are '
+                            'acquired)')
             if (run_deadline and running_since is not None
                     and (time.time() - running_since) > run_deadline):
                 digest = self._find_active_job_digest(description)
                 self.cancel_job(digest)
-                canceled_digest = digest
-                self._last_watchdog_cancel = True
                 proc.terminate()
                 try:
                     proc.wait(timeout=5)
@@ -454,7 +472,6 @@ class Runner:
                              b'budget; killed)\n')
                 self._log('  (agent watchdog: submit.py exceeded '
                           'budget; killed)')
-                self._wait_for_canceled_job(description, digest, log_fh)
                 rc = proc.poll() or 1
                 break
             if live:
@@ -462,11 +479,17 @@ class Runner:
                     elapsed = int(time.monotonic() - started_at)
                     msg = f'\033[33mqueued ({elapsed}s)\033[0m'
                 elif hit and hit['status'] == 'running':
-                    elapsed = time.time() - running_since
-                    if max_s:
+                    if running_since is None:
+                        elapsed = int(time.monotonic() - started_at)
+                        msg = (
+                            f'\033[33mwaiting for bench locks '
+                            f'({elapsed}s)\033[0m')
+                    elif max_s:
+                        elapsed = time.time() - running_since
                         remaining = max(0.0, max_s - elapsed)
                         msg = f'\033[36mrunning ({remaining:.0f}s left)\033[0m'
                     else:
+                        elapsed = time.time() - running_since
                         msg = f'\033[36mrunning ({elapsed:.0f}s)\033[0m'
                 else:
                     msg = None
@@ -483,11 +506,72 @@ class Runner:
             col = len(line_prefix) + 1
             sys.stdout.write(f'\r\033[K\033[A\033[{col}G')
             sys.stdout.flush()
-        if rc != 0 and canceled_digest is None:
+        if rc != 0:
             digest = self._find_active_job_digest(description)
             self.cancel_job(digest)
-            self._wait_for_canceled_job(description, digest, log_fh)
         return rc
+
+    def _find_inflight_job(self, digest):
+        """Return the live /inflight entry for ``digest``, if present."""
+        if not digest:
+            return None
+        try:
+            with urllib.request.urlopen(f'{self.SERVER}/inflight',
+                                        timeout=2) as r:
+                inflight = json.load(r)
+        except Exception:
+            return None
+        return next((j for j in inflight if j.get('digest') == digest), None)
+
+    @staticmethod
+    def _inflight_wait_state(inflight_entry, last_elapsed_s,
+                             unresolved_since):
+        """Track whether missing/stale /inflight should fall back.
+
+        A live inflight entry whose elapsed_s is advancing can represent
+        a legitimate bench-lock wait, so it does not consume DUT runtime.
+        Missing entries or entries whose elapsed_s stops advancing are
+        bounded by INFLIGHT_FALLBACK_S so a real running job cannot hide
+        behind bad /inflight data until submit.py's long --wait expires.
+        """
+        now = time.time()
+        try:
+            elapsed_s = float((inflight_entry or {}).get('elapsed_s'))
+        except (TypeError, ValueError):
+            elapsed_s = None
+        if elapsed_s is not None and (
+                last_elapsed_s is None or elapsed_s > last_elapsed_s):
+            return {
+                'elapsed_s': elapsed_s,
+                'unresolved_since': None,
+                'fallback': False,
+            }
+        return {
+            'elapsed_s': last_elapsed_s if elapsed_s is None else elapsed_s,
+            'unresolved_since': unresolved_since or now,
+            'fallback': True,
+        }
+
+    @staticmethod
+    def _lock_acquired_event_t(inflight_entry):
+        """Session-relative timestamp when hardware ops actually start.
+
+        test_serv marks a job "running" when the poller picks it up, but
+        the session may still be blocked behind another job's device
+        locks. The run.py watchdog must not charge that lock wait against
+        the DUT runtime budget.
+        """
+        if not inflight_entry:
+            return None
+        for event in inflight_entry.get('events') or ():
+            if (event.get('kind') == 'LOCK'
+                    and event.get('source') == 'session'
+                    and event.get('msg') == 'acquired; running ops'):
+                try:
+                    return float(event.get('t'))
+                except (TypeError, ValueError):
+                    return 0.0
+        return None
 
     def capture_lease_token(self, extract_dir, plan_text):
         """Refresh ``self.lease_token`` from this section's artefact:
@@ -510,112 +594,18 @@ class Runner:
 
     def _find_active_job_digest(self, description):
         """Return the queued/running job digest matching a description."""
-        return self._find_job_digest(description, {'queued', 'running'})
-
-    def _find_job_digest(self, description, statuses=None):
-        """Return the newest job digest matching a description."""
         try:
             with urllib.request.urlopen(f'{self.SERVER}/jobs',
                                         timeout=5) as r:
                 jobs = json.load(r)
         except Exception:
             return None
-        matches = [
-            j for j in jobs
-            if j.get('meta', {}).get('description') == description
-            and (statuses is None or j.get('status') in statuses)
-        ]
-        hit = matches[-1] if matches else None
+        hit = next(
+            (j for j in jobs
+             if j.get('meta', {}).get('description') == description
+             and j.get('status') in ('queued', 'running')),
+            None)
         return hit.get('digest') if hit else None
-
-    def _active_matching_jobs(self, description, digest=None):
-        """Return active jobs matching this runner's exact description."""
-        try:
-            with urllib.request.urlopen(f'{self.SERVER}/jobs',
-                                        timeout=5) as r:
-                jobs = json.load(r)
-        except Exception:
-            return []
-        return [
-            j for j in jobs
-            if j.get('meta', {}).get('description') == description
-            and (digest is None or j.get('digest') == digest)
-            and j.get('status') in ('queued', 'running')
-        ]
-
-    def _wait_for_canceled_job(self, description, digest, log_fh):
-        """Wait briefly for test_serv to stop showing a canceled job active."""
-        deadline = time.monotonic() + self.CANCEL_DRAIN_WAIT_S
-        waited = False
-        while self._active_matching_jobs(description, digest):
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                target = digest or description
-                if self._resolve_stale_cancel(digest, log_fh):
-                    return True
-                msg = ('  (agent watchdog: canceled job still active '
-                       f'after {self.CANCEL_DRAIN_WAIT_S}s: {target})')
-                log_fh.write((msg + '\n').encode())
-                log_fh.flush()
-                self._log(msg)
-                return False
-            waited = True
-            time.sleep(min(1, remaining))
-        if waited:
-            target = digest or description
-            msg = f'  (agent watchdog: canceled job drained: {target})'
-            log_fh.write((msg + '\n').encode())
-            log_fh.flush()
-            self._log(msg)
-        return True
-
-    def _resolve_stale_cancel(self, digest, log_fh):
-        """Ask test_serv to remove a cancel-pending orphan if it is stale."""
-        if not digest:
-            return False
-        req = urllib.request.Request(
-            f'{self.SERVER}/cancels/{digest}/stale',
-            data=b'', method='POST')
-        try:
-            with urllib.request.urlopen(req, timeout=5) as r:
-                body = json.load(r)
-        except urllib.error.HTTPError as e:
-            try:
-                body = json.loads(e.read().decode() or '{}')
-            except Exception:
-                body = {'status': f'http_{e.code}'}
-        except Exception:
-            return False
-        status = body.get('status')
-        if status in {'stale_canceled', 'done'}:
-            msg = ('  (agent watchdog: stale canceled job resolved: '
-                   f'{digest} status={status})')
-            log_fh.write((msg + '\n').encode())
-            log_fh.flush()
-            self._log(msg)
-            return True
-        return False
-
-    def _recover_outputs(self, digest, extract_dir, log_fh):
-        """Recover an artefact when submit.py lost its HTTP connection."""
-        if not digest:
-            return False
-        try:
-            with urllib.request.urlopen(
-                    f'{self.SERVER}/outputs/{digest}.tar', timeout=10) as r:
-                data = r.read()
-        except Exception:
-            return False
-        extract_dir.mkdir(parents=True, exist_ok=True)
-        tar_path = extract_dir / f'{digest}.tar'
-        tar_path.write_bytes(data)
-        with tarfile.open(fileobj=io.BytesIO(data), mode='r:') as tf:
-            tf.extractall(extract_dir)
-        msg = f'  (recovered outputs for {digest} after submit.py failure)'
-        log_fh.write((msg + '\n').encode())
-        log_fh.flush()
-        self._log(msg)
-        return True
 
     def cancel_job(self, digest):
         if not digest:
@@ -726,36 +716,38 @@ class Runner:
         last_extract = None
         last_log = None
         digest = None
-        backoffs = list(self.RETRY_BACKOFF_S)
-        foreign_lease_extensions = 0
-        watchdog_cancel_extensions = 0
         attempt = 0
-        while attempt < len(backoffs):
-            backoff = backoffs[attempt]
+        physical_attempt = 0
+        busy_retries = 0
+        busy_started = None
+        self._busy_retry_holder = None
+        while attempt < len(self.RETRY_BACKOFF_S):
+            backoff = self.RETRY_BACKOFF_S[attempt]
             if backoff:
                 time.sleep(backoff)
-            attempt_dir = work_dir / f'attempt_{attempt}'
+            attempt_dir = work_dir / f'attempt_{physical_attempt}'
+            physical_attempt += 1
             attempt_dir.mkdir()
             extract = attempt_dir / 'artefact'
             log = attempt_dir / 'run.log'
             last_extract, last_log = extract, log
             rc, digest = self.submit_plan(
                 test, artifacts, extract, log, description, max_s)
+            busy_before_ops = self._failed_before_ops_due_to_busy(extract)
             if rc != 0:
                 last_reason = f'   submit.py rc={rc}'
                 self._release_failed_attempt_lease(extract, test)
-                if self._lease_released_in_attempt(extract):
+                if (self._lease_released_in_attempt(extract)
+                        and self.LEASE_PLACEHOLDER in test):
                     break
-                if self._wait_for_foreign_lease(extract):
-                    if self._extend_retries_after_foreign_lease(
-                            backoffs, attempt, foreign_lease_extensions):
-                        foreign_lease_extensions += 1
-                if self._last_watchdog_cancel:
-                    if self._extend_retries_after_watchdog_cancel(
-                            backoffs, attempt, watchdog_cancel_extensions):
-                        watchdog_cancel_extensions += 1
-                        self._log(
-                            '  (retrying after watchdog-canceled job)')
+                if busy_before_ops:
+                    retry, busy_started, busy_retries, busy_reason = (
+                        self._retry_after_busy_before_ops(
+                            extract, busy_started, busy_retries))
+                    if retry:
+                        continue
+                    last_reason = busy_reason
+                    break
                 attempt += 1
                 continue
             try:
@@ -763,79 +755,179 @@ class Runner:
             except Exception as e:
                 last_reason = f'   verify {type(e).__name__}: {e}'
                 self._release_failed_attempt_lease(extract, test)
-                if self._lease_released_in_attempt(extract):
+                if (self._lease_released_in_attempt(extract)
+                        and self.LEASE_PLACEHOLDER in test):
                     break
-                if self._wait_for_foreign_lease(extract):
-                    if self._extend_retries_after_foreign_lease(
-                            backoffs, attempt, foreign_lease_extensions):
-                        foreign_lease_extensions += 1
+                if busy_before_ops:
+                    retry, busy_started, busy_retries, busy_reason = (
+                        self._retry_after_busy_before_ops(
+                            extract, busy_started, busy_retries))
+                    if retry:
+                        continue
+                    last_reason = busy_reason
+                    break
                 attempt += 1
                 continue
             if not ok:
                 last_reason = '   verify check() returned False'
                 self._release_failed_attempt_lease(extract, test)
-                if self._lease_released_in_attempt(extract):
+                if (self._lease_released_in_attempt(extract)
+                        and self.LEASE_PLACEHOLDER in test):
                     break
-                if self._wait_for_foreign_lease(extract):
-                    if self._extend_retries_after_foreign_lease(
-                            backoffs, attempt, foreign_lease_extensions):
-                        foreign_lease_extensions += 1
+                if busy_before_ops:
+                    retry, busy_started, busy_retries, busy_reason = (
+                        self._retry_after_busy_before_ops(
+                            extract, busy_started, busy_retries))
+                    if retry:
+                        continue
+                    last_reason = busy_reason
+                    break
                 attempt += 1
                 continue
             return True, digest, None, extract, log
         return False, digest, last_reason, last_extract, last_log
 
-    @staticmethod
-    def _extend_retries_after_foreign_lease(
-            backoffs, attempt, foreign_lease_extensions):
-        """Allow one immediate retry after a final foreign-lease wait."""
-        if foreign_lease_extensions:
+    def _retry_after_busy_before_ops(self, extract_dir, busy_started,
+                                     busy_retries):
+        """Retry zero-op lease/busy rejects until a wall-clock deadline."""
+        holder = self._busy_lease_holder(extract_dir)
+        if self._is_failed_attempt_lease_token(holder):
+            if self._release_failed_attempt_lease_token(holder):
+                return True, busy_started, busy_retries, None
+            reason = (
+                f'   bench busy on unreleased failed-attempt lease '
+                f'{holder[:8]}')
+            return False, busy_started, busy_retries, reason
+
+        # If the busy holder is the lease we captured from the prior
+        # section (which used `lease:claim` without `lease:release`),
+        # the next section's fresh `lease:claim` will deadlock until
+        # the 1-hour duration expires. Release it ourselves so the
+        # next attempt can claim cleanly. Also release if the holder
+        # is unknown to us (a prior section may have used
+        # `auto_release_on_session_end=true` which clears
+        # self.lease_token even though the bench still tracks the
+        # token until the device is freed): we own this run's session,
+        # so any zero-op busy lease left holding our devices is ours
+        # to release. We track each token in
+        # `failed_attempt_lease_tokens` so a foreign user's lease
+        # rejected against our claim isn't repeatedly fired at.
+        if holder and (holder == self.lease_token
+                       or not self._other_user_job_running()):
+            if self._release_ghost(
+                    holder, wait_s=self.FAILED_ATTEMPT_LEASE_RELEASE_WAIT_S):
+                if holder == self.lease_token:
+                    self.lease_token = None
+                if self.LEASE_STATE_FILE.exists():
+                    self.LEASE_STATE_FILE.unlink()
+                self._failed_attempt_lease_token_set().add(holder)
+                return True, busy_started, busy_retries, None
+
+        now = time.monotonic()
+        prior_holder = getattr(self, '_busy_retry_holder', None)
+        other_user_active = self._other_user_job_running()
+        if (busy_started is None or holder != prior_holder
+                or other_user_active):
+            busy_started = now
+            busy_retries = 0
+        self._busy_retry_holder = holder
+        elapsed = now - busy_started
+        deadline_s = self._busy_retry_deadline_s()
+        if elapsed >= deadline_s:
+            reason = (
+                f'   bench busy before ops for >= '
+                f'{self._busy_retry_deadline_s()}s')
+            return False, busy_started, busy_retries, reason
+        busy_retries += 1
+        sleep_s = self.RETRY_BACKOFF_S[
+            min(busy_retries, len(self.RETRY_BACKOFF_S) - 1)]
+        remaining = deadline_s - elapsed
+        if sleep_s and remaining > 0:
+            time.sleep(min(sleep_s, remaining))
+        return True, busy_started, busy_retries, None
+
+    def _busy_retry_deadline_s(self):
+        return getattr(self, 'busy_retry_deadline_s',
+                       self.BUSY_RETRY_DEADLINE_S)
+
+    def _other_user_job_running(self):
+        """True if the shared bench is visibly busy with another user."""
+        try:
+            with urllib.request.urlopen(f'{self.SERVER}/jobs',
+                                        timeout=2) as r:
+                jobs = json.load(r)
+            with urllib.request.urlopen(f'{self.SERVER}/inflight',
+                                        timeout=2) as r:
+                inflight = json.load(r)
+        except Exception:
             return False
-        if attempt == len(backoffs) - 1:
-            backoffs.append(0)
-            return True
+        prefix = f'{getattr(self, "user", getpass.getuser())}: '
+        active_digests = {
+            job.get('digest') for job in inflight if job.get('digest')
+        }
+        for job in jobs:
+            if job.get('status') != 'running':
+                continue
+            if job.get('digest') not in active_digests:
+                continue
+            meta = job.get('meta') or {}
+            description = meta.get('description') or meta.get('Description')
+            if not description or not description.startswith(prefix):
+                return True
         return False
 
     @staticmethod
-    def _extend_retries_after_watchdog_cancel(
-            backoffs, attempt, watchdog_cancel_extensions):
-        """Allow one delayed retry after a final watchdog cancellation."""
-        if watchdog_cancel_extensions:
+    def _failed_before_ops_due_to_busy(extract_dir):
+        """True when the bench rejected the attempt before running ops."""
+        manifest = extract_dir / 'manifest.json'
+        errors = extract_dir / 'errors.log'
+        if not manifest.exists():
             return False
-        if attempt == len(backoffs) - 1:
-            backoffs.append(Runner.WATCHDOG_CANCEL_RETRY_BACKOFF_S)
-            return True
-        return False
+        try:
+            n_ops = int(json.loads(manifest.read_text()).get('n_ops', 1))
+        except Exception:
+            return False
+        if n_ops != 0:
+            return False
+        if errors.exists():
+            text = errors.read_text(errors='replace')
+            if ' is leased to ' in text or 'BusyError' in text:
+                return True
+        timeline = extract_dir / 'timeline.log'
+        if not timeline.exists():
+            return False
+        text = timeline.read_text(errors='replace')
+        return ('LOCK     session              acquired; running ops' in text
+                and 'ERROR    session              session exceeded ' in text
+                and ' deadline' in text)
 
-    def _wait_for_foreign_lease(self, extract_dir):
-        """Pause retries while a plan failed on another active lease."""
+    @staticmethod
+    def _busy_lease_holder(extract_dir):
         errors = extract_dir / 'errors.log'
         if not errors.exists():
-            return False
-        m = re.search(r"is leased to '([0-9a-f]+)'", errors.read_text(
-            errors='replace'))
-        if not m:
-            return False
-        token = m.group(1)
-        try:
-            with urllib.request.urlopen(f'{self.SERVER}/leases',
-                                        timeout=5) as r:
-                leases = json.load(r)
-        except Exception:
-            leases = []
-        hit = next((lease for lease in leases
-                    if token.startswith(lease.get('token_prefix', '')
-                                        .rstrip('.'))), None)
-        if hit:
-            delay = min(float(hit.get('expires_in_s', 0)) + 5.0, 300.0)
-        else:
-            delay = self.FOREIGN_LEASE_FALLBACK_WAIT_S
-        if delay > 0:
-            self._log(
-                f'  (waiting {delay:.0f}s for foreign lease {token[:8]})')
-            time.sleep(delay)
-            return True
-        return False
+            return None
+        text = errors.read_text(errors='replace')
+        match = re.search(r" is leased to '([^']+)'", text)
+        return match.group(1) if match else None
+
+    def _failed_attempt_lease_token_set(self):
+        tokens = getattr(self, 'failed_attempt_lease_tokens', None)
+        if tokens is None:
+            tokens = set()
+            self.failed_attempt_lease_tokens = tokens
+        return tokens
+
+    def _is_failed_attempt_lease_token(self, token):
+        return bool(token and token in self._failed_attempt_lease_token_set())
+
+    def _release_failed_attempt_lease_token(self, token):
+        tokens = self._failed_attempt_lease_token_set()
+        tokens.add(token)
+        ok = self._release_ghost(
+            token, wait_s=self.FAILED_ATTEMPT_LEASE_RELEASE_WAIT_S)
+        if ok:
+            tokens.discard(token)
+        return ok
 
     def _lease_released_in_attempt(self, extract_dir):
         """Return True if the attempt consumed its lease token."""
@@ -858,9 +950,7 @@ class Runner:
 
     def _release_failed_attempt_lease(self, extract_dir, plan_text):
         """Release a freshly claimed lease from a failed retry attempt."""
-        if 'lease:claim' not in plan_text:
-            return
-        if self._lease_released_in_attempt(extract_dir):
+        if 'lease:claim' not in plan_text or 'lease:release' in plan_text:
             return
         manifest = extract_dir / 'manifest.json'
         if not manifest.exists():
@@ -870,7 +960,7 @@ class Runner:
         except Exception:
             return
         if token:
-            self._release_ghost(token)
+            self._release_failed_attempt_lease_token(token)
 
     def run_all(self):
         """Iterate sections in order. Per test prints
@@ -998,7 +1088,6 @@ class Runner:
 
             print(colored('PASS'))
             self._log(f'{colored("PASS")} {total - skipped}/{total}')
-            self.advance_wip()
             return 0
         finally:
             self.log_fh.close()
