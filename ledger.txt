@@ -358,8 +358,8 @@
 2026-05-06T06:24:40 fpga-spi Verifier pass none
 2026-05-06T06:27:03 fpga-spi Tester fail 22
 2026-05-06T06:33:10 fpga-spi Tester fail 39
-2026-05-06T06:34:57 fpga-spi Worker pass
 2026-05-06T06:34:57 fpga-spi Verifier pass none
+2026-05-06T06:34:57 fpga-spi Worker pass
 2026-05-06T06:39:25 fpga-spi Tester pass 40
 2026-05-06T06:40:02 fpga-spi Orchestrator pass 40
 2026-05-06T06:40:47 fpga-spi Manager pass add io2 high uart trigger
@@ -368,16 +368,16 @@
 2026-05-06T06:42:22 fpga-spi Worker pass
 2026-05-06T06:49:28 fpga-spi Tester pass 41
 2026-05-06T06:50:21 fpga-spi Orchestrator pass 41
-2026-05-06T06:50:38 fpga-spi Minimizer pass
 2026-05-06T06:50:38 fpga-spi Manager pass mp135-to-fpga io2 high sample
-2026-05-06T06:51:44 fpga-spi Worker pass
+2026-05-06T06:50:38 fpga-spi Minimizer pass
 2026-05-06T06:51:44 fpga-spi Verifier pass none
+2026-05-06T06:51:44 fpga-spi Worker pass
 2026-05-06T06:53:32 fpga-spi Tester fail 15
 2026-05-06T06:59:57 fpga-spi Tester fail 35
 2026-05-06T07:07:22 fpga-spi Tester pass 42
 2026-05-06T07:07:51 fpga-spi Orchestrator pass 42
-2026-05-06T07:08:10 fpga-spi Minimizer pass
 2026-05-06T07:08:10 fpga-spi Manager pass add io3 high uart trigger
+2026-05-06T07:08:10 fpga-spi Minimizer pass
 2026-05-06T07:09:21 fpga-spi Verifier pass none
 2026-05-06T07:09:21 fpga-spi Worker pass
 2026-05-06T07:20:41 fpga-spi Tester fail 29
@@ -385,8 +385,8 @@
 2026-05-06T07:29:18 fpga-spi Orchestrator pass 43
 2026-05-06T07:29:37 fpga-spi Manager pass mp135-to-fpga io3 high sample
 2026-05-06T07:29:37 fpga-spi Minimizer pass
-2026-05-06T07:30:36 fpga-spi Worker pass
 2026-05-06T07:30:36 fpga-spi Verifier pass none
+2026-05-06T07:30:36 fpga-spi Worker pass
 2026-05-06T07:35:01 fpga-spi Tester fail 39
 2026-05-06T07:41:11 fpga-spi Tester pass 44
 2026-05-06T08:38:53 fpga-spi Manager pass add io0 low uart trigger
@@ -398,14 +398,14 @@
 2026-05-06T09:15:30 fpga-spi Tester pass 45
 2026-05-06T09:43:18 fpga-spi Enemy pass
 2026-05-06T09:44:52 fpga-spi Worker pass
+2026-05-06T10:11:50 fpga-spi Manager pass verify-mp135-to-fpga-io2-low
 2026-05-06T10:11:50 fpga-spi Minimizer pass IO2 low hardware verify; firmware landed iter49
 2026-05-06T10:11:50 fpga-spi Verifier pass none
-2026-05-06T10:11:50 fpga-spi Manager pass verify-mp135-to-fpga-io2-low
 2026-05-06T10:11:50 fpga-spi Worker pass
-2026-05-06T10:37:53 fpga-spi Minimizer pass LFSR-only first PRBS step; smaller would be empty file
-2026-05-06T10:37:53 fpga-spi Worker pass
 2026-05-06T10:37:53 fpga-spi Manager pass add prbs_xor skeleton
+2026-05-06T10:37:53 fpga-spi Minimizer pass LFSR-only first PRBS step; smaller would be empty file
 2026-05-06T10:37:53 fpga-spi Verifier pass none
+2026-05-06T10:37:53 fpga-spi Worker pass
 2026-05-06T16:03:27 fpga-spi Manager pass audit qspi physical connectivity coverage
 2026-05-06T16:05:15 fpga-spi Minimizer pass harness indivisible; per-signal adds 3-line tuple
 2026-05-06T16:07:10 fpga-spi Worker pass
@@ -430,19 +430,19 @@
 2026-05-06T16:39:26 fpga-spi Worker pass
 2026-05-06T16:42:30 fpga-spi Tester pass 46
 2026-05-06T16:45:00 fpga-spi Orchestrator pass 46
-2026-05-06T16:47:39 fpga-spi Minimizer pass mirror IO0-low pattern; cannot split build+verify
 2026-05-06T16:47:39 fpga-spi Manager pass add io1 low uart trigger
-2026-05-06T16:47:39 fpga-spi Worker pass
+2026-05-06T16:47:39 fpga-spi Minimizer pass mirror IO0-low pattern; cannot split build+verify
 2026-05-06T16:47:39 fpga-spi Verifier pass none
+2026-05-06T16:47:39 fpga-spi Worker pass
 2026-05-06T16:52:16 fpga-spi Tester fail bring_up_mp135_uart_dfu_evb_offline
 2026-05-06T16:52:37 fpga-spi Worker pass
 2026-05-06T16:53:30 fpga-spi Tester pass 47
 2026-05-06T16:53:35 fpga-spi Enemy pass
 2026-05-06T16:53:57 fpga-spi Worker pass
 2026-05-06T16:54:30 fpga-spi Orchestrator pass 47
-2026-05-06T16:55:34 fpga-spi Verifier pass none
-2026-05-06T16:55:34 fpga-spi Minimizer pass IO1 low hardware verify; firmware already landed iter47
 2026-05-06T16:55:34 fpga-spi Manager pass verify-mp135-to-fpga-io1-low
+2026-05-06T16:55:34 fpga-spi Minimizer pass IO1 low hardware verify; firmware already landed iter47
+2026-05-06T16:55:34 fpga-spi Verifier pass none
 2026-05-06T16:55:34 fpga-spi Worker pass
 2026-05-06T16:56:51 fpga-spi Tester fail bring_up_mp135_uart_dfu_evb_offline
 2026-05-06T16:57:18 fpga-spi Worker pass
@@ -452,10 +452,10 @@
 2026-05-06T17:01:46 fpga-spi Worker pass
 2026-05-06T17:02:30 fpga-spi Worker pass
 2026-05-06T17:02:35 fpga-spi Orchestrator pass 48
-2026-05-06T17:04:05 fpga-spi Minimizer pass mirror IO1-low pattern; cannot split build+verify
-2026-05-06T17:04:05 fpga-spi Worker pass
-2026-05-06T17:04:05 fpga-spi Verifier pass none
 2026-05-06T17:04:05 fpga-spi Manager pass add io2 low uart trigger
+2026-05-06T17:04:05 fpga-spi Minimizer pass mirror IO1-low pattern; cannot split build+verify
+2026-05-06T17:04:05 fpga-spi Verifier pass none
+2026-05-06T17:04:05 fpga-spi Worker pass
 2026-05-06T17:10:00 fpga-spi Tester pass 49
 2026-05-06T17:10:05 fpga-spi Enemy pass
 2026-05-06T17:11:00 fpga-spi Worker pass
@@ -466,10 +466,10 @@
 2026-05-06T17:18:32 fpga-spi Tester fail bring_up_mp135_uart_dfu_evb_offline
 2026-05-06T17:18:35 fpga-spi Orchestrator pass 50
 2026-05-06T17:18:51 fpga-spi Worker pass
+2026-05-06T17:20:01 fpga-spi Manager pass add io3 low uart trigger
 2026-05-06T17:20:01 fpga-spi Minimizer pass mirror IO2-low pattern; cannot split build+verify
 2026-05-06T17:20:01 fpga-spi Verifier pass none
 2026-05-06T17:20:01 fpga-spi Worker pass
-2026-05-06T17:20:01 fpga-spi Manager pass add io3 low uart trigger
 2026-05-06T17:22:24 fpga-spi Tester fail bring_up_mp135_uart_dfu_evb_offline
 2026-05-06T17:22:40 fpga-spi Worker pass
 2026-05-06T17:26:30 fpga-spi Tester pass 51
@@ -491,10 +491,10 @@
 2026-05-06T17:48:35 fpga-spi Enemy pass
 2026-05-06T17:49:00 fpga-spi Worker pass
 2026-05-06T17:49:05 fpga-spi Orchestrator pass 53
-2026-05-06T17:52:42 fpga-spi Worker pass
-2026-05-06T17:52:42 fpga-spi Verifier pass none
 2026-05-06T17:52:42 fpga-spi Manager pass add prbs xor checksum
 2026-05-06T17:52:42 fpga-spi Minimizer pass adds checksum reg+clear; smaller leaves no-op
+2026-05-06T17:52:42 fpga-spi Verifier pass none
+2026-05-06T17:52:42 fpga-spi Worker pass
 2026-05-06T17:53:59 fpga-spi Tester pass 63
 2026-05-06T17:57:36 fpga-spi Enemy pass
 2026-05-06T17:58:48 fpga-spi Worker pass
@@ -503,10 +503,10 @@
 2026-05-06T17:59:30 fpga-spi Worker pass
 2026-05-06T17:59:35 fpga-spi Orchestrator pass 54
 2026-05-06T17:59:52 fpga-spi Orchestrator pass 63
-2026-05-06T18:01:06 fpga-spi Minimizer pass clk_en gate alone is smallest unit
 2026-05-06T18:01:06 fpga-spi Manager pass add prbs_xor clk_en gate
-2026-05-06T18:01:06 fpga-spi Worker pass
+2026-05-06T18:01:06 fpga-spi Minimizer pass clk_en gate alone is smallest unit
 2026-05-06T18:01:06 fpga-spi Verifier pass none
+2026-05-06T18:01:06 fpga-spi Worker pass
 2026-05-06T18:02:40 fpga-spi Manager pass audit fpga pin numbers vs gpio.nw set_io
 2026-05-06T18:03:36 fpga-spi Minimizer pass smallest cross-check; halves verify nothing
 2026-05-06T18:04:30 fpga-spi Tester fail ncs_high_program_DEVICE_NOT_OPENED
@@ -514,9 +514,9 @@
 2026-05-06T18:05:34 fpga-spi Verifier pass none
 2026-05-06T18:12:00 fpga-spi Tester pass 55
 2026-05-06T18:12:05 fpga-spi Enemy pass
-2026-05-06T18:14:42 fpga-spi Verifier pass none
 2026-05-06T18:14:42 fpga-spi Manager pass add prbs_xor_top reset cmd
 2026-05-06T18:14:42 fpga-spi Minimizer pass single 'r' command + wrapper boundary; smaller is empty wrapper
+2026-05-06T18:14:42 fpga-spi Verifier pass none
 2026-05-06T18:14:42 fpga-spi Worker pass
 2026-05-06T18:18:14 fpga-spi Tester fail bring_up_mp135_uart_dfu_evb_offline
 2026-05-06T18:18:33 fpga-spi Worker pass
@@ -526,10 +526,10 @@
 2026-05-06T18:28:33 fpga-spi Worker pass
 2026-05-06T18:33:30 fpga-spi Tester pass 56
 2026-05-06T18:33:35 fpga-spi Enemy pass
+2026-05-06T18:35:20 fpga-spi Manager pass add single-step cmd
+2026-05-06T18:35:20 fpga-spi Minimizer pass single-step pulse only; smaller leaves no-op
 2026-05-06T18:35:20 fpga-spi Verifier pass none
 2026-05-06T18:35:20 fpga-spi Worker pass
-2026-05-06T18:35:20 fpga-spi Minimizer pass single-step pulse only; smaller leaves no-op
-2026-05-06T18:35:20 fpga-spi Manager pass add single-step cmd
 2026-05-06T18:38:30 fpga-spi Tester pass 59
 2026-05-06T18:39:56 fpga-spi Enemy pass
 2026-05-06T18:42:00 fpga-spi Tester pass 57
@@ -558,8 +558,8 @@
 2026-05-06T19:02:24 fpga-spi Enemy pass
 2026-05-06T19:02:40 fpga-spi Worker pass
 2026-05-06T19:03:08 fpga-spi Orchestrator pass 65
-2026-05-06T19:04:54 fpga-spi Minimizer pass single new fail-mode orphan sig
 2026-05-06T19:04:54 fpga-spi Manager pass audit plan signals in jumpers
+2026-05-06T19:04:54 fpga-spi Minimizer pass single new fail-mode orphan sig
 2026-05-06T19:05:00 fpga-spi Tester pass 59
 2026-05-06T19:05:05 fpga-spi Enemy pass
 2026-05-06T19:05:30 fpga-spi Worker pass
@@ -585,8 +585,8 @@
 2026-05-06T19:32:26 fpga-spi Enemy pass
 2026-05-06T19:32:38 fpga-spi Worker pass
 2026-05-06T19:32:58 fpga-spi Orchestrator pass 66
-2026-05-06T19:34:48 fpga-spi Minimizer pass iter 67 single field one assertion
 2026-05-06T19:34:48 fpga-spi Manager pass iter 67 audit plan driver valid
+2026-05-06T19:34:48 fpga-spi Minimizer pass iter 67 single field one assertion
 2026-05-06T19:35:33 fpga-spi Worker pass
 2026-05-06T19:35:47 fpga-spi Verifier pass none
 2026-05-06T19:43:30 fpga-spi Tester pass 61
@@ -625,14 +625,14 @@
 2026-05-06T20:48:26 fpga-spi Verifier pass none
 2026-05-06T21:05:11 fpga-spi Worker pass
 2026-05-06T21:05:26 fpga-spi Enemy pass
-2026-05-06T21:05:26 fpga-spi Tester pass 59
 2026-05-06T21:05:26 fpga-spi Orchestrator pass 69
+2026-05-06T21:05:26 fpga-spi Tester pass 59
 2026-05-06T21:08:41 fpga-spi Manager pass commit reset_n to pin 112
 2026-05-06T21:08:41 fpga-spi Minimizer pass smallest reset_n pin commit
 2026-05-06T21:11:02 fpga-spi Worker pass
 2026-05-06T21:11:09 fpga-spi Verifier pass none
-2026-05-06T21:14:10 fpga-spi Worker pass
 2026-05-06T21:14:10 fpga-spi Tester fail verify_io2_ftd2xx_DEVICE_NOT_OPENED
+2026-05-06T21:14:10 fpga-spi Worker pass
 2026-05-06T21:16:53 fpga-spi Tester fail verify_io2_ftd2xx_DEVICE_NOT_OPENED
 2026-05-06T21:16:53 fpga-spi Worker pass
 2026-05-06T21:23:25 fpga-spi Tester pass 60
@@ -647,16 +647,16 @@
 2026-05-06T21:35:57 fpga-spi Enemy pass
 2026-05-06T21:36:18 fpga-spi Worker pass
 2026-05-06T21:36:44 fpga-spi Orchestrator pass 71
-2026-05-06T21:38:03 fpga-spi Minimizer pass single jumper edit
 2026-05-06T21:38:03 fpga-spi Manager pass commit status_output to pin 114
+2026-05-06T21:38:03 fpga-spi Minimizer pass single jumper edit
 2026-05-06T21:39:00 fpga-spi Worker pass
 2026-05-06T21:39:09 fpga-spi Verifier pass none
 2026-05-06T21:45:18 fpga-spi Tester pass 62
 2026-05-06T21:45:29 fpga-spi Enemy pass
-2026-05-06T21:45:43 fpga-spi Worker pass
 2026-05-06T21:45:43 fpga-spi Orchestrator pass 72
-2026-05-06T21:50:31 fpga-spi Minimizer pass validator+audit green
+2026-05-06T21:45:43 fpga-spi Worker pass
 2026-05-06T21:50:31 fpga-spi Manager pass audit fpga_signal_pin no TBD
+2026-05-06T21:50:31 fpga-spi Minimizer pass validator+audit green
 2026-05-06T22:06:34 fpga-spi Orchestrator pass 73
 2026-05-06T22:12:25 fpga-spi Manager pass document mpu stub control GPIO TODO
 2026-05-06T22:12:26 fpga-spi Minimizer pass keep TODO chapter minimal
@@ -666,33 +666,33 @@
 2026-05-06T22:22:13 fpga-spi Enemy pass
 2026-05-06T22:22:39 fpga-spi Worker pass
 2026-05-06T22:23:06 fpga-spi Orchestrator pass 74
-2026-05-06T22:26:33 fpga-spi Minimizer pass both constants both sides minimum
 2026-05-06T22:26:33 fpga-spi Manager pass audit prbs poly+seed FPGA vs MPU
+2026-05-06T22:26:33 fpga-spi Minimizer pass both constants both sides minimum
 2026-05-06T22:26:42 fpga-spi Worker pass
 2026-05-06T22:26:54 fpga-spi Verifier pass none
-2026-05-06T22:34:15 fpga-spi Tester pass 65
 2026-05-06T22:34:15 fpga-spi Tester fail bench_lease_BusyError transient
+2026-05-06T22:34:15 fpga-spi Tester pass 65
 2026-05-06T22:34:41 fpga-spi Enemy pass
 2026-05-06T22:35:05 fpga-spi Orchestrator pass 75
 2026-05-06T22:35:05 fpga-spi Worker pass
 2026-05-06T22:37:38 fpga-spi Manager pass audit checksum width+init FPGA vs MPU
 2026-05-06T22:37:38 fpga-spi Minimizer pass width and init both required minimum
-2026-05-06T22:38:29 fpga-spi Worker pass
 2026-05-06T22:38:29 fpga-spi Verifier pass none
+2026-05-06T22:38:29 fpga-spi Worker pass
 2026-05-06T22:44:59 fpga-spi Tester pass 66
 2026-05-06T22:45:13 fpga-spi Enemy pass
 2026-05-06T22:45:36 fpga-spi Worker pass
 2026-05-06T22:46:31 fpga-spi Orchestrator pass 76
-2026-05-06T22:55:50 fpga-spi Worker pass
-2026-05-06T22:55:50 fpga-spi Verifier pass none
-2026-05-06T22:55:50 fpga-spi Minimizer pass shift+LSB-gate both sides minimum
 2026-05-06T22:55:50 fpga-spi Enemy pass
-2026-05-06T22:55:50 fpga-spi Tester pass 67
 2026-05-06T22:55:50 fpga-spi Manager pass audit prbs step shape FPGA vs MPU
-2026-05-06T22:57:47 fpga-spi Worker pass
+2026-05-06T22:55:50 fpga-spi Minimizer pass shift+LSB-gate both sides minimum
+2026-05-06T22:55:50 fpga-spi Tester pass 67
+2026-05-06T22:55:50 fpga-spi Verifier pass none
+2026-05-06T22:55:50 fpga-spi Worker pass
 2026-05-06T22:57:47 fpga-spi Orchestrator pass 77
-2026-05-06T22:59:57 fpga-spi Minimizer pass both fold and prev capture minimum
+2026-05-06T22:57:47 fpga-spi Worker pass
 2026-05-06T22:59:57 fpga-spi Manager pass audit checksum xor-update FPGA vs MPU
+2026-05-06T22:59:57 fpga-spi Minimizer pass both fold and prev capture minimum
 2026-05-06T23:00:05 fpga-spi Worker pass
 2026-05-06T23:00:12 fpga-spi Verifier pass none
 2026-05-06T23:06:47 fpga-spi Tester pass 68
@@ -707,25 +707,25 @@
 2026-05-06T23:18:11 fpga-spi Enemy pass
 2026-05-06T23:18:24 fpga-spi Worker pass
 2026-05-06T23:18:52 fpga-spi Orchestrator pass 79
-2026-05-06T23:36:25 fpga-spi Worker pass
 2026-05-06T23:36:25 fpga-spi Enemy pass
-2026-05-06T23:36:25 fpga-spi Tester pass 70
 2026-05-06T23:36:25 fpga-spi Manager pass audit iter63 required_tags reverse coverage
-2026-05-06T23:36:25 fpga-spi Verifier pass none
 2026-05-06T23:36:25 fpga-spi Minimizer pass reverse-direction completeness minimum
+2026-05-06T23:36:25 fpga-spi Tester pass 70
+2026-05-06T23:36:25 fpga-spi Verifier pass none
+2026-05-06T23:36:25 fpga-spi Worker pass
 2026-05-06T23:37:16 fpga-spi Orchestrator pass 80
-2026-05-06T23:46:39 fpga-spi Minimizer pass uniqueness on manifest side minimum
 2026-05-06T23:46:39 fpga-spi Manager pass audit unique manifest jumper pins
+2026-05-06T23:46:39 fpga-spi Minimizer pass uniqueness on manifest side minimum
 2026-05-06T23:46:44 fpga-spi Worker pass
 2026-05-06T23:46:48 fpga-spi Verifier pass none
+2026-05-06T23:53:22 fpga-spi Enemy pass
 2026-05-06T23:53:22 fpga-spi Tester pass 71
 2026-05-06T23:53:22 fpga-spi Worker pass
-2026-05-06T23:53:22 fpga-spi Enemy pass
 2026-05-06T23:53:58 fpga-spi Orchestrator pass 81
 2026-05-07T04:52:17 fpga-spi Worker pass
 2026-05-07T04:52:33 fpga-spi Verifier pass none
-2026-05-07T04:58:19 fpga-spi Worker pass
 2026-05-07T04:58:19 fpga-spi Tester fail verify_io2_low_DEVICE_NOT_OPENED transient
+2026-05-07T04:58:19 fpga-spi Worker pass
 2026-05-07T05:04:49 fpga-spi Tester pass 63
 2026-05-07T05:05:25 fpga-spi Enemy pass
 2026-05-07T05:05:44 fpga-spi Worker pass
@@ -774,12 +774,20 @@
 2026-05-07T10:15:14 fpga-spi Enemy fail stale-artifact gate
 2026-05-07T10:16:53 fpga-spi Worker pass
 2026-05-07T10:18:36 fpga-spi Verifier pass none
+2026-05-07T10:19:43 kernel-clock-bringup Orchestrator pass 1
+2026-05-07T10:20:06 kernel-clock-bringup Manager pass Confirm clk_ignore_unused is required
+2026-05-07T10:20:57 kernel-clock-bringup Minimizer pass Only compare two boot args; smaller gives no baseline
+2026-05-07T10:26:40 kernel-clock-bringup Worker pass
+2026-05-07T10:30:34 kernel-clock-bringup Verifier pass none
+2026-05-07T10:37:31 kernel-clock-bringup Tester fail 0
 2026-05-07T10:40:58 fpga-spi Tester pass 79
 2026-05-07T10:41:54 fpga-spi Enemy pass none
 2026-05-07T10:42:43 fpga-spi Worker pass
+2026-05-07T10:43:03 kernel-clock-bringup Worker pass
 2026-05-07T10:43:55 fpga-spi Orchestrator pass 86
 2026-05-07T10:44:43 fpga-spi Worker pass
 2026-05-07T10:46:12 fpga-spi Manager pass MP135 prbs_test reset UART command
+2026-05-07T10:46:29 kernel-clock-bringup Verifier pass none
 2026-05-07T10:47:23 fpga-spi Minimizer pass Atomic cmd; smaller has no UART behavior
 2026-05-07T10:48:44 fpga-spi Worker pass
 2026-05-07T10:50:18 fpga-spi Verifier pass none
@@ -794,8 +802,19 @@
 2026-05-07T11:22:40 fpga-spi Worker pass
 2026-05-07T11:24:06 fpga-spi Verifier pass none
 2026-05-07T11:32:43 fpga-spi Tester fail 15 reset_mp135_probe_watchdog /tmp/runpy-yyt18nzz/reset_mp135_before_gpio_uart_probe/attempt_3/artefact
+2026-05-07T11:32:53 kernel-clock-bringup Tester pass 2
+2026-05-07T11:34:39 kernel-clock-bringup Enemy fail WIP_not_advanced_dirty_repos_weak_freeze_check
 2026-05-07T11:35:17 fpga-spi Worker pass
+2026-05-07T11:36:59 kernel-clock-bringup Worker pass
 2026-05-07T11:38:07 fpga-spi Verifier pass none
+2026-05-07T11:40:10 kernel-clock-bringup Verifier pass none
+2026-05-07T11:50:28 kernel-clock-bringup Tester pass 2
+2026-05-07T11:51:49 kernel-clock-bringup Worker pass
+2026-05-07T11:54:07 kernel-clock-bringup Orchestrator pass 2
+2026-05-07T11:54:54 kernel-clock-bringup Manager pass Trace unused-clock shutdown hang
+2026-05-07T11:56:04 kernel-clock-bringup Minimizer pass Trace+boot is atomic; smaller yields no culprit
+2026-05-07T11:58:46 kernel-clock-bringup Worker pass
+2026-05-07T12:03:02 kernel-clock-bringup Verifier pass none
 2026-05-07T12:15:16 stream-websockets Orchestrator pass 1
 2026-05-07T12:15:33 fpga-spi Tester fail 51 mp135_uart_ready_timeout /tmp/runpy-tbbsq94q/verify_mp135_to_fpga_io3_low/attempt_3/artefact
 2026-05-07T12:15:51 stream-websockets Manager pass device inventory check
@@ -828,11 +847,19 @@
 2026-05-07T12:51:32 fpga-spi Worker pass
 2026-05-07T12:54:04 fpga-spi Verifier pass none
 2026-05-07T12:57:26 stream-websockets Tester fail 3 boot_watchdog_timeout
+2026-05-07T13:01:20 kernel-clock-bringup Tester pass 3
+2026-05-07T13:03:01 kernel-clock-bringup Enemy pass dirty_precommit_expected
+2026-05-07T13:04:13 kernel-clock-bringup Worker pass
 2026-05-07T13:04:55 fpga-spi Tester fail 15 reset_mp135_probe_watchdog /tmp/runpy-8d34tido/reset_mp135_before_gpio_uart_probe/attempt_3/artefact
+2026-05-07T13:06:11 kernel-clock-bringup Orchestrator pass 3
+2026-05-07T13:06:52 kernel-clock-bringup Manager pass Keep stgen_k enabled no-flag boot
+2026-05-07T13:08:02 kernel-clock-bringup Minimizer pass stgen_k-only is atomic; smaller proves nothing
 2026-05-07T13:08:45 fpga-spi Worker pass
 2026-05-07T13:10:25 stream-websockets Worker pass
 2026-05-07T13:10:54 fpga-spi Verifier pass none
+2026-05-07T13:11:17 kernel-clock-bringup Worker pass
 2026-05-07T13:11:17 stream-websockets Tester fail 4 ssh_conn_closed
+2026-05-07T13:13:58 kernel-clock-bringup Verifier pass none
 2026-05-07T13:14:18 stream-websockets Worker pass
 2026-05-07T13:17:15 stream-websockets Verifier fail host_key_mismatch
 2026-05-07T13:18:34 stream-websockets Worker pass
@@ -849,7 +876,10 @@
 2026-05-07T14:10:04 fpga-spi Tester fail 15 reset_submit_timeout /tmp/runpy-b3y0jphd/reset_mp135_before_gpio_uart_probe/attempt_3/artefact
 2026-05-07T14:11:59 fpga-spi Worker pass
 2026-05-07T14:13:58 fpga-spi Verifier pass none
+2026-05-07T14:20:03 kernel-clock-bringup Tester fail 3
 2026-05-07T14:23:10 stream-websockets Tester fail 5 ssh_conn_closed
+2026-05-07T14:23:18 kernel-clock-bringup Worker pass
+2026-05-07T14:24:52 kernel-clock-bringup Verifier pass none
 2026-05-07T14:25:32 fpga-spi Tester fail 16 dfu_ambiguous /tmp/runpy-axcjlxg6/bring_up_mp135_gpio_test_uart/attempt_3/artefact
 2026-05-07T14:26:39 fpga-spi Worker pass
 2026-05-07T14:27:37 stream-websockets Worker pass
@@ -859,16 +889,24 @@
 2026-05-07T14:54:00 fpga-spi Worker pass
 2026-05-07T14:56:33 fpga-spi Verifier pass none
 2026-05-07T15:03:43 stream-websockets Tester fail 4 boot_login_timeout
+2026-05-07T15:03:54 kernel-clock-bringup Tester fail 3
+2026-05-07T15:05:55 kernel-clock-bringup Worker pass
+2026-05-07T15:07:53 kernel-clock-bringup Verifier pass local-checks-clean
 2026-05-07T15:08:20 stream-websockets Worker pass
 2026-05-07T15:09:56 stream-websockets Verifier pass none
 2026-05-07T15:19:29 fpga-spi Tester fail 15 reset_lock_wait_runtime /tmp/runpy-23riqx0p/reset_mp135_before_gpio_uart_probe/attempt_3/artefact
 2026-05-07T15:20:27 fpga-spi Worker pass
 2026-05-07T15:22:19 fpga-spi Verifier pass none
+2026-05-07T15:25:06 kernel-clock-bringup Tester fail 2
+2026-05-07T15:26:57 kernel-clock-bringup Worker pass
 2026-05-07T15:28:10 stream-websockets Tester fail 4 boot_login_timeout
+2026-05-07T15:28:37 kernel-clock-bringup Verifier fail trailing-whitespace
 2026-05-07T15:28:40 fpga-spi Tester fail 15 bench_mcu_leased /tmp/runpy-hqc2dg2a/reset_mp135_before_gpio_uart_probe/attempt_3/artefact
 2026-05-07T15:30:11 fpga-spi Worker pass
+2026-05-07T15:30:53 kernel-clock-bringup Worker pass
 2026-05-07T15:31:57 stream-websockets Worker pass
 2026-05-07T15:32:27 fpga-spi Verifier pass none
+2026-05-07T15:32:30 kernel-clock-bringup Verifier pass local-checks-clean
 2026-05-07T15:33:59 stream-websockets Verifier pass none
 2026-05-07T15:43:18 fpga-spi Tester fail 16 mp135_leased /tmp/runpy-66lhziuc/bring_up_mp135_gpio_test_uart/attempt_3/artefact
 2026-05-07T15:44:38 fpga-spi Worker pass
@@ -884,10 +922,15 @@
 2026-05-07T16:20:03 fpga-spi Tester fail 16 vcp_preamble_no_dfu /tmp/runpy-46pikfw0/bring_up_mp135_gpio_test_uart/attempt_3/artefact
 2026-05-07T16:21:42 fpga-spi Worker pass
 2026-05-07T16:23:40 fpga-spi Verifier pass none
+2026-05-07T16:27:12 kernel-clock-bringup Tester fail 3
 2026-05-07T16:29:20 stream-websockets Tester fail 3 stale_lease_provision
+2026-05-07T16:29:47 kernel-clock-bringup Worker pass
 2026-05-07T16:30:35 stream-websockets Worker pass
 2026-05-07T16:31:23 fpga-spi Tester fail 16 dfu_evb_missing /tmp/runpy-wfqp8w1i/bring_up_mp135_gpio_test_uart/attempt_6/artefact
+2026-05-07T16:32:43 kernel-clock-bringup Verifier fail patch-whitespace
+2026-05-07T16:33:36 kernel-clock-bringup Worker pass
 2026-05-07T16:33:43 fpga-spi Worker pass
+2026-05-07T16:35:29 kernel-clock-bringup Verifier pass none
 2026-05-07T16:35:39 fpga-spi Verifier fail stale reset description
 2026-05-07T16:36:35 fpga-spi Worker pass
 2026-05-07T16:38:26 fpga-spi Verifier pass none
@@ -901,14 +944,26 @@
 2026-05-07T16:53:35 stream-websockets Verifier pass none
 2026-05-07T16:53:38 fpga-spi Worker pass
 2026-05-07T16:57:19 fpga-spi Verifier pass rephrased stale reset text
+2026-05-07T16:59:13 kernel-clock-bringup Tester fail 3
+2026-05-07T17:02:18 kernel-clock-bringup Worker pass
+2026-05-07T17:03:51 kernel-clock-bringup Verifier pass cleanup-clean
 2026-05-07T17:14:55 fpga-spi Tester fail 20 io1_dfu_evb_not_enumerated /tmp/runpy-3kyeoggs/verify_fpga_to_mp135_io1/attempt_6/artefact
 2026-05-07T17:18:26 fpga-spi Worker pass
+2026-05-07T17:20:17 kernel-clock-bringup Tester fail 2
 2026-05-07T17:21:42 stream-websockets Tester fail 3 provision_lease_conflict
+2026-05-07T17:21:48 kernel-clock-bringup Worker pass
 2026-05-07T17:22:41 fpga-spi Verifier pass fixed stale audit literals
+2026-05-07T17:23:22 kernel-clock-bringup Verifier pass cleanup-clean
 2026-05-07T17:23:36 stream-websockets Worker pass
 2026-05-07T17:26:46 stream-websockets Verifier pass none
+2026-05-07T17:47:16 kernel-clock-bringup Tester fail 2
+2026-05-07T17:48:38 kernel-clock-bringup Worker pass
+2026-05-07T17:50:11 kernel-clock-bringup Verifier pass cleanup-clean
+2026-05-07T17:53:46 kernel-clock-bringup Tester fail 0
+2026-05-07T17:55:10 kernel-clock-bringup Worker pass
 2026-05-07T17:55:21 fpga-spi Tester fail 22 io2_mp135_leased /tmp/runpy-zwzxfyjh/verify_fpga_to_mp135_io2/attempt_6/artefact
 2026-05-07T17:55:48 stream-websockets Tester fail 6 ssh_conn_closed
+2026-05-07T17:57:02 kernel-clock-bringup Verifier pass none
 2026-05-07T17:59:53 fpga-spi Worker pass
 2026-05-07T18:00:36 stream-websockets Worker pass
 2026-05-07T18:01:29 stream-websockets Worker pass
@@ -918,28 +973,44 @@
 2026-05-07T18:10:20 fpga-spi Worker pass
 2026-05-07T18:12:28 fpga-spi Verifier pass none
 2026-05-07T18:27:58 fpga-spi Tester fail 24 submit_head_connection_reset /tmp/runpy-uctat5mr/verify_fpga_to_mp135_io3/attempt_3
+2026-05-07T18:28:00 kernel-clock-bringup Tester fail 3
 2026-05-07T18:29:18 fpga-spi Worker pass
+2026-05-07T18:30:29 kernel-clock-bringup Worker pass
 2026-05-07T18:30:54 fpga-spi Verifier fail missing URL/timeout/HTTPError tests
+2026-05-07T18:31:52 kernel-clock-bringup Verifier pass cleanup-clean
 2026-05-07T18:32:31 fpga-spi Worker pass
 2026-05-07T18:34:07 fpga-spi Verifier pass none
 2026-05-07T18:48:00 fpga-spi Tester fail 24 io3_dfu_missing /tmp/runpy-t6ogsd3x/verify_fpga_to_mp135_io3/attempt_3/artefact
 2026-05-07T18:50:39 fpga-spi Worker pass
 2026-05-07T18:52:40 fpga-spi Worker pass
+2026-05-07T18:53:31 kernel-clock-bringup Tester fail 3
+2026-05-07T18:54:51 kernel-clock-bringup Worker pass
+2026-05-07T18:56:38 kernel-clock-bringup Verifier pass cleanup-clean
 2026-05-07T18:57:06 fpga-spi Verifier pass none
 2026-05-07T19:00:53 stream-websockets Tester pass 7
 2026-05-07T19:02:46 stream-websockets Enemy fail skipped_cmdline_wip
 2026-05-07T19:03:21 stream-websockets Worker pass
 2026-05-07T19:04:36 stream-websockets Verifier pass none
 2026-05-07T19:27:34 fpga-spi Tester fail 28 ncs_high_dfu_missing /tmp/runpy-elbj50a5/verify_mp135_to_fpga_ncs_high/attempt_3/artefact
+2026-05-07T19:28:04 kernel-clock-bringup Tester fail 3
 2026-05-07T19:30:58 fpga-spi Worker pass
+2026-05-07T19:32:11 kernel-clock-bringup Worker pass
 2026-05-07T19:33:50 fpga-spi Verifier pass none
+2026-05-07T19:33:52 kernel-clock-bringup Orchestrator pass 8
+2026-05-07T19:34:54 kernel-clock-bringup Verifier pass local-checks-clean
 2026-05-07T19:36:00 fpga-spi Tester fail 10 lease_probe_inventory_shape /tmp/runpy-1q90xkj_/acquire_gpio_replay_mpu_fpga_lease/attempt_3/artefact
 2026-05-07T19:37:20 fpga-spi Worker pass
 2026-05-07T19:39:35 fpga-spi Verifier pass none
 2026-05-07T19:49:39 stream-websockets Tester fail 4 dfu_not_enumerated
 2026-05-07T19:50:40 stream-websockets Worker pass
 2026-05-07T19:51:54 stream-websockets Verifier pass none
+2026-05-07T19:58:20 kernel-clock-bringup Tester fail 3
+2026-05-07T19:59:15 kernel-clock-bringup Worker pass
+2026-05-07T20:00:25 kernel-clock-bringup Verifier pass cleanup-correct
 2026-05-07T20:04:14 fpga-spi Tester fail 29 ncs_low_no_fpga_transition /tmp/runpy-d5wa4xl4/verify_mp135_to_fpga_ncs_low/attempt_3/artefact
+2026-05-07T20:04:15 kernel-clock-bringup Tester fail 0
+2026-05-07T20:05:34 kernel-clock-bringup Worker pass
+2026-05-07T20:06:29 kernel-clock-bringup Verifier pass no-issues
 2026-05-07T20:07:26 stream-websockets Tester fail 4 provision_retry_lease
 2026-05-07T20:08:02 stream-websockets Worker pass
 2026-05-07T20:08:27 fpga-spi Worker pass
@@ -950,6 +1021,9 @@
 2026-05-07T20:34:10 fpga-spi Verifier fail closure misclassifies IO audits
 2026-05-07T20:36:35 fpga-spi Worker pass
 2026-05-07T20:38:51 fpga-spi Verifier pass none
+2026-05-07T20:39:32 kernel-clock-bringup Tester fail 2
+2026-05-07T20:40:50 kernel-clock-bringup Worker pass
+2026-05-07T20:42:05 kernel-clock-bringup Verifier pass cleanup-clean
 2026-05-07T20:55:56 fpga-spi Tester fail 32 sclk_uart_dfu_missing /tmp/runpy-n4ne_2k1/verify_mp135_sclk_uart_trigger_report/attempt_6/artefact
 2026-05-07T21:00:04 fpga-spi Worker pass
 2026-05-07T21:02:37 fpga-spi Verifier fail sclk proof still claimed
@@ -969,6 +1043,12 @@
 2026-05-07T21:40:35 fpga-spi Verifier pass none
 2026-05-07T21:42:18 stream-websockets Worker pass
 2026-05-07T21:43:17 stream-websockets Verifier pass none
+2026-05-07T21:43:48 kernel-clock-bringup Tester fail 3
+2026-05-07T21:47:14 kernel-clock-bringup Worker pass
+2026-05-07T21:49:03 kernel-clock-bringup Verifier pass no-issues
+2026-05-07T21:52:10 kernel-clock-bringup Tester fail 0
+2026-05-07T21:53:17 kernel-clock-bringup Worker pass
+2026-05-07T21:54:15 kernel-clock-bringup Verifier pass no-issues
 2026-05-07T22:02:23 fpga-spi Tester fail 39 io1_high_dfu_missing /tmp/runpy-kkakeq7h/verify_mp135_to_fpga_io1_high/attempt_3/artefact
 2026-05-07T22:02:38 stream-websockets Tester fail 4 dfu_msc_missing
 2026-05-07T22:03:15 fpga-spi Worker pass
@@ -986,8 +1066,11 @@
 2026-05-07T22:39:28 stream-websockets Enemy pass none
 2026-05-07T22:41:31 stream-websockets Worker pass
 2026-05-07T22:42:55 stream-websockets Orchestrator pass 5
+2026-05-07T22:44:39 kernel-clock-bringup Tester fail 3
 2026-05-07T22:44:42 stream-websockets Manager pass ssh_put_small_blob
+2026-05-07T22:45:50 kernel-clock-bringup Worker pass
 2026-05-07T22:46:02 stream-websockets Minimizer fail no_local_ssh_put
+2026-05-07T22:46:52 kernel-clock-bringup Verifier pass no-issues
 2026-05-07T22:46:52 stream-websockets Manager pass add_local_ssh_put
 2026-05-07T22:47:41 fpga-spi Tester fail 32 sclk_submit_wait_stuck /tmp/runpy-e0x1ts0z/audit_mp135_sclk_uart_trigger_blocked_boundary/attempt_2/artefact
 2026-05-07T22:48:23 stream-websockets Minimizer pass put_prereq_atomic
@@ -995,6 +1078,9 @@
 2026-05-07T22:49:56 fpga-spi Verifier pass none
 2026-05-07T22:51:25 stream-websockets Worker pass
 2026-05-07T22:53:00 stream-websockets Verifier pass none
+2026-05-07T23:09:33 kernel-clock-bringup Tester fail 1
+2026-05-07T23:10:35 kernel-clock-bringup Worker pass
+2026-05-07T23:11:30 kernel-clock-bringup Verifier pass no-issues
 2026-05-07T23:21:56 fpga-spi Tester fail 43 io3_high_dfu_missing /tmp/runpy-eqpy0avq/verify_mp135_to_fpga_io3_high/attempt_3/artefact
 2026-05-07T23:23:02 fpga-spi Worker pass
 2026-05-07T23:24:42 fpga-spi Verifier pass none
@@ -1002,8 +1088,11 @@
 2026-05-07T23:43:31 stream-websockets Tester fail 6 ssh_timeout
 2026-05-07T23:44:15 stream-websockets Worker pass
 2026-05-07T23:44:59 stream-websockets Verifier pass none
-2026-05-08T00:05:50 fpga-spi Worker pass
+2026-05-07T23:55:01 kernel-clock-bringup Tester fail 2
+2026-05-07T23:56:41 kernel-clock-bringup Worker pass
+2026-05-07T23:57:46 kernel-clock-bringup Verifier pass no-issues
 2026-05-08T00:05:50 fpga-spi Tester fail 37 io0_blocked_empty_uart /tmp/runpy-xafbh2vt/audit_mp135_to_fpga_io0_high_blocked_boundary/attempt_3/artefact
+2026-05-08T00:05:50 fpga-spi Worker pass
 2026-05-08T00:07:42 fpga-spi Verifier pass none
 2026-05-08T00:20:37 fpga-spi Tester fail 18 setup_precondition_lease_lock_budget /tmp/runpy-_eayh__e/audit_physical_gpio_replay_setup_preconditions/attempt_3/artefact
 2026-05-08T00:21:27 fpga-spi Worker pass
@@ -1017,9 +1106,15 @@
 2026-05-08T00:29:37 stream-websockets Worker pass
 2026-05-08T00:31:27 stream-websockets Worker pass
 2026-05-08T00:32:47 stream-websockets Verifier pass none
+2026-05-08T00:56:45 kernel-clock-bringup Tester fail 1
 2026-05-08T00:57:23 stream-websockets Tester fail 6 ssh_timeout
+2026-05-08T00:58:04 kernel-clock-bringup Worker pass
 2026-05-08T00:58:45 stream-websockets Worker pass
+2026-05-08T00:59:16 kernel-clock-bringup Verifier pass no-issues
 2026-05-08T01:00:28 stream-websockets Verifier pass none
+2026-05-08T01:09:27 kernel-clock-bringup Tester fail 1
+2026-05-08T01:11:16 kernel-clock-bringup Worker pass
+2026-05-08T01:12:30 kernel-clock-bringup Verifier pass no-issues
 2026-05-08T01:15:35 fpga-spi Tester fail 45 fail IO0-low artefact=/tmp/runpy-lkwuvwn3/verify_mp135_to_fpga_io0_low/attempt_3/artefact
 2026-05-08T01:17:04 fpga-spi Worker pass
 2026-05-08T01:18:43 fpga-spi Verifier pass none
@@ -1031,7 +1126,10 @@
 2026-05-08T01:57:13 fpga-spi Verifier pass none
 2026-05-08T02:05:18 fpga-spi Tester fail 32 fail lease-contention artefact=/tmp/runpy-qsjo36_j/audit_mp135_sclk_uart_trigger_blocked_boundary/attempt_6/artefact
 2026-05-08T02:05:59 fpga-spi Worker pass
+2026-05-08T02:06:04 kernel-clock-bringup Tester fail 2
+2026-05-08T02:07:20 kernel-clock-bringup Worker pass
 2026-05-08T02:07:27 fpga-spi Verifier pass none
+2026-05-08T02:08:27 kernel-clock-bringup Verifier pass no-issues
 2026-05-08T02:09:44 fpga-spi Tester fail 10 fail lease-busy artefact=/tmp/runpy-th7n5q85/acquire_gpio_replay_mpu_fpga_lease/attempt_3/artefact
 2026-05-08T02:10:01 fpga-spi Worker pass
 2026-05-08T02:11:14 fpga-spi Verifier pass none
@@ -1046,13 +1144,26 @@
 2026-05-08T03:00:04 stream-websockets Verifier fail missing_watch_submit_test
 2026-05-08T03:01:17 stream-websockets Worker pass
 2026-05-08T03:02:42 stream-websockets Verifier pass none
+2026-05-08T03:08:52 kernel-clock-bringup Tester pass 4
+2026-05-08T03:11:01 kernel-clock-bringup Enemy fail WIP_not_advanced_dirty_linux
+2026-05-08T03:12:57 kernel-clock-bringup Worker pass
+2026-05-08T03:14:52 kernel-clock-bringup Verifier pass no-issues
+2026-05-08T03:15:49 kernel-clock-bringup Enemy pass no-issues
+2026-05-08T03:17:08 kernel-clock-bringup Worker pass
+2026-05-08T03:18:21 kernel-clock-bringup Orchestrator pass 9
 2026-05-08T03:19:11 stream-websockets Tester pass 8
+2026-05-08T03:19:24 kernel-clock-bringup Manager pass post-bkpsram next clock
+2026-05-08T03:20:05 kernel-clock-bringup Minimizer pass indivisible_next_clock_name
 2026-05-08T03:20:57 stream-websockets Enemy pass none
 2026-05-08T03:23:34 stream-websockets Orchestrator pass 6
+2026-05-08T03:24:18 kernel-clock-bringup Worker pass
 2026-05-08T03:25:07 stream-websockets Manager pass live ssh put blob
 2026-05-08T03:25:56 stream-websockets Minimizer pass put+sha_min_live_probe
+2026-05-08T03:26:45 kernel-clock-bringup Verifier fail board-diff-whitespace
 2026-05-08T03:30:47 stream-websockets Worker fail
+2026-05-08T03:31:30 kernel-clock-bringup Worker pass
 2026-05-08T03:33:30 stream-websockets Worker pass
+2026-05-08T03:33:43 kernel-clock-bringup Verifier pass no-issues
 2026-05-08T03:34:51 stream-websockets Verifier pass none
 2026-05-08T03:49:46 stream-websockets Tester pass 9
 2026-05-08T03:51:36 stream-websockets Enemy pass none
@@ -1066,10 +1177,23 @@
 2026-05-08T04:02:16 fpga-spi Verifier fail artefact tag mismatch
 2026-05-08T04:02:54 fpga-spi Worker pass
 2026-05-08T04:04:08 fpga-spi Verifier pass none
+2026-05-08T04:19:24 kernel-clock-bringup Tester pass 5
+2026-05-08T04:22:04 kernel-clock-bringup Worker pass
+2026-05-08T04:24:31 kernel-clock-bringup Verifier pass no-issues
+2026-05-08T04:26:10 kernel-clock-bringup Enemy pass no-issues
+2026-05-08T04:27:08 kernel-clock-bringup Worker pass
+2026-05-08T04:28:22 kernel-clock-bringup Orchestrator pass 10
+2026-05-08T04:29:07 kernel-clock-bringup Manager pass mdma-after-marker
+2026-05-08T04:30:45 kernel-clock-bringup Minimizer pass mdma_guard+after_marker_indivisible
 2026-05-08T04:32:20 stream-websockets Tester fail 6 ssh_conn_closed
+2026-05-08T04:33:02 kernel-clock-bringup Worker pass
+2026-05-08T04:34:49 kernel-clock-bringup Verifier pass no-issues
 2026-05-08T04:35:31 stream-websockets Worker pass
 2026-05-08T04:38:00 stream-websockets Verifier pass none
+2026-05-08T04:52:28 kernel-clock-bringup Tester fail 1
+2026-05-08T04:53:38 kernel-clock-bringup Worker pass
 2026-05-08T04:54:51 stream-websockets Tester fail 9 nohw_manifest
+2026-05-08T04:55:13 kernel-clock-bringup Verifier pass no-issues
 2026-05-08T04:56:40 stream-websockets Worker pass
 2026-05-08T04:58:44 stream-websockets Verifier fail dirty_linux_workspace
 2026-05-08T05:01:32 stream-websockets Worker pass
@@ -1080,7 +1204,13 @@
 2026-05-08T05:06:09 fpga-spi Worker pass
 2026-05-08T05:07:52 fpga-spi Orchestrator pass 89
 2026-05-08T05:09:37 fpga-spi Verifier pass none
+2026-05-08T05:23:45 kernel-clock-bringup Tester fail 3
+2026-05-08T05:25:06 kernel-clock-bringup Worker pass
+2026-05-08T05:26:11 kernel-clock-bringup Verifier pass no-issues
+2026-05-08T05:34:04 kernel-clock-bringup Tester fail 1
 2026-05-08T05:34:36 stream-websockets Tester fail 6 ssh_timeout
+2026-05-08T05:34:39 kernel-clock-bringup Worker pass
+2026-05-08T05:36:07 kernel-clock-bringup Verifier pass none
 2026-05-08T05:38:38 stream-websockets Worker pass
 2026-05-08T05:39:52 stream-websockets Worker pass
 2026-05-08T05:41:02 stream-websockets Verifier fail generated_linux_artifacts
@@ -1089,6 +1219,9 @@
 2026-05-08T06:00:36 fpga-spi Tester fail 74 fail reverse-tags-missing-sclk artefact=/tmp/runpy-_z9a77n2/audit_iter_63_required_tags_covers_all_gpio_physical_mark_tags_above_wip
 2026-05-08T06:00:55 fpga-spi Worker pass
 2026-05-08T06:02:11 fpga-spi Verifier pass none
+2026-05-08T06:07:22 kernel-clock-bringup Tester fail 1
+2026-05-08T06:07:55 kernel-clock-bringup Worker pass
+2026-05-08T06:08:46 kernel-clock-bringup Verifier pass none
 2026-05-08T06:20:33 stream-websockets Tester fail 6 watchdog_cancel_active
 2026-05-08T06:25:54 stream-websockets Worker pass
 2026-05-08T06:28:56 stream-websockets Verifier fail dirty_linux_workspace
@@ -1098,9 +1231,15 @@
 2026-05-08T06:50:40 stream-websockets Worker pass
 2026-05-08T06:52:42 stream-websockets Worker pass
 2026-05-08T06:55:17 stream-websockets Verifier pass none
+2026-05-08T07:07:49 kernel-clock-bringup Tester fail 5
 2026-05-08T07:08:16 fpga-spi Tester fail 47 fail IO1-low-blocked artefact=/tmp/runpy-nmqsbea7/audit_mp135_to_fpga_io1_low_blocked_boundary/attempt_3/artefact
+2026-05-08T07:08:23 kernel-clock-bringup Worker pass
 2026-05-08T07:08:54 fpga-spi Worker pass
+2026-05-08T07:09:31 kernel-clock-bringup Verifier pass none
 2026-05-08T07:10:26 fpga-spi Verifier pass none
+2026-05-08T07:12:31 kernel-clock-bringup Tester fail 0
+2026-05-08T07:13:00 kernel-clock-bringup Worker pass
+2026-05-08T07:14:12 kernel-clock-bringup Verifier pass none
 2026-05-08T07:15:19 stream-websockets Tester pass 10
 2026-05-08T07:18:21 stream-websockets Enemy pass none
 2026-05-08T07:20:12 stream-websockets Orchestrator pass 8
@@ -1115,13 +1254,28 @@
 2026-05-08T07:51:41 stream-websockets Minimizer pass upload_is_min_live_next
 2026-05-08T07:53:26 stream-websockets Worker pass
 2026-05-08T07:57:30 stream-websockets Verifier pass none
+2026-05-08T08:17:25 kernel-clock-bringup Tester fail 5
+2026-05-08T08:18:00 kernel-clock-bringup Worker pass
+2026-05-08T08:19:21 kernel-clock-bringup Verifier pass none
+2026-05-08T08:22:05 kernel-clock-bringup Tester fail 0
+2026-05-08T08:22:55 kernel-clock-bringup Worker pass
+2026-05-08T08:24:06 kernel-clock-bringup Verifier pass none
 2026-05-08T08:29:08 fpga-spi Tester fail 79 fail prbs-reset-uart artefact=/tmp/runpy-ui0vfzbk/add_mp135_prbs_test_reset_uart_command
 2026-05-08T08:29:53 fpga-spi Worker pass
 2026-05-08T08:31:07 fpga-spi Verifier pass none
 2026-05-08T08:50:23 stream-websockets Tester fail 5 boot_login_timeout
 2026-05-08T08:55:10 stream-websockets Worker pass
 2026-05-08T09:00:15 stream-websockets Verifier pass none
+2026-05-08T09:16:03 kernel-clock-bringup Tester fail 3
+2026-05-08T09:16:44 kernel-clock-bringup Worker pass
+2026-05-08T09:17:40 kernel-clock-bringup Verifier pass none
+2026-05-08T09:47:41 kernel-clock-bringup Tester fail 2
+2026-05-08T09:48:03 kernel-clock-bringup Worker pass
+2026-05-08T09:49:15 kernel-clock-bringup Verifier pass none
 2026-05-08T09:51:03 stream-websockets Tester fail 6 ssh_conn_closed
+2026-05-08T09:52:08 kernel-clock-bringup Tester fail 0
+2026-05-08T09:52:49 kernel-clock-bringup Worker pass
+2026-05-08T09:53:57 kernel-clock-bringup Verifier pass none
 2026-05-08T10:00:32 fpga-spi Tester pass 81
 2026-05-08T10:01:47 fpga-spi Worker pass
 2026-05-08T10:03:18 fpga-spi Orchestrator pass 90
@@ -1131,10 +1285,19 @@
 2026-05-08T10:06:39 fpga-spi Verifier pass none
 2026-05-08T10:13:41 stream-websockets Worker pass
 2026-05-08T10:17:19 stream-websockets Verifier pass none
+2026-05-08T10:21:56 kernel-clock-bringup Tester fail 2
+2026-05-08T10:22:40 kernel-clock-bringup Worker pass
+2026-05-08T10:23:44 kernel-clock-bringup Verifier pass none
+2026-05-08T10:29:00 kernel-clock-bringup Tester fail 0
+2026-05-08T10:29:33 kernel-clock-bringup Worker pass
+2026-05-08T10:30:39 kernel-clock-bringup Verifier pass none
 2026-05-08T10:33:20 stream-websockets Tester fail 11 lease_placeholder_before_claim
 2026-05-08T10:33:48 stream-websockets Worker pass
 2026-05-08T10:34:32 stream-websockets Worker pass
 2026-05-08T10:35:59 stream-websockets Verifier pass none
+2026-05-08T10:49:26 kernel-clock-bringup Tester fail 1
+2026-05-08T10:50:01 kernel-clock-bringup Worker pass
+2026-05-08T10:51:00 kernel-clock-bringup Verifier pass none
 2026-05-08T10:53:01 stream-websockets Tester pass 12
 2026-05-08T10:54:48 stream-websockets Enemy pass none
 2026-05-08T10:56:08 stream-websockets Orchestrator pass 10
@@ -1145,40 +1308,79 @@
 2026-05-08T11:15:33 fpga-spi Tester fail 79 fail reset-forbids-burst artefact=/tmp/runpy-ltfejw4m/add_mp135_prbs_test_reset_uart_command
 2026-05-08T11:16:13 fpga-spi Worker pass
 2026-05-08T11:17:23 fpga-spi Verifier pass none
+2026-05-08T11:22:57 kernel-clock-bringup Tester fail 4
+2026-05-08T11:23:32 kernel-clock-bringup Worker pass
+2026-05-08T11:24:33 kernel-clock-bringup Verifier pass none
+2026-05-08T11:47:33 kernel-clock-bringup Tester fail 1
+2026-05-08T11:48:18 kernel-clock-bringup Worker pass
+2026-05-08T11:49:17 kernel-clock-bringup Verifier pass clean_mdma_patch
+2026-05-08T11:52:12 kernel-clock-bringup Tester fail 0
+2026-05-08T11:52:46 kernel-clock-bringup Worker pass
+2026-05-08T11:53:38 kernel-clock-bringup Verifier pass clean_mdma_patch
 2026-05-08T11:55:48 stream-websockets Tester fail 11 bench_mcu_lease_stuck
 2026-05-08T11:57:09 stream-websockets Worker pass
 2026-05-08T11:58:37 stream-websockets Verifier pass foreign_lease
+2026-05-08T12:00:25 kernel-clock-bringup Tester fail 1
+2026-05-08T12:01:09 kernel-clock-bringup Worker pass
+2026-05-08T12:02:12 kernel-clock-bringup Verifier pass post_cleanup_clean
+2026-05-08T12:05:55 kernel-clock-bringup Tester fail 0
+2026-05-08T12:06:38 kernel-clock-bringup Worker pass
+2026-05-08T12:07:49 kernel-clock-bringup Verifier pass post_cleanup_ok
+2026-05-08T12:28:05 kernel-clock-bringup Tester fail 1
+2026-05-08T12:28:51 kernel-clock-bringup Worker pass
+2026-05-08T12:29:59 kernel-clock-bringup Verifier pass clean_mdma_patch
 2026-05-08T12:33:37 fpga-spi Tester pass 82
 2026-05-08T12:34:11 fpga-spi Worker pass
 2026-05-08T12:35:12 fpga-spi Orchestrator pass 91
 2026-05-08T12:36:28 fpga-spi Manager pass Add-MP135-prbs-print-checksum
 2026-05-08T12:36:44 fpga-spi Minimizer pass one-UART-checksum-observable
 2026-05-08T12:37:22 fpga-spi Worker pass
+2026-05-08T12:37:38 kernel-clock-bringup Tester fail 1
+2026-05-08T12:38:17 kernel-clock-bringup Worker pass
 2026-05-08T12:38:23 stream-websockets Tester fail 6 ssh_no_route
 2026-05-08T12:38:28 fpga-spi Verifier pass none
+2026-05-08T12:39:21 kernel-clock-bringup Verifier pass clean_mdma_patch
 2026-05-08T12:40:38 stream-websockets Worker pass
 2026-05-08T12:42:17 stream-websockets Verifier pass host-route-missing
+2026-05-08T13:25:15 kernel-clock-bringup Tester fail 3
+2026-05-08T13:25:36 kernel-clock-bringup Worker pass
+2026-05-08T13:27:09 kernel-clock-bringup Verifier pass clean_mdma_patch
 2026-05-08T13:27:24 fpga-spi Tester fail 79 fail reset-forbids-print artefact=/tmp/runpy-10ppmnm_/add_mp135_prbs_test_reset_uart_command
 2026-05-08T13:28:11 fpga-spi Worker pass
 2026-05-08T13:29:49 fpga-spi Verifier pass none
 2026-05-08T13:46:37 stream-websockets Tester fail 6 ssh_conn_closed
+2026-05-08T13:47:55 kernel-clock-bringup Tester fail 1
+2026-05-08T13:48:44 kernel-clock-bringup Worker pass
+2026-05-08T13:49:59 kernel-clock-bringup Verifier pass clean_mdma_patch
 2026-05-08T13:53:03 stream-websockets Worker pass
 2026-05-08T13:54:41 stream-websockets Verifier pass none
+2026-05-08T14:20:27 kernel-clock-bringup Tester fail 3
 2026-05-08T14:37:03 stream-websockets Tester fail 6 ssh_conn_closed
 2026-05-08T14:46:18 fpga-spi Tester pass 83
 2026-05-08T14:46:39 fpga-spi Worker pass
 2026-05-08T14:47:31 fpga-spi Orchestrator pass 92
 2026-05-08T15:52:29 stream-websockets Worker pass
 2026-05-08T15:53:58 stream-websockets Verifier pass none
+2026-05-08T16:02:01 kernel-clock-bringup Orchestrator pass 11
+2026-05-08T16:06:39 kernel-clock-bringup Worker pass
+2026-05-08T16:07:50 kernel-clock-bringup Verifier pass none
 2026-05-08T16:16:28 stream-websockets Tester fail 11 step12_ssh_conn_closed
 2026-05-08T16:18:55 stream-websockets Worker pass
 2026-05-08T16:20:13 stream-websockets Verifier pass none
+2026-05-08T16:31:30 kernel-clock-bringup Tester fail 2
+2026-05-08T16:42:36 kernel-clock-bringup Tester fail 1
+2026-05-08T17:03:30 kernel-clock-bringup Tester fail 0
 2026-05-08T17:08:18 stream-websockets Tester fail 6 step7_no_route_to_host
 2026-05-08T17:16:25 stream-websockets Verifier pass none
+2026-05-08T17:29:05 kernel-clock-bringup Tester fail 1
+2026-05-08T17:51:14 kernel-clock-bringup Tester fail 2
+2026-05-08T17:51:30 kernel-clock-bringup Worker pass
 2026-05-08T18:00:43 stream-websockets Tester fail 4 step5_foreign_lease_hold
+2026-05-08T18:39:10 kernel-clock-bringup Tester fail 2
 2026-05-08T20:44:57 stream-websockets Tester fail 11 step12_ssh_conn_closed_again
 2026-05-08T20:47:00 stream-websockets Worker pass
 2026-05-08T20:48:36 stream-websockets Verifier pass none
+2026-05-08T21:19:30 kernel-clock-bringup Tester fail 2
 2026-05-08T21:21:15 stream-websockets Tester fail 6 step7_killall_sigterm_deconfig
 2026-05-08T21:22:06 stream-websockets Worker pass
 2026-05-08T21:23:25 stream-websockets Verifier pass none
@@ -1193,34 +1395,79 @@
 2026-05-08T22:53:05 fpga-spi Tester fail 16 fail bring_up_mp135_gpio_test_uart artefact=/tmp/runpy-h0zw6trw/bring_up_mp135_gpio_test_uart/attempt_3/artefact
 2026-05-08T22:57:28 fpga-spi Worker pass
 2026-05-08T23:03:17 fpga-spi Tester fail 16 fail bring_up_mp135_gpio_test_uart artefact=/tmp/runpy-_ybmtwk_/bring_up_mp135_gpio_test_uart/attempt_3/artefact
+2026-05-08T23:32:00 kernel-clock-bringup Tester fail 5
+2026-05-08T23:40:02 kernel-clock-bringup Worker pass
+2026-05-08T23:41:32 kernel-clock-bringup Verifier pass none
 2026-05-08T23:41:50 fpga-spi Worker pass
 2026-05-08T23:44:13 fpga-spi Verifier pass none
 2026-05-09T00:13:41 fpga-spi Tester fail 18 fail audit_physical_gpio_replay_setup_preconditions artefact=/tmp/runpy-lsywv3du/audit_physical_gpio_replay_setup_preconditions/attempt_3/artefact
 2026-05-09T00:15:04 stream-websockets Worker pass
 2026-05-09T00:15:13 fpga-spi Worker pass
 2026-05-09T00:16:47 fpga-spi Verifier pass none
+2026-05-09T00:31:30 kernel-clock-bringup Tester pass 6
+2026-05-09T00:46:27 kernel-clock-bringup Worker pass
+2026-05-09T00:48:00 kernel-clock-bringup Orchestrator pass 12
+2026-05-09T00:49:13 kernel-clock-bringup Manager pass name post-mdma next clock
+2026-05-09T00:53:00 kernel-clock-bringup Worker pass
+2026-05-09T00:54:24 kernel-clock-bringup Verifier pass none
+2026-05-09T01:42:30 kernel-clock-bringup Tester pass 7
 2026-05-09T01:46:36 fpga-spi Tester fail 83 fail add_prbs_xor_module_yosys_synth_json_gate artefact=/tmp/runpy-fbaacsbw/add_prbs_xor_module_yosys_synth_json_gate/artefact
 2026-05-09T01:47:55 fpga-spi Worker pass
 2026-05-09T01:49:14 fpga-spi Verifier pass none
+2026-05-09T02:02:48 kernel-clock-bringup Worker pass
+2026-05-09T02:04:00 kernel-clock-bringup Orchestrator pass 13
+2026-05-09T02:05:38 kernel-clock-bringup Manager pass mark after eth1tx skip
+2026-05-09T02:06:15 kernel-clock-bringup Minimizer pass paired sentinel after eth1tx
+2026-05-09T02:08:37 kernel-clock-bringup Worker pass
+2026-05-09T02:10:17 kernel-clock-bringup Verifier pass none
 2026-05-09T02:39:16 fpga-spi Tester fail 32 fail audit_mp135_sclk_uart_trigger_blocked_boundary artefact=/tmp/runpy-vlm6zpnv/audit_mp135_sclk_uart_trigger_blocked_boundary/attempt_10/artefact
+2026-05-09T02:55:30 kernel-clock-bringup Tester pass 8
+2026-05-09T02:57:19 kernel-clock-bringup Worker pass
+2026-05-09T02:58:00 kernel-clock-bringup Orchestrator pass 14
+2026-05-09T02:59:08 kernel-clock-bringup Manager pass name clock after eth1tx
+2026-05-09T02:59:48 kernel-clock-bringup Minimizer pass 1 latch + 1 sentinel post-eth1tx
+2026-05-09T03:02:11 kernel-clock-bringup Worker pass
+2026-05-09T03:03:14 kernel-clock-bringup Verifier pass none
 2026-05-09T03:24:58 fpga-spi Tester fail 32 fail audit_mp135_sclk_uart_trigger_blocked_boundary artefact=/tmp/runpy-8908sprc/audit_mp135_sclk_uart_trigger_blocked_boundary/attempt_3/artefact
 2026-05-09T03:27:36 fpga-spi Worker pass
 2026-05-09T03:29:13 fpga-spi Verifier pass both edits match sibling step pattern
+2026-05-09T04:06:00 kernel-clock-bringup Tester pass 9
+2026-05-09T04:17:30 kernel-clock-bringup Worker pass
+2026-05-09T04:18:00 kernel-clock-bringup Orchestrator pass 15
+2026-05-09T04:18:50 kernel-clock-bringup Manager pass mark after eth1rx skip
+2026-05-09T04:19:39 kernel-clock-bringup Minimizer pass mirrors step 8 eth1tx->eth1rx
+2026-05-09T04:21:11 kernel-clock-bringup Worker pass
+2026-05-09T04:22:24 kernel-clock-bringup Verifier pass none
 2026-05-09T04:38:18 fpga-spi Tester pass 84
 2026-05-09T04:39:55 fpga-spi Worker pass
 2026-05-09T04:41:06 fpga-spi Orchestrator pass 93
+2026-05-09T05:27:30 kernel-clock-bringup Tester pass 10
+2026-05-09T05:36:06 kernel-clock-bringup Worker pass
+2026-05-09T05:51:00 kernel-clock-bringup Orchestrator pass 16
 2026-05-09T06:00:42 stream-websockets Worker pass
 2026-05-09T06:01:57 stream-websockets Verifier pass none
+2026-05-09T06:02:51 kernel-clock-bringup Manager pass name clock after eth1rx
+2026-05-09T06:04:11 kernel-clock-bringup Minimizer pass one latch + sentinel; mirrors step 9
+2026-05-09T06:07:20 kernel-clock-bringup Worker pass
+2026-05-09T06:08:30 kernel-clock-bringup Verifier pass none
 2026-05-09T06:23:41 stream-websockets Verifier pass none
 2026-05-09T06:23:41 stream-websockets Worker pass
+2026-05-09T06:47:30 kernel-clock-bringup Tester fail 3
+2026-05-09T07:00:00 kernel-clock-bringup Worker pass
+2026-05-09T07:00:30 kernel-clock-bringup Verifier pass none
 2026-05-09T07:12:39 stream-websockets Tester fail 6 dhcp_sentinel_echo_false_positive
 2026-05-09T07:28:21 stream-websockets Verifier pass none
 2026-05-09T07:28:21 stream-websockets Worker pass
+2026-05-09T07:30:00 kernel-clock-bringup Tester fail 1
+2026-05-09T07:49:51 kernel-clock-bringup Minimizer pass single post-mdma next latch + sentinel
 2026-05-09T07:58:34 stream-websockets Tester fail 6 step7_ssh_conn_closed_again
+2026-05-09T10:43:30 kernel-clock-bringup Tester fail 0
+2026-05-09T11:28:00 kernel-clock-bringup Tester fail 0
 2026-05-09T13:01:38 fpga-spi Manager pass prbs_xor_top synth json gate
 2026-05-09T13:02:45 fpga-spi Minimizer pass top+3 submodules synth=one JSON, splits emit none
 2026-05-09T13:05:07 fpga-spi Worker pass
 2026-05-09T13:07:03 fpga-spi Verifier pass none
+2026-05-09T13:30:30 kernel-clock-bringup Tester fail 2
 2026-05-09T14:18:20 fpga-spi Tester pass 85
 2026-05-09T14:19:13 fpga-spi Worker pass
 2026-05-09T14:19:46 fpga-spi Orchestrator pass 94
@@ -1235,6 +1482,7 @@
 2026-05-09T15:39:44 fpga-spi Minimizer pass single nextpnr rule, no rule exists yet
 2026-05-09T15:41:44 fpga-spi Worker pass
 2026-05-09T15:43:04 fpga-spi Verifier pass none
+2026-05-09T17:04:00 kernel-clock-bringup Worker pass
 2026-05-09T18:01:34 fpga-spi Tester fail 47 fail audit_mp135_to_fpga_io1_low_blocked_boundary artefact=/tmp/runpy-m7r8d0o6/audit_mp135_to_fpga_io1_low_blocked_boundary/attempt_10/artefact
 2026-05-09T19:05:43 fpga-spi Tester fail 43 fail audit_mp135_to_fpga_io3_high_blocked_boundary artefact=/tmp/runpy-2c0bcl2o/audit_mp135_to_fpga_io3_high_blocked_boundary/attempt_10/artefact
 2026-05-09T20:13:00 fpga-spi Tester fail 45 fail audit_mp135_to_fpga_io0_low_blocked_boundary artefact=/tmp/runpy-p0ov5daa/audit_mp135_to_fpga_io0_low_blocked_boundary/attempt_10/artefact
@@ -1246,5 +1494,5 @@
 2026-05-09T23:00:29 fpga-spi Minimizer pass icepack rule+invocation indivisible
 2026-05-09T23:02:20 fpga-spi Worker pass
 2026-05-09T23:03:21 fpga-spi Verifier pass none
-2026-05-10T00:05:02 fpga-spi Worker pass
 2026-05-10T00:05:02 fpga-spi Tester pass 88 (Worker+Verifier replay; run.py tester killed by operator)
+2026-05-10T00:05:02 fpga-spi Worker pass
