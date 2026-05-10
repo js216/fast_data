@@ -211,6 +211,16 @@ The next Orchestrator session resumes the loop from the head commit.
 Work is done in the `fast_data` "parent repo" that collocates several
 firmware repos.
 
+**Agents have no remote access.** There are no SSH keys or credentials
+for any remote (GitHub, internal mirrors, anything else). Agents must
+NEVER run `git push`, `git pull`, `git fetch`, `git clone <remote>`,
+`git remote update`, `gh` against a remote, or any equivalent that
+contacts a remote --- they will all fail, often after wedging the
+working tree with stale auth state. The operator pushes and pulls by
+hand. The agent's contract is to leave every touched repo in a clean,
+committed state on `main` so that the operator's plain `git push` /
+`git pull` "just works" with no extra cleanup.
+
 When doing commits, Worker must leave every repo it commits, and the
 parent repo, in clean state on branch main without detached heads.
 Pinned submodules that are not committed may remain detached at their
