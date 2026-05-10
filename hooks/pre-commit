@@ -12,7 +12,12 @@ set -e
 
 ROOT=$(git rev-parse --show-toplevel)
 REPO=$(basename "$ROOT")
-HOOK_DIR=$(cd "$(dirname "$0")" && pwd)
+# Resolve $0 through any symlink so helpers are found in the source
+# hooks/ directory even before install.sh has symlinked them all into
+# .git/hooks. readlink -f canonicalises non-symlinks too.
+HOOK_DIR=$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)
+
+"$HOOK_DIR/check-no-platform-info"
 
 if [ "$REPO" = "selache" ]; then
     added_lines=$(git diff --cached --diff-filter=ACMR -U0 -- ':!README.md' ':!LICENSE' | grep -P '^\+(?!\+\+)' || true)
