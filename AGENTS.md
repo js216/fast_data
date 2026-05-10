@@ -111,6 +111,14 @@ hardware pollers. `run.py`'s `Runner.submit_plan` prefixes every job's
 operator that submitted them. Run `test_serv` inventory to learn how to
 operate and reset various devices.
 
+**Do NOT modify `test_serv` (or its pollers).** The server and pollers
+run on remote machines and any local changes here will NOT be deployed
+to production — editing them only desynchronizes this checkout from the
+running services and breaks subsequent test runs. Treat `test_serv` and
+poller code as read-only reference. The single exception is when the
+operator explicitly instructs you to work on `test_serv` itself; in
+that case follow their instructions and they will handle deployment.
+
 At the start of every iteration, before spawning Manager, Orchestrator
 sweeps `test_serv`: every job whose status is `queued` or `running` and
 whose `description` starts with the current user prefix is removed via
