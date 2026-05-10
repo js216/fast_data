@@ -49,9 +49,12 @@ ask the human operator for one.
   unless the operator explicitly asked to run only once or to stop. The
   Orchestrator must extract the first failing section, the concrete
   failing operation, and the relevant artefact path from `run.py`
-  output, append a Tester fail line to `ledger.txt`, clear any stale
-  jobs for the current user prefix, and immediately continue with a
-  fresh Worker scoped to that failure. Compared to the Verifier, the
+  output, increment `tester_fails_for_current_wip` and update
+  `last_tester_signature` in `mission_status.md`, clear any stale jobs
+  for the current user prefix, and immediately continue with a fresh
+  Worker scoped to that failure. Stuck signals are evaluated only at
+  the top of the next iteration (see Logging and Progress Tracking),
+  not mid-iteration; this avoids double-firing. Compared to the Verifier, the
   Tester job is mechanical: run the baseline, flag regressions. The
   tester can be given multiple mission files besides the main one, to
   guard against regressions in other missions caused by the main
@@ -116,37 +119,91 @@ crashed mid-Foreach and wedged jobs from a poller that died mid-run.
 Jobs without the user prefix belong to other operators and are never
 touched.
 
-### Logging
+### Logging and Progress Tracking
 
-The `run.py` appends all output to the `log.txt` file. This file must
-never be deleted. Before any other work, Orchestrator must verify the
-repo-root `ledger.txt`: if missing, create an empty file; if present,
-verify that every non-empty existing line uses the required format. If
-the initial iteration finds existing malformed lines that can be
-mechanically repaired without losing their essential meaning, the
-Orchestrator must fix them first, revalidate the whole file, and
-continue the active mission loop. This initial repair is not a stopping
-condition. In addition, all agents must append one line to the
-`ledger.txt` file each iteration, in the form:
+`run.py` appends all output to `log.txt`; this file must never be
+deleted and is the source of truth for *what happened*. Two other
+artefacts track *what shipped* and *what is stuck*. Per-agent
+pass/fail activity is NOT duplicated into either of them — it lives
+in `log.txt`.
 
-    YYYY-MM-DDTHH:MM:SS <mission> <agent_name> <pass/fail> <extra_info>
+**`progress.jsonl`** — one line per Tester pass that advances WIP.
+Whenever a Tester run passes and the WIP marker moves past one or
+more steps, the Orchestrator appends a single line:
 
-The `<mission>` tag is the mission file name without path and the `.md`.
-The extra info is different for each agent:
+    {"mission": "<file stem>",
+     "steps_advanced": ["<verbatim step heading>", ...],
+     "started_at": "<iso8601>", "ended_at": "<iso8601>",
+     "iterations": <int>, "tester_fails": <int>,
+     "worker_spawns": <int>}
 
-- Orchestrator: iteration number
-- Manager: chosen sub-step described in <50 chars
-- Minimizer: proof that the chosen step is the smallest possible
-- Worker: (no extra info)
-- Verifier: issues found, <50 chars
-- Tester: number of tests that still pass
-- Enemy: any issues found, if found
-- Stopper: either "mission accomplished" or "illegal stop"
+`started_at` is the `ended_at` of the previous progress.jsonl entry
+for the same mission, or the mission file's mtime if none exists. The
+counts represent work done since that point and are attributed to the
+batch as a whole; in the common single-step case `steps_advanced` has
+length 1 and the counts apply directly. Per-step approximations divide
+counts by `len(steps_advanced)`. The file is the time-to-feature
+record; median/p95 advance duration and per-mission throughput are
+derivable from it. Times are all in the Pacific time zone.
 
-If `ledger.txt` does not exist at the start of an iteration,
-Orchestrator must create it before spawning Manager and append a normal
-Orchestrator line for that iteration. A missing ledger file in a fresh
-checkout is not a reason to stop continuous work.
+**`mission_status.md`** — a single-snapshot file rewritten by the
+Orchestrator at three moments: (a) top of each iteration, (b)
+immediately after any Tester pass that advances WIP, (c) immediately
+before requesting Stopper for a context-budget pause. The file always
+reflects the *current* repo+mission state, never a stale snapshot.
+
+Required contents, machine-parseable as a YAML frontmatter block at
+the top of the file:
+
+    ---
+    mission: <file stem>
+    wip_step: <verbatim step heading>
+    wip_step_started_at: <iso8601>
+    iterations_for_current_wip: <int>
+    tester_fails_for_current_wip: <int>
+    worker_spawns_for_current_wip: <int>
+    verifier_worker_bounces_since_last_tester: <int>
+    last_tester_result: <pass|fail|none>
+    last_tester_signature: <"<section>: <op>" | null>
+    ---
+
+These fields are the persistent counter store: the Orchestrator reads
+them at session start and continues incrementing from there, so
+counters survive context-budget pauses. A fresh checkout starts all
+counters at zero. Below the frontmatter, free-form sections may
+include `## Stuck` (if any stuck-signal has fired, see below) and
+`## AGENTS.md Bug` (if the Orchestrator has diagnosed a spec bug, see
+Continuous Work). The operator reads this file to answer "is it
+stuck?" without parsing logs.
+
+**Stuck signals.** Before spawning Manager each iteration, Orchestrator
+checks all three:
+
+  - The same Tester failure signature (first failing section + concrete
+    failing operation) has occurred ≥3 times for the current WIP step.
+  - ≥8 iterations have elapsed on the current WIP step without WIP
+    advancing.
+  - Verifier→Worker has bounced ≥4 times since the last Tester run.
+
+On any trigger, Orchestrator (a) writes a `## Stuck` section in
+`mission_status.md` naming the trigger and counts, and (b) instructs
+the next Manager that the current sub-step decomposition has failed
+and a *different* decomposition is required — the Manager must not
+re-propose the same sub-step or any minor variation of it. Under
+forced strategy change the Manager may pivot scope: combine adjacent
+sub-steps, address a different facet of the parent mission step, or
+rewrite the parent mission step into a more concrete formulation. The
+Minimizer continues to evaluate the new proposal under its standard
+rule, but accepts a sub-step that would have been rejected as "not
+smallest" absent the stuck signal if it represents a genuine pivot in
+approach (not the prior step renamed). This is NOT a stop condition
+and is NOT permission to escalate to the operator; the loop continues
+under the forced strategy change. Stuck triggers reset when WIP
+advances.
+
+A missing `progress.jsonl` or `mission_status.md` in a fresh checkout
+is not a reason to stop continuous work — the Orchestrator creates
+them. There is no backfill from prior runs.
 
 ### Continuous Work
 
@@ -170,14 +227,15 @@ Workers until the repos are clean and committed; it must not advance to
 the next Manager pass.
 
 If work nonetheless stops, this is considered a bug in AGENTS.md. The
-Orchestrator must diagnose the bug, present a suggested improvement to
-the operator, and then resume the mission loop under the existing
-instructions. Merely reporting a failed hardware or software test is
+Orchestrator must diagnose the bug, record the diagnosis and proposed
+fix to `mission_status.md` under an `## AGENTS.md Bug` section, and
+resume the mission loop under the existing instructions. The operator
+reads `mission_status.md` on their own schedule; the Orchestrator does
+not interrupt to surface this. Merely reporting a failed hardware or software test is
 not sufficient. The only allowed stop conditions are: the operator
 explicitly asks to stop or run a single test only; the mission file has
-no WIP marker after a successful Tester run and commit; bad ledger
-format is detected after the initial ledger repair/revalidation window;
-or the Orchestrator's own agent context is approaching exhaustion (see
+no WIP marker after a successful Tester run and commit; or the
+Orchestrator's own agent context is approaching exhaustion (see
 "Context budget pause" below). Hardware symptoms such as missing UART
 bytes, a wedged job, timeout, failed verification, or a bench device not
 responding are ordinary Worker inputs, not stop conditions.
@@ -192,18 +250,17 @@ working a while") are NOT a valid trigger; the Orchestrator must run
 the following must also be true at the moment of pause: the most
 recent Tester run passed; the WIP marker has been moved past the
 just-passed step; every touched repo (parent and submodules) is
-clean on branch `main`; the ledger has a closing `Orchestrator pass
-<iteration>` line; and the response includes a one-paragraph "resume
-point" naming the next step a fresh Orchestrator should pick up.
+clean on branch `main`; rule (b) and (c) of the
+`mission_status.md` rewrite schedule have both fired (the file's
+frontmatter now names the *new* WIP step with counters reset to 0
+and `last_tester_result: pass`) and a corresponding
+`progress.jsonl` line has been appended; and the response includes
+a one-paragraph "resume point" naming the next step a fresh
+Orchestrator should pick up.
 This clause prevents both the worse failure mode of running out of
 context mid-edit (leaving a dirty repo) and the lesser failure mode
 of stopping prematurely on a hunch (false context-exhaustion claims).
 The next Orchestrator session resumes the loop from the head commit.
-
-After the initial ledger repair/revalidation window, Orchestrator must
-also stop if it detects bad format or a missing line in an existing
-ledger file. In that case it must also diagnose the AGENTS.md bug and
-present suggestion for improvement.
 
 ### Repository
 

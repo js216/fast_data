@@ -1,13 +1,12 @@
 *.swp
+*.swo
 
 .claude
 .codex
 __pycache__/
 
 log.txt
-ledger.txt
+progress.jsonl
+mission_status.md
 platform.info
 claude_duty_cycle.log
-
-duty_cycle/claude_duty_cycle.log
-.runpy_lease

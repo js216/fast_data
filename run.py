@@ -237,9 +237,12 @@ class Runner:
     def run_build(self, build, log):
         """Execute each non-empty line of `build` as a shell command.
         Mirrors `$ <cmd>` and the full stdout+stderr to both the
-        per-test run.log and to log.txt. Skip when missing or 'nothing'."""
+        per-test run.log and to log.txt. Skip when missing or 'nothing'.
+        Backslash-at-end-of-line continuations are joined into a single
+        command, matching the convention used in long qemu invocations."""
         if build is None or build.strip().lower().startswith('nothing'):
             return True
+        build = re.sub(r'\\\n[ \t]*', ' ', build)
         for line in build.splitlines():
             if not line.strip():
                 continue
