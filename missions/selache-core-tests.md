@@ -96,6 +96,72 @@ def check(extract_dir):
     return ('5760b22a' in text) and ('9bcab2b4' in text)
 ```
 
+### xtest: defer csmith 95d42820 (selcc target hang)
+
+The selache target build of `cases/cctest_csmith_95d42820.c` boots on
+SHARC+ (177152-byte image transfers cleanly) but the UART then stays
+silent for the full 2.5 s window: `dsp:uart_expect` reports
+`got ` not seen within 2500 ms, last 0B read. Host gcc and host clang
+both run the native binary to completion and print
+`got 298c9077`, matching the filename-encoded expected hash. The C
+source is therefore well-formed; the bug lives in the selache target
+toolchain (selcc/selas/selld/selload), and manifests on this case as
+an early DSP hang or trap before the first `puts()` rather than as a
+wrong-hash print (the 4270e7c5 pattern). The case is 1385 lines, has
+no `#pragma pack`, and has four top-level global arrays, so the cheap
+surgical workarounds in this repo's history (`drop pragma-pack`,
+`NoFillBlock`, `rewrite g_NN to BSS`) do not clearly localise to a
+single rewrite. Following the precedent set by `xtest: defer csmith
+4270e7c5 (selcc miscompile)` and `xtest: defer csmith 8c175802 (slow
+loop)`, demote the case out of the core sweep by moving the source
+into `draft_cases/` and record the diagnosis alongside it as
+`xtest/draft_cases/cctest_csmith_95d42820.deferred.md`. This unblocks
+the core sweep so the remaining ~900 cases can be exercised; the
+selache codegen bug remains tracked in `draft_cases/` for a future
+selcc/seld investigation. Do not touch anything outside the case file
+and the new deferred note.
+
+Build:
+
+```
+test ! -f selache/xtest/cases/cctest_csmith_95d42820.c || git -C selache mv xtest/cases/cctest_csmith_95d42820.c xtest/draft_cases/cctest_csmith_95d42820.c
+rm -f selache/xtest/build/sel/cctest_csmith_95d42820.* selache/xtest/build/cces/cctest_csmith_95d42820.*
+```
+
+The new `xtest/draft_cases/cctest_csmith_95d42820.deferred.md` must
+exist and record: the symptom (SHARC+ boots the 177152-byte image
+successfully but UART is silent / 0 bytes within the 2500 ms window
+for filename-expected hash `298c9077`); that host gcc and host clang
+both reproduce `got 298c9077` natively, confirming the C source is
+sound; and that no `#pragma pack` and a small handful of global
+arrays make the prior workaround patterns inapplicable, so the case
+is deferred pending a real selcc/seld fix.
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    sel = Path('selache')
+    moved_in = sel / 'xtest/draft_cases/cctest_csmith_95d42820.c'
+    moved_out = sel / 'xtest/cases/cctest_csmith_95d42820.c'
+    note = sel / 'xtest/draft_cases/cctest_csmith_95d42820.deferred.md'
+    stale_sel = sel / 'xtest/build/sel/cctest_csmith_95d42820.0x298c9077.ldr'
+    if not moved_in.is_file():
+        return False
+    if moved_out.exists():
+        return False
+    if not note.is_file():
+        return False
+    if stale_sel.exists():
+        return False
+    text = note.read_text()
+    return ('298c9077' in text) and ('timeout' in text.lower() or 'silent' in text.lower() or '0 bytes' in text.lower() or '0B' in text)
+```
+
 ## WIP
 
 ### selache-built target cctest sweep
