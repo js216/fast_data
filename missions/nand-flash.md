@@ -2412,19 +2412,57 @@ sys.modules["nandimage"] = mod
 spec.loader.exec_module(mod)
 parts = [('bootloader', 0, 2), ('dtb', 3, 1),
          ('kernel', 4, 64), ('rootfs', 68, 100), ('ptable', 2, 1)]
-pt = mod.make_partition_table(168, parts, kernel_payload=None)
-assert len(pt) == 212, f"PT block size regressed: {len(pt)}"
-# also exercise the kwarg-with-payload path at macro=0; payload ignored
-pt2 = mod.make_partition_table(168, parts, kernel_payload=b"x" * 4096)
-assert len(pt2) == 212, f"PT block size regressed with payload: {len(pt2)}"
-# header (nand_pt.h) macro must still be 0 so this is the live state
 hdr = (root / "src/nand_pt.h").read_text()
 m = re.search(r'#\s*define\s+BLOAD_KERNEL_HASH_CHECK\s+(\d+)', hdr)
-assert m and int(m.group(1)) == 0, \
-   "BLOAD_KERNEL_HASH_CHECK no longer 0; preflight needs update"
+assert m, "BLOAD_KERNEL_HASH_CHECK macro missing"
+macro = int(m.group(1))
+assert macro in (0, 1), f"unexpected macro value {macro}"
+if macro == 0:
+   pt = mod.make_partition_table(168, parts, kernel_payload=None)
+   assert len(pt) == 212, f"PT block size regressed: {len(pt)}"
+   pt2 = mod.make_partition_table(168, parts, kernel_payload=b"x" * 4096)
+   assert len(pt2) == 212, \
+      f"PT block size regressed with payload: {len(pt2)}"
+else:
+   pt = mod.make_partition_table(168, parts,
+                                 kernel_payload=b"x" * 4096)
+   assert len(pt) == 244, f"PT block size at macro=1 wrong: {len(pt)}"
 ```
 
 ## WIP
+
+### Manager (iter 53): block-pad kernel before SHA-256, then flip macro
+
+Iter 52 flipped `BLOAD_KERNEL_HASH_CHECK` 0->1 and section 1 regressed
+on a clean boot with `kernel: hash mismatch / bload: refused`. Root
+cause: `nandimage.py` hashed the raw `zImage` payload (~7838128 bytes)
+but the bootloader hashes the block-padded NAND range
+`parts[2].num_blocks * NAND_BLOCK_SIZE` = 30 * 256 KiB = 7864320
+bytes, which includes the 0xFF padding NAND fills in for unwritten
+tail bytes. The two digests therefore disagreed even on a clean boot.
+
+The macro has been reverted to 0 in `nand_pt.h` so section 1 is back
+to a known-good state. The iter 52 "macro flipped on" preflight has
+been removed (it can be reintroduced once iter 53 flips the macro
+again). Section 31's macro-aware Verify already tolerates both
+states, so it remains intact.
+
+Iter 53 sub-step: change `nandimage.py` so the digest input matches
+on-flash NAND. Replace `hashlib.sha256(kernel_payload).digest()`
+with the block-padded payload:
+
+```python
+padded = kernel_payload + b'\xff' * ((-len(kernel_payload)) % BLOCK)
+body += hashlib.sha256(padded).digest()
+```
+
+Then re-flip `BLOAD_KERNEL_HASH_CHECK` 0->1 in `nand_pt.h`, rebuild
+bootloader + image, and bench-test. Section 1 is now expected to
+pass because the PT-stored digest matches what `fmc_bload` recomputes
+from the block-padded NAND read. Section 32 (this WIP item) is the
+on-bench corruption test that exercises the refusal path.
+
+
 
 ### Hardened kernel image: bootloader refuses to jump on hash mismatch
 
