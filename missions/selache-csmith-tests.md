@@ -1780,6 +1780,18 @@ def check(extract_dir):
 
 ## WIP
 
+Deferred (not part of the WIP step): `cctest_csmith_8c175802` boots
+fine on the bench but its `func_2` body contains a
+`uint32_t l_1715 = 0xF08224F3L; ... l_1715++; if (l_1715) goto ...`
+backwards-goto loop that needs ~2.6e8 iterations to wrap to zero.
+Under the standard `timeout_ms=2500` window the harness has not
+returned yet; with a 30 s window it completes and emits the expected
+`got a35fa910`. Diagnosis written up in
+`selache/xtest/draft_cases/cctest_csmith_8c175802.deferred.md`.
+Promotion of this draft is therefore deferred until either the
+mission step bumps the per-draft window or a per-draft filter
+rewrites the wrap-counter loop.
+
 ### cces csmith 7fe992f1 checksum
 
 Fix the next focused draft runtime mismatch from the full foreach sweep:
