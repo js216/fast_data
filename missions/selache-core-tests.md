@@ -346,6 +346,54 @@ def check(extract_dir):
     return has_test_bin
 ```
 
+### selache cargo clippy --all-targets --release (lint with -D warnings)
+
+Smallest meaningful next slice of the WIP "selache-built target cctest
+sweep" step: now that `cargo build --release` and `cargo test
+--all-targets` are green (previous two sub-steps), run `cargo clippy
+--all-targets --release -- -D warnings` to lint the workspace at the
+release profile. This is the third command in the WIP Build block and
+the natural follow-on to the build/test slices. It exercises clippy
+across every target (bins, libs, tests, examples) at the release
+optimisation level, with `-D warnings` upgrading every clippy lint
+into a hard error. Any failure is by definition a root-cause lint or
+build issue inside `selache/` (a Rust source file or `Cargo.toml`)
+that must be fixed in place — there is no case file or `xtest/`
+artifact at this stage, so the policy block above does not even admit
+a "demote" alternative. No `#[allow(...)]` blanket suppressions: if
+clippy flags real code, fix the code; only allow on a single binding
+when the lint is a genuine false positive and document why on the
+same line.
+
+Build:
+
+```
+cd selache && cargo clippy --all-targets --release -- -D warnings
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    sel = Path('selache')
+    # cargo clippy --release re-uses the release-profile target dir
+    # (same as cargo build --release). The four core toolchain bins
+    # must remain present under selache/target/release/. Clippy with
+    # -D warnings exits non-zero on any lint, which run.py converts
+    # into a Build failure; this filesystem check is a smoke confirmation
+    # that the release target dir is intact. No manifest_clean call:
+    # this is a no-hardware step, so no test_serv job runs and no
+    # manifest.json is produced.
+    for name in ('selcc', 'selas', 'seld', 'selload'):
+        if not (sel / 'target/release' / name).is_file():
+            return False
+    return True
+```
+
 ## WIP
 
 ### selache-built target cctest sweep
