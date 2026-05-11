@@ -2147,6 +2147,145 @@ def check(extract_dir):
     return bool(re.search(r'mem = [1-9]\d{2,}', uart[i_mem:]))
 ```
 
+### EVB root login and interactive shell
+
+Smallest meaningful step between "kernel reaches `login:`" (previous
+section) and the full sgtty/jobs/BREAK gate.  It proves only the
+two new capabilities that the next big step depends on: (a)
+`root\r` at the EVB `login:` prompt yields a Bourne-shell `# `
+prompt over UART4 (no password required because
+`unix-v7-c99/root/etc/passwd` has an empty pw_passwd for root),
+and (b) the shell, running on the real chip, takes a typed command
+through cooked-mode tty discipline and emits the expected stdout
+sentinel back over the same UART.  Catches: shell argv0 wiring
+under the `-sh` invocation login does, tty line discipline cooked
+mode on real STM32 USART4, login's `gtty`/`stty` ioctl sequence
+not wedging the line.  Does NOT touch `stty -a`, job control, tab
+expansion, or BREAK -- those land in the next sub-step once this
+gate is green.  No code changes anticipated; this is a probe of
+existing infrastructure.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=80
+mp135.evb:uart_write data="c"
+delay ms=80
+mp135.evb:uart_write data="h"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="S"
+delay ms=80
+mp135.evb:uart_write data="H"
+delay ms=80
+mp135.evb:uart_write data="E"
+delay ms=80
+mp135.evb:uart_write data="L"
+delay ms=80
+mp135.evb:uart_write data="L"
+delay ms=80
+mp135.evb:uart_write data="O"
+delay ms=80
+mp135.evb:uart_write data="K"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="SHELLOK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=evb_root_shell
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    # Strict ordering: kernel login: -> shell prompt after root\r ->
+    # SHELLOK echoed back through cooked-mode tty.
+    try:
+        i_login = uart.index('login:')
+        i_shell = uart.index('# ', i_login)
+        uart.index('SHELLOK', i_shell)
+    except ValueError:
+        return False
+    return True
+```
+
 ## WIP
 
 ### EVB tty line discipline (sgtty + BREAK)
