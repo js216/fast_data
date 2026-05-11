@@ -162,6 +162,60 @@ def check(extract_dir):
     return ('298c9077' in text) and ('timeout' in text.lower() or 'silent' in text.lower() or '0 bytes' in text.lower() or '0B' in text)
 ```
 
+### xtest: defer csmith cb987b7b (selcc miscompile)
+
+The selache target build of `cases/cctest_csmith_cb987b7b.c` boots on
+SHARC+ and prints `got 0b544876` instead of the expected `fa8e4ddc`.
+Host gcc and host clang both produce the correct hash when run
+natively, so the C source is fine and the bug lives in the selache
+target toolchain (selcc/selas/selld/selload). The case is 950 lines,
+has no `#pragma pack`, and has two top-level global arrays, so none of
+the cheap surgical workarounds in this repo's history (`drop
+pragma-pack`, `NoFillBlock`, `rewrite g_NN to BSS`) clearly applies.
+Following the precedent set by `xtest: defer csmith 4270e7c5 (selcc
+miscompile)`, demote the case out of the core sweep by moving the
+source into `draft_cases/` and record the diagnosis alongside it as
+`xtest/draft_cases/cctest_csmith_cb987b7b.deferred.md`. Do not touch
+anything outside the case file and the new deferred note.
+
+Build:
+
+```
+test ! -f selache/xtest/cases/cctest_csmith_cb987b7b.c || git -C selache mv xtest/cases/cctest_csmith_cb987b7b.c xtest/draft_cases/cctest_csmith_cb987b7b.c
+rm -f selache/xtest/build/sel/cctest_csmith_cb987b7b.* selache/xtest/build/cces/cctest_csmith_cb987b7b.*
+```
+
+The new `xtest/draft_cases/cctest_csmith_cb987b7b.deferred.md` must
+exist and record the symptom (SHARC+ prints `got 0b544876`, expected
+`fa8e4ddc`), that host gcc and host clang both reproduce the expected
+hash natively, and that no `#pragma pack` / small-global-array
+structure makes the prior workaround patterns inapplicable.
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    sel = Path('selache')
+    moved_in = sel / 'xtest/draft_cases/cctest_csmith_cb987b7b.c'
+    moved_out = sel / 'xtest/cases/cctest_csmith_cb987b7b.c'
+    note = sel / 'xtest/draft_cases/cctest_csmith_cb987b7b.deferred.md'
+    stale_sel = sel / 'xtest/build/sel/cctest_csmith_cb987b7b.0xfa8e4ddc.ldr'
+    if not moved_in.is_file():
+        return False
+    if moved_out.exists():
+        return False
+    if not note.is_file():
+        return False
+    if stale_sel.exists():
+        return False
+    text = note.read_text()
+    return ('0b544876' in text) and ('fa8e4ddc' in text)
+```
+
 ## WIP
 
 ### selache-built target cctest sweep
