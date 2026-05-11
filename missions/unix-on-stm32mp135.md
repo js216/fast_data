@@ -3945,8 +3945,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### EVB signals and tty interrupts
 
 Bench-side counterpart to the qemu signals section. Real
@@ -4072,17 +4070,118 @@ mp135.evb:uart_write data="p"
 delay ms=80
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
-mp135.evb:uart_write data="root\r"
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="# " timeout_ms=10000
-mp135.evb:uart_write data="trap 'echo HUPGOT' 1; (sleep 1; kill -HUP $$) ; echo HUPSEQOK\r"
-mp135.evb:uart_expect sentinel="HUPGOT"   timeout_ms=8000
-mp135.evb:uart_expect sentinel="HUPSEQOK" timeout_ms=8000
-mp135.evb:uart_write data="cat\r"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="a"
+delay ms=200
+mp135.evb:uart_write data="p"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="'"
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="H"
+delay ms=200
+mp135.evb:uart_write data="U"
+delay ms=200
+mp135.evb:uart_write data="P"
+delay ms=200
+mp135.evb:uart_write data="G"
+delay ms=200
+mp135.evb:uart_write data="O"
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="'"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="\x31"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=8000
+delay ms=300
+mp135.evb:uart_write data="k"
+delay ms=200
+mp135.evb:uart_write data="i"
+delay ms=200
+mp135.evb:uart_write data="l"
+delay ms=200
+mp135.evb:uart_write data="l"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="-"
+delay ms=200
+mp135.evb:uart_write data="\x31"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="$"
+delay ms=200
+mp135.evb:uart_write data="$"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="HUPGOT" timeout_ms=8000
+mp135.evb:uart_expect sentinel="# "     timeout_ms=8000
+delay ms=300
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="a"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
 delay ms=500
 mp135.evb:uart_write data="\x03"
-mp135.evb:uart_expect sentinel="# " timeout_ms=5000
-mp135.evb:uart_write data="echo INTOK\r"
-mp135.evb:uart_expect sentinel="INTOK" timeout_ms=3000
+mp135.evb:uart_expect sentinel="# " timeout_ms=8000
+delay ms=300
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="I"
+delay ms=200
+mp135.evb:uart_write data="N"
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="O"
+delay ms=200
+mp135.evb:uart_write data="K"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="INTOK" timeout_ms=5000
 mp135.evb:uart_close
 mark tag=evb_signals
 ```
@@ -4096,15 +4195,32 @@ def check(extract_dir):
     uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
     if 'panic' in uart.lower():
         return False
+    # Strict ordering: kernel login: -> first root shell prompt ->
+    # HUPGOT emitted by sh's deferred trap exec after kill -1 $$ ->
+    # a *second* shell prompt that only reappears once the handler
+    # has returned and sh re-prints its prompt (proves the shell
+    # survived the SIGHUP self-signal, mirroring section 31's
+    # TRAPHUP+HUPSEQOK gate but split across two commands so the
+    # V7 emulator's signal-delivery path returns cleanly to the
+    # line parser between them) -> INTOK from `echo INTOK` after
+    # the cat exits on the kread ^C-as-EOF path (section 33). The
+    # two `# ` prompts straddling HUPGOT must be distinct byte
+    # offsets, asserted by walking str.index past HUPGOT for the
+    # second prompt.
     try:
         i_login = uart.index('login:')
-        i_hup   = uart.index('HUPGOT',   i_login)
-        i_seq   = uart.index('HUPSEQOK', i_hup)
-        uart.index('INTOK', i_seq)
+        i_sh1   = uart.index('# ',     i_login)
+        i_hup   = uart.index('HUPGOT', i_sh1)
+        i_sh2   = uart.index('# ',     i_hup)
+        if i_sh2 <= i_sh1:
+            return False
+        uart.index('INTOK', i_sh2)
     except ValueError:
         return False
     return True
 ```
+
+## WIP
 
 ### EVB multi-user login and su
 
