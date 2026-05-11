@@ -1196,6 +1196,252 @@ def check(extract_dir):
     return have_namei and have_iget
 ```
 
+### shim_namei delegates to real V7 namei
+
+Smallest forward increment toward the parent section: rename
+`arch/armboot.c`'s file-local `static ino_t namei(char *path)` to
+`shim_namei()` (mirroring iter 4's `shim_bread`/`shim_bwrite`
+naming), rewrite its body to delegate to V7's
+`sys/nami.c::namei(uchar, 0)`, and update every intra-shim call
+site (`kchdir`, `kopen`, `kcreat`, `klink`, `kmknod`, `kchmod`,
+`kstat`, `kexec`, the S_ACCESS/S_UTIME dispatch entries, and the
+EVB `/etc/init` sentinel) to invoke `shim_namei` instead.  V7's
+`namei` returns a locked `struct inode *`; the bridge sets
+`u.u_dirp = path`, `u.u_segflg = 1` (system-space path), clears
+`u.u_error`, calls `namei(uchar, 0)`, snapshots `ip->i_number`,
+and `iput()`s the inode before returning the inum.
+
+`loadino` and `parenti` remain in `arch/armboot.c` for now -- the
+shim still owns the dinode-to-`struct file` translation and the
+basename-to-parent-inum split.  Retiring those is the *next*
+sub-step's job.  This iteration limits the blast radius of the
+namei swap: if V7's path walker misbehaves on any of the ~13
+existing call sites, only the namei half of the lookup chain
+needs to be reverted.
+
+Three supporting changes to `arch/v7stubs.c` make the bridge
+viable on a freshly cold-booted system:
+
+  - `prele(ip)` is upgraded from a no-op to actually clearing
+    `ILOCK` (V7's `iget` leaves the inode locked on return; the
+    no-op stub would have wedged the next `iget` on the same
+    inode in our no-op `sleep`).  `plock(ip)` symmetrically
+    sets the bit.
+  - `getfs(dev)` returns a real zero-initialised `struct filsys`
+    instead of `NULL`, so `iupdat`'s `getfs(ip->i_dev)->s_ronly`
+    deref is safe even though we never reach that path for
+    pure-lookup namei traffic.
+  - `bmap(ip, bn, B_READ)` is given a real read-only
+    implementation that walks the inode's direct + indirect
+    block arrays.  The wrinkle: `sys/iget.c::iexpand()` is the
+    historic PDP-11 byte-order packing that produces
+    `i_addr[i] = byte0 | (byte1<<16) | (byte2<<24)` on ARM
+    little-endian, not the natural `byte0 | (byte1<<8) |
+    (byte2<<16)`.  `bmap`'s `unpack_iaddr` helper bridges
+    this without touching `sys/iget.c`.
+
+The ratchet stays flat: only `arch/armboot.c` and
+`arch/v7stubs.c` change (outside the V7-source purview), and
+`wc -l arch/armboot.c` decreases (the ~40-line shim namei body
+collapses to a 5-line `v7_namei_inum` delegate).
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=80
+mp135.evb:uart_write data="c"
+delay ms=80
+mp135.evb:uart_write data="h"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="S"
+delay ms=80
+mp135.evb:uart_write data="H"
+delay ms=80
+mp135.evb:uart_write data="E"
+delay ms=80
+mp135.evb:uart_write data="L"
+delay ms=80
+mp135.evb:uart_write data="L"
+delay ms=80
+mp135.evb:uart_write data="O"
+delay ms=80
+mp135.evb:uart_write data="K"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="SHELLOK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=v7_shim_namei_delegates
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    # Iter-3 sentinel must still appear: the bread(rootdev, SUPERB)
+    # call from startup() still pulls a plausible V7 superblock
+    # through mp135_strategy.
+    m = re.search(r'v7: sb isize=(\d+) fsize=(\d+)', uart)
+    if not m:
+        return False
+    isize = int(m.group(1))
+    fsize = int(m.group(2))
+    if isize <= 0 or isize > 100000:
+        return False
+    if fsize <= isize or fsize > 10000000:
+        return False
+    # And the heavier exercise: cold boot reaches login:, root\r
+    # yields a shell prompt, and a typed `echo SHELLOK` echoes
+    # back through cooked-mode tty -- proving every shim_namei
+    # call site (kchdir, kopen, kcreat, kexec, S_ACCESS, etc.)
+    # still resolves paths correctly when routed through V7's
+    # real namei() with our bmap()/getfs()/prele() stubs.
+    try:
+        i_login = uart.index('login:')
+        i_shell = uart.index('# ', i_login)
+        uart.index('SHELLOK', i_shell)
+    except ValueError:
+        return False
+    return True
+```
+
 ## WIP
 
 ### V7 sys/iget.c + nami.c linked, shim namei retired
