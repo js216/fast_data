@@ -394,6 +394,41 @@ def check(extract_dir):
     return True
 ```
 
+### selache core clang host sweep
+
+Compile and run every promoted core cctest through host `clang`, using
+the existing xtest target to compare each program's `got NN` output
+against its source `@expect` value. Mirrors the very first sub-step
+(`selache core gcc host sweep`) but for the clang host toolchain — a
+cross-check that each `cases/*.c` source is portable across the two
+mainstream host compilers, which the policy block leans on when it
+asserts that "host gcc and host clang both produce the correct hash".
+This is the fourth command in the WIP "selache-built target cctest
+sweep" parent step's Build block and is the natural follow-on to the
+cargo build/test/clippy slices. Any case-source failure here is a
+genuine portability bug in the case (or in clang); per the policy
+block, fixing it must NOT involve demoting the case to `draft_cases/`
+or skipping it — fix the C source.
+
+Build:
+
+```
+make -C selache/xtest clang -j$(nproc)
+```
+
+Test (max 10 s):
+
+```
+mark tag=selache_core_clang_host
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    return Verification.manifest_clean(extract_dir)
+```
+
 ## WIP
 
 ### selache-built target cctest sweep
