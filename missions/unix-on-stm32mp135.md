@@ -3312,6 +3312,148 @@ def check(extract_dir):
     return True
 ```
 
+### EVB kread treats ^C byte on tty as EOF
+
+Smallest meaningful slice of the EVB signals section: make a
+literal `\x03` byte arriving on the controlling tty terminate
+the current user-mode `read(0,...)` with a zero-length return,
+matching V7 EOF semantics rather than full SIGINT delivery.
+This is deliberately weaker than real SIGINT (which would also
+need a working SIG_DFL termination path through deliver_signal
+plus an unwinding kwait/kexec flow that we do not yet have in
+the sequential-fork model used by armboot.c). For programs
+like `cat` that loop `read(0,&c,1)` until a zero return, EOF
+on `\x03` is observationally identical to "^C killed cat" from
+the shell's point of view: the child exits, the parent shell's
+wait returns, and `# ` reappears. We keep the impurity local
+to `kread()` and document the gap so a follow-up section can
+replace it with proper SIGINT+SIG_DFL termination once the
+exit/wait plumbing in armboot.c can carry a non-zero exit
+status out of user mode.
+
+Scope: edit `unix-v7-c99/arch/armboot.c::kread()` in the
+character-device branch (around lines 896-906) so that when
+the byte read from `getchar()` equals `0x03` (ETX / ^C), the
+function returns 0 instead of returning 1 and echoing the
+byte. All other bytes -- including `\r` (mapped to `\n`),
+printable bytes, and the existing echo -- keep their current
+behavior. No other source files change. The `\x03` byte is
+not echoed, so the shell sees a clean EOF on the cat side and
+no stray glyph on the UART transcript.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+mp135.evb:uart_write data="root\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+mp135.evb:uart_write data="cat\r"
+delay ms=500
+mp135.evb:uart_write data="hello\r"
+mp135.evb:uart_expect sentinel="hheelllloo" timeout_ms=5000
+mp135.evb:uart_write data="\x03"
+mp135.evb:uart_expect sentinel="# " timeout_ms=8000
+mp135.evb:uart_write data="echo CATEOFOK\r"
+mp135.evb:uart_expect sentinel="CATEOFOK" timeout_ms=3000
+mp135.evb:uart_close
+mark tag=evb_kread_ctrlc_eof
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    # Strict ordering: login: -> root prompt -> the `cat`
+    # command echo -> the `hello` line cat echoes back ->
+    # the prompt that only reappears once cat exits on the
+    # ^C-as-EOF path -> CATEOFOK from the next foreground
+    # command on the same shell. The reappearance of `# `
+    # *after* the hello echo is the load-bearing evidence
+    # that kread() returned 0 on \x03 and cat exited; before
+    # this change cat would have blocked forever on its next
+    # read() and `# ` would never come back, failing the
+    # CATEOFOK expect.
+    try:
+        i_login = uart.index('login:')
+        i_sh1   = uart.index('# ',         i_login)
+        # On the real EVB tty path each input byte is echoed
+        # twice: once by kread()'s in-line echo and once by
+        # cat itself reading the byte and writing it to stdout.
+        # So "hello\r" arrives as "hheelllloo\r\n". We probe
+        # for the doubled tail as proof that cat is consuming
+        # bytes from its read loop on the live UART.
+        i_dbl   = uart.index('hheelllloo', i_sh1)
+        # cat echoed the doubled "hello", then we need a *new*
+        # `# ` after it -- proof that kread() returned 0 on
+        # \x03 and cat exited; before this change cat would
+        # have blocked forever on its next read().
+        i_sh2   = uart.index('# ',         i_dbl)
+        uart.index('CATEOFOK', i_sh2)
+    except ValueError:
+        return False
+    return True
+```
+
 ## WIP
 
 ### EVB signals and tty interrupts
