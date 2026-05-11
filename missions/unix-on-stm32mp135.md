@@ -1916,7 +1916,139 @@ def check(extract_dir):
     return bool(m)
 ```
 
-## WIP
+### V7 emulator loads `/etc/init` a.out on EVB
+
+One tight link past the `/etc/init` inode-resolution sentinel.
+The previous section proved `namei("/etc/init")` returns a real
+inum on hardware, which means `scanfs()` plus the V7 directory
+walk both survive the DDR-backed `bio()` path under the MMU.
+The next thing `armboot()` does is call `kexec("/etc/init")`,
+which (a) re-resolves the path, (b) calls `loadino()` to read
+the V7 a.out header from the init inode, (c) walks the inode's
+direct/indirect address blocks through `bread()` to copy the
+text+data segments into `UENTRY` in user-physical RAM, and (d)
+sets up the emulated user registers, stack pointer, and segment
+limits before returning. That is a strictly larger chunk of
+filesystem and MMU surface than the directory walk: it exercises
+multi-block `readi()`, the indirect-block path for any inode big
+enough to need one, and a write into the `USERPHYS` region that
+must be MMU-mapped and cache-coherent enough for the next
+`run_user()` to fetch its first instruction. Isolating this
+here means a regression in a.out loading, indirect-block reads,
+or user-RAM mapping gets caught with one new UART line, instead
+of silence after `evb: init inum=` (which would otherwise be the
+symptom for any of: kexec returning -1, a hang inside loadino,
+or a fault from an unmapped USERPHYS write). The qemu path
+exercises the same `kexec` code but mounts via virtio, so it
+doesn't stress the DDR-bio indirect-block path under MMU. The
+new sentinel is printed immediately *after* `kexec("/etc/init")`
+returns 0, before `run_user(UENTRY, USTACK)` enters user mode --
+so any failure during the first emulated user instruction or
+the first syscall trap shows up as the *next* missing line, not
+as silence after this one. On failure (`kexec` returns -1), we
+print `evb: kexec fail rc=-1` instead of panicking, so the UART
+captures *why* even when the run is going to fail; the verifier
+requires the `ok` form.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=15000
+mp135.evb:uart_expect sentinel="evb: rootfs isize=" timeout_ms=15000
+mp135.evb:uart_expect sentinel="evb: init inum=" timeout_ms=20000
+mp135.evb:uart_expect sentinel="evb: kexec ok" timeout_ms=20000
+mp135.evb:uart_close
+mark tag=evb_kexec_loaded
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    # Strict ordering: bootloader Jump -> kernel banner ->
+    # superblock sentinel -> init-inode sentinel (both proved in
+    # earlier sections) -> the new `evb: kexec ok` sentinel
+    # printed immediately after kexec("/etc/init") returns 0,
+    # before run_user() enters the emulated user mode.  A
+    # `kexec fail` line (or no line at all) means loadino /
+    # indirect-block read / USERPHYS write regressed.
+    try:
+        i_jump = uart.index('Jumping to address')
+        i_mem  = uart.index('mem = ', i_jump)
+        i_sb   = uart.index('evb: rootfs isize=', i_mem)
+        i_ini  = uart.index('evb: init inum=', i_sb)
+        i_kx   = uart.index('evb: kexec ok', i_ini)
+    except ValueError:
+        return False
+    # Guard against a stray `evb: kexec fail` slipping past on a
+    # later boot in the same capture.
+    if re.search(r'evb: kexec fail', uart[i_ini:i_kx]):
+        return False
+    return True
+```
 
 ### Userspace reaches login: on EVB
 
@@ -2014,6 +2146,8 @@ def check(extract_dir):
         return False
     return bool(re.search(r'mem = [1-9]\d{2,}', uart[i_mem:]))
 ```
+
+## WIP
 
 ### EVB tty line discipline (sgtty + BREAK)
 
