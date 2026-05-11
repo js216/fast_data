@@ -2597,6 +2597,248 @@ def check(extract_dir):
     return any(t in head.lower() for t in ('erase', 'speed', 'baud'))
 ```
 
+### EVB background process + numeric kill
+
+Smallest meaningful step between the EVB sgtty fixture (previous
+section) and the full sgtty+BREAK gate. Exercises one capability
+no earlier EVB section has driven: a backgrounded child
+(`sleep 30 &`) followed by an explicit `kill $!`, where the
+parent shell prints the child pid via the FAMP path in
+`cmd/sh/xec.c:246` and assigns it to `$!` via the `pcsadr` path
+at line 254. Pure mission-file change; no code edits. Catches:
+regressions in `sh` FAMP backgrounding (parent does not block on
+the child), `$!` substitution in `cmd/sh/macro.c:86-87`, and
+`cmd/kill.c` numeric pid dispatch through the V7 emulator's
+signal delivery to a sleeping child -- none of which sections
+23-30 touched. Skirts the V7 gaps the next section still has to
+fix (no `kill %1`, no `stty -a`, no BREAK detection in
+`dev/stm32_usart.c`) by using only V7 syntax that works today
+(`&`, `$!`, numeric `kill`, `echo`). The objective UART
+sentinel chain is: shell prompt -> a printed numeric pid line
+from FPRS -> `KILLSENT` (echoed after the kill returns) ->
+`BGKILLOK` (final gate, printed after a fresh foreground `echo`
+runs from the same login session). The reaper "Terminated"
+print in `cmd/sh/service.c:230-232` requires a non-zero low-7
+bits in the V7 wait status; the emulator's `kwait()` in
+`arch/armboot.c:1078` always returns those bits as zero
+("only normal exit is implemented"), so that line is not
+asserted here. Same DFU+SD+jump preamble as the EVB sgtty
+fixture, 200 ms byte cadence to dodge the USART4 RDR overrun
+the earlier sections characterised. Digit bytes are sent as
+`\x33` / `\x30` so the plan parser keeps them as strings
+(`data="3"` is otherwise parsed as the integer 3 by
+`test_serv/plan.py:_parse_value`, which the `uart_write` op
+rejects as the wrong kind).
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="w"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=200
+mp135.evb:uart_write data="u"
+delay ms=200
+mp135.evb:uart_write data="m"
+delay ms=200
+mp135.evb:uart_write data="p"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+delay ms=200
+mp135.evb:uart_write data="s"
+delay ms=200
+mp135.evb:uart_write data="l"
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="p"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="\x33"
+delay ms=200
+mp135.evb:uart_write data="\x30"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="&"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=1500
+mp135.evb:uart_write data="k"
+delay ms=200
+mp135.evb:uart_write data="i"
+delay ms=200
+mp135.evb:uart_write data="l"
+delay ms=200
+mp135.evb:uart_write data="l"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="$"
+delay ms=200
+mp135.evb:uart_write data="!"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="K"
+delay ms=200
+mp135.evb:uart_write data="I"
+delay ms=200
+mp135.evb:uart_write data="L"
+delay ms=200
+mp135.evb:uart_write data="L"
+delay ms=200
+mp135.evb:uart_write data="S"
+delay ms=200
+mp135.evb:uart_write data="E"
+delay ms=200
+mp135.evb:uart_write data="N"
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="KILLSENT" timeout_ms=8000
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="B"
+delay ms=200
+mp135.evb:uart_write data="G"
+delay ms=200
+mp135.evb:uart_write data="K"
+delay ms=200
+mp135.evb:uart_write data="I"
+delay ms=200
+mp135.evb:uart_write data="L"
+delay ms=200
+mp135.evb:uart_write data="L"
+delay ms=200
+mp135.evb:uart_write data="O"
+delay ms=200
+mp135.evb:uart_write data="K"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="BGKILLOK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=evb_bg_kill
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    # Strict ordering: kernel login: -> root shell prompt ->
+    # sh-printed numeric pid from `sleep 30 &` FPRS path ->
+    # KILLSENT echo (after `kill $!` returns) -> BGKILLOK final
+    # OK.  The V7 emulator's kwait() always reports the high-byte
+    # exit code with the low-7 signal bits zeroed (kernel comment
+    # "only normal exit is implemented" in arch/armboot.c), so
+    # cmd/sh/service.c's "Terminated" reaper print is unreachable
+    # from a SIGTERM'd child here -- gating on KILLSENT then
+    # BGKILLOK is the strongest available proof that `kill $!`
+    # returned to the shell prompt and the next foreground
+    # command ran from the same login session.
+    import re
+    try:
+        i_login = uart.index('login:')
+        i_shell = uart.index('# ',         i_login)
+        i_kills = uart.index('KILLSENT',   i_shell)
+        uart.index('BGKILLOK', i_kills)
+    except ValueError:
+        return False
+    # Between the prompt and KILLSENT, the FAMP/FPRS branch in
+    # cmd/sh/xec.c must have printed the backgrounded child's
+    # pid as a bare decimal on its own line.  The emulator's
+    # pid space is small so the pid is often a single digit;
+    # the anchor on (\r|\n) before and (\r|\n) after keeps this
+    # from false-hitting on inline digits inside `sleep 30 &`
+    # or `kill $!` echo.
+    window = uart[i_shell:i_kills]
+    return re.search(r'(^|\r|\n)\d+\r?\n', window) is not None
+```
+
 ## WIP
 
 ### EVB tty line discipline (sgtty + BREAK)
