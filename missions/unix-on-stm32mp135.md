@@ -1533,6 +1533,131 @@ def check(extract_dir):
     return bool(re.search(r'mem = [1-9]\d{2,}', uart[i_mem:]))
 ```
 
+### Bootloader `two` stages root.img into DDR
+
+Without an SDMMC driver inside the v7 kernel, the EVB has no way to
+reach the root filesystem from `bio()` -- on qemu that path is
+virtio-blk MMIO, which simply does not exist on the STM32MP135.
+Before any v7-side block driver makes sense, the rootfs has to live
+somewhere the kernel can already touch: DDR. This step extends the
+bootloader's `two` handler (`stm32mp135_test_board/bootloader/src/sd.c`
+`sd_load_mbr`) so it also copies MBR partition 3 (the V7 root.img
+produced by `sd-unix`) to a fresh DDR window, then a follow-up
+section can teach the v7 emulator's `bio()` to memcpy out of that
+window instead of poking virtio.
+
+The fresh DDR window is `DEF_ROOT_ADDR = 0xC4400000U`, defined in
+`bootloader/src/defaults.h`. It sits in the 4 MiB hole between the
+DTB placeholder (0xC4000000, only 1 KiB used) and the USB MSC backing
+store at 0xC8000000, comfortably fitting root.img (currently 2 MiB =
+4096 sectors). The placement is checked at compile time the same way
+`DEF_INITRD_ADDR` is. The v7 emulator's `bio()` is intentionally
+unchanged here -- this section only proves the bootloader-side
+plumbing. The v7 kernel still falls into the `#ifdef EVB` `for(;;);`
+in `arch/machdep.c::startup()` after the `mem = ` banner; teaching
+`bio()` to read from `0xC4400000` is the *next* step, not this one.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="to DDR addr 0xC4400000" timeout_ms=20000
+mp135.evb:uart_close
+mark tag=evb_root_in_ddr
+```
+
+Verify:
+
+```
+import re
+import struct
+from pathlib import Path
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower() or 'ERROR' in uart:
+        return False
+
+    # Read the MBR from the unix-sdcard.img the test just flashed to
+    # discover the LBA of partition 3 (root.img).  Partition entries
+    # start at offset 446, each 16 bytes; LBA at +8, sectors at +12.
+    img = Path('stm32mp135_test_board/buildroot/output/images/'
+               'unix-sdcard.img').read_bytes()
+    if img[510] != 0x55 or img[511] != 0xAA:
+        return False
+    e3       = 446 + 2 * 16  # third partition entry (index 2)
+    p3_type  = img[e3 + 4]
+    p3_lba   = struct.unpack('<I', img[e3 + 8:e3 + 12])[0]
+    p3_sect  = struct.unpack('<I', img[e3 + 12:e3 + 16])[0]
+    if p3_type == 0 or p3_sect == 0:
+        return False
+
+    # Bootloader's sd_read() emits exactly one of these lines per
+    # call.  The new partition-3 copy must target the fresh
+    # 0xC4400000 window with the right LBA and block count.
+    pat = (r'Copying\s+'
+           + re.escape(str(p3_sect))
+           + r'\s+blocks\s+from\s+LBA\s+'
+           + re.escape(str(p3_lba))
+           + r'\s+to\s+DDR\s+addr\s+0xC4400000\b')
+    if not re.search(pat, uart):
+        return False
+
+    # Regression guard: the existing partition-1 (kernel) and
+    # partition-2 (DTB placeholder) copies must still happen.
+    if 'to DDR addr 0xC2000000' not in uart:
+        return False
+    if 'to DDR addr 0xC4000000' not in uart:
+        return False
+    return True
+```
+
 ## WIP
 
 ### Userspace reaches login: on EVB
