@@ -4020,8 +4020,6 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### EVB multi-user login and su
 
 Bench-side counterpart to the qemu multi-user section. Drives
@@ -4154,9 +4152,7 @@ mp135.evb:uart_write data="m"
 delay ms=200
 mp135.evb:uart_write data="r"
 delay ms=200
-mp135.evb:uart_write data="\\"
-delay ms=200
-mp135.evb:uart_write data="r"
+mp135.evb:uart_write data="\r"
 delay ms=200
 mp135.evb:uart_expect sentinel="$ " timeout_ms=10000
 delay ms=200
@@ -4176,9 +4172,7 @@ mp135.evb:uart_write data="m"
 delay ms=200
 mp135.evb:uart_write data="r"
 delay ms=200
-mp135.evb:uart_write data="\\"
-delay ms=200
-mp135.evb:uart_write data="r"
+mp135.evb:uart_write data="\r"
 delay ms=200
 mp135.evb:uart_expect sentinel="$ " timeout_ms=5000
 delay ms=200
@@ -4208,9 +4202,7 @@ mp135.evb:uart_write data="O"
 delay ms=200
 mp135.evb:uart_write data="K"
 delay ms=200
-mp135.evb:uart_write data="\\"
-delay ms=200
-mp135.evb:uart_write data="r"
+mp135.evb:uart_write data="\r"
 delay ms=200
 mp135.evb:uart_expect sentinel="WHOAMIOK" timeout_ms=5000
 mp135.evb:uart_expect sentinel="$ " timeout_ms=5000
@@ -4229,9 +4221,7 @@ mp135.evb:uart_write data="o"
 delay ms=200
 mp135.evb:uart_write data="t"
 delay ms=200
-mp135.evb:uart_write data="\\"
-delay ms=200
-mp135.evb:uart_write data="r"
+mp135.evb:uart_write data="\r"
 delay ms=200
 mp135.evb:uart_expect sentinel="# " timeout_ms=10000
 delay ms=200
@@ -4257,9 +4247,7 @@ mp135.evb:uart_write data="O"
 delay ms=200
 mp135.evb:uart_write data="K"
 delay ms=200
-mp135.evb:uart_write data="\\"
-delay ms=200
-mp135.evb:uart_write data="r"
+mp135.evb:uart_write data="\r"
 delay ms=200
 mp135.evb:uart_expect sentinel="ROOTOK" timeout_ms=5000
 mp135.evb:uart_close
@@ -4421,17 +4409,117 @@ mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.evb:uart_expect sentinel="mem = " timeout_ms=15000
 mp135.evb:uart_expect sentinel="login:" timeout_ms=30000
-mp135.evb:uart_write data="root\r"
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=200
 mp135.evb:uart_expect sentinel="# " timeout_ms=10000
-mp135.evb:uart_write data="echo unix-v7-mp135-evb-ok\r"
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="u"
+delay ms=200
+mp135.evb:uart_write data="n"
+delay ms=200
+mp135.evb:uart_write data="i"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="-"
+delay ms=200
+mp135.evb:uart_write data="v"
+delay ms=200
+mp135.evb:uart_write data="\x37"
+delay ms=200
+mp135.evb:uart_write data="-"
+delay ms=200
+mp135.evb:uart_write data="m"
+delay ms=200
+mp135.evb:uart_write data="p"
+delay ms=200
+mp135.evb:uart_write data="\x31"
+delay ms=200
+mp135.evb:uart_write data="\x33"
+delay ms=200
+mp135.evb:uart_write data="\x35"
+delay ms=200
+mp135.evb:uart_write data="-"
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="v"
+delay ms=200
+mp135.evb:uart_write data="b"
+delay ms=200
+mp135.evb:uart_write data="-"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="k"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=200
 mp135.evb:uart_expect sentinel="unix-v7-mp135-evb-ok" timeout_ms=5000
-mp135.evb:uart_write data="pwd\r"
+mp135.evb:uart_write data="p"
+delay ms=200
+mp135.evb:uart_write data="w"
+delay ms=200
+mp135.evb:uart_write data="d"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=200
 mp135.evb:uart_expect sentinel="/" timeout_ms=5000
-mp135.evb:uart_write data="ls /bin\r"
+mp135.evb:uart_write data="l"
+delay ms=200
+mp135.evb:uart_write data="s"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="/"
+delay ms=200
+mp135.evb:uart_write data="b"
+delay ms=200
+mp135.evb:uart_write data="i"
+delay ms=200
+mp135.evb:uart_write data="n"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=200
 mp135.evb:uart_expect sentinel="sh" timeout_ms=5000
-mp135.evb:uart_write data="sync\r"
+mp135.evb:uart_write data="s"
+delay ms=200
+mp135.evb:uart_write data="y"
+delay ms=200
+mp135.evb:uart_write data="n"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=200
 mp135.evb:uart_expect sentinel="# " timeout_ms=5000
-mp135.evb:uart_write data="exit\r"
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="i"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=200
 mp135.evb:uart_close
 mark tag=evb_full_e2e
 ```
