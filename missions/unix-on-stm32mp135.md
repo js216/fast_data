@@ -2286,6 +2286,317 @@ def check(extract_dir):
     return True
 ```
 
+### EVB sgtty fixture (no BREAK, no job control)
+
+Smallest meaningful step between "root login + cooked-mode echo
+round-trip" (previous section) and the full EVB sgtty/BREAK gate.
+Mirrors the qemu sgtty fixture (around `### Tty line discipline
+(sgtty) under Qemu` above) on real UART4 hardware, but drops the
+three pieces that the EVB software stack does not yet support:
+BREAK detection in `dev/stm32_usart.c`, the `mp135.evb:uart_break`
+test_serv op, V7 `stty -a`, and V7 `kill %1` job-control syntax.
+What is exercised: V7 `cmd/stty.c`'s default `prmodes()` dump
+(prints `speed`/`erase`/`kill`), `stty raw; stty cooked` round
+trip through `dev/tty.c` sgtty ioctls on the real STM32 USART4,
+and `cmd/tabs.c` tab-stop setting -- all the pre-termios sgtty
+surface that does not depend on BREAK or job control. Catches:
+real-hardware regressions in sgtty ioctl plumbing through the
+STM32 USART4 driver that the qemu PL011 path would mask. The
+remaining BREAK + job-control pieces land in the next sub-step
+once this gate is green. No code changes anticipated; this is a
+probe of existing infrastructure using the same byte-by-byte
+input pattern (80 ms gaps) the previous EVB section established
+to work around the USART4 single-byte RDR.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="w"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=200
+mp135.evb:uart_write data="u"
+delay ms=200
+mp135.evb:uart_write data="m"
+delay ms=200
+mp135.evb:uart_write data="p"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+delay ms=200
+mp135.evb:uart_write data="s"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="y"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="S"
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="Y"
+delay ms=200
+mp135.evb:uart_write data="D"
+delay ms=200
+mp135.evb:uart_write data="U"
+delay ms=200
+mp135.evb:uart_write data="M"
+delay ms=200
+mp135.evb:uart_write data="P"
+delay ms=200
+mp135.evb:uart_write data="O"
+delay ms=200
+mp135.evb:uart_write data="K"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="STTYDUMPOK" timeout_ms=8000
+delay ms=200
+mp135.evb:uart_write data="s"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="y"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="a"
+delay ms=200
+mp135.evb:uart_write data="w"
+delay ms=200
+mp135.evb:uart_write data=";"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="s"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="y"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="k"
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="d"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="R"
+delay ms=200
+mp135.evb:uart_write data="A"
+delay ms=200
+mp135.evb:uart_write data="W"
+delay ms=200
+mp135.evb:uart_write data="C"
+delay ms=200
+mp135.evb:uart_write data="O"
+delay ms=200
+mp135.evb:uart_write data="O"
+delay ms=200
+mp135.evb:uart_write data="K"
+delay ms=200
+mp135.evb:uart_write data="E"
+delay ms=200
+mp135.evb:uart_write data="D"
+delay ms=200
+mp135.evb:uart_write data="O"
+delay ms=200
+mp135.evb:uart_write data="K"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="RAWCOOKEDOK" timeout_ms=8000
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="a"
+delay ms=200
+mp135.evb:uart_write data="b"
+delay ms=200
+mp135.evb:uart_write data="s"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="\x34"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="A"
+delay ms=200
+mp135.evb:uart_write data="B"
+delay ms=200
+mp135.evb:uart_write data="S"
+delay ms=200
+mp135.evb:uart_write data="O"
+delay ms=200
+mp135.evb:uart_write data="K"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="TABSOK" timeout_ms=8000
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="S"
+delay ms=200
+mp135.evb:uart_write data="G"
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="Y"
+delay ms=200
+mp135.evb:uart_write data="O"
+delay ms=200
+mp135.evb:uart_write data="K"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="SGTTYOK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=evb_sgtty_nobreak
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    # Strict ordering: kernel login: -> shell prompt after root\r ->
+    # stty dump -> raw/cooked round trip -> tabs -> final OK.
+    # The window between the shell prompt and STTYDUMPOK must
+    # contain a recognisable V7 sgtty setting word from
+    # cmd/stty.c's prmodes() output ('speed', 'erase', 'baud').
+    try:
+        i_login = uart.index('login:')
+        i_shell = uart.index('# ',          i_login)
+        i_dump  = uart.index('STTYDUMPOK',  i_shell)
+        i_raw   = uart.index('RAWCOOKEDOK', i_dump)
+        i_tabs  = uart.index('TABSOK',      i_raw)
+        uart.index('SGTTYOK', i_tabs)
+    except ValueError:
+        return False
+    head = uart[i_shell:i_dump]
+    return any(t in head.lower() for t in ('erase', 'speed', 'baud'))
+```
+
 ## WIP
 
 ### EVB tty line discipline (sgtty + BREAK)
