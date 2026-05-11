@@ -1658,6 +1658,146 @@ def check(extract_dir):
     return True
 ```
 
+### V7 emulator reads rootfs superblock from DDR on EVB
+
+Bridges the gap between the EVB banner and any userspace progress.
+Today `startup()` halts under `#ifdef EVB` with `for(;;);` right
+after `mem = ...`, so `armboot()` is never entered, the v7
+emulator never runs, and there is no way for the existing
+virtio-MMIO `bio()` path to find a backing store (the
+STM32MP135 has no such MMIO). This step delivers one capability:
+the V7 emulator can read blocks from the DDR-staged root.img
+that the bootloader's `two` command placed at `0xC4400000`, and
+proves it by parsing the superblock and printing its size fields
+to the UART. Once this works, armboot proceeds into the rest of
+the V7 emulator (scanfs, kexec, run_user) without any further
+block-device plumbing.
+
+This is the smallest sub-step that produces an externally
+observable advance: just removing the halt would land in
+`virtioinit()`'s `panic("virtio")` (no progress, looks like a
+regression); just rewiring `bio()` without removing the halt
+would not run at all (zero observable change); printing from
+the top of `armboot()` before any block read would also
+"work" but leave `bio()` as the next blocking domino with no
+proof the rewire actually returns valid data. Reading the
+superblock and printing its `s_isize`/`s_fsize` is the first
+moment the chain `DDR -> bio -> bread -> superblock` is
+end-to-end exercised; any smaller piece exercises a prefix of
+that chain and stops short of demonstrating the capability.
+
+Worker implementation sketch: in `arch/machdep.c::startup()`,
+delete the `for(;;);` block under `#ifdef EVB` (keep the banner
+print). In `arch/armboot.c`, under `#ifdef EVB`, replace the
+body of `virtioinit()` with a no-op (or skip the call from
+`armboot()`), replace the body of `bio()` with a `bcopy()` from
+`0xC4400000 + (unsigned int)blkno * BSIZE` into `buf` for
+`VIRTIO_BLK_T_IN` (writes are a no-op for now), and after the
+existing `bread(SUPERB, blkbuf)` in `armboot()` print the
+sentinel line via the existing `printf()` -> `putchar()` ->
+USART4 path. The print uses `((struct filsys *)blkbuf)->s_isize`
+and `s_fsize` directly. No new files; touch only `arch/` (which
+is exempt from the original-diffs ratchet).
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=15000
+mp135.evb:uart_expect sentinel="evb: rootfs isize=" timeout_ms=15000
+mp135.evb:uart_close
+mark tag=evb_rootfs_super_in_ddr
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    # Strict ordering: bootloader Jump -> kernel banner -> the
+    # V7 emulator's DDR-bio superblock readout, with both
+    # superblock size fields plausibly non-zero.  A zero isize
+    # would mean the existing armboot panic("fs") path, and a
+    # zero fsize would mean we read garbage.
+    try:
+        i_jump = uart.index('Jumping to address')
+        i_mem  = uart.index('mem = ', i_jump)
+        i_sb   = uart.index('evb: rootfs isize=', i_mem)
+    except ValueError:
+        return False
+    m = re.search(r'evb: rootfs isize=([1-9]\d*) fsize=([1-9]\d*)',
+                  uart[i_sb:])
+    if not m:
+        return False
+    # root.img is 4096 sectors of 512 bytes = 2 MiB; s_fsize is
+    # in BSIZE blocks so it should be 4096.  Allow some slack
+    # in case the V7 mkfs left the count slightly different,
+    # but require it is large enough to not be a stray bit
+    # pattern.
+    return int(m.group(2)) >= 64
+```
+
 ## WIP
 
 ### Userspace reaches login: on EVB
