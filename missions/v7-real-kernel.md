@@ -998,6 +998,204 @@ def check(extract_dir):
     return True
 ```
 
+### V7 sys/nami.c + sys/iget.c compile and link (no caller)
+
+Smallest forward increment toward the parent section: add
+`iget.o` and `nami.o` to `unix-v7-c99/sys/Makefile`'s `OBJS` so
+the V7 inode-lookup translation units (`namei`, `iget`, `iput`,
+`iupdat`, `itrunc`, `maknode`, `wdir`, `schar`, `uchar`) compile
+unmodified V7 source (with C99 prototype conversion and one
+macro-correctness touch-up to use the `i_lastr` / `i_addr` macros
+defined in `h/inode.h`) under our `arm-none-eabi-gcc -std=c99`
+toolchain, and that the final `unix` ELF still links.
+
+No caller is added in this sub-step.  `namei`, `iget`, `iput`
+and friends become defined-but-unreferenced symbols in the
+kernel ELF; `arch/armboot.c::namei`, `loadino`, `parenti`,
+and the file-scope `iget` shim are unchanged and continue to
+satisfy every existing kernel path-walk on hardware.  Behavior
+on the EVB is byte-identical to the prior commit.
+
+The linker cascade is contained by adding minimal stubs in
+`arch/v7stubs.c` for the symbols `nami.c` / `iget.c` reference
+but whose V7 source is not yet linked: `bcopy`, `free`,
+`getfs`, `ialloc`, `ifree`, `prele`, `plock`, `access`, `bmap`,
+`fubyte`, `writei`.  Storage for the in-core inode table
+`inode[NINODE]` is added in `v7stubs.c` as well.  These stubs
+do nothing -- they exist solely to make `iget.o` / `nami.o`
+link.  When real callers wire up, they will be replaced by
+their real V7 implementations in later iterations.
+
+This sub-step de-risks the much larger parent section by
+isolating "does V7 `nami.c` / `iget.c` compile against our
+header shims" from "does the inode-lookup chain actually
+return the right inodes on hardware."  If `nami.c` / `iget.c`
+need trivial header touch-ups (extern declarations, missing
+prototypes), those land here in isolation rather than tangled
+with new caller wiring.  The ratchet still shrinks because
+`sys/nami.c` and `sys/iget.c` enter the build in their
+unmodified-or-only-C99-prototyped form.
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_expect sentinel="v7: sb isize=" timeout_ms=15000
+mp135.evb:uart_close
+mark tag=v7_nami_iget_link
+```
+
+Verify:
+
+```
+import re
+import subprocess
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    m = re.search(r'v7: sb isize=(\d+) fsize=(\d+)', uart)
+    if not m:
+        return False
+    isize = int(m.group(1))
+    fsize = int(m.group(2))
+    if not (0 < isize < 100000 and isize < fsize):
+        return False
+    # Both symbols must be defined in the linked kernel ELF.
+    out = subprocess.run(
+        ['arm-none-eabi-nm', 'unix-v7-c99/unix'],
+        capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        return False
+    have_namei = False
+    have_iget = False
+    for line in out.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[1] == 'T':
+            if parts[2] == 'namei':
+                have_namei = True
+            elif parts[2] == 'iget':
+                have_iget = True
+    return have_namei and have_iget
+```
+
 ## WIP
 
 ### V7 sys/iget.c + nami.c linked, shim namei retired
