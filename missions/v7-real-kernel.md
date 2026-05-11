@@ -1442,19 +1442,177 @@ def check(extract_dir):
     return True
 ```
 
-## WIP
-
 ### V7 sys/iget.c + nami.c linked, shim namei retired
 
-Replace `arch/armboot.c::namei`, `loadino`, `parenti` with
-`sys/nami.c::namei()` and `sys/iget.c::iget`/`iput`.  These already
-walk `bdevsw` for block I/O; after the prior section's buffer-cache
-work this just-works.  `arch/armboot.c`'s versions become
-unreferenced and are deleted.
+Parent section: the shim's namei wrapper in `arch/armboot.c`
+is *gone*.  Every former `shim_namei` call site now invokes
+`v7_namei_inum` directly (the arch-resident bridge in
+`arch/v7stubs.c` that drives V7's historic
+`sys/nami.c::namei(uchar, 0)` and unboxes `struct inode *`
+into the legacy `ino_t` shape).  The shim's `loadino` and
+`parenti` continue to satisfy the few inode-table walks they
+own; their retirement is a later sub-iteration.
 
-Build / Test / Verify: cold-boot to `login:` on EVB.  Sentinel:
-`namei` panic-checked output of the inode for `/etc/init`
-(printable from `sys/main.c`'s `iinit` flow).
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_expect sentinel="v7: sb isize=" timeout_ms=15000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+mp135.evb:uart_close
+mark tag=v7_shim_namei_gone
+```
+
+Verify:
+
+```
+import subprocess
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'login:' not in uart or '# ' not in uart:
+        return False
+    # Only V7's real namei (from sys/nami.c) should remain.
+    out = subprocess.run(
+        ['arm-none-eabi-nm', 'unix-v7-c99/unix'],
+        capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        return False
+    n = sum(1 for line in out.stdout.splitlines()
+            if len(line.split()) == 3
+            and line.split()[2] == 'namei'
+            and line.split()[1] in ('T', 't'))
+    return n == 1
+```
+
+## WIP
 
 ### sys/main.c::main() takes over from armboot() shim
 
