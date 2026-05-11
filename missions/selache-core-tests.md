@@ -244,6 +244,50 @@ def check(extract_dir):
     return ('0b544876' in text) and ('fa8e4ddc' in text)
 ```
 
+### selache cargo build --release (workspace compile)
+
+Smallest meaningful slice of the WIP "selache-built target cctest sweep"
+step: confirm the selache Rust workspace still compiles cleanly in
+release mode before spending time on the host-toolchain `make` halves
+or the 1224-case bench foreach. This is the very first command in the
+WIP Build block and gates everything that follows: if `selcc` /
+`selas` / `seld` / `selload` / `libsel` do not build, no `.ldr` can be
+produced, and the bench foreach is moot. Any failure here is by
+definition a root-cause issue inside `selache/` (a Rust source file,
+`Cargo.toml`, or a build script under selcc/selas/seld/selload/libsel)
+and must be fixed in place — there is no case file or `xtest/`
+artifact involved at this stage, so the policy block above does not
+even admit a "demote" alternative. If the build succeeds, the WIP
+marker advances to the next slice (cargo test, then clippy, then the
+gcc/clang/sel host makes, then the bench foreach).
+
+Build:
+
+```
+cd selache && cargo build --release
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    sel = Path('selache')
+    # The release workspace build must produce the four core toolchain
+    # binaries under selache/target/release/. Their presence (and the
+    # build command's zero exit) is sufficient evidence of a clean
+    # cargo build --release. No manifest_clean call: this is a
+    # no-hardware step, so no test_serv job runs and no manifest.json
+    # is produced.
+    for name in ('selcc', 'selas', 'seld', 'selload'):
+        if not (sel / 'target/release' / name).is_file():
+            return False
+    return True
+```
+
 ## WIP
 
 ### selache-built target cctest sweep
