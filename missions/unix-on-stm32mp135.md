@@ -4555,3 +4555,162 @@ def check(extract_dir):
         return False
     return True
 ```
+
+## WIP
+
+The 35 sections above gate what we said we would gate: V7 cold-boots
+on the EVB to a multi-user shell over UART4.  That is a real and
+testable milestone, but it is not full V7 fidelity, because the port
+takes shortcuts in the kernel that the discipline never demanded the
+sections to catch.  The work below closes the gap between
+"externally indistinguishable from V7 for these sections" and
+"structurally V7 underneath."  Land each as its own section once the
+behavior it gates is testable from the bench; until then they are a
+prioritized backlog.
+
+The ordering matters: items earlier on the list unblock items later
+on the list, and most also remove a workaround currently visible to
+the bench (load_sd preamble, byte-by-byte cadence, missing ^C, etc).
+
+### Real V7 main() with proc[], iinit, sched
+
+Enable the `#if 0`-d body of `sys/main.c::main()`: `clkstart`,
+`cinit`, `binit`, `iinit`, `newproc`, `sched`.  Stop falling through
+to `arch/armboot.c::armboot()`.  Requires linking `sys/bio.c`,
+`sys/iget.c`, `sys/alloc.c`, `sys/text.c`, `sys/slp.c`, `sys/clock.c`,
+`sys/trap.c`, and `conf/c.c` (which already declares `bdevsw`,
+`rootdev`, `swapdev`, `pipedev`).  `conf/c.c`'s `rootdev =
+makedev(0,0)` resolves to whatever the V7 SD/eMMC driver registers
+as major 0 (see the SD block driver item below).
+
+Gate test: kernel reaches the V7 `init: multi-user` banner *via*
+`sys/main.c`'s real flow (not via `armboot()` short-circuit).  Add a
+sentinel that fires only from sys/main.c's path so a regression
+into the shim path is caught.
+
+### V7 line discipline (dev/tty.c) linked in
+
+Link `dev/tty.c` into the build (currently absent from
+`sys/Makefile`'s OBJS).  Wire `dev/stm32_usart.c` (and `dev/pl011.c`
+on qemu) to call into `tty.c`'s `ttread`/`ttwrite`/`ttyinput`
+instead of returning bytes directly to `read(2)`.  `conf/c.c`'s
+`linesw[]` already wires `ttyopen`/`ttread`/`ttwrite`/`ttyinput` to
+`tty.c`; this is the missing line-discipline plumb.
+
+What this unlocks on the bench: cooked-mode line editing (V7 erase
+`#`, kill `@`), `^S`/`^Q` flow control under burst write,
+`^C`->SIGINT to the foreground process, `^D` returning 0 from
+`read(2)` at start-of-line, and the `gtty`/`stty` ioctls (cbreak,
+raw, etc.) that V7 `stty` already shipped.
+
+Gate test: bench-typed `^C` (byte `\x03`) sent to a foreground
+`cat` kills `cat` and returns the shell to `# `.  This is the same
+test the removed "EVB kread treats ^C byte on tty as EOF" section
+*should* have looked like once the line discipline is real.
+
+### Real fork(2) and proc[] scheduling
+
+Replace `arch/armboot.c`'s NFORK=8 sequential save/restore model
+with V7's real `fork()`/`exec()`/`wait()` operating on `proc[]`
+entries, `u` struct, scheduling via `swtch()` and the run queues.
+Most of this is already in `sys/fork.c`, `sys/exec1.c`, `sys/exec2.c`,
+`sys/main.c`'s `sched()`, `sys/slp.c` -- just not linked.  Requires
+implementing context switch in `arch/a7.s` (currently only kernel
+entry exists).
+
+What this unlocks: real concurrent processes, real `ps`, V7's job
+control as designed, multi-tty getty.  Removes the
+`(sleep 1; kill -HUP $$)` subshell oddities the trap section
+documented.
+
+Gate test: two getty's running on (say) UART4 and a virtual second
+console, both producing `login:` at boot, both servicing logins.
+
+### SIG_DFL termination and full V7 wait() status
+
+`arch/armboot.c::deliver_signal()` currently has a comment "No
+fancy default actions yet -- absent a real exit/wait flow here,
+drop the signal."  After the real fork item lands, this drop
+becomes wrong: SIG_DFL for fatal signals must terminate the
+process and set the wait status low 7 bits to the signal number.
+`arch/armboot.c::kwait()` hard-codes the low 7 bits to 0 today;
+`sys/sig.c`'s `psignal()` does the right thing on its own once
+linked.
+
+Gate test: `cat` killed by `^C` (or by another process's
+`kill -2 <pid>`) returns from `wait()` with status `2`, observable
+via a small test program that forks/execs cat, kills it, and prints
+the wait status.
+
+### Real SD/eMMC block driver in dev/
+
+Implement V7's `bdevsw` major-0 entry as a real SDMMC driver for
+the STM32MP135 (and keep `dev/virtio_blk.c` for the qemu path) so
+`bread(2)`/`bwrite(2)` go through the V7 buffer cache (`sys/bio.c`)
+and the kernel can mount its root from the SD card on demand,
+without the bench staging the rootfs into DDR via `load_sd` first.
+After this lands, the EVB test plans' `load_sd 4096 382 0xC4400000`
+preamble can drop and section runtime goes down by a few seconds
+per section.
+
+Gate test: cold-boot a sdcard-img that has *only* main.stm32 +
+unix.bin + .dtb_placeholder on it (no `load_sd` from the bench);
+kernel mounts the rootfs from disk after `jump` and reaches
+`login:`.
+
+### Remaining V7 syscalls in arch/armboot.c (or post-shim equivalent)
+
+The shim handles ~30 syscalls.  After real main()+fork() the shim
+moves into `sys/trap.c`'s `trap()` and the missing entries become
+straightforward to wire from existing V7 source:
+
+  * `setgid`/`getgid`/`getpid`/`getppid`
+  * `alarm`/`pause`/`nice`
+  * `gtty`/`stty`/`ioctl` (needed by the line-discipline item above)
+  * `ptrace`/`profil`/`fcntl`/`times`
+  * `mpx` (V7 has it; we don't need it)
+  * `phys`/`acct`
+
+Gate test: each as its own section, mirroring how `cmd/who`,
+`cmd/ps`, `cmd/time`, etc. exercise them.
+
+### Persistent utmp/wtmp
+
+Real V7 `/etc/utmp` and `/usr/adm/wtmp` accumulate login records
+across boots.  The shim's tmpfs makes them volatile.  After the
+real SD block driver lands, point `/etc/utmp` and `/usr/adm/wtmp`
+at the mounted rootfs.  Then `who` and `last` show real history.
+
+Gate test: log in, log out, reboot, log in again; `last` shows two
+entries.
+
+### Multi-tty getty
+
+V7 `init` reads `/etc/ttys` and spawns a `getty` per line.  Today
+the rootfs has a `ttys` entry only for the console.  Add a second
+tty (UART somewhere, or a soft tty over USB-CDC if we go that
+route), spawn a second getty, gate that both serve `login:`
+concurrently.
+
+### Kernel-side stty mode set by getty
+
+V7 getty does `stty <speed>` on its tty before exec'ing login.
+Today the bench drives UART4 at the bootloader's preconfigured
+baud.  After `gtty`/`stty` ioctls land, getty can renegotiate.
+This becomes relevant if/when the second tty has a different
+speed than the console.
+
+### `ed`-on-EVB regression gate
+
+`ed` already passes under qemu (section 19).  On the EVB it should
+work today too but no section tests it; add one.  Drives a small
+`ed` session over UART, edits a file, writes, quits, verifies the
+file content via `cat`.
+
+### Optional: original-diffs ratchet against this commit
+
+Re-baseline `unix-v7-c99/tools/original-diffs.budget.json` against
+the current commit.  Every later session that touches port files
+under `cmd/`, `sys/`, `h/`, `include/`, `lib/`, `tools/`, `conf/`
+then can only *reduce* inserts/deletes -- so the port can only get
+*closer* to historic V7, never further.
