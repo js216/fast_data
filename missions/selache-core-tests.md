@@ -429,6 +429,60 @@ def check(extract_dir):
     return Verification.manifest_clean(extract_dir)
 ```
 
+### selache target xtest build (make sel)
+
+Smallest meaningful next slice of the WIP "selache-built target cctest
+sweep" step: now that the cargo build/test/clippy and host gcc/clang
+sweeps are all green (previous five sub-steps), build every promoted
+core cctest through the selache target toolchain (selcc → selas →
+seld → selload, ending in `cctest_<case>.<expect>.ldr`). This is the
+sixth and final command in the WIP Build block before the bench
+foreach. No hardware: this only emits `.ldr` images on the host.
+
+Per the policy block above, if `make sel` fails to compile any case,
+the only acceptable remediation is a root-cause fix inside
+`selache/` (selcc, selas, seld, selload, or libsel as appropriate)
+so the same case compiles on the next attempt. Demoting the case to
+`xtest/draft_cases/`, adding a per-case `.deferred.md`, editing
+`xtest/Makefile` or `xtest/build_rules.*` to skip the case, modifying
+the case `.c` source to dodge the failure, or any equivalent that
+hides the failure without correcting the toolchain are all
+forbidden. Mission progress is measured in selache codegen defects
+fixed.
+
+Build:
+
+```
+make -C selache/xtest sel -j$(nproc)
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    sel = Path('selache')
+    # make sel must produce one cctest_<case>.<expect>.ldr per
+    # promoted core case under selache/xtest/build/sel/. The exact
+    # file count tracks selache/xtest/cases/cctest_*.c (1:1 mapping
+    # via the Makefile), so the Verify counts both sides and demands
+    # parity.
+    cases = sorted(p.stem for p in (sel / 'xtest/cases').glob('cctest_*.c'))
+    if not cases:
+        return False
+    ldrs = list((sel / 'xtest/build/sel').glob('cctest_*.0x*.ldr'))
+    # Each .ldr filename is `<case>.0x<hash>.ldr` so its stem-stem
+    # must match a case basename.
+    ldr_stems = {p.name.split('.0x')[0] for p in ldrs}
+    missing = [c for c in cases if c not in ldr_stems]
+    if missing:
+        return False
+    return True
+```
+
 ## WIP
 
 ### selache-built target cctest sweep
