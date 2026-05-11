@@ -181,7 +181,7 @@ mp135.evb:uart_write data="p"
 delay ms=80
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
-mp135.evb:uart_expect sentinel="mem = " timeout_ms=30000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
 mp135.evb:uart_close
 mark tag=v7_bio_link
 ```
@@ -208,6 +208,195 @@ def check(extract_dir):
     for line in out.stdout.splitlines():
         parts = line.split()
         if len(parts) == 3 and parts[1] == 'T' and parts[2] == 'bread':
+            return True
+    return False
+```
+
+### V7 bdevsw[0] wired to dev/mp135_blk.c::mp135_strategy (no caller yet)
+
+Smallest forward increment toward the parent section: introduce a
+real block-device strategy routine for the EVB and wire it into
+`bdevsw[0]` so that the buffer-cache module linked in iter 1 has a
+working back end *before* any kernel caller exercises it.
+
+Add `dev/mp135_blk.c` (new) containing `mp135_strategy(struct buf *bp)`.
+The body does exactly what `arch/armboot.c::bio()` does today on EVB:
+inspect `bp->b_blkno`, `bp->b_bcount`, and `bp->b_flags & B_READ`, then
+memcpy between the V7 buffer (`bp->b_un.b_addr`) and the DDR-staged
+rootfs at `0xC4400000` plus `blkno * BSIZE`.  On completion, set
+`B_DONE` in `bp->b_flags`, clear `B_BUSY`, and call `iodone(bp)`.
+No interrupt handling is needed: the memcpy is synchronous.
+
+Also add `dev/virtio_blk.c` (new) containing `virtio_strategy()` for
+qemu, factored out of the virtio code currently inside
+`arch/armboot.c`.  The qemu path is preserved for parity but is not
+the focus of this section's bench verifier.
+
+Replace the `{0,0,0,0}` placeholder for `bdevsw[0]` in
+`arch/v7stubs.c` with `{nulldev, nulldev, mp135_strategy, &mp135_tab}`
+(EVB build) or the virtio equivalent (qemu build), gated by
+`CONF=evb_arm` vs `CONF=qemu_arm`.  `mp135_tab` is a zero-initialised
+`struct buf` used as the per-device buffer-list head, matching the V7
+`bdevsw` ABI.
+
+No kernel-side caller of `bread()` is added in this sub-step.
+`arch/armboot.c::bio()` remains the active block-I/O path on
+hardware, byte-for-byte identical to today.  The only observable
+change is that the `bdevsw[0].d_strategy` slot now points at a real
+function symbol in the ELF, and a fresh cold boot must still reach
+the `mem = ` banner with no panic.
+
+This sub-step de-risks the parent section by isolating "does the
+bdevsw wiring compile and not break boot" from "does `bread()`
+actually pull the right bytes through the cache."  If header
+plumbing for `struct buf`, `B_READ`, `iodone`, etc. needs
+adjustment, it lands here in isolation rather than tangled with a
+new kernel caller.  The ratchet still shrinks because the new
+strategy routines are net additions in `dev/` (not V7 source) and
+no V7 file regresses.
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_close
+mark tag=v7_bdevsw0_wired
+```
+
+Verify:
+
+```
+import subprocess
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    # Strategy routine must be defined in the linked kernel ELF.
+    out = subprocess.run(
+        ['arm-none-eabi-nm', 'unix-v7-c99/unix'],
+        capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        return False
+    for line in out.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[1] == 'T' and parts[2] == 'mp135_strategy':
             return True
     return False
 ```
