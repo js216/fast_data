@@ -288,6 +288,64 @@ def check(extract_dir):
     return True
 ```
 
+### selache cargo test --all-targets (workspace unit/integration tests)
+
+Smallest meaningful next slice of the WIP "selache-built target cctest
+sweep" step: now that `cargo build --release` is green (previous
+sub-step), exercise the selache workspace's own Rust unit and
+integration tests before committing to the much heavier host-toolchain
+`make` halves or the 1224-case bench foreach. This is the second
+command in the WIP Build block and is the natural follow-on to the
+release build: it validates internal invariants of `selcc` / `selas` /
+`seld` / `selload` / `libsel` (parsers, codegen helpers, register
+allocation, ELF/LDR emitters, etc.) using the workspace's own test
+suite, with no hardware and no `xtest/` cases involved. Any failure
+here is by definition a root-cause issue inside a `selache/` Rust
+source file or `Cargo.toml` and must be fixed in place — there is no
+case file or `xtest/` artifact at this stage, so the policy block
+above does not even admit a "demote" alternative. If the tests pass,
+the WIP marker advances to the next slice (clippy, then the
+gcc/clang/sel host makes, then the bench foreach).
+
+Build:
+
+```
+cd selache && cargo test --all-targets
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    sel = Path('selache')
+    # cargo test --all-targets must compile (and so leave behind) the
+    # four core toolchain binaries under selache/target/debug/ as well
+    # as at least one test executable under selache/target/debug/deps/.
+    # Their presence (combined with the build command's zero exit, which
+    # for `cargo test` also implies every test passed) is sufficient
+    # evidence of a clean workspace test run. No manifest_clean call:
+    # this is a no-hardware step, so no test_serv job runs and no
+    # manifest.json is produced.
+    for name in ('selcc', 'selas', 'seld', 'selload'):
+        if not (sel / 'target/debug' / name).is_file():
+            return False
+    deps = sel / 'target/debug/deps'
+    if not deps.is_dir():
+        return False
+    # At least one test binary must have been built and run. cargo
+    # names test executables `<crate>-<hash>` (no extension on Linux).
+    has_test_bin = any(
+        p.is_file() and '-' in p.name and not p.name.endswith('.d')
+        and not p.name.endswith('.rlib') and not p.name.endswith('.rmeta')
+        for p in deps.iterdir()
+    )
+    return has_test_bin
+```
+
 ## WIP
 
 ### selache-built target cctest sweep
