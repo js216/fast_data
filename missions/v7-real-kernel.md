@@ -401,6 +401,193 @@ def check(extract_dir):
     return False
 ```
 
+### V7 bread(rootdev, SUPERB) sentinel from startup()
+
+Smallest forward increment toward the parent section: add the first
+real V7-style caller of `bread()` so the linked buffer cache and the
+`bdevsw[0].d_strategy` slot (already wired in the prior two
+sub-steps) are exercised end-to-end on hardware -- without yet
+retiring `arch/armboot.c::bio()` or any of the shim's `shim_bread`
+call sites.
+
+Add `int rootdev = 0;` (a fake `makedev(0,0)`) to `arch/v7stubs.c`
+if not already present, so the new caller has a device number to
+pass.  In `arch/machdep.c::startup()`, immediately after the
+existing `printf("mem = ...")` line, call
+`bp = bread((dev_t)rootdev, (daddr_t)SUPERB)`, then print
+`v7: sb isize=%d fsize=%d\n` reading `((struct filsys *)bp->b_un.b_addr)->s_isize` and
+`->s_fsize` from the returned buffer.  Call `brelse(bp)` afterwards.
+This walks `bdevsw[0].d_strategy` (the EVB's `mp135_strategy` /
+qemu's `virtio_strategy`) for LBA `SUPERB` (block 1 of the V7
+filesystem), pulls it through `getblk`, and exercises the full
+`bread -> getblk -> strategy -> iowait -> iodone` path that V7
+expects.
+
+`arch/armboot.c::bio()` and its `shim_bread`/`shim_bwrite` callers
+are untouched.  The shim continues to satisfy every kernel block
+read elsewhere; this new sentinel call is additive.  `arch/machdep.c`
+lives outside the V7 ratchet's purview (it is `arch/`-prefixed),
+so the modification is allowed without affecting the ratchet's
+insert/delete bookkeeping against `v7/usr/...`.
+
+The point of this sub-step is to prove on real hardware that the
+chain we wired in iterations 1 and 2 actually returns the right
+bytes: `s_isize` and `s_fsize` for a V7 filesystem are small,
+non-zero, plausible integers (typically `s_isize` in the tens to
+low thousands, `s_fsize` larger than `s_isize`).  Reading garbage,
+zeros, or `0xdeadbeef`-style sentinels means the buffer cache,
+the strategy routine, or the DDR-staged rootfs offset is wrong --
+and we want to find that out *now*, before retiring the shim's
+block-I/O path in the next iteration.
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_expect sentinel="v7: sb isize=" timeout_ms=15000
+mp135.evb:uart_close
+mark tag=v7_bread_sentinel
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    m = re.search(r'v7: sb isize=(\d+) fsize=(\d+)', uart)
+    if not m:
+        return False
+    isize = int(m.group(1))
+    fsize = int(m.group(2))
+    # Plausible V7 superblock: small non-zero isize, fsize > isize,
+    # and neither value is an obvious garbage sentinel.
+    if isize <= 0 or isize > 100000:
+        return False
+    if fsize <= isize or fsize > 10000000:
+        return False
+    return True
+```
+
 ## WIP
 
 ### V7 sys/bio.c buffer cache linked, shim bio() retired
