@@ -1798,6 +1798,124 @@ def check(extract_dir):
     return int(m.group(2)) >= 64
 ```
 
+### V7 emulator resolves `/etc/init` inode on EVB
+
+One tight link past the rootfs-superblock sentinel. The previous
+section proved `bread(SUPERB)` returns a real V7 superblock from
+the bootloader-staged image in DDR (`0xC4400000`). This section
+proves the next pair of links works on real hardware: `scanfs()`
+returns (i.e., iterating every inode through the DDR-backed
+`bio()` path doesn't fault, hang, or trip an unmapped region),
+and `namei("/etc/init")` resolves to a non-zero inode number
+(i.e., the directory walk reads `/`'s data blocks, finds the
+`etc` entry, descends, and finds `init`). That is everything
+needed before `kexec` loads the V7 a.out from disk into
+`UENTRY`; isolating it here means a regression in either inode
+iteration or directory-block reads gets caught with a single
+new UART line, not with a missing `login:` 20 seconds later.
+The qemu path mounts via virtio so it never exercises the
+DDR-bio inode walk under MMU. The new sentinel is printed
+immediately after `namei("/etc/init")` returns, before
+`kexec`'s `loadino`/`readi` of the text segment -- so a failure
+during a.out load shows up as the *next* missing line, not as
+silence after `mem = `.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=15000
+mp135.evb:uart_expect sentinel="evb: rootfs isize=" timeout_ms=15000
+mp135.evb:uart_expect sentinel="evb: init inum=" timeout_ms=20000
+mp135.evb:uart_close
+mark tag=evb_init_inode_resolved
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    # Strict ordering: bootloader Jump -> kernel banner ->
+    # superblock sentinel (proved in the previous section) ->
+    # the new `evb: init inum=N` sentinel printed immediately
+    # after namei("/etc/init") returns.  A zero inum would mean
+    # namei walked but didn't find the entry (broken directory
+    # read or wrong rootfs); require a positive integer.  V7
+    # ROOTINO is 1 and reserves a handful of early inodes, so
+    # /etc/init is always well above 1.
+    try:
+        i_jump = uart.index('Jumping to address')
+        i_mem  = uart.index('mem = ', i_jump)
+        i_sb   = uart.index('evb: rootfs isize=', i_mem)
+        i_ini  = uart.index('evb: init inum=', i_sb)
+    except ValueError:
+        return False
+    m = re.search(r'evb: init inum=([1-9]\d*)', uart[i_ini:])
+    return bool(m)
+```
+
 ## WIP
 
 ### Userspace reaches login: on EVB
