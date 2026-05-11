@@ -101,6 +101,23 @@ Tests are considered successful when all the previously-passing tests
 still pass (zero regressions) and at least one new test passes. Tests
 are always only run up to first failing step.
 
+### Root cause only
+
+When a test, build, hook, or verify fails — at any level, in any
+mission — the only acceptable response is to fix the underlying
+defect at its root cause. The Minimizer rejects any proposed sub-step
+that hides a failure instead of fixing it: moving the failing test
+into a quarantine directory ("drafts", "deferred", "skipped"),
+adding a per-test skip / allowlist / `.deferred.md` note, relaxing
+the verify or widening a tolerance, commenting out an assertion,
+modifying the test source to dodge rather than fix, patching the
+test runner to swallow the failure, or any equivalent that lets the
+suite proceed without running and passing the failing test.
+Smallest-meaningful-step is measured against the root-cause-fix
+space, not the workaround space; "the smallest workaround that
+unblocks the sweep" is never a valid sub-step. Mission progress is
+measured in defects fixed, never in tests quarantined.
+
 ### Test Server
 
 Bench tests run through `test_serv`, a queued job server polled by the
