@@ -588,6 +588,248 @@ def check(extract_dir):
     return True
 ```
 
+### shim_bread/shim_bwrite delegate to real V7 bread/bwrite
+
+Smallest forward increment toward the parent section: re-implement
+the bodies of `arch/armboot.c::shim_bread(blkno, buf)` and
+`shim_bwrite(blkno, buf)` to call the real V7 `bread(rootdev, blkno)`
+/ `bwrite(bp)` chain (linked in iter 1, wired in iter 2a, proven on
+hardware in iter 3 by the `v7: sb isize=16 fsize=4096` sentinel)
+instead of the shim's `bio()` byte-pump.  After this sub-step:
+
+  - `shim_bread(blkno, buf)` becomes:
+    `bp = bread((dev_t)rootdev, (daddr_t)blkno);
+     bcopy(bp->b_un.b_addr, buf, BSIZE);
+     brelse(bp);`
+  - `shim_bwrite(blkno, buf)` becomes:
+    `bp = getblk((dev_t)rootdev, (daddr_t)blkno);
+     bcopy(buf, bp->b_un.b_addr, BSIZE);
+     bwrite(bp);`
+  - `arch/armboot.c::bio()` is left in place but is now unreferenced
+    (its sole callers were the two `shim_*` wrappers).  Removing the
+    dead `bio()` function and the EVB DDR-staging memcpy / qemu virtio
+    code inside it is the *next* sub-step's job, not this one.  Keeping
+    `bio()` resident this iteration limits the blast radius if real
+    `bread`/`bwrite` misbehaves on any of the ~13 call sites
+    (`loadino`, `readi`, `writei`, `namei`, `iupdat`, etc.) -- a
+    single-line revert of the two shim bodies brings the working
+    iter-3 state back.
+
+No call-site changes in `arch/armboot.c` are made in this sub-step:
+all ~13 existing `shim_bread(...)`/`shim_bwrite(...)` invocations
+(loadino, readi, writei, namei, iupdat, etc.) keep the same caller
+ABI -- only the wrapper body changes.  This means *every* kernel
+block read and write that armboot.c performs on hardware now flows
+through the real V7 buffer-cache chain
+(`bread` -> `getblk` -> `bdevsw[0].d_strategy` -> `iowait` ->
+`iodone`), the same chain that iter 3 proved good on a single
+superblock read.  Where iter 3 hit `bread` exactly once for
+`SUPERB`, this iteration hits it dozens of times during root inode
+walks, `/etc/init` load, exec(), and the multi-user-shell init
+chain -- a much heavier exercise of the cache, of `getblk`'s LRU
+list, and of `mp135_strategy`'s memcpy path under repeated calls.
+
+The ratchet stays flat: only `arch/armboot.c` changes (outside the
+V7-source purview), and `wc -l arch/armboot.c` decreases by a few
+lines (the two shim bodies shrink; `bio()` is unchanged for now).
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=80
+mp135.evb:uart_write data="c"
+delay ms=80
+mp135.evb:uart_write data="h"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="S"
+delay ms=80
+mp135.evb:uart_write data="H"
+delay ms=80
+mp135.evb:uart_write data="E"
+delay ms=80
+mp135.evb:uart_write data="L"
+delay ms=80
+mp135.evb:uart_write data="L"
+delay ms=80
+mp135.evb:uart_write data="O"
+delay ms=80
+mp135.evb:uart_write data="K"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="SHELLOK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=v7_shim_bread_delegates
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    # Iter-3 sentinel must still appear: the bread(rootdev, SUPERB)
+    # call from startup() still hits the real V7 buffer cache and
+    # pulls a plausible superblock through mp135_strategy.
+    m = re.search(r'v7: sb isize=(\d+) fsize=(\d+)', uart)
+    if not m:
+        return False
+    isize = int(m.group(1))
+    fsize = int(m.group(2))
+    if isize <= 0 or isize > 100000:
+        return False
+    if fsize <= isize or fsize > 10000000:
+        return False
+    # And the heavier exercise: cold boot reaches login:, root\r
+    # yields a shell prompt, and a typed `echo SHELLOK` echoes
+    # back through cooked-mode tty -- proving every shim_bread/
+    # shim_bwrite call site (loadino, readi, writei, namei,
+    # iupdat, etc.) still returns correct bytes when routed
+    # through the real V7 buffer cache.
+    try:
+        i_login = uart.index('login:')
+        i_shell = uart.index('# ', i_login)
+        uart.index('SHELLOK', i_shell)
+    except ValueError:
+        return False
+    return True
+```
+
 ## WIP
 
 ### V7 sys/bio.c buffer cache linked, shim bio() retired
