@@ -3083,6 +3083,235 @@ def check(extract_dir):
     return True
 ```
 
+### EVB shell trap and self-signal with SIGINT over live UART
+
+One-knob delta from the previous EVB section: the same
+trap+self-signal pipeline, but for signal 2 (SIGINT) instead of
+signal 1 (SIGHUP).  Section 32 proved the full S_SIGNAL +
+S_KILL + sigtramp + S_SIGRETURN + chktrap loop for SIGHUP on
+real hardware; nothing in section 32 actually exercises the
+generic `handlers[sig]` slot for any other signal number.  The
+emulator's `deliver_signal()` walks signals 1..NSIG and looks up
+`handlers[sig]`, so SIGINT should "just work" if and only if
+(a) sh's `stdsigs` table installs a SIGINT slot the same way it
+installs SIGHUP, (b) the V7 `kill` builtin parses `-2` and the
+literal `INT` mnemonic identically to `-1`/`HUP`, and (c) the
+emulator's per-signal bookkeeping in `kkill` and the
+`handlers[]` array does not have a SIGHUP-specific code path.
+This section converts those three assumptions into a tested
+fact, isolating any later ^C-via-`kread` failure (the bigger
+gap below) from a hypothetical "SIGINT delivery itself is
+broken" alternative explanation.  Pure mission-file change; no
+code edits.  The objective UART sentinel chain is: kernel
+`login:` -> root shell `# ` -> the literal `TRAPINT` line
+emitted by `fault()`'s deferred exec of the registered trap
+command -> `INTSEQOK` echoed by the shell after `kill -2 $$`
+returns.  Same DFU+SD+jump preamble and 200 ms byte cadence as
+the prior EVB trap section; single-quotes around the trap body
+are sent as `data="'"` and `$$` as two separate `data="$"`
+writes to keep the plan parser literal.  Deliberately retains
+the same gaps as section 32: this is a parametrization, not a
+new capability landing.  The follow-on `EVB signals and tty
+interrupts` section is what lands the `kread`-level ^C
+intercept and SIG_DFL termination.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="w"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=200
+mp135.evb:uart_write data="u"
+delay ms=200
+mp135.evb:uart_write data="m"
+delay ms=200
+mp135.evb:uart_write data="p"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="a"
+delay ms=200
+mp135.evb:uart_write data="p"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="'"
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="R"
+delay ms=200
+mp135.evb:uart_write data="A"
+delay ms=200
+mp135.evb:uart_write data="P"
+delay ms=200
+mp135.evb:uart_write data="I"
+delay ms=200
+mp135.evb:uart_write data="N"
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="'"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="\x32"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="k"
+delay ms=200
+mp135.evb:uart_write data="i"
+delay ms=200
+mp135.evb:uart_write data="l"
+delay ms=200
+mp135.evb:uart_write data="l"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="-"
+delay ms=200
+mp135.evb:uart_write data="\x32"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="$"
+delay ms=200
+mp135.evb:uart_write data="$"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="TRAPINT" timeout_ms=8000
+delay ms=300
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="I"
+delay ms=200
+mp135.evb:uart_write data="N"
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="S"
+delay ms=200
+mp135.evb:uart_write data="E"
+delay ms=200
+mp135.evb:uart_write data="Q"
+delay ms=200
+mp135.evb:uart_write data="O"
+delay ms=200
+mp135.evb:uart_write data="K"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="INTSEQOK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=evb_trap_int
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    # Strict ordering: kernel login: -> root shell prompt ->
+    # the `TRAPINT` text emitted by sh's deferred exec of the
+    # registered SIGINT trap command (cmd/sh/fault.c::chktrap
+    # calling execexp(trapcom[2], 0) once the shell returns to
+    # its prompt cycle after kill -2 $$) -> INTSEQOK echo from
+    # the next foreground command on the same shell.  TRAPINT
+    # must appear strictly between the root prompt and INTSEQOK,
+    # for the same deferred-trap reason as the SIGHUP section.
+    try:
+        i_login = uart.index('login:')
+        i_shell = uart.index('# ',      i_login)
+        i_trap  = uart.index('TRAPINT', i_shell)
+        uart.index('INTSEQOK', i_trap)
+    except ValueError:
+        return False
+    return True
+```
+
 ## WIP
 
 ### EVB signals and tty interrupts
