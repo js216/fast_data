@@ -2839,6 +2839,250 @@ def check(extract_dir):
     return re.search(r'(^|\r|\n)\d+\r?\n', window) is not None
 ```
 
+### EVB shell trap and self-signal over live UART
+
+Smallest meaningful step between the EVB background-process +
+numeric-kill section (previous step) and the full sgtty+BREAK
+gate. Exercises one capability no earlier EVB section has
+driven: the shell `trap` builtin (`cmd/sh/fault.c::getsig` +
+`stdsigs`) installing a userspace SIGHUP handler via the
+S_SIGNAL syscall, followed by `kill -1 $$` which raises SIGHUP
+on the running shell, then the V7 emulator's `deliver_signal()`
+in `arch/armboot.c:1350` finding the pending bit, pushing the
+saved PC+r0 onto the user stack, redirecting r15 to the
+sigtramp at `UENTRY_SIGTRAMP` with r0=1, the handler running
+`fault()` which sets the `TRAPSET` bit in `trapnote`, the
+S_SIGRETURN path popping the saved frame, and finally
+`sh::chktrap` executing the registered `echo TRAPHUP` command
+on the next prompt cycle.  This is the full S_SIGNAL +
+S_KILL + sigtramp + S_SIGRETURN + chktrap loop end-to-end on
+real hardware, which qemu's PL011 + qemu-virt timing already
+proved works at sim speed but the EVB has never exercised.
+Pure mission-file change; no code edits.  Catches: regressions
+in the trap-frame save/restore around `deliver_signal`,
+sigtramp PC fixup at `r[14] = UENTRY_SIGTRAMP`, the per-trap
+handlers[] table lookup, and the `cmd/sh/fault.c::fault`
+trapnote bit math -- none of which sections 1-31 touched.
+Deliberately avoids: BREAK detection in `dev/stm32_usart.c`
+(missing today, needs ISR.LBDF wiring), `kread`-level ^C
+intercept (also missing -- the V7 line-discipline in
+`dev/tty.c` is not linked into the armboot kernel, so `\x03`
+arrives at userspace as a raw byte, never as SIGINT), `stty
+-a` (the V7 stty in `cmd/stty.c` predates the `-a` flag), and
+the `kill %1` jobspec (sh's % expansion lives in a job-control
+path not built here).  All four gaps remain for the follow-on
+sgtty+BREAK and signals sections to address.  The objective
+UART sentinel chain is: kernel `login:` -> root shell `# ` ->
+the literal `TRAPHUP` line emitted by `fault()`'s deferred
+exec -> `HUPSEQOK` echoed by the shell after `kill -1 $$`
+returns.  Same DFU+SD+jump preamble as the previous EVB
+sections, 200 ms byte cadence to dodge the USART4 RDR overrun
+the EVB uart sections characterised.  The single-quote in
+`trap 'echo TRAPHUP' 1` is sent as `data="'"`; the `$$` is
+sent as two `data="$"` writes to keep the plan parser from
+treating it as anything but a literal pair of dollar signs in
+the shell input stream.
+
+Build:
+
+```
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="w"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=5000
+mp135.evb:uart_write data="j"
+delay ms=200
+mp135.evb:uart_write data="u"
+delay ms=200
+mp135.evb:uart_write data="m"
+delay ms=200
+mp135.evb:uart_write data="p"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="a"
+delay ms=200
+mp135.evb:uart_write data="p"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="'"
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="T"
+delay ms=200
+mp135.evb:uart_write data="R"
+delay ms=200
+mp135.evb:uart_write data="A"
+delay ms=200
+mp135.evb:uart_write data="P"
+delay ms=200
+mp135.evb:uart_write data="H"
+delay ms=200
+mp135.evb:uart_write data="U"
+delay ms=200
+mp135.evb:uart_write data="P"
+delay ms=200
+mp135.evb:uart_write data="'"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="\x31"
+delay ms=200
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="k"
+delay ms=200
+mp135.evb:uart_write data="i"
+delay ms=200
+mp135.evb:uart_write data="l"
+delay ms=200
+mp135.evb:uart_write data="l"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="-"
+delay ms=200
+mp135.evb:uart_write data="\x31"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="$"
+delay ms=200
+mp135.evb:uart_write data="$"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="TRAPHUP" timeout_ms=8000
+delay ms=300
+mp135.evb:uart_write data="e"
+delay ms=200
+mp135.evb:uart_write data="c"
+delay ms=200
+mp135.evb:uart_write data="h"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data=" "
+delay ms=200
+mp135.evb:uart_write data="H"
+delay ms=200
+mp135.evb:uart_write data="U"
+delay ms=200
+mp135.evb:uart_write data="P"
+delay ms=200
+mp135.evb:uart_write data="S"
+delay ms=200
+mp135.evb:uart_write data="E"
+delay ms=200
+mp135.evb:uart_write data="Q"
+delay ms=200
+mp135.evb:uart_write data="O"
+delay ms=200
+mp135.evb:uart_write data="K"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="HUPSEQOK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=evb_trap_hup
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    # Strict ordering: kernel login: -> root shell prompt ->
+    # the `TRAPHUP` text emitted by sh's deferred exec of the
+    # registered trap command (cmd/sh/fault.c::chktrap calling
+    # execexp(trapcom[1], 0) once the shell returns to its
+    # prompt cycle after kill -1 $$) -> HUPSEQOK echo emitted
+    # by the next foreground command from the same shell.
+    # The TRAPHUP token must appear strictly between the shell
+    # prompt and the HUPSEQOK token; if it appeared first it
+    # would mean sh ran the echo trap command synchronously
+    # from the kill builtin, which is not the V7 deferred-trap
+    # semantics we want to assert.
+    try:
+        i_login = uart.index('login:')
+        i_shell = uart.index('# ',       i_login)
+        i_trap  = uart.index('TRAPHUP',  i_shell)
+        uart.index('HUPSEQOK', i_trap)
+    except ValueError:
+        return False
+    return True
+```
+
 ## WIP
 
 ### EVB tty line discipline (sgtty + BREAK)
