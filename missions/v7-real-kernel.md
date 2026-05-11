@@ -40,6 +40,178 @@ later on the list.  Tester runs all sections through the WIP marker;
 the WIP marker moves forward only when each section's verify check
 passes on bench.
 
+### V7 dev/bio.c compiles and links into kernel (no caller)
+
+Smallest forward increment toward the parent section: add
+`../dev/bio.o` to `unix-v7-c99/sys/Makefile`'s `OBJS` so that
+the V7 buffer-cache translation unit (`bread`, `breada`,
+`bwrite`, `bdwrite`, `bawrite`, `brelse`, `getblk`, `iowait`,
+`iodone`, `clrbuf`, `geteblk`, `swap`, `physio`) compiles
+unmodified V7 source under our `arm-none-eabi-gcc -std=c99`
+toolchain alongside the existing kernel headers, and that the
+final `unix` ELF still links.
+
+No caller is added in this sub-step.  `bread` and friends
+become defined but unreferenced symbols in the kernel ELF;
+`arch/armboot.c::bio()` is unchanged and continues to satisfy
+every existing kernel block read on hardware.  Behavior on the
+EVB is byte-identical to the prior commit.
+
+This sub-step de-risks the much larger parent section by
+isolating "does V7 `bio.c` even compile against our header
+shims" from "does the bdevsw chain return the right bytes on
+hardware."  If `dev/bio.c` needs trivial header touch-ups
+(extern declarations, missing prototypes), those land here in
+isolation rather than tangled with new driver code.  The
+ratchet still shrinks because `dev/bio.c` enters the build in
+its historic form.
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=30000
+mp135.evb:uart_close
+mark tag=v7_bio_link
+```
+
+Verify:
+
+```
+import subprocess
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    # Symbol must be defined in the linked kernel ELF.
+    out = subprocess.run(
+        ['arm-none-eabi-nm', 'unix-v7-c99/unix'],
+        capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        return False
+    for line in out.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[1] == 'T' and parts[2] == 'bread':
+            return True
+    return False
+```
+
 ## WIP
 
 ### V7 sys/bio.c buffer cache linked, shim bio() retired
