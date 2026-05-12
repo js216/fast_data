@@ -1616,18 +1616,185 @@ def check(extract_dir):
 
 ### sys/main.c::main() takes over from armboot() shim
 
-Re-enable the `#if 0`-wrapped body of `sys/main.c::main()`:
-clkstart, cinit, binit, iinit, newproc, sched.  Stop falling
-through to `arch/armboot.c::armboot()`.  Link in `sys/alloc.c`,
-`sys/text.c`, `sys/clock.c`, and the rest of sys/'s init
-prerequisites.  `armboot()` becomes unreachable.  Delete it.
+Parent task: re-enable the `#if 0`-wrapped body of
+`sys/main.c::main()` (clkstart, cinit, binit, iinit, newproc,
+sched), stop falling through to `arch/armboot.c::armboot()`,
+link in `sys/alloc.c`, `sys/text.c`, `sys/clock.c`, and the
+rest of sys/'s init prerequisites.  `armboot()` becomes
+unreachable and is deleted.  This is decomposed into sub-steps;
+each landing keeps sections 1-8 green and tightens the bind on
+the real V7 sys/.
 
-Build / Test / Verify: cold-boot to `login:` on EVB, then drive
-`root\r` and confirm `# ` prompt.  Sentinel: a new
-`init: real V7 main` printf added to the top of the enabled
-sys/main.c block (replacing the existing `init: multi-user`
-banner -- not removing it, the V7 init still prints it after
-forking).
+This iteration takes the first chunk: V7's real
+`sys/main.c::binit()` (and its `buffers[NBUF][BSIZE+BSLOP]`
+storage) come out of `#if 0` and `arch/v7stubs.c::binit_stub()`
+is retired.  `iinit()` stays wrapped (the next sub-iteration).
+`arch/machdep.c::startup()` now calls V7's real `binit()`
+before the `bread(rootdev, SUPERB)` sentinel.
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_expect sentinel="v7: sb isize=" timeout_ms=15000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+mp135.evb:uart_write data="echo SHELLOK\r"
+mp135.evb:uart_expect sentinel="SHELLOK" timeout_ms=8000
+mp135.evb:uart_close
+mark tag=v7_real_binit_live
+```
+
+Verify:
+
+```
+import subprocess
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'login:' not in uart or '# ' not in uart:
+        return False
+    if 'SHELLOK' not in uart:
+        return False
+    # V7's real binit() must be live, and the v7stubs binit_stub() gone.
+    out = subprocess.run(
+        ['arm-none-eabi-nm', 'unix-v7-c99/unix'],
+        capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        return False
+    nm = out.stdout
+    has_binit = any(line.split()[-2:] == ['T', 'binit']
+        for line in nm.splitlines() if len(line.split()) == 3)
+    has_stub = any(line.split()[-1] == 'binit_stub'
+        for line in nm.splitlines() if len(line.split()) == 3)
+    return has_binit and not has_stub
+```
 
 ### sys/trap.c + sys/sys[1-4].c syscall path replaces shim dispatcher
 
