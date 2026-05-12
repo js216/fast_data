@@ -18,11 +18,10 @@ for i in 1 2 3 4 5 6 7 8 9; do
    sudo chmod    o-w   "/home/agent$i"
    sudo chmod    o-w   "/home/agent$i/fast_data"
 
-   # lock test cases and git history
+   # lock test cases
    sudo chown    jk:jk "/home/agent$i/fast_data/permissions.sh"
    sudo chown    jk:jk "/home/agent$i/fast_data/sync.sh"
    sudo chown    jk:jk "/home/agent$i/fast_data/run.py"
-   sudo chown -R jk:jk "/home/agent$i/fast_data/.git"
    sudo chown -R jk:jk "/home/agent$i/fast_data/missions"
 
    # no other backdoor
