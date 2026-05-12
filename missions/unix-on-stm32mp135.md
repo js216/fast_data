@@ -471,7 +471,7 @@ expect -c '
   send "root\r"
   expect "# "
   send "/bin/sh /bin/test_suite\r"
-  expect "--- UNIT TESTS COMPLETE ---"
+  expect -exact "--- UNIT TESTS COMPLETE ---"
   send "sync\rexit\r"
   sleep 0.5
   send "\x01x"
