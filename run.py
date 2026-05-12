@@ -101,7 +101,7 @@ class Runner:
     def __init__(self, md_path):
         self.md_path = Path(md_path)
         self.workdir = Path(tempfile.mkdtemp(prefix='runpy-'))
-        self.log_path = Path.cwd() / 'log.txt'
+        self.log_path = Path.cwd() / 'logs/log.txt'
         self.log_fh = None
         self.user = getpass.getuser()
         self.busy_retry_deadline_s = self._busy_retry_deadline_for_md(
