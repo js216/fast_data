@@ -58,9 +58,13 @@ prevents seven independently-derived versions:
   apply a hard wall-clock timeout (default 90 s, override via
   `QEMU_SHELL_TIMEOUT_S`).
 - `<script-name>` (optional, default `shell`) selects a driver
-  fixture at `unix-v7-c99/tools/qemu/<script-name>.expect`. Driver
-  fixtures wait for `login:`, send `root\r`, wait for `# `, run the
-  per-fixture command set, then send `sync\r` and `exit\r`.
+  fixture at `unix-v7-c99/tools/qemu/<script-name>.expect`. If no
+  fixture exists with that name, the argument is treated as a
+  sentinel string: the wrapper boots qemu, waits for that string
+  to appear in the serial log, and terminates immediately.
+  Existing fixtures wait for `login:`, send `root\r`, wait for
+  `# `, run the per-fixture command set, then send `sync\r` and
+  `exit\r`.
 - Wrapper exit status is irrelevant; verifiers read only the
   captured log. The wrapper is responsible for not leaving stale
   log content from a prior section visible to the verifier (the
@@ -319,14 +323,7 @@ Build:
 ```
 make -C unix-v7-c99 ARCH=arm CONF=qemu_arm
 mkdir -p unix-v7-c99/build/qemu
-rm -f unix-v7-c99/build/qemu/banner.log
-timeout 30 qemu-system-arm \
-    -machine virt -cpu cortex-a7 -nographic -no-reboot \
-    -kernel unix-v7-c99/unix \
-    -drive if=none,file=unix-v7-c99/root.img,format=raw,id=hd0 \
-    -device virtio-blk-device,drive=hd0 \
-    -serial file:unix-v7-c99/build/qemu/banner.log \
-    < /dev/null || true
+unix-v7-c99/tools/qemu-shell.sh unix-v7-c99/build/qemu/banner.log "mem = "
 test -s unix-v7-c99/build/qemu/banner.log
 ```
 
@@ -366,14 +363,7 @@ Build:
 ```
 make -C unix-v7-c99 ARCH=arm CONF=qemu_arm
 mkdir -p unix-v7-c99/build/qemu
-rm -f unix-v7-c99/build/qemu/init.log
-timeout 60 qemu-system-arm \
-    -machine virt -cpu cortex-a7 -nographic -no-reboot \
-    -kernel unix-v7-c99/unix \
-    -drive if=none,file=unix-v7-c99/root.img,format=raw,id=hd0 \
-    -device virtio-blk-device,drive=hd0 \
-    -serial file:unix-v7-c99/build/qemu/init.log \
-    < /dev/null || true
+unix-v7-c99/tools/qemu-shell.sh unix-v7-c99/build/qemu/init.log "login:"
 test -s unix-v7-c99/build/qemu/init.log
 ```
 
