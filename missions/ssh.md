@@ -6,19 +6,9 @@ write+verify an SD image via MSC, boot Linux via UART, reach it over
 SSH. Plans escalate from a poller-alive probe to a full reset -> flash
 -> boot -> SSH round trip.
 
-Sections that need device state to survive across submissions claim
-a test_serv lease and pass the issued token to the next plan. The
-mission file spells the lifecycle out: the first lease-using section
-runs `lease:claim devices="..." duration_s=N`, every subsequent
-section starts with `lease:resume token="{{LEASE_TOKEN}}"`, and the
-last section before the flagship ends with `lease:release token=...`.
-The runner (`run.py`) substitutes `{{LEASE_TOKEN}}` from the prior
-section's `streams/lease.token.bin` and does no other lease plumbing.
-The flagship runs lease-less on purpose -- it proves the cold path
-(reset -> DFU -> write -> boot -> SSH) still works end-to-end without
-inheriting any state.
-
 ### Inventory smoke
+
+Done: 05/12/2026 16:37:43
 
 Confirms the poller is up and every configured device probes and
 verifies. Surfaces `bench.devices.json` (instance ids) and
@@ -46,6 +36,8 @@ def check(extract_dir):
 ```
 
 ### Bootloader hold via DFU + UART
+
+Done: 05/12/2026 16:37:51
 
 DFU + UART end-to-end with autoload-stop. Resets, DFU-loads the
 bootloader, opens UART, sends three blind `x` bytes during the
@@ -100,11 +92,13 @@ def check(extract_dir):
 
 ### MSC enumeration smoke
 
-Inherits the bootloader-at-`> ` state from the previous test --- no
-reset, no DFU, no autoload-stop preamble. Refreshes inventory so
-`msc.evb` shows up after the bootloader exposed the MSC interface,
-then reads 1 MiB from the card. Read-only. Verifier checks for a
-valid MBR signature in the `msc.read` stream.
+Done: 05/12/2026 16:38:46
+
+Inherits the bootloader-at-`> ` state from the previous test---no reset,
+no DFU, no autoload-stop preamble. Refreshes inventory so `msc.evb`
+shows up after the bootloader exposed the MSC interface, then reads 1
+MiB from the card. Read-only. Verifier checks for a valid MBR signature
+in the `msc.read` stream.
 
 Build: nothing required.
 
@@ -126,6 +120,8 @@ def check(extract_dir):
     data = Verification.load_stream(extract_dir, 'msc.read')
     return len(data) == 1048576 and data[510:512] == b'\x55\xaa'
 ```
+
+## WIP
 
 ### SD image round-trip: write -> verify -> read -> diff
 

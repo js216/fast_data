@@ -7,3 +7,5 @@
 .codex
 logs
 __pycache__
+
+.runpy_lease

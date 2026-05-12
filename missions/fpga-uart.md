@@ -7,9 +7,9 @@ heartbeat and the per-byte echo loopback are alive end-to-end. The two
 sections are byte-for-byte identical apart from the `fpga.<id>:` prefix,
 so a regression on either board surfaces immediately.
 
-## WIP
-
 ### UART on iCEstick (hx1k)
+
+Done: 05/12/2026 16:32:24
 
 Build the per-board bitstream, program the iCEstick, open the FT2232H
 UART, let two heartbeat periods elapse so the banner is captured
@@ -58,6 +58,8 @@ def check(extract_dir):
 ```
 
 ### UART on HX8K-B-EVN (hx8k)
+
+Done: 05/12/2026 16:32:26
 
 Same plan as the iCEstick section, addressing the `fpga.hx8k` instance
 instead. The HX8K-B-EVN's eight on-board LEDs (D2..D9) display the

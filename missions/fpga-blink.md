@@ -9,9 +9,9 @@ these boards. The two sections are identical apart from the per-board
 build artifact and the `fpga.<id>:` prefix, so a programming regression
 on either board surfaces immediately.
 
-## WIP
-
 ### Blinky on iCEstick (hx1k)
+
+Done: 05/12/2026 16:32:32
 
 Build the per-board bitstream and submit a one-op plan that programs it
 onto the iCEstick. Verifier checks that the test_serv manifest reports
@@ -45,6 +45,8 @@ def check(extract_dir):
 ```
 
 ### Blinky on HX8K-B-EVN (hx8k)
+
+Done: 05/12/2026 16:32:34
 
 Same plan as the iCEstick section, addressing the `fpga.hx8k` instance
 instead. The HX8K-B-EVN's D2 LED is driven by the single blinky output;
