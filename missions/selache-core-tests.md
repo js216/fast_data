@@ -13,30 +13,33 @@ cases built by the CCES toolchain.
 haven't been promoted yet live in `draft_cases/` and run via the
 companion mission `selache-csmith-tests.md`.
 
-### selache core gcc host sweep
+## Policy: fix the toolchain, never demote the case
 
-Compile and run every promoted core cctest through host `gcc`, using the
-existing xtest target to compare each program's `got NN` output against
-its source `@expect` value.
+Per AGENTS.md "Root cause only": when the bench sweep fails on a
+case, the only acceptable remediation is a root-cause fix in
+`selache/` (selcc, selas, seld, selload, or libsel as appropriate)
+so the same case passes on the next sweep. The Minimizer must reject
+any proposed sub-step that:
 
-Build:
+- moves the failing case from `xtest/cases/` into `xtest/draft_cases/`;
+- adds a `.deferred.md` note or per-case bypass under WIP;
+- deletes or excludes the case's `.ldr` from the build output;
+- edits `xtest/Makefile` or `xtest/build_rules.*` to skip the case;
+- modifies the case's `.c` source to dodge the failure (the host
+  gcc / host clang sweep already validates each case's source; a
+  selache-target-only failure means the bug is in the toolchain, not
+  the source);
+- or any equivalent that hides the failure without correcting the
+  toolchain.
 
-```
-make -C selache/xtest gcc -j$(nproc)
-```
-
-Test (max 10 s):
-
-```
-mark tag=selache_core_gcc_host
-```
-
-Verify:
-
-```
-def check(extract_dir):
-    return Verification.manifest_clean(extract_dir)
-```
+The `## WIP` marker advances only after a real toolchain change
+makes a previously-failing case pass on the bench. Cases already in
+`xtest/draft_cases/` with `.deferred.md` notes (currently
+`cctest_csmith_4270e7c5`, `cctest_csmith_95d42820`,
+`cctest_csmith_cb987b7b`, `cctest_csmith_8c175802`) predate this
+policy and remain there as historical workarounds; each is unblocked
+only when a corresponding selache root-cause fix lands, after which
+the case is re-promoted into `xtest/cases/`.
 
 ### selache-built target cctest sweep
 

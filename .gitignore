@@ -1,12 +1,9 @@
 *.swp
 *.swo
+*.pdf
 
 .claude
 .codex
 __pycache__/
 
 log.txt
-progress.jsonl
-mission_status.md
-platform.info
-claude_duty_cycle.log

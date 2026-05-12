@@ -11,7 +11,7 @@ ROOT=$(git rev-parse --show-toplevel)
 SRC="$ROOT/hooks"
 
 # List of hook entrypoints and shared helpers to install.
-HOOKS="check-terms commit-msg pre-commit pre-push"
+HOOKS="check-no-platform-info check-terms commit-msg pre-commit pre-push"
 
 link_one() {
   hooks_dir=$1

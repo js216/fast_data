@@ -1,0 +1,32 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# check-no-platform-info --- forbid platform.info in the worktree
+# Copyright (c) 2026 Jakob Kastelic
+#
+# platform.info must never exist in any repo. If a build, test, or run
+# script is leaving one behind, that script is the bug --- fix it so no
+# platform.info is written, rather than gitignoring or deleting on every
+# commit.
+#
+# Invoked by pre-commit. Exits non-zero when the file is found.
+
+set -e
+
+ROOT=$(git rev-parse --show-toplevel)
+
+if [ -e "$ROOT/platform.info" ]; then
+    cat >&2 <<MSG
+pre-commit: platform.info exists at $ROOT/platform.info
+
+This file must never be created. Whichever script wrote it needs to
+be modified so that platform.info is not produced in the first place.
+Do NOT add it back to .gitignore --- find the producer and fix it:
+
+    grep -rn 'platform\\.info' .
+
+Then delete the file and retry the commit.
+MSG
+    exit 1
+fi
+
+exit 0

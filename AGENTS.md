@@ -49,11 +49,9 @@ ask the human operator for one.
   unless the operator explicitly asked to run only once or to stop. The
   Orchestrator must extract the first failing section, the concrete
   failing operation, and the relevant artefact path from `run.py`
-  output, increment `tester_fails_for_current_wip` and update
-  `last_tester_signature` in `mission_status.md`, clear any stale jobs
-  for the current user prefix, and immediately continue with a fresh
-  Worker scoped to that failure. Stuck signals are evaluated only at
-  the top of the next iteration (see Logging and Progress Tracking),
+  output, clear any stale jobs for the current user prefix, and
+  immediately continue with a fresh Worker scoped to that failure.
+  Stuck signals are evaluated only at the top of the next iteration,
   not mid-iteration; this avoids double-firing. Compared to the Verifier, the
   Tester job is mechanical: run the baseline, flag regressions. The
   tester can be given multiple mission files besides the main one, to
@@ -103,6 +101,23 @@ Tests are considered successful when all the previously-passing tests
 still pass (zero regressions) and at least one new test passes. Tests
 are always only run up to first failing step.
 
+### Root cause only
+
+When a test, build, hook, or verify fails — at any level, in any
+mission — the only acceptable response is to fix the underlying
+defect at its root cause. The Minimizer rejects any proposed sub-step
+that hides a failure instead of fixing it: moving the failing test
+into a quarantine directory ("drafts", "deferred", "skipped"),
+adding a per-test skip / allowlist / `.deferred.md` note, relaxing
+the verify or widening a tolerance, commenting out an assertion,
+modifying the test source to dodge rather than fix, patching the
+test runner to swallow the failure, or any equivalent that lets the
+suite proceed without running and passing the failing test.
+Smallest-meaningful-step is measured against the root-cause-fix
+space, not the workaround space; "the smallest workaround that
+unblocks the sweep" is never a valid sub-step. Mission progress is
+measured in defects fixed, never in tests quarantined.
+
 ### Test Server
 
 Bench tests run through `test_serv`, a queued job server polled by the
@@ -110,6 +125,14 @@ hardware pollers. `run.py`'s `Runner.submit_plan` prefixes every job's
 `description` field with `<user>: ` so jobs can be attributed to the
 operator that submitted them. Run `test_serv` inventory to learn how to
 operate and reset various devices.
+
+**Do NOT modify `test_serv` (or its pollers).** The server and pollers
+run on remote machines and any local changes here will NOT be deployed
+to production — editing them only desynchronizes this checkout from the
+running services and breaks subsequent test runs. Treat `test_serv` and
+poller code as read-only reference. The single exception is when the
+operator explicitly instructs you to work on `test_serv` itself; in
+that case follow their instructions and they will handle deployment.
 
 At the start of every iteration, before spawning Manager, Orchestrator
 sweeps `test_serv`: every job whose status is `queued` or `running` and
@@ -119,65 +142,16 @@ crashed mid-Foreach and wedged jobs from a poller that died mid-run.
 Jobs without the user prefix belong to other operators and are never
 touched.
 
-### Logging and Progress Tracking
+### Logging
 
 `run.py` appends all output to `log.txt`; this file must never be
-deleted and is the source of truth for *what happened*. Two other
-artefacts track *what shipped* and *what is stuck*. Per-agent
-pass/fail activity is NOT duplicated into either of them — it lives
-in `log.txt`.
-
-**`progress.jsonl`** — one line per Tester pass that advances WIP.
-Whenever a Tester run passes and the WIP marker moves past one or
-more steps, the Orchestrator appends a single line:
-
-    {"mission": "<file stem>",
-     "steps_advanced": ["<verbatim step heading>", ...],
-     "started_at": "<iso8601>", "ended_at": "<iso8601>",
-     "iterations": <int>, "tester_fails": <int>,
-     "worker_spawns": <int>}
-
-`started_at` is the `ended_at` of the previous progress.jsonl entry
-for the same mission, or the mission file's mtime if none exists. The
-counts represent work done since that point and are attributed to the
-batch as a whole; in the common single-step case `steps_advanced` has
-length 1 and the counts apply directly. Per-step approximations divide
-counts by `len(steps_advanced)`. The file is the time-to-feature
-record; median/p95 advance duration and per-mission throughput are
-derivable from it. Times are all in the Pacific time zone.
-
-**`mission_status.md`** — a single-snapshot file rewritten by the
-Orchestrator at three moments: (a) top of each iteration, (b)
-immediately after any Tester pass that advances WIP, (c) immediately
-before requesting Stopper for a context-budget pause. The file always
-reflects the *current* repo+mission state, never a stale snapshot.
-
-Required contents, machine-parseable as a YAML frontmatter block at
-the top of the file:
-
-    ---
-    mission: <file stem>
-    wip_step: <verbatim step heading>
-    wip_step_started_at: <iso8601>
-    iterations_for_current_wip: <int>
-    tester_fails_for_current_wip: <int>
-    worker_spawns_for_current_wip: <int>
-    verifier_worker_bounces_since_last_tester: <int>
-    last_tester_result: <pass|fail|none>
-    last_tester_signature: <"<section>: <op>" | null>
-    ---
-
-These fields are the persistent counter store: the Orchestrator reads
-them at session start and continues incrementing from there, so
-counters survive context-budget pauses. A fresh checkout starts all
-counters at zero. Below the frontmatter, free-form sections may
-include `## Stuck` (if any stuck-signal has fired, see below) and
-`## AGENTS.md Bug` (if the Orchestrator has diagnosed a spec bug, see
-Continuous Work). The operator reads this file to answer "is it
-stuck?" without parsing logs.
+deleted and is the source of truth for what happened. No other
+ledgers, progress files, or persistent mission-state files are
+written — counters and signatures used by stuck-signal logic are
+tracked in the Orchestrator's in-session memory only.
 
 **Stuck signals.** Before spawning Manager each iteration, Orchestrator
-checks all three:
+checks all three (counters tracked in-session):
 
   - The same Tester failure signature (first failing section + concrete
     failing operation) has occurred ≥3 times for the current WIP step.
@@ -185,25 +159,19 @@ checks all three:
     advancing.
   - Verifier→Worker has bounced ≥4 times since the last Tester run.
 
-On any trigger, Orchestrator (a) writes a `## Stuck` section in
-`mission_status.md` naming the trigger and counts, and (b) instructs
-the next Manager that the current sub-step decomposition has failed
-and a *different* decomposition is required — the Manager must not
-re-propose the same sub-step or any minor variation of it. Under
-forced strategy change the Manager may pivot scope: combine adjacent
-sub-steps, address a different facet of the parent mission step, or
-rewrite the parent mission step into a more concrete formulation. The
-Minimizer continues to evaluate the new proposal under its standard
-rule, but accepts a sub-step that would have been rejected as "not
-smallest" absent the stuck signal if it represents a genuine pivot in
-approach (not the prior step renamed). This is NOT a stop condition
-and is NOT permission to escalate to the operator; the loop continues
-under the forced strategy change. Stuck triggers reset when WIP
-advances.
-
-A missing `progress.jsonl` or `mission_status.md` in a fresh checkout
-is not a reason to stop continuous work — the Orchestrator creates
-them. There is no backfill from prior runs.
+On any trigger, Orchestrator instructs the next Manager that the
+current sub-step decomposition has failed and a *different*
+decomposition is required — the Manager must not re-propose the same
+sub-step or any minor variation of it. Under forced strategy change
+the Manager may pivot scope: combine adjacent sub-steps, address a
+different facet of the parent mission step, or rewrite the parent
+mission step into a more concrete formulation. The Minimizer continues
+to evaluate the new proposal under its standard rule, but accepts a
+sub-step that would have been rejected as "not smallest" absent the
+stuck signal if it represents a genuine pivot in approach (not the
+prior step renamed). This is NOT a stop condition and is NOT permission
+to escalate to the operator; the loop continues under the forced
+strategy change. Stuck triggers reset when WIP advances.
 
 ### Continuous Work
 
@@ -227,11 +195,8 @@ Workers until the repos are clean and committed; it must not advance to
 the next Manager pass.
 
 If work nonetheless stops, this is considered a bug in AGENTS.md. The
-Orchestrator must diagnose the bug, record the diagnosis and proposed
-fix to `mission_status.md` under an `## AGENTS.md Bug` section, and
-resume the mission loop under the existing instructions. The operator
-reads `mission_status.md` on their own schedule; the Orchestrator does
-not interrupt to surface this. Merely reporting a failed hardware or software test is
+Orchestrator must diagnose the bug and resume the mission loop under
+the existing instructions. Merely reporting a failed hardware or software test is
 not sufficient. The only allowed stop conditions are: the operator
 explicitly asks to stop or run a single test only; the mission file has
 no WIP marker after a successful Tester run and commit; or the
@@ -250,13 +215,9 @@ working a while") are NOT a valid trigger; the Orchestrator must run
 the following must also be true at the moment of pause: the most
 recent Tester run passed; the WIP marker has been moved past the
 just-passed step; every touched repo (parent and submodules) is
-clean on branch `main`; rule (b) and (c) of the
-`mission_status.md` rewrite schedule have both fired (the file's
-frontmatter now names the *new* WIP step with counters reset to 0
-and `last_tester_result: pass`) and a corresponding
-`progress.jsonl` line has been appended; and the response includes
-a one-paragraph "resume point" naming the next step a fresh
-Orchestrator should pick up.
+clean on branch `main`; and the response includes a one-paragraph
+"resume point" naming the next step a fresh Orchestrator should
+pick up.
 This clause prevents both the worse failure mode of running out of
 context mid-edit (leaving a dirty repo) and the lesser failure mode
 of stopping prematurely on a hunch (false context-exhaustion claims).
@@ -266,6 +227,16 @@ The next Orchestrator session resumes the loop from the head commit.
 
 Work is done in the `fast_data` "parent repo" that collocates several
 firmware repos.
+
+**Agents have no remote access.** There are no SSH keys or credentials
+for any remote (GitHub, internal mirrors, anything else). Agents must
+NEVER run `git push`, `git pull`, `git fetch`, `git clone <remote>`,
+`git remote update`, `gh` against a remote, or any equivalent that
+contacts a remote --- they will all fail, often after wedging the
+working tree with stale auth state. The operator pushes and pulls by
+hand. The agent's contract is to leave every touched repo in a clean,
+committed state on `main` so that the operator's plain `git push` /
+`git pull` "just works" with no extra cleanup.
 
 When doing commits, Worker must leave every repo it commits, and the
 parent repo, in clean state on branch main without detached heads.
