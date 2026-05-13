@@ -53,11 +53,17 @@ dot-only autoload countdown (~5 s window), waits for `> `, kicks `\r`
 to reconfirm the prompt, closes UART. Leaves the board parked at the
 bootloader so the next section can use MSC immediately.
 
-Build (custom board is the bootloader default: no `-DEVB`; this is
-SD-only, so no `-DNAND_FLASH`):
+Build (rebuild bootloader, then submit a side plan that briefly
+claims `bench_mcu.0` just to reset the DUT and immediately
+releases. Doing the reset in its own session keeps the main Test
+plan to a single `lease:claim`, so `manifest.json:lease_token`
+unambiguously records the long lease's token for `{{LEASE_TOKEN}}`
+substitution in later sections):
 
 ```
-make -C stm32mp135_test_board boot
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+printf '%s\n' 'description "reset custom DUT"' 'lease:claim devices="bench_mcu.0" duration_s=10' 'bench_mcu:reset_dut2' 'lease:release' > "$RUNPY_WORKDIR/reset_dut.plan"
+python3 test_serv/submit.py --server http://localhost:8080 --wait 20 "$RUNPY_WORKDIR/reset_dut.plan"
 ```
 
 Artifacts:
@@ -70,11 +76,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 30 s):
 
 ```
-lease:claim devices="bench_mcu.0" duration_s=10
-bench_mcu:reset_dut2
-lease:release
-delay ms=10000
-inventory refresh=true verify=false
+delay ms=2000
 lease:claim devices="mp135.custom,ssh.custom" duration_s=3600
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
@@ -316,8 +318,7 @@ Test (max 10 min):
 
 ```
 bench_mcu:reset_dut2
-delay ms=10000
-inventory refresh=true verify=false
+delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
 delay ms=300
