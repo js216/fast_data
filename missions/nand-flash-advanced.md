@@ -91,8 +91,6 @@ mark tag=stale_ubi_tail_panic_fixed
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -202,8 +200,6 @@ mark tag=ecc_unrecoverable_refuses_jump
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -301,8 +297,6 @@ mark tag=program_fail_marks_bad
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -421,8 +415,6 @@ mark tag=bbt_preserved_across_fmc_flush
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -476,9 +468,6 @@ Test: no hardware.
 Verify:
 
 ```
-import re
-from pathlib import Path
-
 def check(_extract_dir):
     cfg = Path('stm32mp135_test_board/config/buildroot.conf')
     if not cfg.is_file():
@@ -685,8 +674,6 @@ mark tag=bch_bitflip_corrected
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -779,9 +766,6 @@ Test: no hardware.
 Verify:
 
 ```
-from pathlib import Path
-import re
-
 def check(_extract_dir):
     fmc = Path('stm32mp135_test_board/bootloader/src/fmc.c')
     image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
@@ -853,9 +837,6 @@ Test: no hardware.
 Verify:
 
 ```
-from pathlib import Path
-import re
-
 def check(_extract_dir):
     pt = Path('stm32mp135_test_board/bootloader/src/nand_pt.h')
     image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
@@ -914,9 +895,6 @@ Test: no hardware.
 Verify:
 
 ```
-from pathlib import Path
-import re
-
 def check(_extract_dir):
     pt = Path('stm32mp135_test_board/bootloader/src/nand_pt.h')
     image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
@@ -985,7 +963,6 @@ make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
 Verify:
 
 ```python
-import re, os
 root = "stm32mp135_test_board/bootloader"
 src = open(os.path.join(root, "src/fmc.c")).read()
 # Find a `#if BLOAD_KERNEL_HASH_CHECK` block that contains the stub
@@ -1049,7 +1026,6 @@ make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
 Verify:
 
 ```python
-import re, os
 root = "stm32mp135_test_board/bootloader"
 src = open(os.path.join(root, "src/fmc.c")).read()
 # Find the body of `void fmc_bload(...)`. Brace-balance from the
@@ -1128,7 +1104,6 @@ make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
 Verify:
 
 ```python
-import re, os, hashlib
 root = "stm32mp135_test_board/bootloader"
 src = open(os.path.join(root, "src/fmc.c")).read()
 open_re  = re.compile(r'#\s*if\s+BLOAD_KERNEL_HASH_CHECK\b')
@@ -1566,8 +1541,6 @@ mark tag=power_loss_ubifs_recovers
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -1775,8 +1748,6 @@ mark tag=wear_level_100_cycles
 Verify:
 
 ```
-import re
-
 def check(extract_dir, loop):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -1902,9 +1873,6 @@ mark tag=final_speed_characterization
 Verify:
 
 ```
-import re
-from pathlib import Path
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False

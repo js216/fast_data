@@ -61,8 +61,6 @@ mark tag=nand_reboot_persistence
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -143,8 +141,6 @@ mark tag=nand_writable_persistent_state_reboot
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -197,8 +193,6 @@ mark tag=nand_writable_persistent_state_verify
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -287,8 +281,6 @@ mark tag=nand_writable_rootfs_reboot
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -341,8 +333,6 @@ mark tag=nand_writable_rootfs_verify
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -474,8 +464,6 @@ mark tag=nand_writable_rootfs_50m_reboot_loop
 Verify:
 
 ```
-import re
-
 def check(extract_dir, loop):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -521,9 +509,6 @@ Test: no hardware.
 Verify:
 
 ```
-import re
-from pathlib import Path
-
 def check(_extract_dir):
     fmc = Path('stm32mp135_test_board/bootloader/src/fmc.c')
     image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
@@ -570,9 +555,6 @@ Test: no hardware.
 Verify:
 
 ```
-import re
-from pathlib import Path
-
 def check(_extract_dir):
     fmc = Path('stm32mp135_test_board/bootloader/src/fmc.c')
     image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
@@ -682,8 +664,6 @@ mark tag=stale_ubi_tail_panic_fixed
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -793,8 +773,6 @@ mark tag=ecc_unrecoverable_refuses_jump
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -892,8 +870,6 @@ mark tag=program_fail_marks_bad
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -1012,8 +988,6 @@ mark tag=bbt_preserved_across_fmc_flush
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -1067,9 +1041,6 @@ Test: no hardware.
 Verify:
 
 ```
-import re
-from pathlib import Path
-
 def check(_extract_dir):
     cfg = Path('stm32mp135_test_board/config/buildroot.conf')
     if not cfg.is_file():
@@ -1276,8 +1247,6 @@ mark tag=bch_bitflip_corrected
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -1370,9 +1339,6 @@ Test: no hardware.
 Verify:
 
 ```
-from pathlib import Path
-import re
-
 def check(_extract_dir):
     fmc = Path('stm32mp135_test_board/bootloader/src/fmc.c')
     image = Path('stm32mp135_test_board/bootloader/build/main.stm32')
