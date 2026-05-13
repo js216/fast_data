@@ -5,6 +5,7 @@
 
 .claude
 .codex
+doc
 logs
 __pycache__
 
