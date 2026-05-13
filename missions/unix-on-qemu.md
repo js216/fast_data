@@ -1,5 +1,3 @@
-## WIP
-
 # Unix v7 on Qemu (Armv7-A)
 
 ### Build unix
@@ -60,6 +58,370 @@ words
 __TEST_DONE__
 # 
 ```
+
+### MKDIR LN
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+mkdir /tmp/d
+ls -la /tmp
+rmdir /tmp/d
+ln /etc/passwd /tmp/pwlink
+ls -li /etc/passwd /tmp/pwlink
+rm /tmp/pwlink
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+mkdir /tmp/d
+# ls -la /tmp
+total 3
+drwxr-xr-x 1 root       64 Jan  1 00:00 .
+drwxr-xr-x 1 root      112 Jan  1 00:00 ..
+-rwxr-xr-x 1 root        0 Jan  1 00:00 .keep
+drwxrwxr-x 1 root       32 Jan  1 00:00 d
+# rmdir /tmp/d
+# ln /etc/passwd /tmp/pwlink
+# ls -li /etc/passwd /tmp/pwlink
+   88 -rwxr-xr-x 1 root       51 Jan  1 00:00 /etc/passwd
+   88 -rwxr-xr-x 1 root       51 Jan  1 00:00 /tmp/pwlink
+# rm /tmp/pwlink
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### COMPARE
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+cmp /etc/passwd /etc/passwd
+diff /etc/passwd /etc/passwd
+echo "a 1" > /tmp/j1
+echo "a x" > /tmp/j2
+join /tmp/j1 /tmp/j2
+echo "a b" | tsort
+rm /tmp/j1 /tmp/j2
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+cmp /etc/passwd /etc/passwd
+# diff /etc/passwd /etc/passwd
+# echo "a 1" > /tmp/j1
+# echo "a x" > /tmp/j2
+# join /tmp/j1 /tmp/j2
+a 1 x
+# echo "a b" | tsort
+a
+b
+# rm /tmp/j1 /tmp/j2
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### TEST
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+test -f /etc/passwd
+echo $?
+test -d /etc
+echo $?
+test -f /nonexistent
+echo $?
+test -r /etc/passwd
+echo $?
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+test -f /etc/passwd
+# echo $?
+0
+# test -d /etc
+# echo $?
+0
+# test -f /nonexistent
+# echo $?
+1
+# test -r /etc/passwd
+# echo $?
+0
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### FOR
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+for i in 1 2 3
+do
+echo loop $i
+done
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+for i in 1 2 3
+> do
+> echo loop $i
+> done
+loop 1
+loop 2
+loop 3
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### CASE
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+case foo in
+foo) echo matched;;
+bar) echo bar;;
+esac
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+case foo in
+> foo) echo matched;;
+> bar) echo bar;;
+> esac
+matched
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### IF
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+if test -f /etc/passwd
+then
+echo passwd_exists
+fi
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+if test -f /etc/passwd
+> then
+> echo passwd_exists
+> fi
+passwd_exists
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### GLOB
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+ls /etc/p*
+ls /b??
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+ls /etc/p*
+/etc/passwd
+# ls /b??
+[
+basename
+cal
+calendar
+cat
+cb
+checkeq
+chgrp
+chmod
+chown
+clri
+cmp
+col
+comm
+cp
+crypt
+date
+dcheck
+dd
+df
+diff
+du
+echo
+ed
+fgrep
+file
+find
+grep
+icheck
+id
+join
+kill
+ln
+login
+look
+ls
+mesg
+mkdir
+mknod
+mount
+mv
+ncheck
+newgrp
+nice
+od
+pr
+pwd
+random
+rev
+rm
+rmdir
+sh
+sleep
+sort
+sp
+split
+stty
+su
+sum
+sync
+tabs
+tail
+tee
+test
+time
+touch
+tr
+tsort
+tty
+umount
+uniq
+wall
+wc
+who
+write
+yes
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### CAL
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+cal 1 1970
+cal 12 1969
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+cal 1 1970
+   January 1970
+ S  M Tu  W Th  F  S
+             1  2  3
+ 4  5  6  7  8  9 10
+11 12 13 14 15 16 17
+18 19 20 21 22 23 24
+25 26 27 28 29 30 31
+
+# cal 12 1969
+   December 1969
+ S  M Tu  W Th  F  S
+    1  2  3  4  5  6
+ 7  8  9 10 11 12 13
+14 15 16 17 18 19 20
+21 22 23 24 25 26 27
+28 29 30 31
+
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+## WIP
 
 ### CD
 
@@ -165,47 +527,6 @@ __TEST_DONE__
 # 
 ```
 
-### MKDIR LN
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-mkdir /tmp/d
-ls -la /tmp
-rmdir /tmp/d
-ln /etc/passwd /tmp/pwlink
-ls -li /etc/passwd /tmp/pwlink
-rm /tmp/pwlink
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-mkdir /tmp/d
-# ls -la /tmp
-total 3
-drwxr-xr-x 1 root       64 Jan  1 00:00 .
-drwxr-xr-x 1 root      112 Jan  1 00:00 ..
--rwxr-xr-x 1 root        0 Jan  1 00:00 .keep
-drwxrwxr-x 1 root       32 Jan  1 00:00 d
-# rmdir /tmp/d
-# ln /etc/passwd /tmp/pwlink
-# ls -li /etc/passwd /tmp/pwlink
-   88 -rwxr-xr-x 1 root       51 Jan  1 00:00 /etc/passwd
-   88 -rwxr-xr-x 1 root       51 Jan  1 00:00 /tmp/pwlink
-# rm /tmp/pwlink
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
 ### TEXT
 
 Local test:
@@ -272,45 +593,6 @@ abc
 sed: cannot execute
 # awk 1 /etc/passwd
 awk: cannot execute
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
-### COMPARE
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-cmp /etc/passwd /etc/passwd
-diff /etc/passwd /etc/passwd
-echo "a 1" > /tmp/j1
-echo "a x" > /tmp/j2
-join /tmp/j1 /tmp/j2
-echo "a b" | tsort
-rm /tmp/j1 /tmp/j2
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-cmp /etc/passwd /etc/passwd
-# diff /etc/passwd /etc/passwd
-# echo "a 1" > /tmp/j1
-# echo "a x" > /tmp/j2
-# join /tmp/j1 /tmp/j2
-a 1 x
-# echo "a b" | tsort
-a
-b
-# rm /tmp/j1 /tmp/j2
 # echo __TEST_DONE__
 __TEST_DONE__
 # 
@@ -564,143 +846,6 @@ __TEST_DONE__
 # 
 ```
 
-### TEST
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-test -f /etc/passwd
-echo $?
-test -d /etc
-echo $?
-test -f /nonexistent
-echo $?
-test -r /etc/passwd
-echo $?
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-test -f /etc/passwd
-# echo $?
-0
-# test -d /etc
-# echo $?
-0
-# test -f /nonexistent
-# echo $?
-1
-# test -r /etc/passwd
-# echo $?
-0
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
-### FOR
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-for i in 1 2 3
-do
-echo loop $i
-done
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-for i in 1 2 3
-> do
-> echo loop $i
-> done
-loop 1
-loop 2
-loop 3
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
-### CASE
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-case foo in
-foo) echo matched;;
-bar) echo bar;;
-esac
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-case foo in
-> foo) echo matched;;
-> bar) echo bar;;
-> esac
-matched
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
-### IF
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-if test -f /etc/passwd
-then
-echo passwd_exists
-fi
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-if test -f /etc/passwd
-> then
-> echo passwd_exists
-> fi
-passwd_exists
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
 ### EXPAND
 
 Local test:
@@ -730,109 +875,6 @@ single quote
 double quote
 # expr 1 + 2
 expr: cannot execute
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
-### GLOB
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-ls /etc/p*
-ls /b??
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-ls /etc/p*
-/etc/passwd
-# ls /b??
-[
-basename
-cal
-calendar
-cat
-cb
-checkeq
-chgrp
-chmod
-chown
-clri
-cmp
-col
-comm
-cp
-crypt
-date
-dcheck
-dd
-df
-diff
-du
-echo
-ed
-fgrep
-file
-find
-grep
-icheck
-id
-join
-kill
-ln
-login
-look
-ls
-mesg
-mkdir
-mknod
-mount
-mv
-ncheck
-newgrp
-nice
-od
-pr
-pwd
-random
-rev
-rm
-rmdir
-sh
-sleep
-sort
-sp
-split
-stty
-su
-sum
-sync
-tabs
-tail
-tee
-test
-time
-touch
-tr
-tsort
-tty
-umount
-uniq
-wall
-wc
-who
-write
-yes
 # echo __TEST_DONE__
 __TEST_DONE__
 # 
@@ -903,48 +945,6 @@ Expect:
 ```
 find /usr/lib -print
 # find: bad status-- /usr/lib
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
-### CAL
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-cal 1 1970
-cal 12 1969
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-cal 1 1970
-   January 1970
- S  M Tu  W Th  F  S
-             1  2  3
- 4  5  6  7  8  9 10
-11 12 13 14 15 16 17
-18 19 20 21 22 23 24
-25 26 27 28 29 30 31
-
-# cal 12 1969
-   December 1969
- S  M Tu  W Th  F  S
-    1  2  3  4  5  6
- 7  8  9 10 11 12 13
-14 15 16 17 18 19 20
-21 22 23 24 25 26 27
-28 29 30 31
-
 # echo __TEST_DONE__
 __TEST_DONE__
 # 
