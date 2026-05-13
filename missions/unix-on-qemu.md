@@ -779,19 +779,19 @@ Expect:
 
 ```
 sleep 1 &
-2
+5
 # echo $!
-2
+5
 # wait
 # nice echo niced
 niced
 # sync
 # sleep 100 &
-6
+9
 # echo $!
-6
+9
 # kill $!
-6: Error 0
+9: Error 0
 # wait
 # ps
 ps: cannot execute

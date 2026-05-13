@@ -123,7 +123,7 @@ is_spdx_excluded() {
     # …) don't accidentally exempt files in other repos.
     if [ "$REPO" = "unix-v7-c99" ]; then
         case "$1" in
-            cmd/*|sys/*|h/*|include/*|arch/*|dev/*|lib/*) return 0 ;;
+            cmd/*|sys/*|h/*|include/*|arch/*|dev/*|lib/*|root/*) return 0 ;;
         esac
     fi
     return 1

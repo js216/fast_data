@@ -7763,8 +7763,6 @@ Expect:
 > putchr(int cc)
 ```
 
-## WIP
-
 ### cmd/init.c
 
 Local test:
@@ -7776,318 +7774,169 @@ diff unix-v7-c99/v7/usr/src/cmd/init.c unix-v7-c99/cmd/init.c || true
 Expect:
 
 ```
-1,4c1
-< #include <signal.h>
-< #include <sys/types.h>
-< #include <utmp.h>
-< #include <setjmp.h>
----
-> #include "../lib/u.h"
-6,95c3,4
-< #define	TABSIZ	100
-< #define	ALL	p = &itab[0]; p < &itab[TABSIZ]; p++
-< #define	EVER	;;
-< 
-< char	shell[]	= "/bin/sh";
-< char	getty[]	 = "/etc/getty";
-< char	minus[]	= "-";
-< char	runc[]	= "/etc/rc";
-< char	ifile[]	= "/etc/ttys";
-< char	utmp[]	= "/etc/utmp";
-< char	wtmpf[]	= "/usr/adm/wtmp";
-< char	ctty[]	= "/dev/console";
-< char	dev[]	= "/dev/";
-< 
-< struct utmp wtmp;
-< struct
-< {
-< 	char	line[8];
-< 	char	comn;
-< 	char	flag;
-< } line;
-< struct	tab
-< {
-< 	char	line[8];
-< 	char	comn;
-< 	int	pid;
-< } itab[TABSIZ];
-< 
-< int	fi;
-< char	tty[20];
-< jmp_buf	sjbuf;
-< 
+4a5
+> #include <stdio.h>
+38c39,53
 < main()
-< {
+---
+> int shutdown(void);
+> int single(void);
+> int runcom(void);
+> int multiple(void);
+> int merge(void);
+> int term(struct tab *p);
+> int rline(void);
+> int maktty(char *lin);
+> int get(void);
+> int dfork(struct tab *p);
+> int rmut(struct tab *p);
+> void reset(void);
+> 
+> int
+> main(void)
+40d54
 < 	int reset();
-< 
-< 	setjmp(sjbuf);
+43c57
 < 	signal(SIGHUP, reset);
-< 	for(EVER) {
-< 		shutdown();
-< 		single();
-< 		runcom();
-< 		merge();
-< 		multiple();
-< 	}
-< }
-< 
+---
+> 	signal(SIGHUP, (int)reset);
+50a65
+> 	return(0);
+53c68,69
 < shutdown()
-< {
+---
+> int
+> shutdown(void)
+55c71
 < 	register i;
-< 	register struct tab *p;
-< 
-< 	signal(SIGINT, SIG_IGN);
-< 	for(ALL)
-< 		term(p);
+---
+> 	register int i;
+61c77
 < 	signal(SIGALRM, reset);
-< 	alarm(60);
-< 	for(i=0; i<5; i++)
-< 		kill(-1, SIGKILL);
-< 	while(wait((int *)0) != -1)
-< 		;
-< 	alarm(0);
-< 	signal(SIGALRM, SIG_DFL);
-< 	for(i=0; i<10; i++)
-< 		close(i);
-< }
-< 
+---
+> 	signal(SIGALRM, (int)reset);
+70a87
+> 	return(0);
+73c90,91
 < single()
-< {
+---
+> int
+> single(void)
+75c93
 < 	register pid;
-< 
-< 	pid = fork();
-< 	if(pid == 0) {
-< /*
-< 		alarm(300);
-< */
-< 		signal(SIGHUP, SIG_DFL);
-< 		signal(SIGINT, SIG_DFL);
-< 		signal(SIGALRM, SIG_DFL);
-< 		open(ctty, 2);
-< 		dup(0);
-< 		dup(0);
-< 		execl(shell, minus, (char *)0);
-< 		exit(0);
-< 	}
-< 	while(wait((int *)0) != pid)
-< 		;
-< }
-< 
+---
+> 	register int pid;
+92a111
+> 	return(0);
+95c114,115
 < runcom()
 ---
 > int
-> main(void)
-97,138d5
+> runcom(void)
+97c117
 < 	register pid;
-< 
-< 	pid = fork();
-< 	if(pid == 0) {
-< 		open("/", 0);
-< 		dup(0);
-< 		dup(0);
-< 		execl(shell, shell, runc, (char *)0);
-< 		exit(0);
-< 	}
-< 	while(wait((int *)0) != pid)
-< 		;
-< }
-< 
+---
+> 	register int pid;
+108a129
+> 	return(0);
+111c132,133
 < multiple()
-< {
-< 	register struct tab *p;
+---
+> int
+> multiple(void)
+114c136
 < 	register pid;
-< 
-< 	for(EVER) {
-< 		pid = wait((int *)0);
-< 		if(pid == -1)
+---
+> 	register int pid;
+119c141
 < 			return;
-< 		for(ALL)
-< 			if(p->pid == pid || p->pid == -1) {
-< 				rmut(p);
-< 				dfork(p);
-< 			}
-< 	}
-< }
-< 
+---
+> 			return(0);
+128,129c150,151
 < term(p)
 < register struct tab *p;
-< {
-< 
-< 	if(p->pid != 0) {
-< 		rmut(p);
-< 		kill(p->pid, SIGKILL);
-< 	}
-< 	p->pid = 0;
-< 	p->line[0] = 0;
-< }
-140,170c7,9
-< rline()
-< {
-< 	register c, i;
-< 
-< 	c = get();
-< 	if(c < 0)
-< 		return(0);
-< 	if(c == 0)
-< 		goto bad;
-< 	line.flag = c;
-< 	c = get();
-< 	if(c <= 0)
-< 		goto bad;
-< 	line.comn = c;
-< 	for(i=0; i<8; i++)
-< 		line.line[i] = 0;
-< 	for(i=0; i<7; i++) {
-< 		c = get();
-< 		if(c <= 0)
-< 			break;
-< 		line.line[i] = c;
-< 	}
-< 	while(c > 0)
-< 		c = get();
-< 	maktty(line.line);
-< 	if(access(tty, 06) < 0)
-< 		goto bad;
-< 	return(1);
-< 
-< bad:
-< 	line.flag = '0';
 ---
-> 	puts("init: multi-user\n");
-> 	(void)exec("/etc/getty");
-> 	puts("init: cannot exec getty\n");
-172,301d10
-< }
-< 
+> int
+> term(struct tab *p)
+137a160
+> 	return(0);
+140c163,164
+< rline()
+---
+> int
+> rline(void)
+142c166
+< 	register c, i;
+---
+> 	register int c, i;
+174,175c198,199
 < maktty(lin)
 < char *lin;
-< {
+---
+> int
+> maktty(char *lin)
+177c201
 < 	register i, j;
-< 
-< 	for(i=0; dev[i]; i++)
-< 		tty[i] = dev[i];
-< 	for(j=0; lin[j]; j++) {
-< 		tty[i] = lin[j];
-< 		i++;
-< 	}
-< 	tty[i] = 0;
-< }
-< 
+---
+> 	register int i, j;
+185a210
+> 	return(0);
+188c213,214
 < get()
-< {
-< 	char b;
-< 
-< 	if(read(fi, &b, 1) != 1)
-< 		return(-1);
-< 	if(b == '\n')
-< 		return(0);
-< 	return(b);
-< }
-< 
+---
+> int
+> get(void)
+199c225,226
 < merge()
-< {
-< 	register struct tab *p, *q;
+---
+> int
+> merge(void)
+202c229
 < 	register i;
-< 
-< 	close(creat(utmp, 0644));
+---
+> 	register int i;
+205c232
 < 	signal(SIGINT, merge);
-< 	fi = open(ifile, 0);
-< 	if(fi < 0)
+---
+> 	signal(SIGINT, (int)merge);
+208c235
 < 		return;
-< 	q = &itab[0];
-< 	while(rline()) {
-< 		if(line.flag == '0')
-< 			continue;
-< 		for(ALL) {
-< 			if(p->line[0] != 0)
-< 			for(i=0; i<8; i++)
-< 				if(p->line[i] != line.line[i])
-< 					goto contin;
-< 			if(p >= q) {
-< 				i = p->pid;
-< 				p->pid = q->pid;
-< 				q->pid = i;
-< 				for(i=0; i<8; i++)
-< 					p->line[i] = q->line[i];
-< 				p->comn = q->comn;
-< 				for(i=0; i<8; i++)
-< 					q->line[i] = line.line[i];
-< 				q->comn = line.comn;
-< 				q++;
-< 			}
-< 			break;
-< 		contin:
-< 			;
-< 		}
-< 	}
-< 	close(fi);
-< 	for(; q < &itab[TABSIZ]; q++)
-< 		term(q);
-< 	for(ALL)
-< 		if(p->line[0] != 0 && p->pid == 0)
-< 			dfork(p);
-< }
-< 
+---
+> 		return(0);
+240a268
+> 	return(0);
+243,244c271,272
 < dfork(p)
 < struct tab *p;
-< {
+---
+> int
+> dfork(struct tab *p)
+246c274
 < 	register pid;
-< 
-< 	pid = fork();
-< 	if(pid == 0) {
-< 		signal(SIGHUP, SIG_DFL);
-< 		signal(SIGINT, SIG_DFL);
-< 		maktty(p->line);
-< 		chown(tty, 0, 0);
-< 		chmod(tty, 0622);
-< 		open(tty, 2);
-< 		dup(0);
-< 		dup(0);
-< 		tty[0] = p->comn;
-< 		tty[1] = 0;
-< 		execl(getty, minus, tty, (char *)0);
-< 		exit(0);
-< 	}
-< 	p->pid = pid;
-< }
-< 
+---
+> 	register int pid;
+263a292
+> 	return(0);
+266,267c295,296
 < rmut(p)
 < register struct tab *p;
-< {
+---
+> int
+> rmut(struct tab *p)
+269c298
 < 	register i, f;
-< 
-< 	f = open(utmp, 2);
-< 	if(f >= 0) {
-< 		while(read(f, (char *)&wtmp, sizeof(wtmp)) == sizeof(wtmp)) {
-< 			for(i=0; i<8; i++)
-< 				if(wtmp.ut_line[i] != p->line[i])
-< 					goto contin;
-< 			lseek(f, -(long)sizeof(wtmp), 1);
-< 			for(i=0; i<8; i++)
-< 				wtmp.ut_name[i] = 0;
-< 			time(&wtmp.ut_time);
-< 			write(f, (char *)&wtmp, sizeof(wtmp));
-< 		contin:;
-< 		}
-< 		close(f);
-< 	}
-< 	f = open(wtmpf, 1);
-< 	if (f >= 0) {
-< 		for(i=0; i<8; i++) {
-< 			wtmp.ut_name[i] = 0;
-< 			wtmp.ut_line[i] = p->line[i];
-< 		}
-< 		time(&wtmp.ut_time);
-< 		lseek(f, (long)0, 2);
-< 		write(f, (char *)&wtmp, sizeof(wtmp));
-< 		close(f);
-< 	}
-< }
-< 
+---
+> 	register int i, f;
+296a326
+> 	return(0);
+299c329,330
 < reset()
-< {
-< 	longjmp(sjbuf, 1);
+---
+> void
+> reset(void)
 ```
+
+## WIP
 
 ### sys/prim.c
 
