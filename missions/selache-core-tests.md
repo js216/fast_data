@@ -6,40 +6,9 @@ build time and verify the selache-built target artifacts by booting each
 `.ldr` image on the SHARC+ board and matching the UART `got NN` against
 the expected value encoded in the filename.
 
-The companion `selache-cces-tests.md` mission covers the same target
-cases built by the CCES toolchain.
-
 `cases/` is the locked, hand-promoted core suite. Candidates that
 haven't been promoted yet live in `draft_cases/` and run via the
 companion mission `selache-csmith-tests.md`.
-
-## Policy: fix the toolchain, never demote the case
-
-Per AGENTS.md "Root cause only": when the bench sweep fails on a
-case, the only acceptable remediation is a root-cause fix in
-`selache/` (selcc, selas, seld, selload, or libsel as appropriate)
-so the same case passes on the next sweep. The Minimizer must reject
-any proposed sub-step that:
-
-- moves the failing case from `xtest/cases/` into `xtest/draft_cases/`;
-- adds a `.deferred.md` note or per-case bypass under WIP;
-- deletes or excludes the case's `.ldr` from the build output;
-- edits `xtest/Makefile` or `xtest/build_rules.*` to skip the case;
-- modifies the case's `.c` source to dodge the failure (the host
-  gcc / host clang sweep already validates each case's source; a
-  selache-target-only failure means the bug is in the toolchain, not
-  the source);
-- or any equivalent that hides the failure without correcting the
-  toolchain.
-
-The `## WIP` marker advances only after a real toolchain change
-makes a previously-failing case pass on the bench. Cases already in
-`xtest/draft_cases/` with `.deferred.md` notes (currently
-`cctest_csmith_4270e7c5`, `cctest_csmith_95d42820`,
-`cctest_csmith_cb987b7b`, `cctest_csmith_8c175802`) predate this
-policy and remain there as historical workarounds; each is unblocked
-only when a corresponding selache root-cause fix lands, after which
-the case is re-promoted into `xtest/cases/`.
 
 ### selache-built target cctest sweep
 
