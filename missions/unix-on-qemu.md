@@ -1,5 +1,3 @@
-## WIP
-
 # Unix v7 on Qemu (Armv7-A)
 
 ### Build unix
@@ -60,6 +58,370 @@ words
 __TEST_DONE__
 # 
 ```
+
+### MKDIR LN
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+mkdir /tmp/d
+ls -la /tmp
+rmdir /tmp/d
+ln /etc/passwd /tmp/pwlink
+ls -li /etc/passwd /tmp/pwlink
+rm /tmp/pwlink
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+mkdir /tmp/d
+# ls -la /tmp
+total 3
+drwxr-xr-x 1 root       64 Jan  1 00:00 .
+drwxr-xr-x 1 root      112 Jan  1 00:00 ..
+-rwxr-xr-x 1 root        0 Jan  1 00:00 .keep
+drwxrwxr-x 1 root       32 Jan  1 00:00 d
+# rmdir /tmp/d
+# ln /etc/passwd /tmp/pwlink
+# ls -li /etc/passwd /tmp/pwlink
+   88 -rwxr-xr-x 1 root       51 Jan  1 00:00 /etc/passwd
+   88 -rwxr-xr-x 1 root       51 Jan  1 00:00 /tmp/pwlink
+# rm /tmp/pwlink
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### COMPARE
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+cmp /etc/passwd /etc/passwd
+diff /etc/passwd /etc/passwd
+echo "a 1" > /tmp/j1
+echo "a x" > /tmp/j2
+join /tmp/j1 /tmp/j2
+echo "a b" | tsort
+rm /tmp/j1 /tmp/j2
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+cmp /etc/passwd /etc/passwd
+# diff /etc/passwd /etc/passwd
+# echo "a 1" > /tmp/j1
+# echo "a x" > /tmp/j2
+# join /tmp/j1 /tmp/j2
+a 1 x
+# echo "a b" | tsort
+a
+b
+# rm /tmp/j1 /tmp/j2
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### TEST
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+test -f /etc/passwd
+echo $?
+test -d /etc
+echo $?
+test -f /nonexistent
+echo $?
+test -r /etc/passwd
+echo $?
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+test -f /etc/passwd
+# echo $?
+0
+# test -d /etc
+# echo $?
+0
+# test -f /nonexistent
+# echo $?
+1
+# test -r /etc/passwd
+# echo $?
+0
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### FOR
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+for i in 1 2 3
+do
+echo loop $i
+done
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+for i in 1 2 3
+> do
+> echo loop $i
+> done
+loop 1
+loop 2
+loop 3
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### CASE
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+case foo in
+foo) echo matched;;
+bar) echo bar;;
+esac
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+case foo in
+> foo) echo matched;;
+> bar) echo bar;;
+> esac
+matched
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### IF
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+if test -f /etc/passwd
+then
+echo passwd_exists
+fi
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+if test -f /etc/passwd
+> then
+> echo passwd_exists
+> fi
+passwd_exists
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### GLOB
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+ls /etc/p*
+ls /b??
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+ls /etc/p*
+/etc/passwd
+# ls /b??
+[
+basename
+cal
+calendar
+cat
+cb
+checkeq
+chgrp
+chmod
+chown
+clri
+cmp
+col
+comm
+cp
+crypt
+date
+dcheck
+dd
+df
+diff
+du
+echo
+ed
+fgrep
+file
+find
+grep
+icheck
+id
+join
+kill
+ln
+login
+look
+ls
+mesg
+mkdir
+mknod
+mount
+mv
+ncheck
+newgrp
+nice
+od
+pr
+pwd
+random
+rev
+rm
+rmdir
+sh
+sleep
+sort
+sp
+split
+stty
+su
+sum
+sync
+tabs
+tail
+tee
+test
+time
+touch
+tr
+tsort
+tty
+umount
+uniq
+wall
+wc
+who
+write
+yes
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### CAL
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+cal 1 1970
+cal 12 1969
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+cal 1 1970
+   January 1970
+ S  M Tu  W Th  F  S
+             1  2  3
+ 4  5  6  7  8  9 10
+11 12 13 14 15 16 17
+18 19 20 21 22 23 24
+25 26 27 28 29 30 31
+
+# cal 12 1969
+   December 1969
+ S  M Tu  W Th  F  S
+    1  2  3  4  5  6
+ 7  8  9 10 11 12 13
+14 15 16 17 18 19 20
+21 22 23 24 25 26 27
+28 29 30 31
+
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+## WIP
 
 ### CD
 
@@ -165,47 +527,6 @@ __TEST_DONE__
 # 
 ```
 
-### MKDIR LN
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-mkdir /tmp/d
-ls -la /tmp
-rmdir /tmp/d
-ln /etc/passwd /tmp/pwlink
-ls -li /etc/passwd /tmp/pwlink
-rm /tmp/pwlink
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-mkdir /tmp/d
-# ls -la /tmp
-total 3
-drwxr-xr-x 1 root       64 Jan  1 00:00 .
-drwxr-xr-x 1 root      112 Jan  1 00:00 ..
--rwxr-xr-x 1 root        0 Jan  1 00:00 .keep
-drwxrwxr-x 1 root       32 Jan  1 00:00 d
-# rmdir /tmp/d
-# ln /etc/passwd /tmp/pwlink
-# ls -li /etc/passwd /tmp/pwlink
-   88 -rwxr-xr-x 1 root       51 Jan  1 00:00 /etc/passwd
-   88 -rwxr-xr-x 1 root       51 Jan  1 00:00 /tmp/pwlink
-# rm /tmp/pwlink
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
 ### TEXT
 
 Local test:
@@ -272,45 +593,6 @@ abc
 sed: cannot execute
 # awk 1 /etc/passwd
 awk: cannot execute
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
-### COMPARE
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-cmp /etc/passwd /etc/passwd
-diff /etc/passwd /etc/passwd
-echo "a 1" > /tmp/j1
-echo "a x" > /tmp/j2
-join /tmp/j1 /tmp/j2
-echo "a b" | tsort
-rm /tmp/j1 /tmp/j2
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-cmp /etc/passwd /etc/passwd
-# diff /etc/passwd /etc/passwd
-# echo "a 1" > /tmp/j1
-# echo "a x" > /tmp/j2
-# join /tmp/j1 /tmp/j2
-a 1 x
-# echo "a b" | tsort
-a
-b
-# rm /tmp/j1 /tmp/j2
 # echo __TEST_DONE__
 __TEST_DONE__
 # 
@@ -564,143 +846,6 @@ __TEST_DONE__
 # 
 ```
 
-### TEST
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-test -f /etc/passwd
-echo $?
-test -d /etc
-echo $?
-test -f /nonexistent
-echo $?
-test -r /etc/passwd
-echo $?
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-test -f /etc/passwd
-# echo $?
-0
-# test -d /etc
-# echo $?
-0
-# test -f /nonexistent
-# echo $?
-1
-# test -r /etc/passwd
-# echo $?
-0
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
-### FOR
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-for i in 1 2 3
-do
-echo loop $i
-done
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-for i in 1 2 3
-> do
-> echo loop $i
-> done
-loop 1
-loop 2
-loop 3
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
-### CASE
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-case foo in
-foo) echo matched;;
-bar) echo bar;;
-esac
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-case foo in
-> foo) echo matched;;
-> bar) echo bar;;
-> esac
-matched
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
-### IF
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-if test -f /etc/passwd
-then
-echo passwd_exists
-fi
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-if test -f /etc/passwd
-> then
-> echo passwd_exists
-> fi
-passwd_exists
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
 ### EXPAND
 
 Local test:
@@ -730,109 +875,6 @@ single quote
 double quote
 # expr 1 + 2
 expr: cannot execute
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
-### GLOB
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-ls /etc/p*
-ls /b??
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-ls /etc/p*
-/etc/passwd
-# ls /b??
-[
-basename
-cal
-calendar
-cat
-cb
-checkeq
-chgrp
-chmod
-chown
-clri
-cmp
-col
-comm
-cp
-crypt
-date
-dcheck
-dd
-df
-diff
-du
-echo
-ed
-fgrep
-file
-find
-grep
-icheck
-id
-join
-kill
-ln
-login
-look
-ls
-mesg
-mkdir
-mknod
-mount
-mv
-ncheck
-newgrp
-nice
-od
-pr
-pwd
-random
-rev
-rm
-rmdir
-sh
-sleep
-sort
-sp
-split
-stty
-su
-sum
-sync
-tabs
-tail
-tee
-test
-time
-touch
-tr
-tsort
-tty
-umount
-uniq
-wall
-wc
-who
-write
-yes
 # echo __TEST_DONE__
 __TEST_DONE__
 # 
@@ -908,48 +950,6 @@ __TEST_DONE__
 # 
 ```
 
-### CAL
-
-Local test:
-
-```
-unix-v7-c99/tools/qemu-shell.py
-```
-
-Inputs:
-
-```
-cal 1 1970
-cal 12 1969
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-cal 1 1970
-   January 1970
- S  M Tu  W Th  F  S
-             1  2  3
- 4  5  6  7  8  9 10
-11 12 13 14 15 16 17
-18 19 20 21 22 23 24
-25 26 27 28 29 30 31
-
-# cal 12 1969
-   December 1969
- S  M Tu  W Th  F  S
-    1  2  3  4  5  6
- 7  8  9 10 11 12 13
-14 15 16 17 18 19 20
-21 22 23 24 25 26 27
-28 29 30 31
-
-# echo __TEST_DONE__
-__TEST_DONE__
-# 
-```
-
 ### DF
 
 Local test:
@@ -975,3 +975,806 @@ cannot open /dev/rp3
 __TEST_DONE__
 # 
 ```
+
+### GREP
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+grep '^root' /etc/passwd
+grep -v root /etc/passwd
+grep -c sh /etc/passwd
+grep -n sh /etc/passwd
+grep '\(o\)\1' /etc/passwd
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+grep '^root' /etc/passwd
+root::0:0:root:/:/bin/sh
+# grep -v root /etc/passwd
+dmr::1:1:dennis:/:/bin/sh
+# grep -c sh /etc/passwd
+2
+# grep -n sh /etc/passwd
+1:root::0:0:root:/:/bin/sh
+2:dmr::1:1:dennis:/:/bin/sh
+# grep '\(o\)\1' /etc/passwd
+root::0:0:root:/:/bin/sh
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### CP
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+mkdir /tmp/cpdir
+echo srcA > /tmp/A
+echo srcB > /tmp/B
+cp /tmp/A /tmp/B /tmp/cpdir
+cat /tmp/cpdir/A
+cat /tmp/cpdir/B
+cp /tmp/A /tmp/A
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+mkdir /tmp/cpdir
+# echo srcA > /tmp/A
+# echo srcB > /tmp/B
+# cp /tmp/A /tmp/B /tmp/cpdir
+# cat /tmp/cpdir/A
+srcA
+# cat /tmp/cpdir/B
+srcB
+# cp /tmp/A /tmp/A
+cp: cannot copy file to itself.
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### MV
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+echo content > /tmp/mvsrc
+mv /tmp/mvsrc /tmp/mvsrc
+mkdir /tmp/mvA
+mkdir /tmp/mvB
+mkdir /tmp/mvA/sub
+echo data > /tmp/mvA/sub/file
+mv /tmp/mvA/sub /tmp/mvB/sub
+cat /tmp/mvB/sub/file
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+echo content > /tmp/mvsrc
+# mv /tmp/mvsrc /tmp/mvsrc
+mv: /tmp/mvsrc and /tmp/mvsrc are identical
+# mkdir /tmp/mvA
+# mkdir /tmp/mvB
+# mkdir /tmp/mvA/sub
+# echo data > /tmp/mvA/sub/file
+# mv /tmp/mvA/sub /tmp/mvB/sub
+# cat /tmp/mvB/sub/file
+data
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### CHMOD
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+echo x > /tmp/cmf
+chmod 644 /tmp/cmf
+chmod u+x /tmp/cmf
+ls -l /tmp/cmf
+chmod a-w /tmp/cmf
+ls -l /tmp/cmf
+chmod og=r /tmp/cmf
+ls -l /tmp/cmf
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+echo x > /tmp/cmf
+# chmod 644 /tmp/cmf
+# chmod u+x /tmp/cmf
+# ls -l /tmp/cmf
+-rwxr--r-- 1 root        2 Jan  1 00:00 /tmp/cmf
+# chmod a-w /tmp/cmf
+# ls -l /tmp/cmf
+-r-xr--r-- 1 root        2 Jan  1 00:00 /tmp/cmf
+# chmod og=r /tmp/cmf
+# ls -l /tmp/cmf
+-r-xr--r-- 1 root        2 Jan  1 00:00 /tmp/cmf
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### TOUCH
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+touch /tmp/tnew
+ls /tmp/tnew
+echo old > /tmp/told
+touch /tmp/told
+cat /tmp/told
+touch -c /tmp/tabsent
+ls /tmp/tabsent
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+touch /tmp/tnew
+# ls /tmp/tnew
+/tmp/tnew
+# echo old > /tmp/told
+# touch /tmp/told
+# cat /tmp/told
+old
+# touch -c /tmp/tabsent
+touch: file /tmp/tabsent does not exist.
+# ls /tmp/tabsent
+/tmp/tabsent not found
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### TR
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+echo abcdef | tr -d def
+echo aaabbb | tr -s ab AB
+echo Hello123 | tr -cd 0-9
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+echo abcdef | tr -d def
+abc
+# echo aaabbb | tr -s ab AB
+AB
+# echo Hello123 | tr -cd 0-9
+123# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### SPLIT
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+echo line1 > /tmp/spi
+echo line2 >> /tmp/spi
+echo line3 >> /tmp/spi
+split -1 /tmp/spi /tmp/x
+cat /tmp/xaa
+cat /tmp/xab
+cat /tmp/xac
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+echo line1 > /tmp/spi
+# echo line2 >> /tmp/spi
+# echo line3 >> /tmp/spi
+# split -1 /tmp/spi /tmp/x
+# cat /tmp/xaa
+line1
+# cat /tmp/xab
+line2
+# cat /tmp/xac
+line3
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### TSORT
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+echo a b > /tmp/ts
+echo b c >> /tmp/ts
+tsort /tmp/ts
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+echo a b > /tmp/ts
+# echo b c >> /tmp/ts
+# tsort /tmp/ts
+a
+b
+c
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### WRITE
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+write
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+write
+usage: write user [ttyname]
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### COMM
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+comm /etc/passwd /etc/passwd
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+comm /etc/passwd /etc/passwd
+		root::0:0:root:/:/bin/sh
+		dmr::1:1:dennis:/:/bin/sh
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### CRYPT
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+echo hello | crypt key | crypt key
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+echo hello | crypt key | crypt key
+hello
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### DATE
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+date
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+date
+Thu Jan  1 00:00:00 GMT 1970
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### TIME
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+time
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+time
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### MKNOD
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+mknod
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+mknod
+arg count
+usage: mknod name b/c major minor
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### NEWGRP
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+newgrp
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+newgrp
+usage: newgrp groupname
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### CLRI
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+clri
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+clri
+usage: clri filsys inumber ...
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### CALENDAR
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+calendar
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+calendar
+(^|[ (,;])(([Jj]an[^ ]* *|1/)0*1)([^0123456789]|$)
+(^|[ (,;])(([Jj]an[^ ]* *|1/)0*2)([^0123456789]|$)
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### CHECKEQ
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+echo hello | checkeq
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+echo hello | checkeq
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### MOUNT
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+mount
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+mount
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### UMOUNT
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+umount
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+umount
+arg count
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### DCHECK
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+dcheck /etc/auxfs
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+dcheck /etc/auxfs
+/etc/auxfs:
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### ICHECK
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+icheck /etc/auxfs
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+icheck /etc/auxfs
+/etc/auxfs:
+files      0 (r=0,d=0,b=0,c=0)
+used       0 (i=0,ii=0,iii=0,d=0)
+free       0
+missing    0
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### NCHECK
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+ncheck /etc/auxfs
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+ncheck /etc/auxfs
+/etc/auxfs:
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### RANDOM
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+echo hi | random 0
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+echo hi | random 0
+hi
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### STTY
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+stty
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+stty
+speed 0 baud
+erase = '^@'; kill = '^@'
+
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### SU
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+su nosuchuser
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+su nosuchuser
+Unknown id: nosuchuser
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### TABS
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+tabs
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+tabs
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
+### WALL
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+echo hi | wall
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+echo hi | wall
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+

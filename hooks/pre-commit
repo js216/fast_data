@@ -88,8 +88,18 @@ is_spdx_excluded() {
         drivers/*|*/drivers/*) return 0 ;;
         # vendored 3rd-party printf (mpaland)
         utils/printf.c|utils/printf.h|*/utils/printf.c|*/utils/printf.h) return 0 ;;
-        # fpga build-output (canonical sources are .nw, exempt)
+        # fpga build-output (canonical sources are .nw, exempt).
+        # Match both superproject-relative (fpga/verilog/...) and
+        # submodule-relative (verilog/...) paths, since this hook runs
+        # in both the superproject and the fpga submodule.
         fpga/verilog/*|fpga/tb/*) return 0 ;;
+    esac
+    if [ "$REPO" = "fpga" ]; then
+        case "$1" in
+            verilog/*|tb/*) return 0 ;;
+        esac
+    fi
+    case "$1" in
         # CAD project trees
         */kicad/*) return 0 ;;
         # license / readme / changelog
@@ -107,6 +117,15 @@ is_spdx_excluded() {
         *.png|*.jpg|*.jpeg|*.gif|*.ico|*.pdf|*.bin|*.hex|*.raw|*.out|*.elf|*.o|*.so|*.a|*.wasm|*.svg|*.gbr) return 0 ;;
         *.kicad_sch|*.kicad_pro|*.kicad_prl|*.kicad_pcb|*.drl|*.gbrjob|*.ioc|*.ddw|*.zip|*.tgz) return 0 ;;
     esac
+    # unix-v7-c99 port subtrees: 1979 V7 sources whose "leave-as-1979"
+    # rule conflicts with modern SPDX headers.  Scoped to the
+    # unix-v7-c99 submodule so the generic directory names (cmd/, sys/,
+    # …) don't accidentally exempt files in other repos.
+    if [ "$REPO" = "unix-v7-c99" ]; then
+        case "$1" in
+            cmd/*|sys/*|h/*|include/*|arch/*|dev/*|lib/*) return 0 ;;
+        esac
+    fi
     return 1
 }
 
