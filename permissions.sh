@@ -23,6 +23,7 @@ for i in 1 2 3 4 5 6 7 8 9; do
    sudo chown    jk:jk "/home/agent$i/fast_data/sync.sh"
    sudo chown    jk:jk "/home/agent$i/fast_data/run.py"
    sudo chown -R jk:jk "/home/agent$i/fast_data/missions"
+   sudo chown -R jk:jk "/home/agent$i/fast_data/selache/xtest/cases"
 
    # no other backdoor
    sudo chmod -R o-w   "/home/agent$i/fast_data"
