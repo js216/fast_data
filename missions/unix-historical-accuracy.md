@@ -5889,590 +5889,6 @@ Expect:
 > geterror(struct buf *bp)
 ```
 
-### cmd/getty.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/getty.c unix-v7-c99/cmd/getty.c || true
-```
-
-Expect:
-
-```
-1,4c1
-< #
-< /*
-<  * getty -- adapt to terminal speed on dialup, and call login
-<  */
----
-> #include "../lib/u.h"
-6,178c3,4
-< #include <sgtty.h>
-< #include <signal.h>
-< #define ERASE	'#'
-< #define KILL	'@'
-< 
-< struct sgttyb tmode;
-< struct tchars tchars = { '\177', '\034', '\021', '\023', '\004', '\377' };
-< 
-< struct	tab {
-< 	char	tname;		/* this table name */
-< 	char	nname;		/* successor table name */
-< 	int	iflags;		/* initial flags */
-< 	int	fflags;		/* final flags */
-< 	int	ispeed;		/* input speed */
-< 	int	ospeed;		/* output speed */
-< 	char	*message;	/* login message */
-< } itab[] = {
-< 
-< /* table '0'-1-2-3 300,1200,150,110 */
-< 
-< 	'0', 1,
-< 	ANYP+RAW+NL1+CR1, ANYP+ECHO+CR1,
-< 	B300, B300,
-< 	"\n\r\033;\007login: ",
-< 
-< 	1, 2,
-< 	ANYP+RAW+NL1+CR1, ANYP+XTABS+ECHO+CRMOD+FF1,
-< 	B1200, B1200,
-< 	"\n\r\033;login: ",
-< 
-< 	2, 3,
-< 	ANYP+RAW+NL1+CR1, EVENP+ECHO+FF1+CR2+TAB1+NL1,
-< 	B150, B150,
-< 	"\n\r\033:\006\006\017login: ",
-< 
-< 	3, '0',
-< 	ANYP+RAW+NL1+CR1, ANYP+ECHO+CRMOD+XTABS+LCASE+CR1,
-< 	B110, B110,
-< 	"\n\rlogin: ",
-< 
-< /* table '-' -- Console TTY 110 */
-< 	'-', '-',
-< 	ANYP+RAW+NL1+CR1, ANYP+ECHO+CRMOD+XTABS+LCASE+CR1,
-< 	B110, B110,
-< 	"\n\rlogin: ",
-< 
-< /* table '1' -- 150 */
-< 	'1', '1',
-< 	ANYP+RAW+NL1+CR1, EVENP+ECHO+FF1+CR2+TAB1+NL1,
-< 	B150, B150,
-< 	"\n\r\033:\006\006\017login: ",
-< 
-< /* table '2' -- 9600 */
-< 	'2', '2',
-< 	ANYP+RAW+NL1+CR1, ANYP+XTABS+ECHO+CRMOD+FF1,
-< 	B9600, B9600,
-< 	"\n\r\033;login: ",
-< 
-< /* table '3'-'5' -- 1200,300 */
-< 	'3', '5',
-< 	ANYP+RAW+NL1+CR1, ANYP+XTABS+ECHO+CRMOD+FF1,
-< 	B1200, B1200,
-< 	"\n\r\033;login: ",
-< 
-< /* table '5'-'3' -- 300,1200 */
-< 	'5', '3',
-< 	ANYP+RAW+NL1+CR1, ANYP+ECHO+CR1,
-< 	B300, B300,
-< 	"\n\r\033;\007login: ",
-< 
-< /* table '4' -- Console Decwriter */
-< 	'4', '4',
-< 	ANYP+RAW, ANYP+ECHO+CRMOD+XTABS,
-< 	B300, B300,
-< 	"\n\rlogin: ",
-< 
-< /* table 'i' -- Interdata Console */
-< 	'i', 'i',
-< 	RAW+CRMOD, CRMOD+ECHO+LCASE,
-< 	0, 0,
-< 	"\n\rlogin: ",
-< 
-< /* table 'l' -- LSI Chess Terminal */
-< 	'l', 'l',
-< 	ANYP+RAW/*+HUPCL*/, ANYP+ECHO/*+HUPCL*/,
-< 	B300, B300,
-< 	"*",
-< /* table '6' -- 2400 11/23 line */
-< 	'6', '6',
-< 	ANYP+RAW+NL1+CR1, ANYP+ECHO,
-< 	B2400, B2400,
-< 	"\n\rlogin: ",
-< 
-< };
-< 
-< #define	NITAB	sizeof itab/sizeof itab[0]
-< #define	EOT	04		/* EOT char */
-< 
-< char	name[16];
-< int	crmod;
-< int	upper;
-< int	lower;
-< 
-< char partab[] = {
-< 	0001,0201,0201,0001,0201,0001,0001,0201,
-< 	0202,0004,0003,0205,0005,0206,0201,0001,
-< 	0201,0001,0001,0201,0001,0201,0201,0001,
-< 	0001,0201,0201,0001,0201,0001,0001,0201,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0000,0200,0200,0000,0200,0000,0000,0200,
-< 	0000,0200,0200,0000,0200,0000,0000,0200,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0000,0200,0200,0000,0200,0000,0000,0200,
-< 	0000,0200,0200,0000,0200,0000,0000,0200,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0000,0200,0200,0000,0200,0000,0000,0200,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0000,0200,0200,0000,0200,0000,0000,0201
-< };
-< 
-< main(argc, argv)
-< char **argv;
-< {
-< 	register struct tab *tabp;
-< 	int tname;
-< 
-< 	tname = '0';
-< 	if (argc > 1)
-< 		tname = argv[1][0];
-< 	switch (tname) {
-< 
-< 	case '3':		/* adapt to connect speed (212) */
-< 		ioctl(0, TIOCGETP, &tmode);
-< 		if (tmode.sg_ispeed==B300)
-< 			tname = '0';
-< 		else
-< 			tname = '3';
-< 		break;
-< 	}
-< 	for (;;) {
-< 		for(tabp = itab; tabp < &itab[NITAB]; tabp++)
-< 			if(tabp->tname == tname)
-< 				break;
-< 		if(tabp >= &itab[NITAB])
-< 			tabp = itab;
-< 		tmode.sg_flags = tabp->iflags;
-< 		tmode.sg_ispeed = tabp->ispeed;
-< 		tmode.sg_ospeed = tabp->ospeed;
-< 		ioctl(0, TIOCSETP, &tmode);
-< 		ioctl(0, TIOCSETC, &tchars);
-< 		puts(tabp->message);
-< 		if(getname()) {
-< 			tmode.sg_erase = ERASE;
-< 			tmode.sg_kill = KILL;
-< 			tmode.sg_flags = tabp->fflags;
-< 			if(crmod)
-< 				tmode.sg_flags |= CRMOD;
-< 			if(upper)
-< 				tmode.sg_flags |= LCASE;
-< 			if(lower)
-< 				tmode.sg_flags &= ~LCASE;
-< 			stty(0, &tmode);
-< 			putchr('\n');
-< 			execl("/bin/login", "login", name, 0);
-< 			exit(1);
-< 		}
-< 		tname = tabp->nname;
-< 	}
-< }
-< 
-< getname()
----
-> int
-> main(void)
-180,182d5
-< 	register char *np;
-< 	register c;
-< 	char cs;
-184,218c7,9
-< 	crmod = 0;
-< 	upper = 0;
-< 	lower = 0;
-< 	np = name;
-< 	for (;;) {
-< 		if (read(0, &cs, 1) <= 0)
-< 			exit(0);
-< 		if ((c = cs&0177) == 0)
-< 			return(0);
-< 		if (c==EOT)
-< 			exit(1);
-< 		if (c=='\r' || c=='\n' || np >= &name[16])
-< 			break;
-< 		putchr(cs);
-< 		if (c>='a' && c <='z')
-< 			lower++;
-< 		else if (c>='A' && c<='Z') {
-< 			upper++;
-< 			c += 'a'-'A';
-< 		} else if (c==ERASE) {
-< 			if (np > name)
-< 				np--;
-< 			continue;
-< 		} else if (c==KILL) {
-< 			putchr('\r');
-< 			putchr('\n');
-< 			np = name;
-< 			continue;
-< 		} else if(c == ' ')
-< 			c = '_';
-< 		*np++ = c;
-< 	}
-< 	*np = 0;
-< 	if (c == '\r')
-< 		crmod++;
----
-> 	puts("\nlogin: ");
-> 	(void)exec("/bin/login");
-> 	puts("getty: cannot exec login\n");
-220,237d10
-< }
-< 
-< puts(as)
-< char *as;
-< {
-< 	register char *s;
-< 
-< 	s = as;
-< 	while (*s)
-< 		putchr(*s++);
-< }
-< 
-< putchr(cc)
-< {
-< 	char c;
-< 	c = cc;
-< 	c |= partab[c&0177] & 0200;
-< 	write(1, &c, 1);
-```
-
-### cmd/init.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/init.c unix-v7-c99/cmd/init.c || true
-```
-
-Expect:
-
-```
-1,4c1
-< #include <signal.h>
-< #include <sys/types.h>
-< #include <utmp.h>
-< #include <setjmp.h>
----
-> #include "../lib/u.h"
-6,95c3,4
-< #define	TABSIZ	100
-< #define	ALL	p = &itab[0]; p < &itab[TABSIZ]; p++
-< #define	EVER	;;
-< 
-< char	shell[]	= "/bin/sh";
-< char	getty[]	 = "/etc/getty";
-< char	minus[]	= "-";
-< char	runc[]	= "/etc/rc";
-< char	ifile[]	= "/etc/ttys";
-< char	utmp[]	= "/etc/utmp";
-< char	wtmpf[]	= "/usr/adm/wtmp";
-< char	ctty[]	= "/dev/console";
-< char	dev[]	= "/dev/";
-< 
-< struct utmp wtmp;
-< struct
-< {
-< 	char	line[8];
-< 	char	comn;
-< 	char	flag;
-< } line;
-< struct	tab
-< {
-< 	char	line[8];
-< 	char	comn;
-< 	int	pid;
-< } itab[TABSIZ];
-< 
-< int	fi;
-< char	tty[20];
-< jmp_buf	sjbuf;
-< 
-< main()
-< {
-< 	int reset();
-< 
-< 	setjmp(sjbuf);
-< 	signal(SIGHUP, reset);
-< 	for(EVER) {
-< 		shutdown();
-< 		single();
-< 		runcom();
-< 		merge();
-< 		multiple();
-< 	}
-< }
-< 
-< shutdown()
-< {
-< 	register i;
-< 	register struct tab *p;
-< 
-< 	signal(SIGINT, SIG_IGN);
-< 	for(ALL)
-< 		term(p);
-< 	signal(SIGALRM, reset);
-< 	alarm(60);
-< 	for(i=0; i<5; i++)
-< 		kill(-1, SIGKILL);
-< 	while(wait((int *)0) != -1)
-< 		;
-< 	alarm(0);
-< 	signal(SIGALRM, SIG_DFL);
-< 	for(i=0; i<10; i++)
-< 		close(i);
-< }
-< 
-< single()
-< {
-< 	register pid;
-< 
-< 	pid = fork();
-< 	if(pid == 0) {
-< /*
-< 		alarm(300);
-< */
-< 		signal(SIGHUP, SIG_DFL);
-< 		signal(SIGINT, SIG_DFL);
-< 		signal(SIGALRM, SIG_DFL);
-< 		open(ctty, 2);
-< 		dup(0);
-< 		dup(0);
-< 		execl(shell, minus, (char *)0);
-< 		exit(0);
-< 	}
-< 	while(wait((int *)0) != pid)
-< 		;
-< }
-< 
-< runcom()
----
-> int
-> main(void)
-97,138d5
-< 	register pid;
-< 
-< 	pid = fork();
-< 	if(pid == 0) {
-< 		open("/", 0);
-< 		dup(0);
-< 		dup(0);
-< 		execl(shell, shell, runc, (char *)0);
-< 		exit(0);
-< 	}
-< 	while(wait((int *)0) != pid)
-< 		;
-< }
-< 
-< multiple()
-< {
-< 	register struct tab *p;
-< 	register pid;
-< 
-< 	for(EVER) {
-< 		pid = wait((int *)0);
-< 		if(pid == -1)
-< 			return;
-< 		for(ALL)
-< 			if(p->pid == pid || p->pid == -1) {
-< 				rmut(p);
-< 				dfork(p);
-< 			}
-< 	}
-< }
-< 
-< term(p)
-< register struct tab *p;
-< {
-< 
-< 	if(p->pid != 0) {
-< 		rmut(p);
-< 		kill(p->pid, SIGKILL);
-< 	}
-< 	p->pid = 0;
-< 	p->line[0] = 0;
-< }
-140,170c7,9
-< rline()
-< {
-< 	register c, i;
-< 
-< 	c = get();
-< 	if(c < 0)
-< 		return(0);
-< 	if(c == 0)
-< 		goto bad;
-< 	line.flag = c;
-< 	c = get();
-< 	if(c <= 0)
-< 		goto bad;
-< 	line.comn = c;
-< 	for(i=0; i<8; i++)
-< 		line.line[i] = 0;
-< 	for(i=0; i<7; i++) {
-< 		c = get();
-< 		if(c <= 0)
-< 			break;
-< 		line.line[i] = c;
-< 	}
-< 	while(c > 0)
-< 		c = get();
-< 	maktty(line.line);
-< 	if(access(tty, 06) < 0)
-< 		goto bad;
-< 	return(1);
-< 
-< bad:
-< 	line.flag = '0';
----
-> 	puts("init: multi-user\n");
-> 	(void)exec("/etc/getty");
-> 	puts("init: cannot exec getty\n");
-172,301d10
-< }
-< 
-< maktty(lin)
-< char *lin;
-< {
-< 	register i, j;
-< 
-< 	for(i=0; dev[i]; i++)
-< 		tty[i] = dev[i];
-< 	for(j=0; lin[j]; j++) {
-< 		tty[i] = lin[j];
-< 		i++;
-< 	}
-< 	tty[i] = 0;
-< }
-< 
-< get()
-< {
-< 	char b;
-< 
-< 	if(read(fi, &b, 1) != 1)
-< 		return(-1);
-< 	if(b == '\n')
-< 		return(0);
-< 	return(b);
-< }
-< 
-< merge()
-< {
-< 	register struct tab *p, *q;
-< 	register i;
-< 
-< 	close(creat(utmp, 0644));
-< 	signal(SIGINT, merge);
-< 	fi = open(ifile, 0);
-< 	if(fi < 0)
-< 		return;
-< 	q = &itab[0];
-< 	while(rline()) {
-< 		if(line.flag == '0')
-< 			continue;
-< 		for(ALL) {
-< 			if(p->line[0] != 0)
-< 			for(i=0; i<8; i++)
-< 				if(p->line[i] != line.line[i])
-< 					goto contin;
-< 			if(p >= q) {
-< 				i = p->pid;
-< 				p->pid = q->pid;
-< 				q->pid = i;
-< 				for(i=0; i<8; i++)
-< 					p->line[i] = q->line[i];
-< 				p->comn = q->comn;
-< 				for(i=0; i<8; i++)
-< 					q->line[i] = line.line[i];
-< 				q->comn = line.comn;
-< 				q++;
-< 			}
-< 			break;
-< 		contin:
-< 			;
-< 		}
-< 	}
-< 	close(fi);
-< 	for(; q < &itab[TABSIZ]; q++)
-< 		term(q);
-< 	for(ALL)
-< 		if(p->line[0] != 0 && p->pid == 0)
-< 			dfork(p);
-< }
-< 
-< dfork(p)
-< struct tab *p;
-< {
-< 	register pid;
-< 
-< 	pid = fork();
-< 	if(pid == 0) {
-< 		signal(SIGHUP, SIG_DFL);
-< 		signal(SIGINT, SIG_DFL);
-< 		maktty(p->line);
-< 		chown(tty, 0, 0);
-< 		chmod(tty, 0622);
-< 		open(tty, 2);
-< 		dup(0);
-< 		dup(0);
-< 		tty[0] = p->comn;
-< 		tty[1] = 0;
-< 		execl(getty, minus, tty, (char *)0);
-< 		exit(0);
-< 	}
-< 	p->pid = pid;
-< }
-< 
-< rmut(p)
-< register struct tab *p;
-< {
-< 	register i, f;
-< 
-< 	f = open(utmp, 2);
-< 	if(f >= 0) {
-< 		while(read(f, (char *)&wtmp, sizeof(wtmp)) == sizeof(wtmp)) {
-< 			for(i=0; i<8; i++)
-< 				if(wtmp.ut_line[i] != p->line[i])
-< 					goto contin;
-< 			lseek(f, -(long)sizeof(wtmp), 1);
-< 			for(i=0; i<8; i++)
-< 				wtmp.ut_name[i] = 0;
-< 			time(&wtmp.ut_time);
-< 			write(f, (char *)&wtmp, sizeof(wtmp));
-< 		contin:;
-< 		}
-< 		close(f);
-< 	}
-< 	f = open(wtmpf, 1);
-< 	if (f >= 0) {
-< 		for(i=0; i<8; i++) {
-< 			wtmp.ut_name[i] = 0;
-< 			wtmp.ut_line[i] = p->line[i];
-< 		}
-< 		time(&wtmp.ut_time);
-< 		lseek(f, (long)0, 2);
-< 		write(f, (char *)&wtmp, sizeof(wtmp));
-< 		close(f);
-< 	}
-< }
-< 
-< reset()
-< {
-< 	longjmp(sjbuf, 1);
-```
-
 ### cmd/login.c
 
 Local test:
@@ -7790,6 +7206,887 @@ Expect:
 ---
 > void
 > deverror(register struct buf *bp, int o1, int o2)
+```
+
+### cmd/mount.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/mount.c unix-v7-c99/cmd/mount.c || true
+```
+
+Expect:
+
+```
+11,12c11,12
+< main(argc, argv)
+< char **argv;
+---
+> int
+> main(int argc, char **argv)
+```
+
+### cmd/umount.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/umount.c unix-v7-c99/cmd/umount.c || true
+```
+
+Expect:
+
+```
+0a1,2
+> #include <stdio.h>
+> 
+9,10c11,12
+< main(argc, argv)
+< char **argv;
+---
+> int
+> main(int argc, char **argv)
+```
+
+### lib/getpwent.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/getpwent.c unix-v7-c99/lib/getpwent.c || true
+```
+
+Expect:
+
+```
+9a10
+> void
+17a19
+> void
+```
+
+### lib/getpwnam.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/getpwnam.c unix-v7-c99/lib/getpwnam.c || true
+```
+
+Expect:
+
+```
+0a1
+> #include "u.h"
+```
+
+### lib/getpwuid.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/getpwuid.c unix-v7-c99/lib/getpwuid.c || true
+```
+
+Expect:
+
+```
+5c5
+< register uid;
+---
+> register int uid;
+```
+
+### lib/strncat.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/strncat.c unix-v7-c99/lib/strncat.c || true
+```
+
+Expect:
+
+```
+10c10
+< register n;
+---
+> register int n;
+```
+
+### lib/ttyslot.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/ttyslot.c unix-v7-c99/lib/ttyslot.c || true
+```
+
+Expect:
+
+```
+6a7
+> #include "u.h"
+9c10
+< char	*getttys();
+---
+> static char *getttys();
+14a16
+> int
+18c20
+< 	register s, tf;
+---
+> 	register int s, tf;
+41a44
+> int f;
+```
+
+### lib/execvp.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/execvp.c unix-v7-c99/lib/execvp.c || true
+```
+
+Expect:
+
+```
+4a5
+> #include "u.h"
+9,10c10,11
+< char	*execat(), *getenv();
+< extern	errno;
+---
+> static char *execat();
+> extern	int errno;
+12,13c13,14
+< execlp(name, argv)
+< char *name, *argv;
+---
+> int
+> execlp(char *name, char *arg0, ...)
+15c16
+< 	return(execvp(name, &argv));
+---
+> 	return(execvp(name, &arg0));
+17a19
+> int
+27c29
+< 	register eacces = 0;
+---
+> 	register int eacces = 0;
+```
+
+### lib/getenv.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/getenv.c unix-v7-c99/lib/getenv.c || true
+```
+
+Expect:
+
+```
+4a5
+> #include "u.h"
+6,7c7,12
+< extern	char **environ;
+< char	*nvmatch();
+---
+> 
+> static char *empty[] = { 0 };
+> char **environ = empty;
+> int errno;
+> 
+> static char *nvmatch();
+```
+
+### lib/atoi.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/atoi.c unix-v7-c99/lib/atoi.c || true
+```
+
+Expect:
+
+```
+0a1
+> int
+```
+
+### lib/atol.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/atol.c unix-v7-c99/lib/atol.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/abs.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/abs.c unix-v7-c99/lib/abs.c || true
+```
+
+Expect:
+
+```
+0a1
+> int
+1a3
+> int arg;
+```
+
+### lib/index.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/index.c unix-v7-c99/lib/index.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/rindex.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/rindex.c unix-v7-c99/lib/rindex.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/strcat.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/strcat.c unix-v7-c99/lib/strcat.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/strcmp.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/strcmp.c unix-v7-c99/lib/strcmp.c || true
+```
+
+Expect:
+
+```
+4a5
+> int
+```
+
+### lib/strcpy.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/strcpy.c unix-v7-c99/lib/strcpy.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/strlen.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/strlen.c unix-v7-c99/lib/strlen.c || true
+```
+
+Expect:
+
+```
+5a6
+> int
+9c10
+< 	register n;
+---
+> 	register int n;
+```
+
+### lib/strncmp.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/strncmp.c unix-v7-c99/lib/strncmp.c || true
+```
+
+Expect:
+
+```
+4a5
+> int
+7c8
+< register n;
+---
+> register int n;
+```
+
+### lib/strncpy.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/strncpy.c unix-v7-c99/lib/strncpy.c || true
+```
+
+Expect:
+
+```
+8a9
+> int n;
+10c11
+< 	register i;
+---
+> 	register int i;
+```
+
+### lib/isatty.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/isatty.c unix-v7-c99/lib/isatty.c || true
+```
+
+Expect:
+
+```
+4a5
+> #include "u.h"
+6a8
+> int
+7a10
+> int f;
+```
+
+### lib/perror.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/perror.c unix-v7-c99/lib/perror.c || true
+```
+
+Expect:
+
+```
+5a6,7
+> #include "u.h"
+> 
+8c10,11
+< char	*sys_errlist[];
+---
+> char	*sys_errlist[1];
+> void
+13c16
+< 	register n;
+---
+> 	register int n;
+```
+
+### lib/swab.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/swab.c unix-v7-c99/lib/swab.c || true
+```
+
+Expect:
+
+```
+5a6
+> void
+8c9
+< register n;
+---
+> register int n;
+```
+
+### lib/rand.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/rand.c unix-v7-c99/lib/rand.c || true
+```
+
+Expect:
+
+```
+2a3
+> void
+8a10
+> int
+```
+
+### lib/mktemp.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/mktemp.c unix-v7-c99/lib/mktemp.c || true
+```
+
+Expect:
+
+```
+0a1,2
+> #include "u.h"
+> 
+7c9
+< 	register i;
+---
+> 	register int i;
+```
+
+### lib/errlst.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/errlst.c unix-v7-c99/lib/errlst.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/ttyname.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/ttyname.c unix-v7-c99/lib/ttyname.c || true
+```
+
+Expect:
+
+```
+7a8
+> #include "u.h"
+17a19
+> int f;
+23c25
+< 	register df;
+---
+> 	register int df;
+```
+
+### cmd/getty.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/getty.c unix-v7-c99/cmd/getty.c || true
+```
+
+Expect:
+
+```
+10a11,20
+> int read(int fd, char *buf, int n);
+> int write(int fd, char *buf, int n);
+> int ioctl(int fd, int cmd, void *arg);
+> int stty(int fd, void *buf);
+> int execl(char *path, char *arg0, ...);
+> void exit(int n);
+> int getname(void);
+> void puts(char *as);
+> void putchr(int cc);
+> 
+128,129c138,139
+< main(argc, argv)
+< char **argv;
+---
+> int
+> main(int argc, char *argv[])
+178c188,189
+< getname()
+---
+> int
+> getname(void)
+181c192
+< 	register c;
+---
+> 	register int c;
+222,223c233,234
+< puts(as)
+< char *as;
+---
+> void
+> puts(char *as)
+232c243,244
+< putchr(cc)
+---
+> void
+> putchr(int cc)
+```
+
+## WIP
+
+### cmd/init.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/init.c unix-v7-c99/cmd/init.c || true
+```
+
+Expect:
+
+```
+1,4c1
+< #include <signal.h>
+< #include <sys/types.h>
+< #include <utmp.h>
+< #include <setjmp.h>
+---
+> #include "../lib/u.h"
+6,95c3,4
+< #define	TABSIZ	100
+< #define	ALL	p = &itab[0]; p < &itab[TABSIZ]; p++
+< #define	EVER	;;
+< 
+< char	shell[]	= "/bin/sh";
+< char	getty[]	 = "/etc/getty";
+< char	minus[]	= "-";
+< char	runc[]	= "/etc/rc";
+< char	ifile[]	= "/etc/ttys";
+< char	utmp[]	= "/etc/utmp";
+< char	wtmpf[]	= "/usr/adm/wtmp";
+< char	ctty[]	= "/dev/console";
+< char	dev[]	= "/dev/";
+< 
+< struct utmp wtmp;
+< struct
+< {
+< 	char	line[8];
+< 	char	comn;
+< 	char	flag;
+< } line;
+< struct	tab
+< {
+< 	char	line[8];
+< 	char	comn;
+< 	int	pid;
+< } itab[TABSIZ];
+< 
+< int	fi;
+< char	tty[20];
+< jmp_buf	sjbuf;
+< 
+< main()
+< {
+< 	int reset();
+< 
+< 	setjmp(sjbuf);
+< 	signal(SIGHUP, reset);
+< 	for(EVER) {
+< 		shutdown();
+< 		single();
+< 		runcom();
+< 		merge();
+< 		multiple();
+< 	}
+< }
+< 
+< shutdown()
+< {
+< 	register i;
+< 	register struct tab *p;
+< 
+< 	signal(SIGINT, SIG_IGN);
+< 	for(ALL)
+< 		term(p);
+< 	signal(SIGALRM, reset);
+< 	alarm(60);
+< 	for(i=0; i<5; i++)
+< 		kill(-1, SIGKILL);
+< 	while(wait((int *)0) != -1)
+< 		;
+< 	alarm(0);
+< 	signal(SIGALRM, SIG_DFL);
+< 	for(i=0; i<10; i++)
+< 		close(i);
+< }
+< 
+< single()
+< {
+< 	register pid;
+< 
+< 	pid = fork();
+< 	if(pid == 0) {
+< /*
+< 		alarm(300);
+< */
+< 		signal(SIGHUP, SIG_DFL);
+< 		signal(SIGINT, SIG_DFL);
+< 		signal(SIGALRM, SIG_DFL);
+< 		open(ctty, 2);
+< 		dup(0);
+< 		dup(0);
+< 		execl(shell, minus, (char *)0);
+< 		exit(0);
+< 	}
+< 	while(wait((int *)0) != pid)
+< 		;
+< }
+< 
+< runcom()
+---
+> int
+> main(void)
+97,138d5
+< 	register pid;
+< 
+< 	pid = fork();
+< 	if(pid == 0) {
+< 		open("/", 0);
+< 		dup(0);
+< 		dup(0);
+< 		execl(shell, shell, runc, (char *)0);
+< 		exit(0);
+< 	}
+< 	while(wait((int *)0) != pid)
+< 		;
+< }
+< 
+< multiple()
+< {
+< 	register struct tab *p;
+< 	register pid;
+< 
+< 	for(EVER) {
+< 		pid = wait((int *)0);
+< 		if(pid == -1)
+< 			return;
+< 		for(ALL)
+< 			if(p->pid == pid || p->pid == -1) {
+< 				rmut(p);
+< 				dfork(p);
+< 			}
+< 	}
+< }
+< 
+< term(p)
+< register struct tab *p;
+< {
+< 
+< 	if(p->pid != 0) {
+< 		rmut(p);
+< 		kill(p->pid, SIGKILL);
+< 	}
+< 	p->pid = 0;
+< 	p->line[0] = 0;
+< }
+140,170c7,9
+< rline()
+< {
+< 	register c, i;
+< 
+< 	c = get();
+< 	if(c < 0)
+< 		return(0);
+< 	if(c == 0)
+< 		goto bad;
+< 	line.flag = c;
+< 	c = get();
+< 	if(c <= 0)
+< 		goto bad;
+< 	line.comn = c;
+< 	for(i=0; i<8; i++)
+< 		line.line[i] = 0;
+< 	for(i=0; i<7; i++) {
+< 		c = get();
+< 		if(c <= 0)
+< 			break;
+< 		line.line[i] = c;
+< 	}
+< 	while(c > 0)
+< 		c = get();
+< 	maktty(line.line);
+< 	if(access(tty, 06) < 0)
+< 		goto bad;
+< 	return(1);
+< 
+< bad:
+< 	line.flag = '0';
+---
+> 	puts("init: multi-user\n");
+> 	(void)exec("/etc/getty");
+> 	puts("init: cannot exec getty\n");
+172,301d10
+< }
+< 
+< maktty(lin)
+< char *lin;
+< {
+< 	register i, j;
+< 
+< 	for(i=0; dev[i]; i++)
+< 		tty[i] = dev[i];
+< 	for(j=0; lin[j]; j++) {
+< 		tty[i] = lin[j];
+< 		i++;
+< 	}
+< 	tty[i] = 0;
+< }
+< 
+< get()
+< {
+< 	char b;
+< 
+< 	if(read(fi, &b, 1) != 1)
+< 		return(-1);
+< 	if(b == '\n')
+< 		return(0);
+< 	return(b);
+< }
+< 
+< merge()
+< {
+< 	register struct tab *p, *q;
+< 	register i;
+< 
+< 	close(creat(utmp, 0644));
+< 	signal(SIGINT, merge);
+< 	fi = open(ifile, 0);
+< 	if(fi < 0)
+< 		return;
+< 	q = &itab[0];
+< 	while(rline()) {
+< 		if(line.flag == '0')
+< 			continue;
+< 		for(ALL) {
+< 			if(p->line[0] != 0)
+< 			for(i=0; i<8; i++)
+< 				if(p->line[i] != line.line[i])
+< 					goto contin;
+< 			if(p >= q) {
+< 				i = p->pid;
+< 				p->pid = q->pid;
+< 				q->pid = i;
+< 				for(i=0; i<8; i++)
+< 					p->line[i] = q->line[i];
+< 				p->comn = q->comn;
+< 				for(i=0; i<8; i++)
+< 					q->line[i] = line.line[i];
+< 				q->comn = line.comn;
+< 				q++;
+< 			}
+< 			break;
+< 		contin:
+< 			;
+< 		}
+< 	}
+< 	close(fi);
+< 	for(; q < &itab[TABSIZ]; q++)
+< 		term(q);
+< 	for(ALL)
+< 		if(p->line[0] != 0 && p->pid == 0)
+< 			dfork(p);
+< }
+< 
+< dfork(p)
+< struct tab *p;
+< {
+< 	register pid;
+< 
+< 	pid = fork();
+< 	if(pid == 0) {
+< 		signal(SIGHUP, SIG_DFL);
+< 		signal(SIGINT, SIG_DFL);
+< 		maktty(p->line);
+< 		chown(tty, 0, 0);
+< 		chmod(tty, 0622);
+< 		open(tty, 2);
+< 		dup(0);
+< 		dup(0);
+< 		tty[0] = p->comn;
+< 		tty[1] = 0;
+< 		execl(getty, minus, tty, (char *)0);
+< 		exit(0);
+< 	}
+< 	p->pid = pid;
+< }
+< 
+< rmut(p)
+< register struct tab *p;
+< {
+< 	register i, f;
+< 
+< 	f = open(utmp, 2);
+< 	if(f >= 0) {
+< 		while(read(f, (char *)&wtmp, sizeof(wtmp)) == sizeof(wtmp)) {
+< 			for(i=0; i<8; i++)
+< 				if(wtmp.ut_line[i] != p->line[i])
+< 					goto contin;
+< 			lseek(f, -(long)sizeof(wtmp), 1);
+< 			for(i=0; i<8; i++)
+< 				wtmp.ut_name[i] = 0;
+< 			time(&wtmp.ut_time);
+< 			write(f, (char *)&wtmp, sizeof(wtmp));
+< 		contin:;
+< 		}
+< 		close(f);
+< 	}
+< 	f = open(wtmpf, 1);
+< 	if (f >= 0) {
+< 		for(i=0; i<8; i++) {
+< 			wtmp.ut_name[i] = 0;
+< 			wtmp.ut_line[i] = p->line[i];
+< 		}
+< 		time(&wtmp.ut_time);
+< 		lseek(f, (long)0, 2);
+< 		write(f, (char *)&wtmp, sizeof(wtmp));
+< 		close(f);
+< 	}
+< }
+< 
+< reset()
+< {
+< 	longjmp(sjbuf, 1);
 ```
 
 ### sys/prim.c
@@ -10538,507 +10835,3 @@ Expect:
 > 	(void)fclose(fp);
 ```
 
-### cmd/mount.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/mount.c unix-v7-c99/cmd/mount.c || true
-```
-
-Expect:
-
-```
-11,12c11,12
-< main(argc, argv)
-< char **argv;
----
-> int
-> main(int argc, char **argv)
-```
-
-### cmd/umount.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/umount.c unix-v7-c99/cmd/umount.c || true
-```
-
-Expect:
-
-```
-0a1,2
-> #include <stdio.h>
-> 
-9,10c11,12
-< main(argc, argv)
-< char **argv;
----
-> int
-> main(int argc, char **argv)
-```
-
-### lib/getpwent.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getpwent.c unix-v7-c99/lib/getpwent.c || true
-```
-
-Expect:
-
-```
-9a10
-> void
-17a19
-> void
-```
-
-### lib/getpwnam.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getpwnam.c unix-v7-c99/lib/getpwnam.c || true
-```
-
-Expect:
-
-```
-0a1
-> #include "u.h"
-```
-
-### lib/getpwuid.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getpwuid.c unix-v7-c99/lib/getpwuid.c || true
-```
-
-Expect:
-
-```
-5c5
-< register uid;
----
-> register int uid;
-```
-
-### lib/strncat.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/strncat.c unix-v7-c99/lib/strncat.c || true
-```
-
-Expect:
-
-```
-10c10
-< register n;
----
-> register int n;
-```
-
-### lib/ttyslot.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/ttyslot.c unix-v7-c99/lib/ttyslot.c || true
-```
-
-Expect:
-
-```
-6a7
-> #include "u.h"
-9c10
-< char	*getttys();
----
-> static char *getttys();
-14a16
-> int
-18c20
-< 	register s, tf;
----
-> 	register int s, tf;
-41a44
-> int f;
-```
-
-### lib/execvp.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/execvp.c unix-v7-c99/lib/execvp.c || true
-```
-
-Expect:
-
-```
-4a5
-> #include "u.h"
-9,10c10,11
-< char	*execat(), *getenv();
-< extern	errno;
----
-> static char *execat();
-> extern	int errno;
-12,13c13,14
-< execlp(name, argv)
-< char *name, *argv;
----
-> int
-> execlp(char *name, char *arg0, ...)
-15c16
-< 	return(execvp(name, &argv));
----
-> 	return(execvp(name, &arg0));
-17a19
-> int
-27c29
-< 	register eacces = 0;
----
-> 	register int eacces = 0;
-```
-
-### lib/getenv.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/getenv.c unix-v7-c99/lib/getenv.c || true
-```
-
-Expect:
-
-```
-4a5
-> #include "u.h"
-6,7c7,12
-< extern	char **environ;
-< char	*nvmatch();
----
-> 
-> static char *empty[] = { 0 };
-> char **environ = empty;
-> int errno;
-> 
-> static char *nvmatch();
-```
-
-### lib/atoi.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/atoi.c unix-v7-c99/lib/atoi.c || true
-```
-
-Expect:
-
-```
-0a1
-> int
-```
-
-### lib/atol.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/atol.c unix-v7-c99/lib/atol.c || true
-```
-
-Expect:
-
-```
-
-```
-
-### lib/abs.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/abs.c unix-v7-c99/lib/abs.c || true
-```
-
-Expect:
-
-```
-0a1
-> int
-1a3
-> int arg;
-```
-
-### lib/index.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/index.c unix-v7-c99/lib/index.c || true
-```
-
-Expect:
-
-```
-
-```
-
-### lib/rindex.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/rindex.c unix-v7-c99/lib/rindex.c || true
-```
-
-Expect:
-
-```
-
-```
-
-### lib/strcat.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/strcat.c unix-v7-c99/lib/strcat.c || true
-```
-
-Expect:
-
-```
-
-```
-
-### lib/strcmp.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/strcmp.c unix-v7-c99/lib/strcmp.c || true
-```
-
-Expect:
-
-```
-4a5
-> int
-```
-
-### lib/strcpy.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/strcpy.c unix-v7-c99/lib/strcpy.c || true
-```
-
-Expect:
-
-```
-
-```
-
-### lib/strlen.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/strlen.c unix-v7-c99/lib/strlen.c || true
-```
-
-Expect:
-
-```
-5a6
-> int
-9c10
-< 	register n;
----
-> 	register int n;
-```
-
-### lib/strncmp.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/strncmp.c unix-v7-c99/lib/strncmp.c || true
-```
-
-Expect:
-
-```
-4a5
-> int
-7c8
-< register n;
----
-> register int n;
-```
-
-### lib/strncpy.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/strncpy.c unix-v7-c99/lib/strncpy.c || true
-```
-
-Expect:
-
-```
-8a9
-> int n;
-10c11
-< 	register i;
----
-> 	register int i;
-```
-
-### lib/isatty.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/isatty.c unix-v7-c99/lib/isatty.c || true
-```
-
-Expect:
-
-```
-4a5
-> #include "u.h"
-6a8
-> int
-7a10
-> int f;
-```
-
-### lib/perror.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/perror.c unix-v7-c99/lib/perror.c || true
-```
-
-Expect:
-
-```
-5a6,7
-> #include "u.h"
-> 
-8c10,11
-< char	*sys_errlist[];
----
-> char	*sys_errlist[1];
-> void
-13c16
-< 	register n;
----
-> 	register int n;
-```
-
-### lib/swab.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/swab.c unix-v7-c99/lib/swab.c || true
-```
-
-Expect:
-
-```
-5a6
-> void
-8c9
-< register n;
----
-> register int n;
-```
-
-### lib/rand.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/rand.c unix-v7-c99/lib/rand.c || true
-```
-
-Expect:
-
-```
-2a3
-> void
-8a10
-> int
-```
-
-### lib/mktemp.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/mktemp.c unix-v7-c99/lib/mktemp.c || true
-```
-
-Expect:
-
-```
-0a1,2
-> #include "u.h"
-> 
-7c9
-< 	register i;
----
-> 	register int i;
-```
-
-### lib/errlst.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/errlst.c unix-v7-c99/lib/errlst.c || true
-```
-
-Expect:
-
-```
-
-```
-
-### lib/ttyname.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/ttyname.c unix-v7-c99/lib/ttyname.c || true
-```
-
-Expect:
-
-```
-7a8
-> #include "u.h"
-17a19
-> int f;
-23c25
-< 	register df;
----
-> 	register int df;
-```
