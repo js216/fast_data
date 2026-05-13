@@ -61,9 +61,11 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 30 s):
 
 ```
-lease:claim devices="bench_mcu.0,mp135.evb,ssh.target" duration_s=3600
+lease:claim devices="bench_mcu.0" duration_s=10
 bench_mcu:reset_dut
+lease:release
 delay ms=2000
+lease:claim devices="mp135.evb,ssh.target" duration_s=3600
 dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.evb:uart_open
 delay ms=300
@@ -121,9 +123,9 @@ def check(extract_dir):
     return len(data) == 1048576 and data[510:512] == b'\x55\xaa'
 ```
 
-## WIP
-
 ### SD image round-trip: write -> verify -> read -> diff
+
+Done: 05/13/2026 11:37:54
 
 Confirms the build instructions actually produce a usable SD image.
 Builds a fresh `sdcard.img`, writes it to the card via MSC, has the
@@ -185,6 +187,8 @@ def check(extract_dir):
 
 ### Boot Linux from SD
 
+Done: 05/13/2026 11:38:00
+
 Fast (~30 s total) check that the EVB DFU-loaded bootloader can `two`
 + `jump` into Linux from the SD already on the card and reach the
 userspace `login:` prompt. Skips MSC entirely --- the only timing
@@ -193,22 +197,13 @@ Linux boot itself is ~10-20 s, so the late expects are tight; if the
 SD is unprovisioned or unbootable this fails fast and the slower
 end-to-end below will do the writing.
 
-Build:
-
-```
-make -C stm32mp135_test_board/bootloader -j$(nproc)
-```
-
-Artifacts:
-
-```
-stm32mp135_test_board/bootloader/scripts/flash.tsv
-stm32mp135_test_board/bootloader/build/main.stm32
-```
+Build: nothing required.
 
 Test (inherits the bootloader-at-`> ` state from the previous test ---
 no reset/DFU/autoload-stop, just open UART, kick the prompt, `two`,
-`jump`):
+`jump`. The bootloader binary is already running on the DUT; this
+section only speaks UART, so neither `flash.tsv` nor `main.stm32`
+needs to be (re)built here):
 
 Test (max 1 min):
 
@@ -243,19 +238,27 @@ def check(extract_dir):
 
 ### SSH smoke (no reload)
 
-Inherits the running Linux from the previous test --- no DFU, no MSC,
-no boot. Waits a few seconds for DHCP, registers the dropbear host
-key, and runs `ssh:exec` for IP + uname. Quick check that the bench
-SSH path reaches the live system.
+Done: 05/13/2026 11:38:05
 
-Build: nothing required.
+Inherits the running Linux from the previous test --- no DFU, no MSC,
+no boot. Waits a few seconds for DHCP, derives the dropbear host key
+from the buildroot target tree at Build time, registers it via a
+side plan, and runs `ssh:exec` for IP + uname. Quick check that the
+bench SSH path reaches the live system. Key rotations don't require
+editing this mission.
+
+Build:
+
+```
+python3 -c "import base64,os,struct; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); tok=os.environ['RUNPY_LEASE_TOKEN']; open(os.environ['RUNPY_WORKDIR']+'/refresh_known_hosts.plan','w').write('description \"refresh ssh.target known_hosts\"'+chr(10)+'lease:resume token=\"'+tok+'\"'+chr(10)+'ssh.target:trust_host_key key=\"'+line+'\"'+chr(10))"
+python3 test_serv/submit.py --server http://localhost:8080 --wait 20 "$RUNPY_WORKDIR/refresh_known_hosts.plan"
+```
 
 Test (max 1 min):
 
 ```
 lease:resume token="{{LEASE_TOKEN}}"
 delay ms=8000
-ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq2/Qf4lNrw/weZ9Aod1VTCvett2F/iNjzDBuA/gKe/ stm32mp135-evb-recovery"
 ssh.target:exec command="ip -4 -o addr show dev eth0; uname -a"
 lease:release token="{{LEASE_TOKEN}}"
 mark tag=ssh_smoke
@@ -277,12 +280,11 @@ def check(extract_dir):
 
 ### Full end-to-end: DFU -> write+verify golden -> boot Linux -> SSH IP
 
-Flagship: exercises every link. Resets, DFU-loads the bootloader,
-stops autoload, **writes and bit-perfect-verifies** the recovery SD
-image via MSC, reopens UART for `two` (loads kernel+DTB from MBR)
-then `jump`, waits for the kernel banner, board model, userspace
-banner, and `login:`, then registers the host key and runs `ssh:exec`
-for IP and uname.
+Flagship: exercises every link. Resets, DFU-loads the bootloader, stops
+autoload, writes and bit-perfect-verifies the recovery SD image via MSC,
+reopens UART for `two` (loads kernel+DTB from MBR) then `jump`, waits
+for the kernel banner, board model, userspace banner, and `login:`, then
+registers the host key and runs `ssh:exec` for IP and uname.
 
 Build:
 
@@ -338,7 +340,6 @@ mp135.evb:uart_expect sentinel="Welcome to STM32MP135 EVB" timeout_ms=10000
 mp135.evb:uart_expect sentinel="login:" timeout_ms=15000
 mp135.evb:uart_close
 delay ms=8000
-ssh.target:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq2/Qf4lNrw/weZ9Aod1VTCvett2F/iNjzDBuA/gKe/ stm32mp135-evb-recovery"
 ssh.target:exec command="ip -4 -o addr show dev eth0; uname -a; cat /etc/os-release | head -3"
 mark tag=full_end_to_end
 ```

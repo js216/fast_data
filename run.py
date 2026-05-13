@@ -11,10 +11,11 @@ import argparse
 import datetime
 import getpass
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 import urllib.request
@@ -86,10 +87,13 @@ class Runner:
     FAILED_ATTEMPT_LEASE_RELEASE_WAIT_S = 300
     LONG_BUSY_RETRY_MISSIONS = {'nand-flash.md'}
     LEASE_PLACEHOLDER = '{{LEASE_TOKEN}}'
-    # Persists the most recent captured lease token across run.py
-    # invocations so a crashed run that never reached its mission's
-    # `lease:release` can be cleaned up on the next startup.
-    LEASE_STATE_FILE = FAST_DATA / 'logs/.runpy_lease'
+    # Directory holding the per-invocation workdir and lease-state
+    # file. Each run.py creates a unique subdir under here keyed by
+    # PID + nanosecond timestamp so two run.py invocations can drive
+    # disjoint missions concurrently (e.g., ssh.md on EVB and
+    # ssh-custom.md on the custom board) without clobbering each
+    # other's `.workdir` or known_hosts lease state.
+    WORKDIR_PARENT = FAST_DATA / 'logs'
     # Bounded retries with backoff for transient bench failures
     # (USB device dropouts, busy queues, FT4222 not-found). The
     # retry sequence is the wait BEFORE the i-th attempt; the first
@@ -100,7 +104,14 @@ class Runner:
 
     def __init__(self, md_path):
         self.md_path = Path(md_path)
-        self.workdir = Path(tempfile.mkdtemp(prefix='runpy-'))
+        # Unique per-invocation workdir + lease state file. Stays
+        # inside the repo so we never touch /tmp.  Removed on a clean
+        # PASS at the end of run_all(); kept around on FAIL so the
+        # operator can inspect per-section artefacts.
+        tag = f'{os.getpid()}-{time.time_ns()}'
+        self.workdir = self.WORKDIR_PARENT / f'workdir-{tag}'
+        self.workdir.mkdir(parents=True)
+        self.lease_state_file = self.WORKDIR_PARENT / f'.runpy_lease-{tag}'
         self.log_path = Path.cwd() / 'logs/log.txt'
         self.log_fh = None
         self.user = getpass.getuser()
@@ -112,15 +123,42 @@ class Runner:
         # subsequent sections. Cleared when a section's plan contains
         # lease:release.
         self.lease_token = None
-        # Defensive ghost-lease cleanup: a prior run that crashed
-        # before its mission's lease:release fired would leave the
-        # bench locked for the full duration_s. Best-effort release.
-        if self.LEASE_STATE_FILE.exists():
-            ghost = self.LEASE_STATE_FILE.read_text().strip()
+        # Defensive ghost-lease cleanup: scan for lease-state files
+        # left over from prior crashed runs (PID no longer alive) and
+        # release each. Per-PID workdirs from those runs aren't
+        # touched -- they're kept for post-mortem.
+        self._cleanup_orphan_leases()
+
+    def _cleanup_orphan_leases(self):
+        for path in sorted(self.WORKDIR_PARENT.glob('.runpy_lease-*')):
+            if path == self.lease_state_file:
+                continue
+            name = path.name[len('.runpy_lease-'):]
+            try:
+                pid = int(name.split('-', 1)[0])
+            except ValueError:
+                continue
+            # If the owning PID is still alive, leave it alone --
+            # another run.py is using it.
+            try:
+                os.kill(pid, 0)
+                continue
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                # Different uid -- not ours to clean up.
+                continue
+            try:
+                ghost = path.read_text().strip()
+            except OSError:
+                ghost = ''
             if ghost:
-                print(f'releasing ghost lease {ghost} from prior run')
+                print(f'releasing ghost lease {ghost} from prior run (pid {pid})')
                 self._release_ghost(ghost)
-            self.LEASE_STATE_FILE.unlink()
+            try:
+                path.unlink()
+            except OSError:
+                pass
 
     def _release_ghost(self, token, wait_s=30):
         """Best-effort release of a stale lease token left over from a
@@ -158,11 +196,12 @@ class Runner:
         return float(m.group(1)) * cls.UNITS[m.group(2)]
 
     def parse_md(self):
-        """Yield (title, build, artifacts, test, verify, test_max_s,
-        foreach) per '### ' section. ``test_max_s`` is set from a
-        per-block specifier like ``Test (max 5 min):``; None when
-        omitted. ``foreach`` is the raw text of an optional Foreach
-        block (parsed lazily by ``parse_foreach``)."""
+        """Yield (title, build, artifacts, test, verify, local_test,
+        inputs, expect, test_max_s, foreach) per '### ' section.
+        ``test_max_s`` is set from a per-block specifier like
+        ``Test (max 5 min):``; None when omitted. ``foreach`` is the
+        raw text of an optional Foreach block (parsed lazily by
+        ``parse_foreach``)."""
         text = self.md_path.read_text()
         parts = re.split(r'^### (.+)$', text, flags=re.M)
         for i in range(1, len(parts), 2):
@@ -171,18 +210,21 @@ class Runner:
             blocks = {}
             specs = {}
             for label in ('Build', 'Artifacts', 'Test', 'Verify',
-                          'Foreach'):
+                          'Foreach', 'Local test', 'Inputs', 'Expect'):
+                key = label.lower().replace(' ', '_')
                 m = re.search(
                     rf'^{label}\s*(?:\(([^)]+)\))?\s*:\s*\n+```\n(.*?)\n```',
                     body, re.M | re.S)
-                blocks[label.lower()] = m.group(2) if m else None
-                specs[label.lower()] = m.group(1) if m else None
+                blocks[key] = m.group(2) if m else None
+                specs[key] = m.group(1) if m else None
             if blocks['test'] is None and re.search(
                     r'^Test:\s*no hardware\.?\s*$',
                     body, re.M | re.I):
                 blocks['test'] = self.NO_HARDWARE_TEST
             yield (title, blocks['build'], blocks['artifacts'],
                    blocks['test'], blocks['verify'],
+                   blocks['local_test'], blocks['inputs'],
+                   blocks['expect'],
                    self.parse_max(specs['test']),
                    blocks['foreach'])
 
@@ -239,9 +281,18 @@ class Runner:
         Mirrors `$ <cmd>` and the full stdout+stderr to both the
         per-test run.log and to log.txt. Skip when missing or 'nothing'.
         Backslash-at-end-of-line continuations are joined into a single
-        command, matching the convention used in long qemu invocations."""
+        command, matching the convention used in long qemu invocations.
+
+        Exports ``RUNPY_WORKDIR`` in the subprocess environment so build
+        scripts can stash transient files (refresh plans, scratch
+        artefacts) under the per-invocation workdir -- which is
+        auto-cleaned on a PASS -- instead of leaking into /tmp."""
         if build is None or build.strip().lower().startswith('nothing'):
             return True
+        env = dict(os.environ)
+        env['RUNPY_WORKDIR'] = str(self.workdir)
+        if self.lease_token:
+            env['RUNPY_LEASE_TOKEN'] = self.lease_token
         build = re.sub(r'\\\n[ \t]*', ' ', build)
         for line in build.splitlines():
             if not line.strip():
@@ -252,7 +303,7 @@ class Runner:
                 f.write(cmd_line)
                 f.flush()
                 proc = subprocess.Popen(
-                    line, shell=True, cwd=self.FAST_DATA,
+                    line, shell=True, cwd=self.FAST_DATA, env=env,
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 assert proc.stdout is not None
                 self._tee_pipe_to_logs(proc.stdout, f)
@@ -268,6 +319,71 @@ class Runner:
             log_fh.write(chunk)
             log_fh.flush()
             self._log(chunk.decode('utf-8', 'replace').rstrip('\r\n'))
+
+    def run_local_test(self, local_test, inputs, log):
+        """Execute each non-empty line of `local_test` as a shell
+        command, piping `inputs` (when not None) to the FIRST line's
+        stdin.  Mirrors `$ <cmd>` and the full stdout+stderr to the
+        per-test run.log and to log.txt; in addition, writes the
+        subprocess stdout (and stderr -- merged) to logs/local.out
+        for byte-exact comparison against the section's Expect block.
+        Backslash-at-end-of-line continuations are joined. Returns
+        True on success, False on non-zero rc."""
+        if local_test is None:
+            return True
+        local_out = self.FAST_DATA / 'logs' / 'local.out'
+        local_out.parent.mkdir(exist_ok=True)
+        local_out.write_bytes(b'')
+        local_test = re.sub(r'\\\n[ \t]*', ' ', local_test)
+        first = True
+        for line in local_test.splitlines():
+            if not line.strip():
+                continue
+            self._log(f'$ {line}')
+            with log.open('ab') as f, local_out.open('ab') as lo:
+                f.write(f'$ {line}\n'.encode())
+                f.flush()
+                proc = subprocess.Popen(
+                    line, shell=True, cwd=self.FAST_DATA,
+                    stdin=subprocess.PIPE if (first and inputs is not None)
+                          else subprocess.DEVNULL,
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                assert proc.stdout is not None
+                if first and inputs is not None:
+                    assert proc.stdin is not None
+                    proc.stdin.write(inputs.encode())
+                    proc.stdin.close()
+                first = False
+                for chunk in iter(proc.stdout.readline, b''):
+                    f.write(chunk); f.flush()
+                    lo.write(chunk); lo.flush()
+                    self._log(chunk.decode('utf-8', 'replace').rstrip(
+                        '\r\n'))
+                proc.wait()
+            if proc.returncode != 0:
+                self._log(f'  (local-test line returned rc={proc.returncode})')
+                return False
+        return True
+
+    def run_expect(self, expect_text):
+        """Byte-exact compare logs/local.out against expect_text.
+        Returns (ok, diff_text).  The markdown fenced-block grammar
+        elides the trailing newline of expect_text; we therefore
+        compare modulo a single trailing newline on either side."""
+        local_out = self.FAST_DATA / 'logs' / 'local.out'
+        actual_bytes = local_out.read_bytes() if local_out.exists() else b''
+        # Normalize a single trailing-newline ambiguity between
+        # markdown fence (no trailing \n) and emitted file (has \n).
+        a = actual_bytes.rstrip(b'\n')
+        e = expect_text.encode().rstrip(b'\n')
+        if a == e:
+            return True, ''
+        import difflib
+        diff = difflib.unified_diff(
+            e.decode('utf-8', 'replace').splitlines(keepends=True),
+            a.decode('utf-8', 'replace').splitlines(keepends=True),
+            fromfile='expect', tofile='actual', n=3)
+        return False, ''.join(diff)
 
     def submit_plan(self, plan_text, artifacts, extract_dir, log,
                     description, max_s=None, line_prefix=None):
@@ -577,23 +693,27 @@ class Runner:
         return None
 
     def capture_lease_token(self, extract_dir, plan_text):
-        """Refresh ``self.lease_token`` from this section's artefact:
-        if ``manifest.json`` carries a ``lease_token`` field, the
-        section ran a fresh ``lease:claim`` and we adopt the new
-        token. If the section's plan body contains ``lease:release``,
-        drop the captured token regardless -- it's no longer usable.
-        Mirror the active token into ``LEASE_STATE_FILE`` so a crashed
+        """Refresh ``self.lease_token`` from this section's artefact.
+        Looks at the LAST lease op in the section's plan to decide
+        whether the section ended with an active lease (claim/resume)
+        or not (release). A section that does claim/release/claim is
+        fine -- the final claim's token (in manifest.json) is
+        captured; the intermediate release does NOT clobber it.
+        Mirror the active token into ``lease_state_file`` so a crashed
         next-section can be recovered on the following startup."""
         manifest = extract_dir / 'manifest.json'
-        if manifest.exists():
+        lease_ops = re.findall(r'^\s*lease:(\w+)\b', plan_text, re.M)
+        last_op = lease_ops[-1] if lease_ops else None
+        if last_op == 'release':
+            self.lease_token = None
+            if self.lease_state_file.exists():
+                self.lease_state_file.unlink()
+            return
+        if last_op in ('claim', 'resume') and manifest.exists():
             tok = json.loads(manifest.read_text()).get('lease_token')
             if tok:
                 self.lease_token = tok
-                self.LEASE_STATE_FILE.write_text(tok)
-        if 'lease:release' in plan_text:
-            self.lease_token = None
-            if self.LEASE_STATE_FILE.exists():
-                self.LEASE_STATE_FILE.unlink()
+                self.lease_state_file.write_text(tok)
 
     def _find_active_job_digest(self, description):
         """Return the queued/running job digest matching a description."""
@@ -821,8 +941,8 @@ class Runner:
                     holder, wait_s=self.FAILED_ATTEMPT_LEASE_RELEASE_WAIT_S):
                 if holder == self.lease_token:
                     self.lease_token = None
-                if self.LEASE_STATE_FILE.exists():
-                    self.LEASE_STATE_FILE.unlink()
+                if self.lease_state_file.exists():
+                    self.lease_state_file.unlink()
                 self._failed_attempt_lease_token_set().add(holder)
                 return True, busy_started, busy_retries, None
 
@@ -944,8 +1064,8 @@ class Runner:
                         and op.get('verb') == 'release'
                         and op.get('status') == 'ok'):
                     self.lease_token = None
-                    if self.LEASE_STATE_FILE.exists():
-                        self.LEASE_STATE_FILE.unlink()
+                    if self.lease_state_file.exists():
+                        self.lease_state_file.unlink()
                     return True
         except Exception:
             return False
@@ -1015,6 +1135,7 @@ class Runner:
         try:
             skipped = 0
             for i, (title, build, artifacts_text, test, verify,
+                    local_test, inputs, expect,
                     test_max_s, foreach_text) in enumerate(sections, 1):
                 slug = re.sub(r'[^a-z0-9]+', '_', title.lower()).strip('_')
                 section_dir = self.workdir / slug
@@ -1038,6 +1159,21 @@ class Runner:
                         result(i, 'FAIL', title, el(), started, budget)
                         dump(log)
                         return 1
+                if local_test is not None:
+                    if not self.run_local_test(local_test, inputs, log):
+                        result(i, 'FAIL', title, el(), started, budget)
+                        dump(log)
+                        return 1
+                    if expect is not None:
+                        ok, diff = self.run_expect(expect)
+                        if not ok:
+                            result(i, 'FAIL', title, el(), started, budget)
+                            self._log('   expect/actual diff:')
+                            for ln in diff.splitlines():
+                                print(f'   {ln}'); self._log(f'   {ln}')
+                            return 1
+                    result(i, 'PASS', title, el(), started, budget)
+                    continue
                 foreach = self.parse_foreach(foreach_text)
                 if foreach is not None:
                     if test is None:
@@ -1071,8 +1207,12 @@ class Runner:
                     result(i, 'PASS', title, el(), started, budget)
                     continue
                 if test is None:
-                    result(i, 'SKIP', title, el(), started, budget)
-                    skipped += 1
+                    if build is not None and not build.strip().lower(
+                            ).startswith('nothing'):
+                        result(i, 'PASS', title, el(), started, budget)
+                    else:
+                        result(i, 'SKIP', title, el(), started, budget)
+                        skipped += 1
                     continue
                 ok, digest, fail_reason, fail_extract, fail_log = (
                     self._submit_with_retries(
@@ -1091,10 +1231,23 @@ class Runner:
 
             print(colored('PASS'))
             self._log(f'{colored("PASS")} {total - skipped}/{total}')
+            success = True
             return 0
         finally:
             self.log_fh.close()
             self.log_fh = None
+            if locals().get('success'):
+                # Clean PASS -- remove the per-invocation workdir.
+                # FAIL paths leave it on disk for post-mortem.
+                try:
+                    shutil.rmtree(self.workdir)
+                except OSError:
+                    pass
+                try:
+                    if self.lease_state_file.exists():
+                        self.lease_state_file.unlink()
+                except OSError:
+                    pass
 
     def _log(self, line):
         if self.log_fh is not None:
