@@ -88,8 +88,18 @@ is_spdx_excluded() {
         drivers/*|*/drivers/*) return 0 ;;
         # vendored 3rd-party printf (mpaland)
         utils/printf.c|utils/printf.h|*/utils/printf.c|*/utils/printf.h) return 0 ;;
-        # fpga build-output (canonical sources are .nw, exempt)
+        # fpga build-output (canonical sources are .nw, exempt).
+        # Match both superproject-relative (fpga/verilog/...) and
+        # submodule-relative (verilog/...) paths, since this hook runs
+        # in both the superproject and the fpga submodule.
         fpga/verilog/*|fpga/tb/*) return 0 ;;
+    esac
+    if [ "$REPO" = "fpga" ]; then
+        case "$1" in
+            verilog/*|tb/*) return 0 ;;
+        esac
+    fi
+    case "$1" in
         # CAD project trees
         */kicad/*) return 0 ;;
         # license / readme / changelog
