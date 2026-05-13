@@ -85,15 +85,15 @@ Expect:
 mkdir /tmp/d
 # ls -la /tmp
 total 3
-drwxr-xr-x 1 root       64 Jan  1 00:00 .
+drwxrwxrwx 1 root       64 Jan  1 00:00 .
 drwxr-xr-x 1 root      112 Jan  1 00:00 ..
--rwxr-xr-x 1 root        0 Jan  1 00:00 .keep
+-rw-r--r-- 1 root        0 Jan  1 00:00 .keep
 drwxrwxr-x 1 root       32 Jan  1 00:00 d
 # rmdir /tmp/d
 # ln /etc/passwd /tmp/pwlink
 # ls -li /etc/passwd /tmp/pwlink
-   88 -rwxr-xr-x 1 root       51 Jan  1 00:00 /etc/passwd
-   88 -rwxr-xr-x 1 root       51 Jan  1 00:00 /tmp/pwlink
+   86 -rw-r--r-- 1 root       51 Jan  1 00:00 /etc/passwd
+   86 -rw-r--r-- 1 root       51 Jan  1 00:00 /tmp/pwlink
 # rm /tmp/pwlink
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -622,13 +622,13 @@ Expect:
 
 ```
 ls -i /etc/passwd
-   88 /etc/passwd
+   86 /etc/passwd
 # ls -l /
 total 7
 drwxr-xr-x 1 root     1248 Jan  1 00:00 bin
 drwxr-xr-x 1 root       48 Jan  1 00:00 dev
 drwxr-xr-x 1 root      128 Jan  1 00:00 etc
-drwxr-xr-x 1 root       48 Jan  1 00:00 tmp
+drwxrwxrwx 1 root       48 Jan  1 00:00 tmp
 drwxr-xr-x 1 root       64 Jan  1 00:00 usr
 # tty
 not a tty
@@ -1619,9 +1619,9 @@ Expect:
 ```
 icheck /etc/auxfs
 /etc/auxfs:
-files      0 (r=0,d=0,b=0,c=0)
-used       0 (i=0,ii=0,iii=0,d=0)
-free       0
+files      2 (r=1,d=1,b=0,c=0)
+used       1 (i=0,ii=0,iii=0,d=1)
+free      56
 missing    0
 # echo __TEST_DONE__
 __TEST_DONE__
