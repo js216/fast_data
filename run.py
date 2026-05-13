@@ -74,7 +74,7 @@ class Runner:
     across submissions must spell out `lease:claim` / `lease:resume` /
     `lease:release` in the mission file."""
 
-    FAST_DATA = Path(__file__).resolve().parent.parent
+    FAST_DATA = Path(__file__).resolve().parent
     SUBMIT_PY = FAST_DATA / 'test_serv' / 'submit.py'
     SERVER = 'http://localhost:8080'
     WAIT_S = 1200                    # generous shared-bench upper bound
