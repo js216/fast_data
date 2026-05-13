@@ -89,7 +89,7 @@ class Runner:
     # Persists the most recent captured lease token across run.py
     # invocations so a crashed run that never reached its mission's
     # `lease:release` can be cleaned up on the next startup.
-    LEASE_STATE_FILE = FAST_DATA / '.runpy_lease'
+    LEASE_STATE_FILE = FAST_DATA / 'logs/.runpy_lease'
     # Bounded retries with backoff for transient bench failures
     # (USB device dropouts, busy queues, FT4222 not-found). The
     # retry sequence is the wait BEFORE the i-th attempt; the first
