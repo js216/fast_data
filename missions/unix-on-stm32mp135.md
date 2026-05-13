@@ -1,20 +1,17 @@
-# Unix v7 running on Armv7
+## WIP
 
-This mission ports the Seventh Edition Unix kernel and userland from
-PDP-11 K&R C to C99 on Armv7-A, keeping `unix-v7-c99/tools/original-diffs.sh`
-as the discipline ratchet: only function prototypes and type widenings
-should change against the original `v7/usr/...` tree, with device drivers
-and `arch/` machine-dependent code exempt. The work is staged simple to
-complex: first the cross-compile and root image build cleanly, then the
-kernel boots and reaches a shell under `qemu-system-arm -machine virt`,
-and finally the same `unix` image boots on the STM32MP135 EVB through
-the bench's DFU+UART path and reaches a shell over UART.
+# Unix v7 on STM32MP135 EVB
 
-The two demonstrations share the `unix` ELF and `root.img` artefacts.
-The only thing that changes between them is how the image is delivered
-to the CPU and how its console is captured: a qemu wrapper for the
-host-side sections, the existing `dfu.evb` + `mp135.evb:uart_*` path
-(see `missions/ssh.md`) for the bench-side sections.
+Sister mission to `unix-on-qemu.md`. Both port the Seventh Edition
+Unix kernel and userland from PDP-11 K&R C to C99 on Armv7-A,
+keeping `unix-v7-c99/tools/original-diffs.sh` as the discipline
+ratchet: only function prototypes and type widenings should change
+against the original `v7/usr/...` tree, with device drivers and
+`arch/` machine-dependent code exempt. The two demonstrations share
+the `unix` ELF and `root.img` artefacts; this file owns the
+bench-side EVB sections, where the image is delivered through the
+bench's DFU+UART path (see `missions/ssh.md`) and the console is
+captured over UART4.
 
 Every EVB section is self-contained: reset -> DFU-flash bootloader ->
 hold at `> ` -> MSC-write a unix-flavoured SD image -> `two` ->
@@ -23,11 +20,11 @@ state, no `{{LEASE_TOKEN}}` plumbing. Each section pays the full
 cold-boot cost, which keeps the sections independently runnable and
 reproducible.
 
-The EVB delivery path reuses the bootloader's existing
-`two` + `jump` flow that `ssh.md` already drives for Linux: `two`
-copies kernel and (optional) DTB from a known MBR offset into DDR,
-`jump` enters the loaded image. No new bootloader command is
-needed. What is new is on the v7 side, all under `dev/`:
+The EVB delivery path reuses the bootloader's existing `two` + `jump`
+flow that `ssh.md` already drives for Linux: `two` copies kernel and
+(optional) DTB from a known MBR offset into DDR, `jump` enters the
+loaded image. No new bootloader command is needed. What is new is
+on the v7 side, all under `dev/`:
 
 - An STM32 USART console driver (UART4 at `0x40010000`, the same
   port `ssh.md` captures over the bench FT2232H). The existing
@@ -43,492 +40,42 @@ needed. What is new is on the v7 side, all under `dev/`:
 
 Drivers and `arch/` are exempt from the original-diffs ratchet
 (the discipline only governs the portable kernel core), so this
-scope is appropriate for the EVB phase.
-
-### Tooling contract
-
-Every host-side qemu section drives one wrapper:
-`unix-v7-c99/tools/qemu-shell.sh`. Pinning its contract once here
-prevents seven independently-derived versions:
-
-    qemu-shell.sh <log-path> [<script-name>]
-
-- `<log-path>` is the file to capture the qemu serial console into.
-  The wrapper MUST truncate the file before launching qemu and MUST
-  apply a hard wall-clock timeout (default 90 s, override via
-  `QEMU_SHELL_TIMEOUT_S`).
-- `<script-name>` (optional, default `shell`) selects a driver
-  fixture at `unix-v7-c99/tools/qemu/<script-name>.expect`. If no
-  fixture exists with that name, the argument is treated as a
-  sentinel string: the wrapper boots qemu, waits for that string
-  to appear in the serial log, and terminates immediately.
-  Existing fixtures wait for `login:`, send `root\r`, wait for
-  `# `, run the per-fixture command set, then send `sync\r` and
-  `exit\r`.
-- Wrapper exit status is irrelevant; verifiers read only the
-  captured log. The wrapper is responsible for not leaving stale
-  log content from a prior section visible to the verifier (the
-  truncate above plus a fresh-mtime guarantee).
-- Each section names its own log path and fixture so captures never
-  collide.
-
-The original-diffs ratchet uses a snapshot file at
-`unix-v7-c99/tools/original-diffs.budget.json`, formatted as a
-nested JSON dictionary: `{port_path: {"inserts": N, "deletes": N}}`.
-The verifier accepts only *decreases* in either insertion or
-deletion counts against the snapshot; growth requires an explicit
-committed snapshot bump alongside the change. A missing snapshot is
-a hard failure, not a bootstrap-and-pass.
-
-The ratchet has **three** stacked checks, not just one:
-
-1. **Counts** — both insertions (`>`) and deletions (`<`) per port
-   file may only shrink. Counting inserts alone lets a worker
-   hollow out function bodies for free; the C99 port should be
-   approaching the V7 source, not retreating from it.
-2. **Coverage** — every non-exempt port `.c`/`.h`/`.s` file under
-   `cmd/`, `sys/`, `h/`, `include/`, `lib/`, `tools/`, or `conf/`
-   whose basename matches a file under `unix-v7-c99/v7/` MUST
-   appear in `tools/original-diffs.sh`. This closes the
-   "structurally invisible" hole where files never seen by the
-   diff command are implicitly exempt. **Each Manager pass that
-   introduces or modifies such a file extends `tools/original-diffs.sh`
-   and the snapshot in the same change** — the diff script is not
-   a one-time enumeration; it grows with the port.
-3. **Path-laundering** — every entry in the snapshot must point to
-   an existing port file. A worker who renames `sys/main.c` to
-   `dev/main.c` to escape the ratchet would leave a stale snapshot
-   entry that fails this check.
-
-Drivers (`dev/*`) and `arch/*` remain exempt by directory; the
-discipline only governs the portable kernel core.
-
-Build:
-
-```
-test -x unix-v7-c99/tools/qemu-shell.sh
-test -d unix-v7-c99/tools/qemu
-```
-
-Artifacts:
-
-```
-unix-v7-c99/tools/qemu-shell.sh
-```
-
-Test: no hardware.
-
-Verify:
-
-```
-import os
-import re
-from pathlib import Path
-
-def check(extract_dir):
-    wrapper = Path('unix-v7-c99/tools/qemu-shell.sh')
-    if not wrapper.exists() or not os.access(wrapper, os.X_OK):
-        return False
-    text = wrapper.read_text()
-    # Contract from the section above: <log-path> <script-name>,
-    # truncates the log, applies a wall-clock timeout overridable
-    # via QEMU_SHELL_TIMEOUT_S, and picks a fixture under
-    # tools/qemu/<script-name>.expect.
-    if not re.search(r'QEMU_SHELL_TIMEOUT_S', text):
-        return False
-    if not re.search(r':\s*>\s*"\$log_path"', text):
-        return False
-    if not re.search(r'tools/qemu/\$\{?script_name\}?\.expect|'
-                     r'qemu/\$script_name\.expect', text):
-        return False
-    # Every fixture under tools/qemu/ must end with the Ctrl-A x
-    # quit so happy-path sections don't sit on the timeout.
-    for f in Path('unix-v7-c99/tools/qemu').glob('*.expect'):
-        body = f.read_text()
-        if 'send "\\x01x"' not in body or 'expect eof' not in body:
-            return False
-    return True
-```
-
-### Cross-compile gate: `unix` ELF and `root.img` build clean
-
-Smallest meaningful step: prove the C99 cross build still works after
-each change to kernel or userland. No qemu, no hardware. Verifier
-checks that `unix` is a statically linked Armv7 ELF executable with a
-plausible entry point in `.text`, and that `root.img` has the V7
-superblock magic and contains the canonical boot inodes
-(`/etc/init`, `/bin/sh`, `/bin/login`).
-
-Build:
-
-```
-make -C unix-v7-c99 clean
-make -C unix-v7-c99 ARCH=arm CONF=qemu_arm
-```
-
-Artifacts:
-
-```
-unix-v7-c99/unix
-unix-v7-c99/root.img
-```
-
-Test: no hardware.
-
-Verify:
-
-```
-from pathlib import Path
-import struct
-
-def check(extract_dir):
-    unix = Path('unix-v7-c99/unix').read_bytes()
-    if unix[:4] != b'\x7fELF' or unix[4] != 1:
-        return False
-    e_machine = struct.unpack('<H', unix[18:20])[0]
-    if e_machine != 0x28:  # EM_ARM
-        return False
-    img = Path('unix-v7-c99/root.img').read_bytes()
-    if len(img) < 8192:
-        return False
-    # V7 superblock lives in block 1; s_magic / sane s_isize sanity check.
-    s_isize = struct.unpack('<H', img[512:514])[0]
-    s_fsize = struct.unpack('<H', img[514:516])[0]
-    return 0 < s_isize < s_fsize <= len(img) // 512
-```
-
-### Original-diffs discipline holds (snapshot ratchet)
-
-Run `unix-v7-c99/tools/original-diffs.sh` and compare per-file
-insertion AND deletion counts against the committed snapshot at
-`unix-v7-c99/tools/original-diffs.budget.json`, then verify that
-every non-exempt port file with a V7 ancestor is tracked, then
-verify that the snapshot has no stale entries. The three checks
-together rule out gradual drift, hollowed-out functions, brand-new
-files smuggled in without a v7 counterpart, and path-laundering
-renames intended to escape the ratchet.
-
-Drivers (`dev/*`) and `arch/*` are exempt by directory; everything
-else under `cmd/`, `sys/`, `h/`, `include/`, `lib/`, `tools/`, and
-`conf/` is in scope.
-
-Build:
-
-```
-mkdir -p unix-v7-c99/build
-cd unix-v7-c99 && tools/original-diffs.sh > build/original-diffs.out
-```
-
-Artifacts:
-
-```
-unix-v7-c99/build/original-diffs.out
-unix-v7-c99/tools/original-diffs.budget.json
-```
-
-Test: no hardware.
-
-Verify:
-
-```
-from pathlib import Path
-import json
-import re
-
-EXEMPT_PREFIXES = ('dev/', 'arch/')
-PORT_DIRS = ('cmd', 'sys', 'h', 'include', 'lib', 'tools', 'conf')
-SRC_SUFFIXES = ('.c', '.h', '.s')
-
-def check(extract_dir):
-    out_path  = Path('unix-v7-c99/build/original-diffs.out')
-    snap_path = Path('unix-v7-c99/tools/original-diffs.budget.json')
-    if not out_path.exists() or not snap_path.exists():
-        return False              # the ratchet is itself a discipline gate
-    snap = json.loads(snap_path.read_text())
-
-    # Parse: each `diff <v7> <port>` opens a tracked pair; subsequent
-    # lines starting with '> ' are insertions in the port, '< ' are
-    # deletions vs. the V7 reference.
-    inserts, deletes, pair = {}, {}, {}
-    current = None
-    for line in out_path.read_text().splitlines():
-        m = re.match(r'^diff (\S+) (\S+)$', line)
-        if m:
-            current = m.group(2)
-            pair[current] = m.group(1)
-            inserts.setdefault(current, 0)
-            deletes.setdefault(current, 0)
-            continue
-        if current and line.startswith('> '):
-            inserts[current] += 1
-        elif current and line.startswith('< '):
-            deletes[current] += 1
-
-    # 1. Counts: per-file inserts AND deletes may only shrink.
-    for f in inserts:
-        if any(f.startswith(p) for p in EXEMPT_PREFIXES):
-            continue
-        budget = snap.get(f) or {}
-        if not isinstance(budget, dict):
-            return False
-        if inserts[f] > budget.get('inserts', 0):
-            return False
-        if deletes[f] > budget.get('deletes', 0):
-            return False
-
-    # 2. Coverage: every non-exempt port .c/.h/.s under PORT_DIRS whose
-    #    basename matches a file under v7/ must appear in the ratchet.
-    v7_root = Path('unix-v7-c99/v7')
-    v7_basenames = set()
-    if v7_root.exists():
-        for p in v7_root.rglob('*'):
-            if p.is_file() and p.suffix in SRC_SUFFIXES:
-                v7_basenames.add(p.name)
-    tracked = set(pair.keys())
-    for d in PORT_DIRS:
-        root = Path('unix-v7-c99') / d
-        if not root.exists():
-            continue
-        for p in root.rglob('*'):
-            if not p.is_file() or p.suffix not in SRC_SUFFIXES:
-                continue
-            rel = str(p.relative_to(Path('unix-v7-c99')))
-            if any(rel.startswith(prefix) for prefix in EXEMPT_PREFIXES):
-                continue
-            if p.name in v7_basenames and rel not in tracked:
-                return False      # untracked file with V7 ancestor
-
-    # 3. Path-laundering: every snapshot entry must point to an existing
-    #    port file. Catches renames into exempt dirs.
-    for f in snap:
-        if not (Path('unix-v7-c99') / f).exists():
-            return False
-
-    return True
-```
-
-### Kernel reaches startup banner under Qemu
-
-First boot gate. Runs `qemu-system-arm -machine virt -cpu cortex-a7
--nographic` against the freshly built `unix`, with `root.img`
-attached as a virtio block device, and captures the serial console
-to a log file with a hard timeout. Verifier requires that the
-captured log contains the V7 "mem = " banner (printed from
-`sys/main.c` after `iinit`) and the early panic-free path through
-`main()`. Drives no input; this only proves the kernel reaches
-userspace-prep without faulting.
-
-Build:
-
-```
-make -C unix-v7-c99 ARCH=arm CONF=qemu_arm
-mkdir -p unix-v7-c99/build/qemu
-unix-v7-c99/tools/qemu-shell.sh unix-v7-c99/build/qemu/banner.log "mem = "
-test -s unix-v7-c99/build/qemu/banner.log
-```
-
-Artifacts:
-
-```
-unix-v7-c99/build/qemu/banner.log
-```
-
-Test: no hardware.
-
-Verify:
-
-```
-from pathlib import Path
-import re
-
-def check(extract_dir):
-    log = Path('unix-v7-c99/build/qemu/banner.log').read_text(
-        errors='replace')
-    if 'panic' in log.lower():
-        return False
-    # Tightened against a stub printf: mem must be a non-zero
-    # multi-digit byte count, not literally "mem = 0".
-    return bool(re.search(r'mem = [1-9]\d{2,}', log))
-```
-
-### Kernel mounts root and execs init under Qemu
-
-Extends the qemu boot: same invocation, longer timeout, capture must
-reach the `init` exec path and the first `getty` opening
-`/dev/console`. Catches `bio`, `namei`, and `exec` regressions
-together. Still drives no input.
-
-Build:
-
-```
-make -C unix-v7-c99 ARCH=arm CONF=qemu_arm
-mkdir -p unix-v7-c99/build/qemu
-unix-v7-c99/tools/qemu-shell.sh unix-v7-c99/build/qemu/init.log "login:"
-test -s unix-v7-c99/build/qemu/init.log
-```
-
-Artifacts:
-
-```
-unix-v7-c99/build/qemu/init.log
-```
-
-Test: no hardware.
-
-Verify:
-
-```
-from pathlib import Path
-import re
-
-def check(extract_dir):
-    log = Path('unix-v7-c99/build/qemu/init.log').read_text(
-        errors='replace')
-    if 'panic' in log.lower():
-        return False
-    # Banner must arrive before login: (rules out a stub that prints
-    # "login:" without ever booting the kernel) and the byte count
-    # must be plausibly non-zero.
-    try:
-        i_mem = log.index('mem = ')
-        log.index('login:', i_mem)
-    except ValueError:
-        return False
-    return bool(re.search(r'mem = [1-9]\d{2,}', log))
-```
-
-### Login and shell prompt under Qemu
-
-First interactive section. Drives the qemu serial console through an
-`expect` (or `socat`-piped) wrapper that sends `root\r` at `login:`,
-waits for `# `, runs `echo unix-v7-armv7-ok`, then `sync; exit`.
-Verifier requires the echoed sentinel and a clean shell exit in the
-capture. Catches tty discipline, signal, and shell exec regressions.
-
-Build:
-
-```
-make -C unix-v7-c99 ARCH=arm CONF=qemu_arm
-mkdir -p unix-v7-c99/build/qemu
-rm -f unix-v7-c99/build/qemu/shell.log
-unix-v7-c99/tools/qemu-shell.sh unix-v7-c99/build/qemu/shell.log shell
-test -s unix-v7-c99/build/qemu/shell.log
-```
-
-Artifacts:
-
-```
-unix-v7-c99/build/qemu/shell.log
-```
-
-Test: no hardware.
-
-Verify:
-
-```
-from pathlib import Path
-
-def check(extract_dir):
-    log = Path('unix-v7-c99/build/qemu/shell.log').read_text(
-        errors='replace')
-    if 'panic' in log.lower():
-        return False
-    # Position-anchored: login -> # prompt -> typed echo command ->
-    # echo's *output* (a second occurrence of the sentinel after
-    # the input echo). Rules out a kernel printf that just prints
-    # the sentinel string.
-    try:
-        i_login  = log.index('login:')
-        i_prompt = log.index('# ', i_login)
-        i_typed  = log.index('echo unix-v7-armv7-ok', i_prompt)
-        log.index('unix-v7-armv7-ok',
-                  i_typed + len('echo unix-v7-armv7-ok'))
-    except ValueError:
-        return False
-    return True
-```
-
-### Unified functional parity: Qemu vs EVB
-
-Drives the `/bin/test_suite` script (which consolidates smoke, pipes,
-filesystem, signals, and text processing tests) on both the Qemu
-emulator and the real STM32MP135 hardware. Verifier ensures the
-captured UART streams are functionally identical.
-
-Build:
-
-```
-make -C unix-v7-c99 ARCH=arm CONF=qemu_arm
-mkdir -p unix-v7-c99/build/qemu
-# Drive Qemu via an expect one-liner (no extra files needed)
-expect -c '
-  set timeout 120
-  spawn qemu-system-arm -machine virt -cpu cortex-a7 -nographic -no-reboot \
-    -kernel unix-v7-c99/unix \
-    -drive if=none,file=unix-v7-c99/root.img,format=raw,id=hd0 \
-    -device virtio-blk-device,drive=hd0
-  expect "login: "
-  send "root\r"
-  expect "# "
-  send "/bin/sh /bin/test_suite\r"
-  expect -exact "--- UNIT TESTS COMPLETE ---"
-  send "sync\rexit\r"
-  sleep 0.5
-  send "\x01x"
-  expect eof
-' > unix-v7-c99/build/qemu/suite.log 2>&1
-```
-
-Artifacts:
-
-```
-unix-v7-c99/build/qemu/suite.log
-```
-
-Test (max 10 min):
-
-```
-bench_mcu:reset_dut
-delay ms=2000
-# [Bootstrap elided for brevity in this example, use previous section's state]
-lease:resume token="{{LEASE_TOKEN}}"
-mp135.evb:uart_open
-mp135.evb:uart_expect sentinel="login: "
-mp135.evb:uart_write data="root\r"
-mp135.evb:uart_expect sentinel="# "
-mp135.evb:uart_write data="/bin/sh /bin/test_suite\r"
-mp135.evb:uart_expect sentinel="--- UNIT TESTS COMPLETE ---"
-mp135.evb:uart_write data="sync\rexit\r"
-mp135.evb:uart_close
-```
-
-Verify:
-
-```
-from pathlib import Path
-import re
-
-def sanitize(text):
-    # Remove hardware-specific banners and timing noise
-    text = re.sub(r'mem = \d+', 'mem = <ANY>', text)
-    text = re.sub(r'evb: .*\n', '', text)
-    # Strip everything before the first login
-    if 'login:' in text:
-        text = text[text.index('login:'):]
-    return text.strip()
-
-def check(extract_dir):
-    qemu_log = Path('unix-v7-c99/build/qemu/suite.log').read_text(errors='replace')
-    evb_log = Verification.load_stream_text(extract_dir, 'mp135.uart')
-    
-    qemu_clean = sanitize(qemu_log)
-    evb_clean = sanitize(evb_log)
-    
-    if '--- UNIT TESTS COMPLETE ---' not in evb_clean:
-        return False
-        
-    return qemu_clean == evb_clean
-```
+scope is appropriate for the EVB work.
+
+The mission has two phases. **Phase 1** ("V7 userspace reaches a
+multi-user shell on the EVB", sections below up to and including
+`### Full end-to-end on EVB: cold reset -> SD -> shell`) gates V7
+cold-boot via a kernel-side shim in `arch/armboot.c` that
+re-implements fork, exec, wait, namei, bread, signal delivery, and
+the V7 syscall dispatcher in parallel with the real V7 source in
+`sys/`. The shim let us ship a checkpoint; it is not the
+destination. **Phase 2** ("Remove the kernel shim", sections from
+`### V7 dev/bio.c compiles and links into kernel (no caller)`
+onward) removes the shim: the kernel ends up running V7's own
+`sys/main.c::main()`, V7's own `sys/trap.c::trap()` for syscalls,
+V7's own `sys/bio.c` buffer cache, V7's own `sys/fork.c`+`sys/slp.c`
+for processes and scheduling, V7's own `sys/sig.c` for signal
+delivery, V7's own `dev/tty.c` for cooked-mode line discipline,
+and `arch/armboot.c` shrinks to zero lines.
+
+Two anchor invariants for every Phase 2 section:
+
+  1. **No regression on hardware.**  After each section lands,
+     a fresh cold boot on the EVB still reaches `login:` and accepts
+     `root` and `dmr` logins.  The Phase 1 sections above do NOT
+     need to keep passing once their behavior is satisfied by the
+     real kernel -- their shim-specific test plans can be replaced,
+     removed, or marked obsolete in Phase 2.
+
+  2. **Shim shrinks monotonically.**  `wc -l arch/armboot.c` must
+     decrease (or stay the same) at every commit.  The shim cannot
+     grow during Phase 2.  Net code-of-interest moves from
+     `arch/armboot.c` into `sys/*.c` and `dev/*.c`.
+
+Section order matters: items earlier on the list unblock items
+later on the list.  Tester runs all sections through the WIP marker;
+the WIP marker moves forward only when each section's verify check
+passes on bench.
 
 ### Cross-build gate: `unix` ELF for STM32MP135 EVB
 
@@ -3714,75 +3261,1887 @@ def check(extract_dir):
     return True
 ```
 
+### V7 dev/bio.c compiles and links into kernel (no caller)
+
+Smallest forward increment toward the parent section: add
+`../dev/bio.o` to `unix-v7-c99/sys/Makefile`'s `OBJS` so that
+the V7 buffer-cache translation unit (`bread`, `breada`,
+`bwrite`, `bdwrite`, `bawrite`, `brelse`, `getblk`, `iowait`,
+`iodone`, `clrbuf`, `geteblk`, `swap`, `physio`) compiles
+unmodified V7 source under our `arm-none-eabi-gcc -std=c99`
+toolchain alongside the existing kernel headers, and that the
+final `unix` ELF still links.
+
+No caller is added in this sub-step.  `bread` and friends
+become defined but unreferenced symbols in the kernel ELF;
+`arch/armboot.c::bio()` is unchanged and continues to satisfy
+every existing kernel block read on hardware.  Behavior on the
+EVB is byte-identical to the prior commit.
+
+This sub-step de-risks the much larger parent section by
+isolating "does V7 `bio.c` even compile against our header
+shims" from "does the bdevsw chain return the right bytes on
+hardware."  If `dev/bio.c` needs trivial header touch-ups
+(extern declarations, missing prototypes), those land here in
+isolation rather than tangled with new driver code.  The
+ratchet still shrinks because `dev/bio.c` enters the build in
+its historic form.
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_close
+mark tag=v7_bio_link
+```
+
+Verify:
+
+```
+import subprocess
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    # Symbol must be defined in the linked kernel ELF.
+    out = subprocess.run(
+        ['arm-none-eabi-nm', 'unix-v7-c99/unix'],
+        capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        return False
+    for line in out.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[1] == 'T' and parts[2] == 'bread':
+            return True
+    return False
+```
+
+### V7 bdevsw[0] wired to dev/mp135_blk.c::mp135_strategy (no caller yet)
+
+Smallest forward increment toward the parent section: introduce a
+real block-device strategy routine for the EVB and wire it into
+`bdevsw[0]` so that the buffer-cache module linked in iter 1 has a
+working back end *before* any kernel caller exercises it.
+
+Add `dev/mp135_blk.c` (new) containing `mp135_strategy(struct buf *bp)`.
+The body does exactly what `arch/armboot.c::bio()` does today on EVB:
+inspect `bp->b_blkno`, `bp->b_bcount`, and `bp->b_flags & B_READ`, then
+memcpy between the V7 buffer (`bp->b_un.b_addr`) and the DDR-staged
+rootfs at `0xC4400000` plus `blkno * BSIZE`.  On completion, set
+`B_DONE` in `bp->b_flags`, clear `B_BUSY`, and call `iodone(bp)`.
+No interrupt handling is needed: the memcpy is synchronous.
+
+Also add `dev/virtio_blk.c` (new) containing `virtio_strategy()` for
+qemu, factored out of the virtio code currently inside
+`arch/armboot.c`.  The qemu path is preserved for parity but is not
+the focus of this section's bench verifier.
+
+Replace the `{0,0,0,0}` placeholder for `bdevsw[0]` in
+`arch/v7stubs.c` with `{nulldev, nulldev, mp135_strategy, &mp135_tab}`
+(EVB build) or the virtio equivalent (qemu build), gated by
+`CONF=evb_arm` vs `CONF=qemu_arm`.  `mp135_tab` is a zero-initialised
+`struct buf` used as the per-device buffer-list head, matching the V7
+`bdevsw` ABI.
+
+No kernel-side caller of `bread()` is added in this sub-step.
+`arch/armboot.c::bio()` remains the active block-I/O path on
+hardware, byte-for-byte identical to today.  The only observable
+change is that the `bdevsw[0].d_strategy` slot now points at a real
+function symbol in the ELF, and a fresh cold boot must still reach
+the `mem = ` banner with no panic.
+
+This sub-step de-risks the parent section by isolating "does the
+bdevsw wiring compile and not break boot" from "does `bread()`
+actually pull the right bytes through the cache."  If header
+plumbing for `struct buf`, `B_READ`, `iodone`, etc. needs
+adjustment, it lands here in isolation rather than tangled with a
+new kernel caller.  The ratchet still shrinks because the new
+strategy routines are net additions in `dev/` (not V7 source) and
+no V7 file regresses.
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_close
+mark tag=v7_bdevsw0_wired
+```
+
+Verify:
+
+```
+import subprocess
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    # Strategy routine must be defined in the linked kernel ELF.
+    out = subprocess.run(
+        ['arm-none-eabi-nm', 'unix-v7-c99/unix'],
+        capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        return False
+    for line in out.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[1] == 'T' and parts[2] == 'mp135_strategy':
+            return True
+    return False
+```
+
+### V7 bread(rootdev, SUPERB) sentinel from startup()
+
+Smallest forward increment toward the parent section: add the first
+real V7-style caller of `bread()` so the linked buffer cache and the
+`bdevsw[0].d_strategy` slot (already wired in the prior two
+sub-steps) are exercised end-to-end on hardware -- without yet
+retiring `arch/armboot.c::bio()` or any of the shim's `shim_bread`
+call sites.
+
+Add `int rootdev = 0;` (a fake `makedev(0,0)`) to `arch/v7stubs.c`
+if not already present, so the new caller has a device number to
+pass.  In `arch/machdep.c::startup()`, immediately after the
+existing `printf("mem = ...")` line, call
+`bp = bread((dev_t)rootdev, (daddr_t)SUPERB)`, then print
+`v7: sb isize=%d fsize=%d\n` reading `((struct filsys *)bp->b_un.b_addr)->s_isize` and
+`->s_fsize` from the returned buffer.  Call `brelse(bp)` afterwards.
+This walks `bdevsw[0].d_strategy` (the EVB's `mp135_strategy` /
+qemu's `virtio_strategy`) for LBA `SUPERB` (block 1 of the V7
+filesystem), pulls it through `getblk`, and exercises the full
+`bread -> getblk -> strategy -> iowait -> iodone` path that V7
+expects.
+
+`arch/armboot.c::bio()` and its `shim_bread`/`shim_bwrite` callers
+are untouched.  The shim continues to satisfy every kernel block
+read elsewhere; this new sentinel call is additive.  `arch/machdep.c`
+lives outside the V7 ratchet's purview (it is `arch/`-prefixed),
+so the modification is allowed without affecting the ratchet's
+insert/delete bookkeeping against `v7/usr/...`.
+
+The point of this sub-step is to prove on real hardware that the
+chain we wired in iterations 1 and 2 actually returns the right
+bytes: `s_isize` and `s_fsize` for a V7 filesystem are small,
+non-zero, plausible integers (typically `s_isize` in the tens to
+low thousands, `s_fsize` larger than `s_isize`).  Reading garbage,
+zeros, or `0xdeadbeef`-style sentinels means the buffer cache,
+the strategy routine, or the DDR-staged rootfs offset is wrong --
+and we want to find that out *now*, before retiring the shim's
+block-I/O path in the next iteration.
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_expect sentinel="v7: sb isize=" timeout_ms=15000
+mp135.evb:uart_close
+mark tag=v7_bread_sentinel
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    m = re.search(r'v7: sb isize=(\d+) fsize=(\d+)', uart)
+    if not m:
+        return False
+    isize = int(m.group(1))
+    fsize = int(m.group(2))
+    # Plausible V7 superblock: small non-zero isize, fsize > isize,
+    # and neither value is an obvious garbage sentinel.
+    if isize <= 0 or isize > 100000:
+        return False
+    if fsize <= isize or fsize > 10000000:
+        return False
+    return True
+```
+
+### shim_bread/shim_bwrite delegate to real V7 bread/bwrite
+
+Smallest forward increment toward the parent section: re-implement
+the bodies of `arch/armboot.c::shim_bread(blkno, buf)` and
+`shim_bwrite(blkno, buf)` to call the real V7 `bread(rootdev, blkno)`
+/ `bwrite(bp)` chain (linked in iter 1, wired in iter 2a, proven on
+hardware in iter 3 by the `v7: sb isize=16 fsize=4096` sentinel)
+instead of the shim's `bio()` byte-pump.  After this sub-step:
+
+  - `shim_bread(blkno, buf)` becomes:
+    `bp = bread((dev_t)rootdev, (daddr_t)blkno);
+     bcopy(bp->b_un.b_addr, buf, BSIZE);
+     brelse(bp);`
+  - `shim_bwrite(blkno, buf)` becomes:
+    `bp = getblk((dev_t)rootdev, (daddr_t)blkno);
+     bcopy(buf, bp->b_un.b_addr, BSIZE);
+     bwrite(bp);`
+  - `arch/armboot.c::bio()` is left in place but is now unreferenced
+    (its sole callers were the two `shim_*` wrappers).  Removing the
+    dead `bio()` function and the EVB DDR-staging memcpy / qemu virtio
+    code inside it is the *next* sub-step's job, not this one.  Keeping
+    `bio()` resident this iteration limits the blast radius if real
+    `bread`/`bwrite` misbehaves on any of the ~13 call sites
+    (`loadino`, `readi`, `writei`, `namei`, `iupdat`, etc.) -- a
+    single-line revert of the two shim bodies brings the working
+    iter-3 state back.
+
+No call-site changes in `arch/armboot.c` are made in this sub-step:
+all ~13 existing `shim_bread(...)`/`shim_bwrite(...)` invocations
+(loadino, readi, writei, namei, iupdat, etc.) keep the same caller
+ABI -- only the wrapper body changes.  This means *every* kernel
+block read and write that armboot.c performs on hardware now flows
+through the real V7 buffer-cache chain
+(`bread` -> `getblk` -> `bdevsw[0].d_strategy` -> `iowait` ->
+`iodone`), the same chain that iter 3 proved good on a single
+superblock read.  Where iter 3 hit `bread` exactly once for
+`SUPERB`, this iteration hits it dozens of times during root inode
+walks, `/etc/init` load, exec(), and the multi-user-shell init
+chain -- a much heavier exercise of the cache, of `getblk`'s LRU
+list, and of `mp135_strategy`'s memcpy path under repeated calls.
+
+The ratchet stays flat: only `arch/armboot.c` changes (outside the
+V7-source purview), and `wc -l arch/armboot.c` decreases by a few
+lines (the two shim bodies shrink; `bio()` is unchanged for now).
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=80
+mp135.evb:uart_write data="c"
+delay ms=80
+mp135.evb:uart_write data="h"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="S"
+delay ms=80
+mp135.evb:uart_write data="H"
+delay ms=80
+mp135.evb:uart_write data="E"
+delay ms=80
+mp135.evb:uart_write data="L"
+delay ms=80
+mp135.evb:uart_write data="L"
+delay ms=80
+mp135.evb:uart_write data="O"
+delay ms=80
+mp135.evb:uart_write data="K"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="SHELLOK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=v7_shim_bread_delegates
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    # Iter-3 sentinel must still appear: the bread(rootdev, SUPERB)
+    # call from startup() still hits the real V7 buffer cache and
+    # pulls a plausible superblock through mp135_strategy.
+    m = re.search(r'v7: sb isize=(\d+) fsize=(\d+)', uart)
+    if not m:
+        return False
+    isize = int(m.group(1))
+    fsize = int(m.group(2))
+    if isize <= 0 or isize > 100000:
+        return False
+    if fsize <= isize or fsize > 10000000:
+        return False
+    # And the heavier exercise: cold boot reaches login:, root\r
+    # yields a shell prompt, and a typed `echo SHELLOK` echoes
+    # back through cooked-mode tty -- proving every shim_bread/
+    # shim_bwrite call site (loadino, readi, writei, namei,
+    # iupdat, etc.) still returns correct bytes when routed
+    # through the real V7 buffer cache.
+    try:
+        i_login = uart.index('login:')
+        i_shell = uart.index('# ', i_login)
+        uart.index('SHELLOK', i_shell)
+    except ValueError:
+        return False
+    return True
+```
+
+### V7 sys/bio.c buffer cache linked, shim bio() retired
+
+Pull `sys/bio.c` into the link.  `bdevsw` already lives in
+`conf/c.c` and currently lists only `rkstrategy` (the PDP-11 RK
+disk).  Register a placeholder `mp135_strategy()` in
+`dev/mp135_blk.c` (new) that initially does exactly what the
+shim's `bio()` does today on EVB: memcpy between the V7 buffer
+and the DDR-staged rootfs at `0xC4400000`.  On qemu, register
+`virtio_strategy()` in `dev/virtio_blk.c` (new) that re-uses the
+virtio code currently inside `armboot.c`.  After this section,
+`arch/armboot.c::bio()` is unreferenced and deletable.
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_expect sentinel="v7: sb isize=" timeout_ms=15000
+mp135.evb:uart_close
+mark tag=v7_bio_retired
+```
+
+Verify:
+
+```
+import re
+import subprocess
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    m = re.search(r'v7: sb isize=(\d+) fsize=(\d+)', uart)
+    if not m:
+        return False
+    isize = int(m.group(1))
+    fsize = int(m.group(2))
+    if not (0 < isize < 100000 and isize < fsize):
+        return False
+    # The shim's bio() must be gone from the ELF -- proves the parent
+    # section's intent (shim bio() retired).
+    out = subprocess.run(
+        ['arm-none-eabi-nm', 'unix-v7-c99/unix'],
+        capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        return False
+    for line in out.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[2] == 'bio':
+            return False
+    return True
+```
+
+### V7 sys/nami.c + sys/iget.c compile and link (no caller)
+
+Smallest forward increment toward the parent section: add
+`iget.o` and `nami.o` to `unix-v7-c99/sys/Makefile`'s `OBJS` so
+the V7 inode-lookup translation units (`namei`, `iget`, `iput`,
+`iupdat`, `itrunc`, `maknode`, `wdir`, `schar`, `uchar`) compile
+unmodified V7 source (with C99 prototype conversion and one
+macro-correctness touch-up to use the `i_lastr` / `i_addr` macros
+defined in `h/inode.h`) under our `arm-none-eabi-gcc -std=c99`
+toolchain, and that the final `unix` ELF still links.
+
+No caller is added in this sub-step.  `namei`, `iget`, `iput`
+and friends become defined-but-unreferenced symbols in the
+kernel ELF; `arch/armboot.c::namei`, `loadino`, `parenti`,
+and the file-scope `iget` shim are unchanged and continue to
+satisfy every existing kernel path-walk on hardware.  Behavior
+on the EVB is byte-identical to the prior commit.
+
+The linker cascade is contained by adding minimal stubs in
+`arch/v7stubs.c` for the symbols `nami.c` / `iget.c` reference
+but whose V7 source is not yet linked: `bcopy`, `free`,
+`getfs`, `ialloc`, `ifree`, `prele`, `plock`, `access`, `bmap`,
+`fubyte`, `writei`.  Storage for the in-core inode table
+`inode[NINODE]` is added in `v7stubs.c` as well.  These stubs
+do nothing -- they exist solely to make `iget.o` / `nami.o`
+link.  When real callers wire up, they will be replaced by
+their real V7 implementations in later iterations.
+
+This sub-step de-risks the much larger parent section by
+isolating "does V7 `nami.c` / `iget.c` compile against our
+header shims" from "does the inode-lookup chain actually
+return the right inodes on hardware."  If `nami.c` / `iget.c`
+need trivial header touch-ups (extern declarations, missing
+prototypes), those land here in isolation rather than tangled
+with new caller wiring.  The ratchet still shrinks because
+`sys/nami.c` and `sys/iget.c` enter the build in their
+unmodified-or-only-C99-prototyped form.
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_expect sentinel="v7: sb isize=" timeout_ms=15000
+mp135.evb:uart_close
+mark tag=v7_nami_iget_link
+```
+
+Verify:
+
+```
+import re
+import subprocess
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    m = re.search(r'v7: sb isize=(\d+) fsize=(\d+)', uart)
+    if not m:
+        return False
+    isize = int(m.group(1))
+    fsize = int(m.group(2))
+    if not (0 < isize < 100000 and isize < fsize):
+        return False
+    # Both symbols must be defined in the linked kernel ELF.
+    out = subprocess.run(
+        ['arm-none-eabi-nm', 'unix-v7-c99/unix'],
+        capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        return False
+    have_namei = False
+    have_iget = False
+    for line in out.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[1] == 'T':
+            if parts[2] == 'namei':
+                have_namei = True
+            elif parts[2] == 'iget':
+                have_iget = True
+    return have_namei and have_iget
+```
+
+### shim_namei delegates to real V7 namei
+
+Smallest forward increment toward the parent section: rename
+`arch/armboot.c`'s file-local `static ino_t namei(char *path)` to
+`shim_namei()` (mirroring iter 4's `shim_bread`/`shim_bwrite`
+naming), rewrite its body to delegate to V7's
+`sys/nami.c::namei(uchar, 0)`, and update every intra-shim call
+site (`kchdir`, `kopen`, `kcreat`, `klink`, `kmknod`, `kchmod`,
+`kstat`, `kexec`, the S_ACCESS/S_UTIME dispatch entries, and the
+EVB `/etc/init` sentinel) to invoke `shim_namei` instead.  V7's
+`namei` returns a locked `struct inode *`; the bridge sets
+`u.u_dirp = path`, `u.u_segflg = 1` (system-space path), clears
+`u.u_error`, calls `namei(uchar, 0)`, snapshots `ip->i_number`,
+and `iput()`s the inode before returning the inum.
+
+`loadino` and `parenti` remain in `arch/armboot.c` for now -- the
+shim still owns the dinode-to-`struct file` translation and the
+basename-to-parent-inum split.  Retiring those is the *next*
+sub-step's job.  This iteration limits the blast radius of the
+namei swap: if V7's path walker misbehaves on any of the ~13
+existing call sites, only the namei half of the lookup chain
+needs to be reverted.
+
+Three supporting changes to `arch/v7stubs.c` make the bridge
+viable on a freshly cold-booted system:
+
+  - `prele(ip)` is upgraded from a no-op to actually clearing
+    `ILOCK` (V7's `iget` leaves the inode locked on return; the
+    no-op stub would have wedged the next `iget` on the same
+    inode in our no-op `sleep`).  `plock(ip)` symmetrically
+    sets the bit.
+  - `getfs(dev)` returns a real zero-initialised `struct filsys`
+    instead of `NULL`, so `iupdat`'s `getfs(ip->i_dev)->s_ronly`
+    deref is safe even though we never reach that path for
+    pure-lookup namei traffic.
+  - `bmap(ip, bn, B_READ)` is given a real read-only
+    implementation that walks the inode's direct + indirect
+    block arrays.  The wrinkle: `sys/iget.c::iexpand()` is the
+    historic PDP-11 byte-order packing that produces
+    `i_addr[i] = byte0 | (byte1<<16) | (byte2<<24)` on ARM
+    little-endian, not the natural `byte0 | (byte1<<8) |
+    (byte2<<16)`.  `bmap`'s `unpack_iaddr` helper bridges
+    this without touching `sys/iget.c`.
+
+The ratchet stays flat: only `arch/armboot.c` and
+`arch/v7stubs.c` change (outside the V7-source purview), and
+`wc -l arch/armboot.c` decreases (the ~40-line shim namei body
+collapses to a 5-line `v7_namei_inum` delegate).
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+delay ms=200
+mp135.evb:uart_write data="e"
+delay ms=80
+mp135.evb:uart_write data="c"
+delay ms=80
+mp135.evb:uart_write data="h"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="S"
+delay ms=80
+mp135.evb:uart_write data="H"
+delay ms=80
+mp135.evb:uart_write data="E"
+delay ms=80
+mp135.evb:uart_write data="L"
+delay ms=80
+mp135.evb:uart_write data="L"
+delay ms=80
+mp135.evb:uart_write data="O"
+delay ms=80
+mp135.evb:uart_write data="K"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="SHELLOK" timeout_ms=5000
+mp135.evb:uart_close
+mark tag=v7_shim_namei_delegates
+```
+
+Verify:
+
+```
+import re
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'mem = ' not in uart:
+        return False
+    # Iter-3 sentinel must still appear: the bread(rootdev, SUPERB)
+    # call from startup() still pulls a plausible V7 superblock
+    # through mp135_strategy.
+    m = re.search(r'v7: sb isize=(\d+) fsize=(\d+)', uart)
+    if not m:
+        return False
+    isize = int(m.group(1))
+    fsize = int(m.group(2))
+    if isize <= 0 or isize > 100000:
+        return False
+    if fsize <= isize or fsize > 10000000:
+        return False
+    # And the heavier exercise: cold boot reaches login:, root\r
+    # yields a shell prompt, and a typed `echo SHELLOK` echoes
+    # back through cooked-mode tty -- proving every shim_namei
+    # call site (kchdir, kopen, kcreat, kexec, S_ACCESS, etc.)
+    # still resolves paths correctly when routed through V7's
+    # real namei() with our bmap()/getfs()/prele() stubs.
+    try:
+        i_login = uart.index('login:')
+        i_shell = uart.index('# ', i_login)
+        uart.index('SHELLOK', i_shell)
+    except ValueError:
+        return False
+    return True
+```
+
+### V7 sys/iget.c + nami.c linked, shim namei retired
+
+Parent section: the shim's namei wrapper in `arch/armboot.c`
+is *gone*.  Every former `shim_namei` call site now invokes
+`v7_namei_inum` directly (the arch-resident bridge in
+`arch/v7stubs.c` that drives V7's historic
+`sys/nami.c::namei(uchar, 0)` and unboxes `struct inode *`
+into the legacy `ino_t` shape).  The shim's `loadino` and
+`parenti` continue to satisfy the few inode-table walks they
+own; their retirement is a later sub-iteration.
+
+Build:
+
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
+
+Test (max 5 min):
+
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_expect sentinel="v7: sb isize=" timeout_ms=15000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+mp135.evb:uart_close
+mark tag=v7_shim_namei_gone
+```
+
+Verify:
+
+```
+import subprocess
+
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'login:' not in uart or '# ' not in uart:
+        return False
+    # Only V7's real namei (from sys/nami.c) should remain.
+    out = subprocess.run(
+        ['arm-none-eabi-nm', 'unix-v7-c99/unix'],
+        capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        return False
+    n = sum(1 for line in out.stdout.splitlines()
+            if len(line.split()) == 3
+            and line.split()[2] == 'namei'
+            and line.split()[1] in ('T', 't'))
+    return n == 1
+```
+
 ## WIP
 
-The 35 sections above gate what we said we would gate: V7 cold-boots
-on the EVB to a multi-user shell over UART4.  That is a real and
-testable milestone, but it is not full V7 fidelity, because the port
-takes shortcuts in the kernel that the discipline never demanded the
-sections to catch.  The work below closes the gap between
-"externally indistinguishable from V7 for these sections" and
-"structurally V7 underneath."  Land each as its own section once the
-behavior it gates is testable from the bench; until then they are a
-prioritized backlog.
+### sys/main.c::main() takes over from armboot() shim
 
-The ordering matters: items earlier on the list unblock items later
-on the list, and most also remove a workaround currently visible to
-the bench (load_sd preamble, byte-by-byte cadence, missing ^C, etc).
+Parent task: re-enable the `#if 0`-wrapped body of
+`sys/main.c::main()` (clkstart, cinit, binit, iinit, newproc,
+sched), stop falling through to `arch/armboot.c::armboot()`,
+link in `sys/alloc.c`, `sys/text.c`, `sys/clock.c`, and the
+rest of sys/'s init prerequisites.  `armboot()` becomes
+unreachable and is deleted.  This is decomposed into sub-steps;
+each landing keeps sections 1-8 green and tightens the bind on
+the real V7 sys/.
 
-### Real V7 main() with proc[], iinit, sched
+This iteration takes the first chunk: V7's real
+`sys/main.c::binit()` (and its `buffers[NBUF][BSIZE+BSLOP]`
+storage) come out of `#if 0` and `arch/v7stubs.c::binit_stub()`
+is retired.  `iinit()` stays wrapped (the next sub-iteration).
+`arch/machdep.c::startup()` now calls V7's real `binit()`
+before the `bread(rootdev, SUPERB)` sentinel.
 
-Enable the `#if 0`-d body of `sys/main.c::main()`: `clkstart`,
-`cinit`, `binit`, `iinit`, `newproc`, `sched`.  Stop falling through
-to `arch/armboot.c::armboot()`.  Requires linking `sys/bio.c`,
-`sys/iget.c`, `sys/alloc.c`, `sys/text.c`, `sys/slp.c`, `sys/clock.c`,
-`sys/trap.c`, and `conf/c.c` (which already declares `bdevsw`,
-`rootdev`, `swapdev`, `pipedev`).  `conf/c.c`'s `rootdev =
-makedev(0,0)` resolves to whatever the V7 SD/eMMC driver registers
-as major 0 (see the SD block driver item below).
+Build:
 
-Gate test: kernel reaches the V7 `init: multi-user` banner *via*
-`sys/main.c`'s real flow (not via `armboot()` short-circuit).  Add a
-sentinel that fires only from sys/main.c's path so a regression
-into the shim path is caught.
+```
+make -C unix-v7-c99 ARCH=arm CONF=evb_arm
+make -C stm32mp135_test_board/bootloader -j$(nproc)
+rm -f stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd-unix
+test -s stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
 
-### V7 line discipline (dev/tty.c) linked in
+Artifacts:
 
-Link `dev/tty.c` into the build (currently absent from
-`sys/Makefile`'s OBJS).  Wire `dev/stm32_usart.c` (and `dev/pl011.c`
-on qemu) to call into `tty.c`'s `ttread`/`ttwrite`/`ttyinput`
-instead of returning bytes directly to `read(2)`.  `conf/c.c`'s
-`linesw[]` already wires `ttyopen`/`ttread`/`ttwrite`/`ttyinput` to
-`tty.c`; this is the missing line-discipline plumb.
+```
+stm32mp135_test_board/bootloader/scripts/flash.tsv
+stm32mp135_test_board/bootloader/build/main.stm32
+stm32mp135_test_board/buildroot/output/images/unix-sdcard.img
+```
 
-What this unlocks on the bench: cooked-mode line editing (V7 erase
-`#`, kill `@`), `^S`/`^Q` flow control under burst write,
-`^C`->SIGINT to the foreground process, `^D` returning 0 from
-`read(2)` at start-of-line, and the `gtty`/`stty` ioctls (cbreak,
-raw, etc.) that V7 `stty` already shipped.
+Test (max 5 min):
 
-Gate test: bench-typed `^C` (byte `\x03`) sent to a foreground
-`cat` kills `cat` and returns the shell to `# `.  This is the same
-test the removed "EVB kread treats ^C byte on tty as EOF" section
-*should* have looked like once the line discipline is real.
+```
+bench_mcu:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+delay ms=200
+mp135.evb:uart_write data="x"
+mp135.evb:uart_expect sentinel="> " timeout_ms=8000
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=3000
+mp135.evb:uart_close
+delay ms=5000
+inventory refresh=true verify=false
+msc.evb:write data=@unix-sdcard.img offset_lba=0
+msc.evb:verify data=@unix-sdcard.img offset_lba=0
+mp135.evb:uart_open
+delay ms=500
+mp135.evb:uart_write data="t"
+delay ms=80
+mp135.evb:uart_write data="w"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=1000
+mp135.evb:uart_write data="l"
+delay ms=80
+mp135.evb:uart_write data="o"
+delay ms=80
+mp135.evb:uart_write data="a"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data="_"
+delay ms=80
+mp135.evb:uart_write data="s"
+delay ms=80
+mp135.evb:uart_write data="d"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x39"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x36"
+delay ms=80
+mp135.evb:uart_write data="\x33"
+delay ms=80
+mp135.evb:uart_write data=" "
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="x"
+delay ms=80
+mp135.evb:uart_write data="C"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x34"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\x30"
+delay ms=80
+mp135.evb:uart_write data="\r"
+delay ms=3000
+mp135.evb:uart_write data="j"
+delay ms=80
+mp135.evb:uart_write data="u"
+delay ms=80
+mp135.evb:uart_write data="m"
+delay ms=80
+mp135.evb:uart_write data="p"
+delay ms=80
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.evb:uart_expect sentinel="mem = " timeout_ms=60000
+mp135.evb:uart_expect sentinel="v7: sb isize=" timeout_ms=15000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=45000
+delay ms=500
+mp135.evb:uart_write data="r"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="o"
+delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=200
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="# " timeout_ms=10000
+mp135.evb:uart_write data="echo SHELLOK\r"
+mp135.evb:uart_expect sentinel="SHELLOK" timeout_ms=8000
+mp135.evb:uart_close
+mark tag=v7_real_binit_live
+```
 
-### Real fork(2) and proc[] scheduling
+Verify:
 
-Replace `arch/armboot.c`'s NFORK=8 sequential save/restore model
-with V7's real `fork()`/`exec()`/`wait()` operating on `proc[]`
-entries, `u` struct, scheduling via `swtch()` and the run queues.
-Most of this is already in `sys/fork.c`, `sys/exec1.c`, `sys/exec2.c`,
-`sys/main.c`'s `sched()`, `sys/slp.c` -- just not linked.  Requires
-implementing context switch in `arch/a7.s` (currently only kernel
-entry exists).
+```
+import subprocess
 
-What this unlocks: real concurrent processes, real `ps`, V7's job
-control as designed, multi-tty getty.  Removes the
-`(sleep 1; kill -HUP $$)` subshell oddities the trap section
-documented.
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream_text(extract_dir, 'mp135.uart')
+    if 'panic' in uart.lower():
+        return False
+    if 'login:' not in uart or '# ' not in uart:
+        return False
+    if 'SHELLOK' not in uart:
+        return False
+    # V7's real binit() must be live, and the v7stubs binit_stub() gone.
+    out = subprocess.run(
+        ['arm-none-eabi-nm', 'unix-v7-c99/unix'],
+        capture_output=True, text=True, check=False)
+    if out.returncode != 0:
+        return False
+    nm = out.stdout
+    has_binit = any(line.split()[-2:] == ['T', 'binit']
+        for line in nm.splitlines() if len(line.split()) == 3)
+    has_stub = any(line.split()[-1] == 'binit_stub'
+        for line in nm.splitlines() if len(line.split()) == 3)
+    return has_binit and not has_stub
+```
 
-Gate test: two getty's running on (say) UART4 and a virtual second
-console, both producing `login:` at boot, both servicing logins.
+### sys/trap.c + sys/sys[1-4].c syscall path replaces shim dispatcher
+
+The shim's giant `else if(n == S_*)` chain in `arch/armboot.c::trap`
+is replaced by `sys/trap.c::trap()` calling into `sys/sys1.c`
+through `sys/sys4.c` per the V7 syscall vector table.  This is the
+biggest single replacement and depends on having `proc[]` real
+(see next section).  May be done in tandem.
+
+Build / Test / Verify: every shim-section behaviour
+(login, shell echo, sgtty, bg+kill, trap+self-signal) still
+reaches its sentinel after this lands.  Sentinel
+`evb: trap.c entered` printf added once on first syscall (then
+removed in a later cleanup).
+
+### Real proc[] + fork + wait + swtch
+
+Link in `sys/fork.c`, `sys/exec1.c`, `sys/exec2.c`, `sys/slp.c`,
+`sys/sig.c`.  Write `arch/swtch.s` (new): saves r0-r12, sp, lr,
+cpsr to the outgoing proc's u-area, loads the incoming proc's.
+~30 lines of assembly.  Delete `arch/armboot.c`'s NFORK=8
+save/restore arrays (`fusave`, `ffsave`, `cfsave`, `kuidsave`,
+`hsave`, `psave`, `cframe`).
+
+Build / Test / Verify: a new section that forks two processes
+that ping-pong via a pipe.  Bench drives them via shell:
+`( echo A ) | ( cat )` over UART; verifier asserts the doubled
+echo and second prompt.  Until this section, that pipe was a
+shim simulation; here it must be a real fork + real wait.
+
+### Real V7 line discipline (dev/tty.c linked into console)
+
+Link `dev/tty.c` into the build.  `dev/stm32_usart.c` and
+`dev/pl011.c` register an open/read/write/ioctl entry in
+`cdevsw` (already declared in `conf/c.c`) and call
+`ttyinput(c, &cons_tty)` per RX byte and `(*linesw[0].l_write)(...)`
+per TX path.  The result: ^C raises SIGINT, ^D returns 0 from
+`read(2)` at start-of-line, ^S/^Q flow-control, V7 `gtty`/`stty`
+ioctls all work.
+
+Build / Test / Verify: bench types `cat\r`, then sends a literal
+`\x03` (^C), then expects `# ` prompt within 5s.  Until this
+section that test was satisfied by the shim hack (which we
+already reverted); here it is satisfied by V7's real
+ttyinput->psignal->setrun path.
+
+### Remaining V7 syscalls in sys/sys[1-4].c
+
+After the trap.c switch, syscalls not yet covered (`setgid`,
+`getpid`, `getppid`, `alarm`, `pause`, `nice`, `ioctl`, `times`,
+`fcntl`, etc.) are pulled in unchanged from V7 source.  Each is
+a one-line decrease in `arch/armboot.c`'s dispatcher (already
+deleted by this point in the mission, but a few may have leaked
+into late-iteration patches).
+
+Build / Test / Verify: per-syscall, exactly the unix-v7-c99 qemu
+section that already exercises it (e.g. `cmd/who` for getuid;
+`cmd/time` for times; `cmd/stty` for ioctl).  Add an EVB
+counterpart per syscall as it lands.
+
+### Real V7 SD/eMMC block driver -- bootloader load_sd preamble drops
+
+Replace `dev/mp135_blk.c`'s memcpy-from-DDR strategy with a real
+STM32MP135 SDMMC1 driver: open queue, issue READ_SINGLE_BLOCK /
+WRITE_SINGLE_BLOCK over CMD/DAT lines, handle interrupts.  About
+~200-400 lines of `dev/sdmmc_mp135.c` (new).  After this lands,
+the EVB test plans can drop the `load_sd 4096 382 0xC4400000`
+preamble; the kernel mounts the rootfs from disk on demand.
+
+Build / Test / Verify: cold-boot a `unix-sdcard.img` whose layout
+has unix.bin at MBR partition 1 and rootfs at partition 2 (no
+DDR pre-stage).  Bench drives `two` + `jump` (no `load_sd`).
+Kernel reaches `login:`.
+
+### Optional speedup: I-cache + cacheable kernel pages
+
+Postponed from the unix-on-stm32mp135.md commit cycle: enable
+SCTLR.I and mark kernel + USERPHYS sections cacheable.  Needs
+careful Cortex-A7 / STM32MP135 cache-coherency handling around
+exec()'s readi-then-jump-into-text (cleared in a prior attempt
+that hit "cannot exec login" due to I/D coherency).  Right home
+for this section is *after* `sys/bio.c` lands, because the V7
+buffer cache plus an actual SD driver makes the load pattern
+predictable.
+
+Build / Test / Verify: `pwd` round-trip from EVB shell completes
+in < 250 ms wall-clock (measured by bench between sending
+`pwd\r` and observing the `# ` reprompt).  Today on the shim
+without cache it is ~4 s; the threshold gates the speedup
+without requiring an exact target.
+
+### Persistent utmp/wtmp after real SD driver lands
+
+V7 `/etc/utmp` and `/usr/adm/wtmp` accumulate login records.  In
+the shim they were tmpfs-backed and volatile.  After real SD I/O,
+point both at the mounted rootfs.
+
+Build / Test / Verify: cold-boot, log in as root, log out, cold-
+boot again, log in as dmr, run `last` -- two entries appear.
+
+### Multi-tty getty (second tty on UART-something or USB-CDC)
+
+V7 init reads `/etc/ttys` and spawns one getty per line.  Add a
+second `ttys` entry, wire it to a second console device,
+spawn a second getty, gate that both serve `login:`
+concurrently.
+
+### Final cleanup: arch/armboot.c is empty (or deleted)
+
+By this section every function in `arch/armboot.c` has been
+replaced by V7 source.  The file is deleted from the build
+(removed from `sys/Makefile`'s OBJS) and from the repo.  Mission
+accomplished.
+
+Build / Test / Verify: `test ! -f unix-v7-c99/arch/armboot.c`
+AND `wc -l unix-v7-c99/sys/main.c` shows the historic V7 init
+body uncommented AND all prior sections still pass on a fresh
+hardware run.
+
+The four sections below are stubs (not yet bench-tested sections).
+They are topics from the original Phase 2 backlog that the formal
+sections above don't cover: SIG_DFL wait-status fidelity after real
+fork lands, `stty` mode renegotiation from `getty`, an EVB-side
+regression gate for `ed`, and an optional re-baseline of the
+original-diffs ratchet. Promote each to a full Build/Test/Verify
+section when it becomes the next thing to land.
 
 ### SIG_DFL termination and full V7 wait() status
 
@@ -3799,56 +5158,6 @@ Gate test: `cat` killed by `^C` (or by another process's
 `kill -2 <pid>`) returns from `wait()` with status `2`, observable
 via a small test program that forks/execs cat, kills it, and prints
 the wait status.
-
-### Real SD/eMMC block driver in dev/
-
-Implement V7's `bdevsw` major-0 entry as a real SDMMC driver for
-the STM32MP135 (and keep `dev/virtio_blk.c` for the qemu path) so
-`bread(2)`/`bwrite(2)` go through the V7 buffer cache (`sys/bio.c`)
-and the kernel can mount its root from the SD card on demand,
-without the bench staging the rootfs into DDR via `load_sd` first.
-After this lands, the EVB test plans' `load_sd 4096 382 0xC4400000`
-preamble can drop and section runtime goes down by a few seconds
-per section.
-
-Gate test: cold-boot a sdcard-img that has *only* main.stm32 +
-unix.bin + .dtb_placeholder on it (no `load_sd` from the bench);
-kernel mounts the rootfs from disk after `jump` and reaches
-`login:`.
-
-### Remaining V7 syscalls in arch/armboot.c (or post-shim equivalent)
-
-The shim handles ~30 syscalls.  After real main()+fork() the shim
-moves into `sys/trap.c`'s `trap()` and the missing entries become
-straightforward to wire from existing V7 source:
-
-  * `setgid`/`getgid`/`getpid`/`getppid`
-  * `alarm`/`pause`/`nice`
-  * `gtty`/`stty`/`ioctl` (needed by the line-discipline item above)
-  * `ptrace`/`profil`/`fcntl`/`times`
-  * `mpx` (V7 has it; we don't need it)
-  * `phys`/`acct`
-
-Gate test: each as its own section, mirroring how `cmd/who`,
-`cmd/ps`, `cmd/time`, etc. exercise them.
-
-### Persistent utmp/wtmp
-
-Real V7 `/etc/utmp` and `/usr/adm/wtmp` accumulate login records
-across boots.  The shim's tmpfs makes them volatile.  After the
-real SD block driver lands, point `/etc/utmp` and `/usr/adm/wtmp`
-at the mounted rootfs.  Then `who` and `last` show real history.
-
-Gate test: log in, log out, reboot, log in again; `last` shows two
-entries.
-
-### Multi-tty getty
-
-V7 `init` reads `/etc/ttys` and spawns a `getty` per line.  Today
-the rootfs has a `ttys` entry only for the console.  Add a second
-tty (UART somewhere, or a soft tty over USB-CDC if we go that
-route), spawn a second getty, gate that both serve `login:`
-concurrently.
 
 ### Kernel-side stty mode set by getty
 

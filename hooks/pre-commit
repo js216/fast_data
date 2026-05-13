@@ -98,6 +98,8 @@ is_spdx_excluded() {
         # docs / data / config
         *.md|*.txt|*.json|*.lock|*.toml|*.nw|*.sh) return 0 ;;
         *.tsv|*.csv|*.stm32|*.linux|*.ldr|*.plan|*.conf|*.dts|*.dtsi|*.patch) return 0 ;;
+        # test golden captures (verbatim console output, no header room)
+        *.golden|*/golden/*) return 0 ;;
         # tool config dotfiles
         .gitignore|.gitmodules|.gitattributes|.codex|.clang-format|.clang-tidy) return 0 ;;
         */.gitignore|*/.gitmodules|*/.gitattributes|*/.codex|*/.clang-format|*/.clang-tidy) return 0 ;;
