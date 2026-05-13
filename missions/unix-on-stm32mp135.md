@@ -1,4 +1,6 @@
-# Unix v7 running on Armv7
+## WIP
+
+# Unix v7 running on Qemu and Armv7
 
 This mission ports the Seventh Edition Unix kernel and userland from
 PDP-11 K&R C to C99 on Armv7-A, keeping `unix-v7-c99/tools/original-diffs.sh`
@@ -3713,8 +3715,6 @@ def check(extract_dir):
         return False
     return True
 ```
-
-## WIP
 
 The 35 sections above gate what we said we would gate: V7 cold-boots
 on the EVB to a multi-user shell over UART4.  That is a real and
