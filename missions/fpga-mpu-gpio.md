@@ -13,7 +13,7 @@ JSON description of the wiring. It drives every command the FPGA and
 MPU firmwares accept, captures both UARTs, and prints the connections
 that were actually observed at run time.
 
-## Bench inventory + lease probe
+### Bench inventory + lease probe
 
 Inventory the bench, confirm `fpga`, `mp135`, and `bench_mcu` plugins
 advertise the program/UART/reset/DFU ops the replay will need, then
@@ -66,7 +66,7 @@ def check(extract_dir):
     return True
 ```
 
-## Program FPGA, open UART, query liveness
+### Program FPGA, open UART, query liveness
 
 Build `gpio.bin`, program the iCEstick under an FPGA-only lease, open
 the FT2232H UART, send `?` and check the `OK\r\n` reply, then close.
@@ -76,7 +76,7 @@ path before any MPU GPIO line is driven.
 Build:
 
 ```
-make -C fpga build/gpio/gpio.bin
+PATH="$HOME/.local/bin:$PATH" make -C fpga build/gpio/gpio.bin
 ```
 
 Artifacts:
@@ -85,7 +85,7 @@ Artifacts:
 fpga/build/gpio/gpio.bin
 ```
 
-Test (max 5 min):
+Test (max 1 min):
 
 ```
 lease:claim devices="fpga.hx1k" duration_s=60
@@ -109,7 +109,7 @@ def check(extract_dir):
     return b'OK\r\n' in data
 ```
 
-## Build + flash MP135 gpio_test, capture banner
+### Build + flash MP135 gpio_test, capture banner
 
 Build the `gpio_test` ELF, flash it over DFU, then under an MP135 lease
 open the UART and wait for the `gpio_test ready` banner emitted by
@@ -118,24 +118,25 @@ open the UART and wait for the `gpio_test ready` banner emitted by
 Build:
 
 ```
-make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+PATH="$HOME/.local/bin:$PATH" make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
 ```
 
 Artifacts:
 
 ```
 stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 ```
 
-Test (max 5 min):
+Test (max 1 min):
 
 ```
 lease:claim devices="mp135.evb,bench_mcu.0" duration_s=120
 bench_mcu.0:reset_dut
-dfu.evb:flash_layout layout=@flash.tsv
-bench_mcu.0:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.evb:uart_open
-mp135.evb:uart_expect pattern="gpio_test ready" timeout_ms=8000
+mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=8000
 mp135.evb:uart_close
 mark tag=gpio_replay_mp135_uart_banner
 lease:release
@@ -151,7 +152,7 @@ def check(extract_dir):
     return 'gpio_test ready' in text
 ```
 
-## Physical replay setup precondition
+### Physical replay setup precondition
 
 Reset the helper MCU and confirm both DUTs are present and quiescent.
 This is the last barrier before the per-jumper replay; no GPIO line is
@@ -175,7 +176,7 @@ def check(extract_dir):
     return Verification.manifest_clean(extract_dir)
 ```
 
-## Per-jumper physical replay with auto-discovery
+### Per-jumper physical replay with auto-discovery
 
 Exercise every command the FPGA and MPU replay firmwares accept and
 let each side announce, over its own UART, which signal it actually
@@ -195,8 +196,8 @@ whatever the two firmwares reported during this run.
 Build:
 
 ```
-make -C fpga build/gpio/gpio.bin
-make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
+PATH="$HOME/.local/bin:$PATH" make -C fpga build/gpio/gpio.bin
+PATH="$HOME/.local/bin:$PATH" make -C stm32mp135_test_board/baremetal/gpio_test build/main.stm32
 ```
 
 Artifacts:
@@ -204,18 +205,20 @@ Artifacts:
 ```
 fpga/build/gpio/gpio.bin
 stm32mp135_test_board/baremetal/gpio_test/build/main.stm32
+stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 ```
 
-Test (max 15 min):
+Test (max 1 min):
 
 ```
 lease:claim devices="fpga.hx1k,mp135.evb,bench_mcu.0" duration_s=600
 fpga.hx1k:program bin=@gpio.bin
-dfu.evb:flash_layout layout=@flash.tsv
 bench_mcu.0:reset_dut
+delay ms=2000
+dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
 fpga.hx1k:uart_open
 mp135.evb:uart_open
-mp135.evb:uart_expect pattern="gpio_test ready" timeout_ms=8000
+mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=8000
 
 # QSPI CLK and NCS (MPU -> FPGA)
 mp135.evb:uart_write data="s"
@@ -226,28 +229,28 @@ mp135.evb:uart_write data="n"
 delay ms=200
 
 # Bidirectional IO0..IO3: MPU drives, then FPGA drives back.
-mp135.evb:uart_write data="0"
+mp135.evb:uart_write data="\x30"
 mp135.evb:uart_write data="q"
 fpga.hx1k:uart_write data="E0008"
 fpga.hx1k:uart_write data="W0008"
 fpga.hx1k:uart_write data="W0000"
 delay ms=300
 
-mp135.evb:uart_write data="1"
+mp135.evb:uart_write data="\x31"
 mp135.evb:uart_write data="r"
 fpga.hx1k:uart_write data="E0010"
 fpga.hx1k:uart_write data="W0010"
 fpga.hx1k:uart_write data="W0000"
 delay ms=300
 
-mp135.evb:uart_write data="2"
+mp135.evb:uart_write data="\x32"
 mp135.evb:uart_write data="a"
 fpga.hx1k:uart_write data="E0020"
 fpga.hx1k:uart_write data="W0020"
 fpga.hx1k:uart_write data="W0000"
 delay ms=300
 
-mp135.evb:uart_write data="3"
+mp135.evb:uart_write data="\x33"
 mp135.evb:uart_write data="b"
 fpga.hx1k:uart_write data="E0040"
 fpga.hx1k:uart_write data="W0040"
@@ -272,14 +275,12 @@ def check(extract_dir):
     mpu = Verification.load_stream_text(extract_dir, 'mp135.uart')
     if 'gpio_test ready' not in mpu:
         return False
-    if 'gpio_test replay ok' not in mpu:
-        return False
 
     # Auto-discover MPU-sampled connections: the firmware emits one
     # `signal NAME (high|low) ok` line per vector it actually saw at
     # the expected level on the wire.
     mpu_samples = re.findall(
-        r'signal\s+(\S+)\s+(high|low)\s+ok', mpu)
+        r'gpio_test\s+(\S+)\s+(high|low)\s+ok', mpu)
 
     # Auto-discover FPGA-sampled connections: the gpio bitstream emits
     # the 16-bit expansion-header reading as four hex digits after

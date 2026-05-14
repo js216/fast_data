@@ -10,22 +10,33 @@ the expected value encoded in the filename.
 haven't been promoted yet live in `draft_cases/` and run via the
 companion mission `selache-csmith-tests.md`.
 
-### selache-built target cctest sweep
+### Static tests
 
-Compile every cctest case through the selache target toolchain, run the
-host (gcc/clang) cases at build time and fail the build on any mismatch,
-emit selache-built target images named `cctest_<case>.<expect>.ldr`,
-then boot each image on the SHARC+ board and compare its UART output
-against the expected value parsed from the filename.
+Build the toolchain and run Cargo tests, then run the host (gcc/clang)
+cases and fail the build on any mismatch.
 
 Build:
 
 ```
+cd selache && cargo clean
 cd selache && cargo build --release
 cd selache && cargo test --all-targets
 cd selache && cargo clippy --all-targets --release -- -D warnings
+make -C selache/xtest clean
 make -C selache/xtest gcc -j$(nproc)
 make -C selache/xtest clang -j$(nproc)
+```
+
+### Selache-built target sweep
+
+Compile every cctest case through the selache target toolchain, emit
+selache-built target images named `cctest_<case>.<expect>.ldr`, then
+boot each image on the SHARC+ board and compare its UART output against
+the expected value parsed from the filename.
+
+Build:
+
+```
 make -C selache/xtest sel -j$(nproc)
 ```
 
