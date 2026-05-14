@@ -241,25 +241,59 @@ unix-v7-c99/include/time.h
 unix-v7-c99/include/utmp.h
 unix-v7-c99/lib/Makefile
 unix-v7-c99/lib/abs.c
+unix-v7-c99/lib/atof.c
 unix-v7-c99/lib/atoi.c
 unix-v7-c99/lib/atol.c
+unix-v7-c99/lib/calloc.c
+unix-v7-c99/lib/clrerr.c
 unix-v7-c99/lib/compat.c
 unix-v7-c99/lib/crt0.c
 unix-v7-c99/lib/crt0.s
 unix-v7-c99/lib/crypt.c
+unix-v7-c99/lib/ctime.c
+unix-v7-c99/lib/data.c
+unix-v7-c99/lib/doprnt.c
+unix-v7-c99/lib/doscan.c
+unix-v7-c99/lib/endopen.c
 unix-v7-c99/lib/errlst.c
 unix-v7-c99/lib/execvp.c
+unix-v7-c99/lib/fgetc.c
+unix-v7-c99/lib/fgets.c
+unix-v7-c99/lib/filbuf.c
+unix-v7-c99/lib/findiop.c
+unix-v7-c99/lib/flsbuf.c
+unix-v7-c99/lib/fopen.c
+unix-v7-c99/lib/fprintf.c
+unix-v7-c99/lib/fputc.c
+unix-v7-c99/lib/fputs.c
+unix-v7-c99/lib/freopen.c
+unix-v7-c99/lib/fseek.c
+unix-v7-c99/lib/ftell.c
+unix-v7-c99/lib/getchar.c
 unix-v7-c99/lib/getenv.c
+unix-v7-c99/lib/getlogin.c
+unix-v7-c99/lib/getpass.c
 unix-v7-c99/lib/getpwent.c
 unix-v7-c99/lib/getpwnam.c
 unix-v7-c99/lib/getpwuid.c
+unix-v7-c99/lib/gets.c
 unix-v7-c99/lib/index.c
 unix-v7-c99/lib/isatty.c
 unix-v7-c99/lib/l3.c
+unix-v7-c99/lib/malloc.c
 unix-v7-c99/lib/mktemp.c
 unix-v7-c99/lib/perror.c
+unix-v7-c99/lib/printf.c
+unix-v7-c99/lib/putchar.c
+unix-v7-c99/lib/puts.c
+unix-v7-c99/lib/qsort.c
 unix-v7-c99/lib/rand.c
+unix-v7-c99/lib/rdwr.c
+unix-v7-c99/lib/rew.c
 unix-v7-c99/lib/rindex.c
+unix-v7-c99/lib/scanf.c
+unix-v7-c99/lib/setbuf.c
+unix-v7-c99/lib/sprintf.c
 unix-v7-c99/lib/strcat.c
 unix-v7-c99/lib/strcmp.c
 unix-v7-c99/lib/strcpy.c
@@ -267,12 +301,16 @@ unix-v7-c99/lib/strlen.c
 unix-v7-c99/lib/strncat.c
 unix-v7-c99/lib/strncmp.c
 unix-v7-c99/lib/strncpy.c
+unix-v7-c99/lib/strout.c
 unix-v7-c99/lib/swab.c
+unix-v7-c99/lib/sys.s
 unix-v7-c99/lib/syscall.s
+unix-v7-c99/lib/tell.c
+unix-v7-c99/lib/timezone.c
 unix-v7-c99/lib/ttyname.c
 unix-v7-c99/lib/ttyslot.c
-unix-v7-c99/lib/u.h
 unix-v7-c99/lib/u.ld
+unix-v7-c99/lib/ungetc.c
 unix-v7-c99/root/etc/passwd
 unix-v7-c99/root/etc/ttys
 unix-v7-c99/sys/Makefile
@@ -360,10 +398,13 @@ dev/pl011.c
 dev/stm32_usart.c
 dev/virtio_blk.c
 h/proto.h
+include/stdio.h
 lib/Makefile
 lib/compat.c
 lib/crt0.c
-lib/u.h
+lib/doprnt.c
+lib/malloc.c
+lib/sys.s
 lib/u.ld
 root/etc/passwd
 root/etc/ttys
@@ -2111,7 +2152,7 @@ Expect:
 ```
 7a8,10
 > #define	puts	u_puts
-> #include "../lib/u.h"
+> #include <stdio.h>
 > #undef	puts
 ```
 
@@ -2126,24 +2167,22 @@ diff unix-v7-c99/v7/usr/src/libc/gen/l3.c unix-v7-c99/lib/l3.c || true
 Expect:
 
 ```
-3a4,7
-> int ltol3(char *cp, long *lp, int n);
-> int l3tol(long *lp, char *cp, int n);
-> 
+3a4,5
+> int ltol3(), l3tol();
 > int
-9c13
+9c11
 < 	register i;
 ---
 > 	register int i;
-26a31
+26a29
 > 	return(0);
-28a34
+28a32
 > int
-34c40
+34c38
 < 	register i;
 ---
 > 	register int i;
-51a58
+51a56
 > 	return(0);
 ```
 
@@ -6525,7 +6564,7 @@ diff unix-v7-c99/v7/usr/include/ctype.h unix-v7-c99/include/ctype.h || true
 Expect:
 
 ```
-1,24c1,7
+1,24c1,8
 < #define	_U	01
 < #define	_L	02
 < #define	_N	04
@@ -6558,6 +6597,7 @@ Expect:
 > #define	isalnum(c)	(isalpha(c)||isdigit(c))
 > #define	isspace(c)	((c)==' '||(c)=='\t'||(c)=='\n'||(c)=='\r'||(c)=='\f')
 > #define	toupper(c)	(islower(c)?(c)-'a'+'A':(c))
+> #define	tolower(c)	(isupper(c)?(c)-'A'+'a':(c))
 ```
 
 ### include/errno.h
@@ -6687,63 +6727,6 @@ Expect:
 > #define	SIG_IGN	1
 ```
 
-### include/stdio.h
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/include/stdio.h unix-v7-c99/include/stdio.h || true
-```
-
-Expect:
-
-```
-1,41c1
-< #define	BUFSIZ	512
-< #define	_NFILE	20
-< # ifndef FILE
-< extern	struct	_iobuf {
-< 	char	*_ptr;
-< 	int	_cnt;
-< 	char	*_base;
-< 	char	_flag;
-< 	char	_file;
-< } _iob[_NFILE];
-< # endif
-< 
-< #define	_IOREAD	01
-< #define	_IOWRT	02
-< #define	_IONBF	04
-< #define	_IOMYBUF	010
-< #define	_IOEOF	020
-< #define	_IOERR	040
-< #define	_IOSTRG	0100
-< #define	_IORW	0200
-< 
-< #define	NULL	0
-< #define	FILE	struct _iobuf
-< #define	EOF	(-1)
-< 
-< #define	stdin	(&_iob[0])
-< #define	stdout	(&_iob[1])
-< #define	stderr	(&_iob[2])
-< #define	getc(p)		(--(p)->_cnt>=0? *(p)->_ptr++&0377:_filbuf(p))
-< #define	getchar()	getc(stdin)
-< #define putc(x,p) (--(p)->_cnt>=0? ((int)(*(p)->_ptr++=(unsigned)(x))):_flsbuf((unsigned)(x),p))
-< #define	putchar(x)	putc(x,stdout)
-< #define	feof(p)		(((p)->_flag&_IOEOF)!=0)
-< #define	ferror(p)	(((p)->_flag&_IOERR)!=0)
-< #define	fileno(p)	p->_file
-< 
-< FILE	*fopen();
-< FILE	*freopen();
-< FILE	*fdopen();
-< long	ftell();
-< char	*fgets();
----
-> #include "../lib/u.h"
-```
-
 ### include/sys/dir.h
 
 Local test:
@@ -6784,7 +6767,7 @@ Expect:
 ---
 > 	short	st_uid;
 > 	short	st_gid;
-16,28c20,28
+16,28c20,31
 < #define	S_IFMT	0170000		/* type of file */
 < #define		S_IFDIR	0040000	/* directory */
 < #define		S_IFCHR	0020000	/* character special */
@@ -6807,6 +6790,9 @@ Expect:
 > #define	S_IREAD	0000400
 > #define	S_IWRITE	0000200
 > #define	S_IEXEC	0000100
+> #define	S_ISUID	0004000
+> #define	S_ISGID	0002000
+> #define	S_ISVTX	0001000
 > #endif
 ```
 
@@ -6821,10 +6807,11 @@ diff unix-v7-c99/v7/usr/include/sys/timeb.h unix-v7-c99/include/sys/timeb.h || t
 Expect:
 
 ```
-0a1,2
+0a1,3
 > #ifndef SYS_TIMEB_H
 > #define SYS_TIMEB_H
-9a12
+> #include <sys/types.h>
+9a13
 > #endif
 ```
 
@@ -7276,7 +7263,7 @@ Expect:
 
 ```
 0a1
-> #include "u.h"
+> #include <stdio.h>
 ```
 
 ### lib/getpwuid.c
@@ -7325,7 +7312,7 @@ Expect:
 
 ```
 6a7
-> #include "u.h"
+> #include <stdio.h>
 9c10
 < char	*getttys();
 ---
@@ -7352,7 +7339,7 @@ Expect:
 
 ```
 4a5
-> #include "u.h"
+> #include <stdio.h>
 9,10c10,11
 < char	*execat(), *getenv();
 < extern	errno;
@@ -7389,16 +7376,14 @@ Expect:
 
 ```
 4a5
-> #include "u.h"
-6,7c7,12
+> #include <stdio.h>
+6,7c7,10
 < extern	char **environ;
 < char	*nvmatch();
 ---
-> 
 > static char *empty[] = { 0 };
 > char **environ = empty;
 > int errno;
-> 
 > static char *nvmatch();
 ```
 
@@ -7588,7 +7573,7 @@ Expect:
 
 ```
 4a5
-> #include "u.h"
+> #include <stdio.h>
 6a8
 > int
 7a10
@@ -7606,15 +7591,14 @@ diff unix-v7-c99/v7/usr/src/libc/gen/perror.c unix-v7-c99/lib/perror.c || true
 Expect:
 
 ```
-5a6,7
-> #include "u.h"
-> 
-8c10,11
+4a5
+> #include <stdio.h>
+8c9,10
 < char	*sys_errlist[];
 ---
 > char	*sys_errlist[1];
 > void
-13c16
+13c15
 < 	register n;
 ---
 > 	register int n;
@@ -7667,10 +7651,9 @@ diff unix-v7-c99/v7/usr/src/libc/gen/mktemp.c unix-v7-c99/lib/mktemp.c || true
 Expect:
 
 ```
-0a1,2
-> #include "u.h"
-> 
-7c9
+0a1
+> #include <stdio.h>
+7c8
 < 	register i;
 ---
 > 	register int i;
@@ -7702,7 +7685,7 @@ Expect:
 
 ```
 7a8
-> #include "u.h"
+> #include <stdio.h>
 17a19
 > int f;
 23c25
@@ -7711,6 +7694,861 @@ Expect:
 > 	register int df;
 ```
 
+### lib/qsort.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/qsort.c unix-v7-c99/lib/qsort.c || true
+```
+
+Expect:
+
+```
+3a4
+> static void qs1(), qsexc(), qstexc();
+4a6
+> void
+6c8
+< char *a;
+---
+> void *a;
+13c15
+< 	qs1(a, a+n*es);
+---
+> 	qs1(a, (char *)a+n*es);
+16c18,19
+< static qs1(a, l)
+---
+> static void
+> qs1(a, l)
+20,21c23
+< 	register es;
+< 	char **k;
+---
+> 	register int es;
+30c32
+< 	if((n=l-a) <= es)
+---
+> 	if((n=l-a) <= (unsigned)es)
+87c89,90
+< static qsexc(i, j)
+---
+> static void
+> qsexc(i, j)
+103c106,107
+< static qstexc(i, j, k)
+---
+> static void
+> qstexc(i, j, k)
+```
+
+### lib/calloc.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/calloc.c unix-v7-c99/lib/calloc.c || true
+```
+
+Expect:
+
+```
+2a3
+> #include <stdio.h>
+4d4
+< #define NULL 0
+11d10
+< 	char *malloc();
+13c12
+< 	register m;
+---
+> 	register int m;
+25a25
+> int
+29a30
+> 	(void)num; (void)size;
+30a32
+> 	return(0);
+```
+
+### lib/tell.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/tell.c unix-v7-c99/lib/tell.c || true
+```
+
+Expect:
+
+```
+5c5
+< long	lseek();
+---
+> extern long lseek(int, long, int);
+7a8
+> int f;
+```
+
+### lib/timezone.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/timezone.c unix-v7-c99/lib/timezone.c || true
+```
+
+Expect:
+
+```
+8a9
+> #include <stdio.h>
+24a26
+> int zone, dst;
+```
+
+### lib/getlogin.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/getlogin.c unix-v7-c99/lib/getlogin.c || true
+```
+
+Expect:
+
+```
+0a1
+> #include <stdio.h>
+1a3
+> extern int ttyslot(void);
+9c11
+< 	register me, uf;
+---
+> 	register int me, uf;
+16c18
+< 	lseek( uf, (long)(me*sizeof(ubuf)), 0 );
+---
+> 	lseek( uf, (long)(me*(int)sizeof(ubuf)), 0 );
+```
+
+### lib/atof.c
+
+On disk but not linked into LIB: pulling libgcc's softfp helpers into every
+binary overflows the rootfs.  See `lib/Makefile`.
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/atof.c unix-v7-c99/lib/atof.c || true
+```
+
+Expect:
+
+```
+5d4
+< #include <math.h>
+6a6,15
+> #define LOGHUGE 39
+> static double
+> ldexp(value, n)
+> double value;
+> int n;
+> {
+> 	while (n > 0) { value *= 2.0; n--; }
+> 	while (n < 0) { value *= 0.5; n++; }
+> 	return(value);
+> }
+12c21
+< 	register c;
+---
+> 	register int c;
+15d23
+< 	double ldexp();
+17c25
+< 	register eexp, exp, neg, negexp, bexp;
+---
+> 	register int eexp, exp, neg, negexp, bexp;
+```
+
+
+### lib/clrerr.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/clrerr.c unix-v7-c99/lib/clrerr.c || true
+```
+
+Expect:
+
+```
+2a3
+> void
+```
+
+### lib/data.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/data.c unix-v7-c99/lib/data.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/doscan.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/doscan.c unix-v7-c99/lib/doscan.c || true
+```
+
+Expect:
+
+```
+2a3
+> #include	<stdarg.h>
+13a15
+> int	_innum(), _instr();
+25a28
+> int
+29c32
+< register int **argp;
+---
+> va_list *argp;
+30a34
+> 	int *slot;
+44,46c48,51
+< 		if (ch != '*')
+< 			ptr = argp++;
+< 		else
+---
+> 		if (ch != '*') {
+> 			slot = va_arg(*argp, int *);
+> 			ptr = &slot;
+> 		} else
+96a102
+> int
+98a105
+> int type, len, size;
+104c111
+< 	register c, base;
+---
+> 	register int c, base;
+204a212
+> int
+206a215
+> int type, len;
+210c219
+< 	register ch;
+---
+> 	register int ch;
+254c263
+< 	register c, t;
+---
+> 	register int c, t;
+```
+
+### lib/endopen.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/endopen.c unix-v7-c99/lib/endopen.c || true
+```
+
+Expect:
+
+```
+2a3
+> static int create();
+```
+
+### lib/fgetc.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fgetc.c unix-v7-c99/lib/fgetc.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+```
+
+### lib/fgets.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fgets.c unix-v7-c99/lib/fgets.c || true
+```
+
+Expect:
+
+```
+6a7
+> int n;
+8c9
+< 	register c;
+---
+> 	register int c;
+```
+
+### lib/filbuf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/filbuf.c unix-v7-c99/lib/filbuf.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/findiop.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/findiop.c unix-v7-c99/lib/findiop.c || true
+```
+
+Expect:
+
+```
+
+### lib/flsbuf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/flsbuf.c unix-v7-c99/lib/flsbuf.c || true
+```
+
+Expect:
+
+```
+11c11
+< 	register n, rn;
+---
+> 	register int n, rn;
+63c63
+< 	register n;
+---
+> 	register int n;
+80a81
+> void
+94c95
+< 	register r;
+---
+> 	register int r;
+107,108c108,109
+< 	iop->_flag &=
+< 		~(_IOREAD|_IOWRT|_IONBF|_IOMYBUF|_IOERR|_IOEOF|_IOSTRG|_IORW);
+---
+> 	iop->_flag = (char)(iop->_flag &
+> 		~(_IOREAD|_IOWRT|_IONBF|_IOMYBUF|_IOERR|_IOEOF|_IOSTRG|_IORW));
+```
+
+### lib/fopen.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fopen.c unix-v7-c99/lib/fopen.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/fprintf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fprintf.c unix-v7-c99/lib/fprintf.c || true
+```
+
+Expect:
+
+```
+1a2,3
+> #include	<stdarg.h>
+> extern void _doprnt();
+3,5c5,6
+< fprintf(iop, fmt, args)
+< FILE *iop;
+< char *fmt;
+---
+> int
+> fprintf(FILE *iop, char *fmt, ...)
+7c8,11
+< 	_doprnt(fmt, &args, iop);
+---
+> 	va_list ap;
+> 	va_start(ap, fmt);
+> 	_doprnt(fmt, &ap, iop);
+> 	va_end(ap);
+```
+
+### lib/fputc.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fputc.c unix-v7-c99/lib/fputc.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+3a5
+> int c;
+```
+
+### lib/fputs.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fputs.c unix-v7-c99/lib/fputs.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+7,8c8,9
+< 	register r;
+< 	register c;
+---
+> 	register int r;
+> 	register int c;
+```
+
+### lib/freopen.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/freopen.c unix-v7-c99/lib/freopen.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/fseek.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fseek.c unix-v7-c99/lib/fseek.c || true
+```
+
+Expect:
+
+```
+8a9
+> int
+11a13
+> 	int ptrname;
+```
+
+### lib/ftell.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/ftell.c unix-v7-c99/lib/ftell.c || true
+```
+
+Expect:
+
+```
+14c14
+< 	register adjust;
+---
+> 	register int adjust;
+```
+
+### lib/getchar.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/getchar.c unix-v7-c99/lib/getchar.c || true
+```
+
+Expect:
+
+```
+7a8
+> int
+```
+
+### lib/getpass.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/getpass.c unix-v7-c99/lib/getpass.c || true
+```
+
+Expect:
+
+```
+12c12
+< 	register c;
+---
+> 	register int c;
+15d14
+< 	int (*signal())();
+22c21
+< 	sig = signal(SIGINT, SIG_IGN);
+---
+> 	sig = (int (*)())signal(SIGINT, (int)SIG_IGN);
+36c35
+< 	signal(SIGINT, sig);
+---
+> 	signal(SIGINT, (int)sig);
+```
+
+### lib/gets.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/gets.c unix-v7-c99/lib/gets.c || true
+```
+
+Expect:
+
+```
+7c7
+< 	register c;
+---
+> 	register int c;
+```
+
+### lib/printf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/printf.c unix-v7-c99/lib/printf.c || true
+```
+
+Expect:
+
+```
+1a2,3
+> #include	<stdarg.h>
+> extern void _doprnt();
+3,4c5,6
+< printf(fmt, args)
+< char *fmt;
+---
+> int
+> printf(char *fmt, ...)
+6c8,11
+< 	_doprnt(fmt, &args, stdout);
+---
+> 	va_list ap;
+> 	va_start(ap, fmt);
+> 	_doprnt(fmt, &ap, stdout);
+> 	va_end(ap);
+```
+
+### lib/putchar.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/putchar.c unix-v7-c99/lib/putchar.c || true
+```
+
+Expect:
+
+```
+7a8
+> int
+9c10
+< register c;
+---
+> register int c;
+11c12
+< 	putc(c, stdout);
+---
+> 	return(putc(c, stdout));
+```
+
+### lib/puts.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/puts.c unix-v7-c99/lib/puts.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+6c7
+< 	register c;
+---
+> 	register int c;
+```
+
+### lib/rdwr.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/rdwr.c unix-v7-c99/lib/rdwr.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+8c9
+< 	register c;
+---
+> 	register int c;
+24a26
+> int
+```
+
+### lib/rew.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/rew.c unix-v7-c99/lib/rew.c || true
+```
+
+Expect:
+
+```
+2a3
+> void
+```
+
+### lib/scanf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/scanf.c unix-v7-c99/lib/scanf.c || true
+```
+
+Expect:
+
+```
+1a2,3
+> #include	<stdarg.h>
+> int	_doscan();
+3,4c5,6
+< scanf(fmt, args)
+< char *fmt;
+---
+> int
+> scanf(char *fmt, ...)
+6c8,13
+< 	return(_doscan(stdin, fmt, &args));
+---
+> 	va_list ap;
+> 	int r;
+> 	va_start(ap, fmt);
+> 	r = _doscan(stdin, fmt, &ap);
+> 	va_end(ap);
+> 	return(r);
+9,11c16,17
+< fscanf(iop, fmt, args)
+< FILE *iop;
+< char *fmt;
+---
+> int
+> fscanf(FILE *iop, char *fmt, ...)
+13c19,24
+< 	return(_doscan(iop, fmt, &args));
+---
+> 	va_list ap;
+> 	int r;
+> 	va_start(ap, fmt);
+> 	r = _doscan(iop, fmt, &ap);
+> 	va_end(ap);
+> 	return(r);
+16,18c27,28
+< sscanf(str, fmt, args)
+< register char *str;
+< char *fmt;
+---
+> int
+> sscanf(char *str, char *fmt, ...)
+20a31,32
+> 	va_list ap;
+> 	int r;
+27c39,42
+< 	return(_doscan(&_strbuf, fmt, &args));
+---
+> 	va_start(ap, fmt);
+> 	r = _doscan(&_strbuf, fmt, &ap);
+> 	va_end(ap);
+> 	return(r);
+```
+
+### lib/setbuf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/setbuf.c unix-v7-c99/lib/setbuf.c || true
+```
+
+Expect:
+
+```
+2a3
+> void
+```
+
+### lib/sprintf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/sprintf.c unix-v7-c99/lib/sprintf.c || true
+```
+
+Expect:
+
+```
+1a2,3
+> #include	<stdarg.h>
+> extern void _doprnt();
+3,4c5,6
+< char *sprintf(str, fmt, args)
+< char *str, *fmt;
+---
+> char *
+> sprintf(char *str, char *fmt, ...)
+6a9
+> 	va_list ap;
+11c14,16
+< 	_doprnt(fmt, &args, &_strbuf);
+---
+> 	va_start(ap, fmt);
+> 	_doprnt(fmt, &ap, &_strbuf);
+> 	va_end(ap);
+```
+
+### lib/strout.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/strout.c unix-v7-c99/lib/strout.c || true
+```
+
+Expect:
+
+```
+2a3
+> void
+5c6
+< register count;
+---
+> register int count;
+7a9
+> int fillch;
+```
+
+### lib/ungetc.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/ungetc.c unix-v7-c99/lib/ungetc.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+3a5
+> int c;
+10c12
+< 			*iop->_ptr++;
+---
+> 			iop->_ptr++;
+```
+
+### lib/ctime.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/ctime.c unix-v7-c99/lib/ctime.c || true
+```
+
+Expect:
+
+```
+30c30
+<  *	Thu Jan 01 00:00:00 1970n0\\
+---
+>  *	Thu Jan 01 00:00:00 1970n0\\
+72c72
+< char		*ct_numb();
+---
+> static char	*ct_numb();
+76a77,79
+> static int	sunday();
+> int	dysize();
+> int	ftime();
+91c94
+< 	register daylbegin, daylend;
+---
+> 	register int daylbegin, daylend;
+122c125
+< static
+---
+> static int
+226a230
+> int
+227a232
+> int y;
+236a242
+> int n;
+```
 ### cmd/getty.c
 
 Local test:

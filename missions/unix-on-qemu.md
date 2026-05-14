@@ -1777,3 +1777,52 @@ __TEST_DONE__
 # 
 ```
 
+### LIBC
+
+Regression test for the v7 libc port (lib/qsort.c, lib/timezone.c,
+lib/calloc.c, lib/tell.c, lib/getlogin.c -- atof.c on disk but unlinked).
+The new files do not add user-visible commands; they replace freestanding
+inlines in lib/u.h with faithful 1979 source.  The visible behaviour must
+not regress:
+
+  - `ls` of /bin (76 entries) drives v7's shellsort qsort end-to-end.
+  - `date` exercises lib/timezone.c's zonetab.  Kernel time is 0 so the
+    timezone offset is 0 -> "GMT" (lookup hit, no GMT+offset fallback).
+  - `random 0` confirms cmd/random still links (it pulls atof from the
+    decimal-and-fraction inline in u.h, not the faithful exponent-
+    handling lib/atof.c which is intentionally not in LIB).
+
+Local test:
+
+```
+unix-v7-c99/tools/qemu-shell.py
+```
+
+Inputs:
+
+```
+ls /bin | wc -l
+ls -1 /bin | sort | tail -3
+date
+echo hi | random 0
+echo __TEST_DONE__
+```
+
+Expect:
+
+```
+ls /bin | wc -l
+     75
+# ls -1 /bin | sort | tail -3
+who
+write
+yes
+# date
+Thu Jan  1 00:00:00 GMT 1970
+# echo hi | random 0
+hi
+# echo __TEST_DONE__
+__TEST_DONE__
+# 
+```
+
