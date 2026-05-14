@@ -92,8 +92,8 @@ drwxrwxr-x 1 root       32 Jan  1 00:00 d
 # rmdir /tmp/d
 # ln /etc/passwd /tmp/pwlink
 # ls -li /etc/passwd /tmp/pwlink
-   86 -rw-r--r-- 1 root       51 Jan  1 00:00 /etc/passwd
-   86 -rw-r--r-- 1 root       51 Jan  1 00:00 /tmp/pwlink
+   85 -rw-r--r-- 1 root       51 Jan  1 00:00 /etc/passwd
+   85 -rw-r--r-- 1 root       51 Jan  1 00:00 /tmp/pwlink
 # rm /tmp/pwlink
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -327,7 +327,6 @@ file
 find
 grep
 icheck
-id
 join
 kill
 ln
@@ -622,10 +621,10 @@ Expect:
 
 ```
 ls -i /etc/passwd
-   86 /etc/passwd
+   85 /etc/passwd
 # ls -l /
 total 7
-drwxr-xr-x 1 root     1248 Jan  1 00:00 bin
+drwxr-xr-x 1 root     1232 Jan  1 00:00 bin
 drwxr-xr-x 1 root       48 Jan  1 00:00 dev
 drwxr-xr-x 1 root      128 Jan  1 00:00 etc
 drwxrwxrwx 1 root       48 Jan  1 00:00 tmp
@@ -634,7 +633,7 @@ drwxr-xr-x 1 root       64 Jan  1 00:00 usr
 not a tty
 # who
 # id
-uid=0
+id: cannot execute
 # mesg
 is n
 # echo __TEST_DONE__
