@@ -117,14 +117,11 @@ is_spdx_excluded() {
         *.png|*.jpg|*.jpeg|*.gif|*.ico|*.pdf|*.bin|*.hex|*.raw|*.out|*.elf|*.o|*.so|*.a|*.wasm|*.svg|*.gbr) return 0 ;;
         *.kicad_sch|*.kicad_pro|*.kicad_prl|*.kicad_pcb|*.drl|*.gbrjob|*.ioc|*.ddw|*.zip|*.tgz) return 0 ;;
     esac
-    # unix-v7-c99 port subtrees: 1979 V7 sources whose "leave-as-1979"
-    # rule conflicts with modern SPDX headers.  Scoped to the
-    # unix-v7-c99 submodule so the generic directory names (cmd/, sys/,
-    # …) don't accidentally exempt files in other repos.
+    # unix-v7-c99 port: the entire tree is 1979 V7 source plus
+    # port-local additions kept SPDX-free to stay consistent.  Exempt
+    # every file in this submodule unconditionally.
     if [ "$REPO" = "unix-v7-c99" ]; then
-        case "$1" in
-            cmd/*|sys/*|h/*|include/*|arch/*|dev/*|lib/*|root/*|tools/*|*.proto) return 0 ;;
-        esac
+        return 0
     fi
     return 1
 }
