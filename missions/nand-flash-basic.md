@@ -103,7 +103,6 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 1 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -155,7 +154,6 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 30 s):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -209,7 +207,6 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 1 min):
 
 ```
-lease:resume token="{{LEASE_TOKEN}}"
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -237,7 +234,6 @@ mp135.custom:uart_expect sentinel="FDT magic" timeout_ms=5000
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_close
 mark tag=msc_nand_smoke
-lease:release token="{{LEASE_TOKEN}}"
 ```
 
 Verify:
@@ -293,7 +289,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 3 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -374,7 +369,6 @@ Build: nothing required.
 Test (max 2 min):
 
 ```
-lease:resume token="{{LEASE_TOKEN}}"
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -386,7 +380,6 @@ mp135.custom:uart_write data="fmc_test_boot\r"
 mp135.custom:uart_expect sentinel="FDT magic OK" timeout_ms=10000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
-lease:release token="{{LEASE_TOKEN}}"
 mark tag=nand_health
 ```
 
@@ -444,7 +437,6 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 1 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -476,7 +468,6 @@ mp135.custom:uart_write data="echo ___MTD___; cat /proc/mtd; echo ___UBI___; ubi
 mp135.custom:uart_expect sentinel="___END___" timeout_ms=15000
 mp135.custom:uart_expect sentinel="# " timeout_ms=3000
 mp135.custom:uart_close
-lease:release
 mark tag=nand_health_linux
 ```
 

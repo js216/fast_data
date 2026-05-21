@@ -44,7 +44,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 4 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -84,7 +83,6 @@ mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
 mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
 mp135.custom:uart_close
-lease:release
 mark tag=stale_ubi_tail_panic_fixed
 ```
 
@@ -151,7 +149,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 4 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -197,7 +194,6 @@ mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
-lease:release
 mark tag=ecc_unrecoverable_refuses_jump
 ```
 
@@ -253,7 +249,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 3 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -294,7 +289,6 @@ mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
-lease:release
 mark tag=program_fail_marks_bad
 ```
 
@@ -355,7 +349,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 4 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -426,7 +419,6 @@ mp135.custom:uart_expect sentinel="___BBT_VERIFY___" timeout_ms=5000
 mp135.custom:uart_expect sentinel="___BBT_POST_HASHES_END___" timeout_ms=15000
 mp135.custom:uart_expect sentinel="___BBT_VERIFY_END___" timeout_ms=5000
 mp135.custom:uart_close
-lease:release
 mark tag=bbt_preserved_across_fmc_flush
 ```
 
@@ -598,7 +590,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 4 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -687,7 +678,6 @@ mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
-lease:release
 mark tag=bch_bitflip_corrected
 ```
 
@@ -1209,7 +1199,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 4 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -1262,7 +1251,6 @@ mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
-lease:release
 mark tag=kernel_hash_refuses_jump
 ```
 
@@ -1346,7 +1334,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 10 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -1470,7 +1457,6 @@ mp135.custom:uart_write data="fmc_flush\r"
 mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=60000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
-lease:release
 mark tag=pt_dtb_mirror_failover
 ```
 
@@ -1530,7 +1516,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 7 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -1614,7 +1599,6 @@ mp135.custom:uart_expect sentinel="___CRASH_CHECK___" timeout_ms=5000
 mp135.custom:uart_expect sentinel="recovered-" timeout_ms=10000
 mp135.custom:uart_expect sentinel="___CRASH_CHECK_END___" timeout_ms=10000
 mp135.custom:uart_close
-lease:release
 mark tag=power_loss_ubifs_recovers
 ```
 
@@ -1678,7 +1662,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 4 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -1716,7 +1699,6 @@ mp135.custom:uart_expect sentinel="rd errs" timeout_ms=120000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
 msc.custom:read n=29884416 offset_lba=0 min_rate_Bps=3000000
-lease:release
 mark tag=nand_round_trip_full_image
 ```
 
@@ -1784,7 +1766,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 20 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -1867,7 +1848,6 @@ mp135.custom:uart_expect sentinel="NAND_SPEED_LINUX_WRITE_NS=" timeout_ms=180000
 mp135.custom:uart_expect sentinel="NAND_SPEED_LINUX_READ_NS=" timeout_ms=120000
 mp135.custom:uart_expect sentinel="___SPEED_END___" timeout_ms=15000
 mp135.custom:uart_close
-lease:release
 mark tag=final_speed_characterization
 ```
 
