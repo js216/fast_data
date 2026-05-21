@@ -15,6 +15,13 @@ bash -c "\
     -not -path 'unix-v7-c99/root/usr/*' \
     -not -path 'unix-v7-c99/root/etc/init' \
     -not -path 'unix-v7-c99/root/etc/getty' \
+    -not -path 'unix-v7-c99/root/etc/accton' \
+    -not -path 'unix-v7-c99/root/etc/atrun' \
+    -not -path 'unix-v7-c99/root/etc/update' \
+    -not -path 'unix-v7-c99/root/etc/ac' \
+    -not -path 'unix-v7-c99/root/etc/cron' \
+    -not -path 'unix-v7-c99/root/etc/utmp.empty' \
+    -not -path 'unix-v7-c99/root/unix' \
     -not -path 'unix-v7-c99/root.img' \
     -not -path 'unix-v7-c99/unix' \
     -not -path 'unix-v7-c99/conf/test_malloc' \
@@ -32,10 +39,29 @@ unix-v7-c99/Makefile
 unix-v7-c99/README
 unix-v7-c99/arch/a7.ld
 unix-v7-c99/arch/a7.s
+unix-v7-c99/arch/arm.h
 unix-v7-c99/arch/armboot.c
 unix-v7-c99/arch/evb.ld
 unix-v7-c99/arch/machdep.c
+unix-v7-c99/arch/swtch.s
+unix-v7-c99/arch/u_bridge.c
+unix-v7-c99/arch/u_stub.c
 unix-v7-c99/arch/v7stubs.c
+unix-v7-c99/cmd/ac.c
+unix-v7-c99/cmd/accton.c
+unix-v7-c99/cmd/arithmetic.c
+unix-v7-c99/cmd/at.c
+unix-v7-c99/cmd/atrun.c
+unix-v7-c99/cmd/awk/awk.def
+unix-v7-c99/cmd/awk/b.c
+unix-v7-c99/cmd/awk/lib.c
+unix-v7-c99/cmd/awk/main.c
+unix-v7-c99/cmd/awk/parse.c
+unix-v7-c99/cmd/awk/proc.c
+unix-v7-c99/cmd/awk/run.c
+unix-v7-c99/cmd/awk/token.c
+unix-v7-c99/cmd/awk/tran.c
+unix-v7-c99/cmd/backgammon.c
 unix-v7-c99/cmd/basename.c
 unix-v7-c99/cmd/cal.c
 unix-v7-c99/cmd/calendar.c
@@ -50,24 +76,36 @@ unix-v7-c99/cmd/cmp.c
 unix-v7-c99/cmd/col.c
 unix-v7-c99/cmd/comm.c
 unix-v7-c99/cmd/cp.c
+unix-v7-c99/cmd/cron.c
 unix-v7-c99/cmd/crypt.c
 unix-v7-c99/cmd/date.c
+unix-v7-c99/cmd/dc/dc.c
+unix-v7-c99/cmd/dc/dc.h
 unix-v7-c99/cmd/dcheck.c
 unix-v7-c99/cmd/dd.c
 unix-v7-c99/cmd/df.c
 unix-v7-c99/cmd/diff.c
+unix-v7-c99/cmd/diff3.c
 unix-v7-c99/cmd/diffh.c
+unix-v7-c99/cmd/dkstat.c (port-local: integer-only iostat stand-in)
+unix-v7-c99/cmd/dmesg.c
 unix-v7-c99/cmd/du.c
+unix-v7-c99/cmd/dump.c
+unix-v7-c99/cmd/dumpdir.c
 unix-v7-c99/cmd/echo.c
 unix-v7-c99/cmd/ed.c
 unix-v7-c99/cmd/fgrep.c
 unix-v7-c99/cmd/file.c
 unix-v7-c99/cmd/find.c
+unix-v7-c99/cmd/fish.c
+unix-v7-c99/cmd/fortune.c
 unix-v7-c99/cmd/getty.c
+unix-v7-c99/cmd/graph.c
 unix-v7-c99/cmd/grep.c
+unix-v7-c99/cmd/hangman.c
 unix-v7-c99/cmd/icheck.c
-unix-v7-c99/cmd/id.c
 unix-v7-c99/cmd/init.c
+unix-v7-c99/cmd/iostat.c
 unix-v7-c99/cmd/join.c
 unix-v7-c99/cmd/kill.c
 unix-v7-c99/cmd/ln.c
@@ -84,9 +122,15 @@ unix-v7-c99/cmd/ncheck.c
 unix-v7-c99/cmd/newgrp.c
 unix-v7-c99/cmd/nice.c
 unix-v7-c99/cmd/od.c
+unix-v7-c99/cmd/passwd.c
+unix-v7-c99/cmd/plot/chrtab.c
 unix-v7-c99/cmd/pr.c
+unix-v7-c99/cmd/ptx.c
 unix-v7-c99/cmd/pwd.c
+unix-v7-c99/cmd/quiz.c
+unix-v7-c99/cmd/quot.c
 unix-v7-c99/cmd/random.c
+unix-v7-c99/cmd/restor.c
 unix-v7-c99/cmd/rev.c
 unix-v7-c99/cmd/rm.c
 unix-v7-c99/cmd/rmdir.c
@@ -124,6 +168,11 @@ unix-v7-c99/cmd/sh/xec.c
 unix-v7-c99/cmd/sleep.c
 unix-v7-c99/cmd/sort.c
 unix-v7-c99/cmd/sp.c
+unix-v7-c99/cmd/spell/spell.c
+unix-v7-c99/cmd/spell/spell.h
+unix-v7-c99/cmd/spell/spellin.c
+unix-v7-c99/cmd/spell/spellout.c
+unix-v7-c99/cmd/spline.c
 unix-v7-c99/cmd/split.c
 unix-v7-c99/cmd/stty.c
 unix-v7-c99/cmd/su.c
@@ -131,23 +180,37 @@ unix-v7-c99/cmd/sum.c
 unix-v7-c99/cmd/sync.c
 unix-v7-c99/cmd/tabs.c
 unix-v7-c99/cmd/tail.c
+unix-v7-c99/cmd/tar/tar.c
 unix-v7-c99/cmd/tee.c
 unix-v7-c99/cmd/test.c
 unix-v7-c99/cmd/time.c
+unix-v7-c99/cmd/tk.c
 unix-v7-c99/cmd/touch.c
+unix-v7-c99/cmd/tp/tp.h
+unix-v7-c99/cmd/tp/tp0.c
+unix-v7-c99/cmd/tp/tp1.c
+unix-v7-c99/cmd/tp/tp2.c
+unix-v7-c99/cmd/tp/tp3.c
+unix-v7-c99/cmd/tp/tp_defs.h
 unix-v7-c99/cmd/tr.c
 unix-v7-c99/cmd/tsort.c
 unix-v7-c99/cmd/tty.c
 unix-v7-c99/cmd/umount.c
 unix-v7-c99/cmd/uniq.c
+unix-v7-c99/cmd/units.c
+unix-v7-c99/cmd/update.c
+unix-v7-c99/cmd/vpr.c
 unix-v7-c99/cmd/wall.c
 unix-v7-c99/cmd/wc.c
 unix-v7-c99/cmd/who.c
 unix-v7-c99/cmd/write.c
+unix-v7-c99/cmd/wump.c
 unix-v7-c99/cmd/yes.c
 unix-v7-c99/conf/Makefile
 unix-v7-c99/conf/c.c
 unix-v7-c99/conf/putchar.c
+unix-v7-c99/conf/qemu_arm/auxfs.proto
+unix-v7-c99/conf/qemu_arm/root.proto
 unix-v7-c99/conf/test_malloc.c
 unix-v7-c99/dev/bio.c
 unix-v7-c99/dev/cat.c
@@ -165,6 +228,7 @@ unix-v7-c99/dev/ht.c
 unix-v7-c99/dev/kl.c
 unix-v7-c99/dev/mem.c
 unix-v7-c99/dev/mp135_blk.c
+unix-v7-c99/dev/msgbuf.c (port-local: kernel msgbuf storage)
 unix-v7-c99/dev/mx1.c
 unix-v7-c99/dev/mx2.c
 unix-v7-c99/dev/partab.c
@@ -186,7 +250,6 @@ unix-v7-c99/dev/virtio_blk.c
 unix-v7-c99/dev/vp.c
 unix-v7-c99/dev/vs.c
 unix-v7-c99/h/acct.h
-unix-v7-c99/h/arm.h
 unix-v7-c99/h/buf.h
 unix-v7-c99/h/callo.h
 unix-v7-c99/h/conf.h
@@ -217,7 +280,9 @@ unix-v7-c99/h/timeb.h
 unix-v7-c99/h/tty.h
 unix-v7-c99/h/types.h
 unix-v7-c99/h/user.h
+unix-v7-c99/include/a.out.h (port-local: hand-written from v7 a.out.h struct decls; ARM/ELF host has no v7-a.out layout)
 unix-v7-c99/include/ctype.h
+unix-v7-c99/include/dumprestor.h
 unix-v7-c99/include/errno.h
 unix-v7-c99/include/execargs.h
 unix-v7-c99/include/grp.h
@@ -240,25 +305,62 @@ unix-v7-c99/include/time.h
 unix-v7-c99/include/utmp.h
 unix-v7-c99/lib/Makefile
 unix-v7-c99/lib/abs.c
+unix-v7-c99/lib/acct.c
+unix-v7-c99/lib/atof.c
 unix-v7-c99/lib/atoi.c
 unix-v7-c99/lib/atol.c
+unix-v7-c99/lib/calloc.c
+unix-v7-c99/lib/clrerr.c
 unix-v7-c99/lib/compat.c
 unix-v7-c99/lib/crt0.c
 unix-v7-c99/lib/crt0.s
 unix-v7-c99/lib/crypt.c
+unix-v7-c99/lib/ctime.c
+unix-v7-c99/lib/data.c
+unix-v7-c99/lib/doprnt.c
+unix-v7-c99/lib/doscan.c
+unix-v7-c99/lib/endopen.c
 unix-v7-c99/lib/errlst.c
 unix-v7-c99/lib/execvp.c
+unix-v7-c99/lib/fgetc.c
+unix-v7-c99/lib/fgets.c
+unix-v7-c99/lib/filbuf.c
+unix-v7-c99/lib/findiop.c
+unix-v7-c99/lib/flsbuf.c
+unix-v7-c99/lib/fopen.c
+unix-v7-c99/lib/fprintf.c
+unix-v7-c99/lib/fputc.c
+unix-v7-c99/lib/fputs.c
+unix-v7-c99/lib/freopen.c
+unix-v7-c99/lib/fseek.c
+unix-v7-c99/lib/ftell.c
+unix-v7-c99/lib/getchar.c
 unix-v7-c99/lib/getenv.c
+unix-v7-c99/lib/getlogin.c
+unix-v7-c99/lib/getpass.c
 unix-v7-c99/lib/getpwent.c
 unix-v7-c99/lib/getpwnam.c
 unix-v7-c99/lib/getpwuid.c
+unix-v7-c99/lib/gets.c
 unix-v7-c99/lib/index.c
 unix-v7-c99/lib/isatty.c
 unix-v7-c99/lib/l3.c
+unix-v7-c99/lib/malloc.c
+unix-v7-c99/lib/memcpy.c
 unix-v7-c99/lib/mktemp.c
+unix-v7-c99/lib/nlist.c (port-local: ARM/ELF nlist parser; v7 had a v7-a.out parser at v7/usr/src/libc/gen/nlist.c)
 unix-v7-c99/lib/perror.c
+unix-v7-c99/lib/printf.c
+unix-v7-c99/lib/putchar.c
+unix-v7-c99/lib/puts.c
+unix-v7-c99/lib/qsort.c
 unix-v7-c99/lib/rand.c
+unix-v7-c99/lib/rdwr.c
+unix-v7-c99/lib/rew.c
 unix-v7-c99/lib/rindex.c
+unix-v7-c99/lib/scanf.c
+unix-v7-c99/lib/setbuf.c
+unix-v7-c99/lib/sprintf.c
 unix-v7-c99/lib/strcat.c
 unix-v7-c99/lib/strcmp.c
 unix-v7-c99/lib/strcpy.c
@@ -266,12 +368,17 @@ unix-v7-c99/lib/strlen.c
 unix-v7-c99/lib/strncat.c
 unix-v7-c99/lib/strncmp.c
 unix-v7-c99/lib/strncpy.c
+unix-v7-c99/lib/strout.c
 unix-v7-c99/lib/swab.c
+unix-v7-c99/lib/sys.s
 unix-v7-c99/lib/syscall.s
+unix-v7-c99/lib/system.c
+unix-v7-c99/lib/tell.c
+unix-v7-c99/lib/timezone.c
 unix-v7-c99/lib/ttyname.c
 unix-v7-c99/lib/ttyslot.c
-unix-v7-c99/lib/u.h
 unix-v7-c99/lib/u.ld
+unix-v7-c99/lib/ungetc.c
 unix-v7-c99/root/etc/passwd
 unix-v7-c99/root/etc/ttys
 unix-v7-c99/sys/Makefile
@@ -300,7 +407,6 @@ unix-v7-c99/sys/sysent.c
 unix-v7-c99/sys/text.c
 unix-v7-c99/sys/trap.c
 unix-v7-c99/sys/ureg.c
-unix-v7-c99/tools/minimkfs
 unix-v7-c99/tools/mkfs
 unix-v7-c99/tools/mkfs.c
 unix-v7-c99/tools/qemu-shell.py
@@ -323,6 +429,13 @@ bash -c "\
         -not -path 'unix-v7-c99/root/usr/*' \
         -not -path 'unix-v7-c99/root/etc/init' \
         -not -path 'unix-v7-c99/root/etc/getty' \
+        -not -path 'unix-v7-c99/root/etc/accton' \
+        -not -path 'unix-v7-c99/root/etc/atrun' \
+        -not -path 'unix-v7-c99/root/etc/update' \
+        -not -path 'unix-v7-c99/root/etc/ac' \
+        -not -path 'unix-v7-c99/root/etc/cron' \
+        -not -path 'unix-v7-c99/root/etc/utmp.empty' \
+        -not -path 'unix-v7-c99/root/unix' \
         -not -path 'unix-v7-c99/root.img' \
         -not -path 'unix-v7-c99/unix' \
         -not -path 'unix-v7-c99/conf/test_malloc' \
@@ -345,29 +458,41 @@ Makefile
 README
 arch/a7.ld
 arch/a7.s
+arch/arm.h
 arch/armboot.c
 arch/evb.ld
 arch/machdep.c
+arch/swtch.s
+arch/u_bridge.c
+arch/u_stub.c
 arch/v7stubs.c
-cmd/id.c
+cmd/dkstat.c
 cmd/sh/makefile
 conf/Makefile
+conf/qemu_arm/auxfs.proto
+conf/qemu_arm/root.proto
 conf/test_malloc.c
 dev/mp135_blk.c
+dev/msgbuf.c
 dev/pl011.c
 dev/stm32_usart.c
 dev/virtio_blk.c
-h/arm.h
 h/proto.h
+include/a.out.h
+include/stdio.h
 lib/Makefile
+lib/acct.c
 lib/compat.c
 lib/crt0.c
-lib/u.h
+lib/doprnt.c (port-local: hand-written replacement for v7's PDP-11 doprnt.s; integer + %s/%c specifiers plus a minimal %f/%e/%g using libgcc softfp helpers)
+lib/malloc.c
+lib/memcpy.c
+lib/nlist.c
+lib/sys.s
 lib/u.ld
 root/etc/passwd
 root/etc/ttys
 sys/Makefile
-tools/minimkfs
 tools/mkfs
 tools/qemu-shell.py
 ```
@@ -2111,7 +2236,7 @@ Expect:
 ```
 7a8,10
 > #define	puts	u_puts
-> #include "../lib/u.h"
+> #include <stdio.h>
 > #undef	puts
 ```
 
@@ -2126,24 +2251,30 @@ diff unix-v7-c99/v7/usr/src/libc/gen/l3.c unix-v7-c99/lib/l3.c || true
 Expect:
 
 ```
-3a4,7
-> int ltol3(char *cp, long *lp, int n);
-> int l3tol(long *lp, char *cp, int n);
-> 
+3a4,5
+> int ltol3(), l3tol();
 > int
-9c13
+9c11
 < 	register i;
 ---
 > 	register int i;
-26a31
+22d23
+< 		b++;
+24a26
+> 		b++;
+26a29
 > 	return(0);
-28a34
+28a32
 > int
-34c40
+34c38
 < 	register i;
 ---
 > 	register int i;
-51a58
+47d50
+< 		*a++ = 0;
+49a53
+> 		*a++ = 0;
+51a56
 > 	return(0);
 ```
 
@@ -2410,7 +2541,36 @@ diff unix-v7-c99/v7/usr/sys/h/reg.h unix-v7-c99/h/reg.h || true
 Expect:
 
 ```
-
+17a18,46
+> 
+> /*
+>  * ARM EABI label_t layout used by save/savu/aretu/resume in arch/swtch.s.
+>  *
+>  * label_t is declared `typedef int label_t[10]` in h/param.h.  The
+>  * primitives stmia/ldmia the AAPCS callee-saved registers into it,
+>  * followed by sp and lr, in this order:
+>  *
+>  *   label[0] = r4    label[5] = r9
+>  *   label[1] = r5    label[6] = r10
+>  *   label[2] = r6    label[7] = r11 (fp)
+>  *   label[3] = r7    label[8] = sp
+>  *   label[4] = r8    label[9] = lr
+>  *
+>  * save() captures this on entry and returns 0; aretu()/resume()
+>  * restore from a label and make the original save() appear to
+>  * return 1.  This mirrors the historic V7 savu/aretu contract on
+>  * PDP-11 where label_t held r5 (frame pointer) and sp.
+>  */
+> #define	LABEL_R4	0
+> #define	LABEL_R5	1
+> #define	LABEL_R6	2
+> #define	LABEL_R7	3
+> #define	LABEL_R8	4
+> #define	LABEL_R9	5
+> #define	LABEL_R10	6
+> #define	LABEL_R11	7
+> #define	LABEL_SP	8
+> #define	LABEL_LR	9
 ```
 
 ### h/seg.h
@@ -4033,6 +4193,39 @@ Expect:
 ---
 > 	register int c, i, n;
 ```
+
+### cmd/dmesg.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/dmesg.c unix-v7-c99/cmd/dmesg.c || true
+```
+
+Expect:
+
+```
+23a24,27
+> int done(char *);
+> int pdate(void);
+> 
+> int
+24a29
+> int argc;
+83a89
+> int
+99a106
+> 	return(0);
+101a109
+> int
+105c113
+< 	static firstime;
+---
+> 	static int firstime;
+112a121
+> 	return(0);
+```
+
 ### cmd/du.c
 
 Local test:
@@ -4954,6 +5147,151 @@ Expect:
 > 	return(0);
 ```
 
+### cmd/iostat.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/iostat.c unix-v7-c99/cmd/iostat.c || true
+```
+
+Expect:
+
+```
+0a1,2
+> #include <stdio.h>
+> 
+7,8c9
+< struct
+< {
+---
+> struct nlent {
+12,15d12
+< } nl[] = {
+< 	"_dk_busy", 0, 0,
+< 	"_io_info", 0, 0,
+< 	"\0\0\0\0\0\0\0\0", 0, 0
+17,18c14,24
+< struct
+< {
+---
+> struct nlent nl[] = {
+> 	{"_dk_busy", 0, 0},
+> 	{"_io_info", 0, 0},
+> 	{"_dk_time", 0, 0},
+> 	{"_dk_numb", 0, 0},
+> 	{"_dk_wds",  0, 0},
+> 	{"_tk_nin",  0, 0},
+> 	{"_tk_nout", 0, 0},
+> 	{"\0\0\0\0\0\0\0\0", 0, 0}
+> };
+> struct sample {
+38a45,53
+> int	stats(int);
+> int	stat1(int);
+> int	stats2(double);
+> int	stats3(double);
+> int	biostats(void);
+> int	atoi(char *);
+> int	nlist(char *, struct nlent *);
+> 
+> int
+39a55
+> int argc;
+43c59
+< 	register  i;
+---
+> 	register  int i;
+49c65
+< 	if(nl[0].type == -1) {
+---
+> 	if(nl[0].type == 0) {
+88a105,108
+> 	/* The v7 original assumed dk_busy/etime/numb/wds/tin/tout were
+> 	 * laid out contiguously in kernel .bss so a single read() filled
+> 	 * `s`.  ELF link order doesn't honour that, so read each symbol
+> 	 * individually into the matching slot. */
+90c110,130
+< 	read(mf, (char *)&s, sizeof s);
+---
+> 	read(mf, (char *)&s.busy, sizeof(s.busy));
+> 	if (nl[2].type != 0) {
+> 		lseek(mf, (long)nl[2].value, 0);
+> 		read(mf, (char *)s.etime, sizeof(s.etime));
+> 	}
+> 	if (nl[3].type != 0) {
+> 		lseek(mf, (long)nl[3].value, 0);
+> 		read(mf, (char *)s.numb, sizeof(s.numb));
+> 	}
+> 	if (nl[4].type != 0) {
+> 		lseek(mf, (long)nl[4].value, 0);
+> 		read(mf, (char *)s.wds, sizeof(s.wds));
+> 	}
+> 	if (nl[5].type != 0) {
+> 		lseek(mf, (long)nl[5].value, 0);
+> 		read(mf, (char *)&s.tin, sizeof(s.tin));
+> 	}
+> 	if (nl[6].type != 0) {
+> 		lseek(mf, (long)nl[6].value, 0);
+> 		read(mf, (char *)&s.tout, sizeof(s.tout));
+> 	}
+91a132
+> 		if (i >= 32) break;
+139a181
+> 	return(0);
+148a191
+> int
+149a193
+> int dn;
+151c195
+< 	register i;
+---
+> 	register int i;
+165c209
+< 		return;
+---
+> 		return(0);
+175a220
+> 	return(0);
+177a223
+> int
+178a225
+> int o;
+180c227
+< 	register i;
+---
+> 	register int i;
+194a242
+> 	return(0);
+196a245
+> int
+200c249
+< 	register i, j;
+---
+> 	register int i, j;
+206a256
+> 	return(0);
+208a259
+> int
+212c263
+< 	register i;
+---
+> 	register int i;
+251a303
+> 	return(0);
+253a306
+> int
+256c309
+< register i;
+---
+> 	register int i;
+257a311,312
+> 	if (nl[1].type == 0)
+> 		return(0);
+270a326
+> 	return(0);
+```
+
 ### cmd/ncheck.c
 
 Local test:
@@ -5526,6 +5864,10 @@ Expect:
 < typedef	unsigned int	ino_t;
 ---
 > typedef	unsigned short	ino_t;
+133c133
+< typedef	int		label_t[6];	/* regs 2-7 */
+---
+> typedef	int		label_t[10];	/* ARM callee-saved: r4-r11, sp, lr (see h/reg.h) */
 ```
 
 ### h/systm.h
@@ -5578,6 +5920,10 @@ Expect:
 < typedef	unsigned int	ino_t;     	/* i-node number */
 ---
 > typedef	unsigned short	ino_t;     	/* i-node number */
+5c5
+< typedef	int        	label_t[6]; 	/* program status */
+---
+> typedef	int        	label_t[10];	/* ARM callee-saved: r4-r11, sp, lr (see h/reg.h) */
 ```
 
 ### sys/iget.c
@@ -5591,107 +5937,32 @@ diff unix-v7-c99/v7/usr/sys/sys/iget.c unix-v7-c99/sys/iget.c || true
 Expect:
 
 ```
-11a12,34
-> /* Stub prototypes - implementations live in v7stubs.c or other sys TUs. */
-> extern void bcopy(caddr_t from, caddr_t to, unsigned int count);
-> extern void brelse(struct buf *bp);
-> extern void bdwrite(struct buf *bp);
-> extern struct buf *bread(dev_t dev, daddr_t blkno);
-> extern void free(dev_t dev, daddr_t bn);
-> extern struct filsys *getfs(dev_t dev);
-> extern struct inode *ialloc(dev_t dev);
-> extern void ifree(dev_t dev, ino_t ino);
-> extern void prele(struct inode *ip);
-> extern void printf(char *fmt, ...);
-> extern void panic(char *s);
-> extern void sleep(caddr_t chan, int pri);
-> extern int writei(struct inode *ip);
-> 
-> void iexpand(struct inode *ip, struct dinode *dp);
-> void iput(struct inode *ip);
-> void iupdat(struct inode *ip, time_t *ta, time_t *tm);
-> void itrunc(struct inode *ip);
-> void tloop(dev_t dev, daddr_t bn, int f1, int f2);
-> struct inode *maknode(int mode);
-> void wdir(struct inode *ip);
-> 
-30,32c53
-< iget(dev, ino)
-< dev_t dev;
-< ino_t ino;
+109d108
+< 		*p1++ = 0;
+111a111
+> 		*p1++ = 0;
+161c161
+< 			return;
 ---
-> iget(dev_t dev, ino_t ino)
-75c96
-< 	ip->i_un.i_lastr = 0;
+> 			return(0);
+165c165
+< 			return;
 ---
-> 	ip->i_lastr = 0;
-92,94c113,114
-< iexpand(ip, dp)
-< register struct inode *ip;
-< register struct dinode *dp;
+> 			return(0);
+177a178,179
+> 			*p1++ = *p2++;
+> 			*p1++ = *p2++;
+181,182d182
+< 			*p1++ = *p2++;
+< 			*p1++ = *p2++;
+213c213
+< 		return;
 ---
-> void
-> iexpand(struct inode *ip, struct dinode *dp)
-105c125
-< 	p1 = (char *)ip->i_un.i_addr;
+> 		return(0);
+257c257
+< 				return;
 ---
-> 	p1 = (char *)ip->i_addr;
-122,123c142,143
-< iput(ip)
-< register struct inode *ip;
----
-> void
-> iput(struct inode *ip)
-149,151c169,170
-< iupdat(ip, ta, tm)
-< register struct inode *ip;
-< time_t *ta, *tm;
----
-> void
-> iupdat(struct inode *ip, time_t *ta, time_t *tm)
-175c194
-< 		p2 = (char *)ip->i_un.i_addr;
----
-> 		p2 = (char *)ip->i_addr;
-204,205c223,224
-< itrunc(ip)
-< register struct inode *ip;
----
-> void
-> itrunc(struct inode *ip)
-207c226
-< 	register i;
----
-> 	register int i;
-216c235
-< 		bn = ip->i_un.i_addr[i];
----
-> 		bn = ip->i_addr[i];
-219c238
-< 		ip->i_un.i_addr[i] = (daddr_t)0;
----
-> 		ip->i_addr[i] = (daddr_t)0;
-242,244c261,262
-< tloop(dev, bn, f1, f2)
-< dev_t dev;
-< daddr_t bn;
----
-> void
-> tloop(dev_t dev, daddr_t bn, int f1, int f2)
-246c264
-< 	register i;
----
-> 	register int i;
-280c298
-< maknode(mode)
----
-> maknode(int mode)
-305,306c323,324
-< wdir(ip)
-< struct inode *ip;
----
-> void
-> wdir(struct inode *ip)
+> 				return(0);
 ```
 
 ### sys/nami.c
@@ -5889,590 +6160,6 @@ Expect:
 > geterror(struct buf *bp)
 ```
 
-### cmd/getty.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/getty.c unix-v7-c99/cmd/getty.c || true
-```
-
-Expect:
-
-```
-1,4c1
-< #
-< /*
-<  * getty -- adapt to terminal speed on dialup, and call login
-<  */
----
-> #include "../lib/u.h"
-6,178c3,4
-< #include <sgtty.h>
-< #include <signal.h>
-< #define ERASE	'#'
-< #define KILL	'@'
-< 
-< struct sgttyb tmode;
-< struct tchars tchars = { '\177', '\034', '\021', '\023', '\004', '\377' };
-< 
-< struct	tab {
-< 	char	tname;		/* this table name */
-< 	char	nname;		/* successor table name */
-< 	int	iflags;		/* initial flags */
-< 	int	fflags;		/* final flags */
-< 	int	ispeed;		/* input speed */
-< 	int	ospeed;		/* output speed */
-< 	char	*message;	/* login message */
-< } itab[] = {
-< 
-< /* table '0'-1-2-3 300,1200,150,110 */
-< 
-< 	'0', 1,
-< 	ANYP+RAW+NL1+CR1, ANYP+ECHO+CR1,
-< 	B300, B300,
-< 	"\n\r\033;\007login: ",
-< 
-< 	1, 2,
-< 	ANYP+RAW+NL1+CR1, ANYP+XTABS+ECHO+CRMOD+FF1,
-< 	B1200, B1200,
-< 	"\n\r\033;login: ",
-< 
-< 	2, 3,
-< 	ANYP+RAW+NL1+CR1, EVENP+ECHO+FF1+CR2+TAB1+NL1,
-< 	B150, B150,
-< 	"\n\r\033:\006\006\017login: ",
-< 
-< 	3, '0',
-< 	ANYP+RAW+NL1+CR1, ANYP+ECHO+CRMOD+XTABS+LCASE+CR1,
-< 	B110, B110,
-< 	"\n\rlogin: ",
-< 
-< /* table '-' -- Console TTY 110 */
-< 	'-', '-',
-< 	ANYP+RAW+NL1+CR1, ANYP+ECHO+CRMOD+XTABS+LCASE+CR1,
-< 	B110, B110,
-< 	"\n\rlogin: ",
-< 
-< /* table '1' -- 150 */
-< 	'1', '1',
-< 	ANYP+RAW+NL1+CR1, EVENP+ECHO+FF1+CR2+TAB1+NL1,
-< 	B150, B150,
-< 	"\n\r\033:\006\006\017login: ",
-< 
-< /* table '2' -- 9600 */
-< 	'2', '2',
-< 	ANYP+RAW+NL1+CR1, ANYP+XTABS+ECHO+CRMOD+FF1,
-< 	B9600, B9600,
-< 	"\n\r\033;login: ",
-< 
-< /* table '3'-'5' -- 1200,300 */
-< 	'3', '5',
-< 	ANYP+RAW+NL1+CR1, ANYP+XTABS+ECHO+CRMOD+FF1,
-< 	B1200, B1200,
-< 	"\n\r\033;login: ",
-< 
-< /* table '5'-'3' -- 300,1200 */
-< 	'5', '3',
-< 	ANYP+RAW+NL1+CR1, ANYP+ECHO+CR1,
-< 	B300, B300,
-< 	"\n\r\033;\007login: ",
-< 
-< /* table '4' -- Console Decwriter */
-< 	'4', '4',
-< 	ANYP+RAW, ANYP+ECHO+CRMOD+XTABS,
-< 	B300, B300,
-< 	"\n\rlogin: ",
-< 
-< /* table 'i' -- Interdata Console */
-< 	'i', 'i',
-< 	RAW+CRMOD, CRMOD+ECHO+LCASE,
-< 	0, 0,
-< 	"\n\rlogin: ",
-< 
-< /* table 'l' -- LSI Chess Terminal */
-< 	'l', 'l',
-< 	ANYP+RAW/*+HUPCL*/, ANYP+ECHO/*+HUPCL*/,
-< 	B300, B300,
-< 	"*",
-< /* table '6' -- 2400 11/23 line */
-< 	'6', '6',
-< 	ANYP+RAW+NL1+CR1, ANYP+ECHO,
-< 	B2400, B2400,
-< 	"\n\rlogin: ",
-< 
-< };
-< 
-< #define	NITAB	sizeof itab/sizeof itab[0]
-< #define	EOT	04		/* EOT char */
-< 
-< char	name[16];
-< int	crmod;
-< int	upper;
-< int	lower;
-< 
-< char partab[] = {
-< 	0001,0201,0201,0001,0201,0001,0001,0201,
-< 	0202,0004,0003,0205,0005,0206,0201,0001,
-< 	0201,0001,0001,0201,0001,0201,0201,0001,
-< 	0001,0201,0201,0001,0201,0001,0001,0201,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0000,0200,0200,0000,0200,0000,0000,0200,
-< 	0000,0200,0200,0000,0200,0000,0000,0200,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0000,0200,0200,0000,0200,0000,0000,0200,
-< 	0000,0200,0200,0000,0200,0000,0000,0200,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0000,0200,0200,0000,0200,0000,0000,0200,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0200,0000,0000,0200,0000,0200,0200,0000,
-< 	0000,0200,0200,0000,0200,0000,0000,0201
-< };
-< 
-< main(argc, argv)
-< char **argv;
-< {
-< 	register struct tab *tabp;
-< 	int tname;
-< 
-< 	tname = '0';
-< 	if (argc > 1)
-< 		tname = argv[1][0];
-< 	switch (tname) {
-< 
-< 	case '3':		/* adapt to connect speed (212) */
-< 		ioctl(0, TIOCGETP, &tmode);
-< 		if (tmode.sg_ispeed==B300)
-< 			tname = '0';
-< 		else
-< 			tname = '3';
-< 		break;
-< 	}
-< 	for (;;) {
-< 		for(tabp = itab; tabp < &itab[NITAB]; tabp++)
-< 			if(tabp->tname == tname)
-< 				break;
-< 		if(tabp >= &itab[NITAB])
-< 			tabp = itab;
-< 		tmode.sg_flags = tabp->iflags;
-< 		tmode.sg_ispeed = tabp->ispeed;
-< 		tmode.sg_ospeed = tabp->ospeed;
-< 		ioctl(0, TIOCSETP, &tmode);
-< 		ioctl(0, TIOCSETC, &tchars);
-< 		puts(tabp->message);
-< 		if(getname()) {
-< 			tmode.sg_erase = ERASE;
-< 			tmode.sg_kill = KILL;
-< 			tmode.sg_flags = tabp->fflags;
-< 			if(crmod)
-< 				tmode.sg_flags |= CRMOD;
-< 			if(upper)
-< 				tmode.sg_flags |= LCASE;
-< 			if(lower)
-< 				tmode.sg_flags &= ~LCASE;
-< 			stty(0, &tmode);
-< 			putchr('\n');
-< 			execl("/bin/login", "login", name, 0);
-< 			exit(1);
-< 		}
-< 		tname = tabp->nname;
-< 	}
-< }
-< 
-< getname()
----
-> int
-> main(void)
-180,182d5
-< 	register char *np;
-< 	register c;
-< 	char cs;
-184,218c7,9
-< 	crmod = 0;
-< 	upper = 0;
-< 	lower = 0;
-< 	np = name;
-< 	for (;;) {
-< 		if (read(0, &cs, 1) <= 0)
-< 			exit(0);
-< 		if ((c = cs&0177) == 0)
-< 			return(0);
-< 		if (c==EOT)
-< 			exit(1);
-< 		if (c=='\r' || c=='\n' || np >= &name[16])
-< 			break;
-< 		putchr(cs);
-< 		if (c>='a' && c <='z')
-< 			lower++;
-< 		else if (c>='A' && c<='Z') {
-< 			upper++;
-< 			c += 'a'-'A';
-< 		} else if (c==ERASE) {
-< 			if (np > name)
-< 				np--;
-< 			continue;
-< 		} else if (c==KILL) {
-< 			putchr('\r');
-< 			putchr('\n');
-< 			np = name;
-< 			continue;
-< 		} else if(c == ' ')
-< 			c = '_';
-< 		*np++ = c;
-< 	}
-< 	*np = 0;
-< 	if (c == '\r')
-< 		crmod++;
----
-> 	puts("\nlogin: ");
-> 	(void)exec("/bin/login");
-> 	puts("getty: cannot exec login\n");
-220,237d10
-< }
-< 
-< puts(as)
-< char *as;
-< {
-< 	register char *s;
-< 
-< 	s = as;
-< 	while (*s)
-< 		putchr(*s++);
-< }
-< 
-< putchr(cc)
-< {
-< 	char c;
-< 	c = cc;
-< 	c |= partab[c&0177] & 0200;
-< 	write(1, &c, 1);
-```
-
-### cmd/init.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/init.c unix-v7-c99/cmd/init.c || true
-```
-
-Expect:
-
-```
-1,4c1
-< #include <signal.h>
-< #include <sys/types.h>
-< #include <utmp.h>
-< #include <setjmp.h>
----
-> #include "../lib/u.h"
-6,95c3,4
-< #define	TABSIZ	100
-< #define	ALL	p = &itab[0]; p < &itab[TABSIZ]; p++
-< #define	EVER	;;
-< 
-< char	shell[]	= "/bin/sh";
-< char	getty[]	 = "/etc/getty";
-< char	minus[]	= "-";
-< char	runc[]	= "/etc/rc";
-< char	ifile[]	= "/etc/ttys";
-< char	utmp[]	= "/etc/utmp";
-< char	wtmpf[]	= "/usr/adm/wtmp";
-< char	ctty[]	= "/dev/console";
-< char	dev[]	= "/dev/";
-< 
-< struct utmp wtmp;
-< struct
-< {
-< 	char	line[8];
-< 	char	comn;
-< 	char	flag;
-< } line;
-< struct	tab
-< {
-< 	char	line[8];
-< 	char	comn;
-< 	int	pid;
-< } itab[TABSIZ];
-< 
-< int	fi;
-< char	tty[20];
-< jmp_buf	sjbuf;
-< 
-< main()
-< {
-< 	int reset();
-< 
-< 	setjmp(sjbuf);
-< 	signal(SIGHUP, reset);
-< 	for(EVER) {
-< 		shutdown();
-< 		single();
-< 		runcom();
-< 		merge();
-< 		multiple();
-< 	}
-< }
-< 
-< shutdown()
-< {
-< 	register i;
-< 	register struct tab *p;
-< 
-< 	signal(SIGINT, SIG_IGN);
-< 	for(ALL)
-< 		term(p);
-< 	signal(SIGALRM, reset);
-< 	alarm(60);
-< 	for(i=0; i<5; i++)
-< 		kill(-1, SIGKILL);
-< 	while(wait((int *)0) != -1)
-< 		;
-< 	alarm(0);
-< 	signal(SIGALRM, SIG_DFL);
-< 	for(i=0; i<10; i++)
-< 		close(i);
-< }
-< 
-< single()
-< {
-< 	register pid;
-< 
-< 	pid = fork();
-< 	if(pid == 0) {
-< /*
-< 		alarm(300);
-< */
-< 		signal(SIGHUP, SIG_DFL);
-< 		signal(SIGINT, SIG_DFL);
-< 		signal(SIGALRM, SIG_DFL);
-< 		open(ctty, 2);
-< 		dup(0);
-< 		dup(0);
-< 		execl(shell, minus, (char *)0);
-< 		exit(0);
-< 	}
-< 	while(wait((int *)0) != pid)
-< 		;
-< }
-< 
-< runcom()
----
-> int
-> main(void)
-97,138d5
-< 	register pid;
-< 
-< 	pid = fork();
-< 	if(pid == 0) {
-< 		open("/", 0);
-< 		dup(0);
-< 		dup(0);
-< 		execl(shell, shell, runc, (char *)0);
-< 		exit(0);
-< 	}
-< 	while(wait((int *)0) != pid)
-< 		;
-< }
-< 
-< multiple()
-< {
-< 	register struct tab *p;
-< 	register pid;
-< 
-< 	for(EVER) {
-< 		pid = wait((int *)0);
-< 		if(pid == -1)
-< 			return;
-< 		for(ALL)
-< 			if(p->pid == pid || p->pid == -1) {
-< 				rmut(p);
-< 				dfork(p);
-< 			}
-< 	}
-< }
-< 
-< term(p)
-< register struct tab *p;
-< {
-< 
-< 	if(p->pid != 0) {
-< 		rmut(p);
-< 		kill(p->pid, SIGKILL);
-< 	}
-< 	p->pid = 0;
-< 	p->line[0] = 0;
-< }
-140,170c7,9
-< rline()
-< {
-< 	register c, i;
-< 
-< 	c = get();
-< 	if(c < 0)
-< 		return(0);
-< 	if(c == 0)
-< 		goto bad;
-< 	line.flag = c;
-< 	c = get();
-< 	if(c <= 0)
-< 		goto bad;
-< 	line.comn = c;
-< 	for(i=0; i<8; i++)
-< 		line.line[i] = 0;
-< 	for(i=0; i<7; i++) {
-< 		c = get();
-< 		if(c <= 0)
-< 			break;
-< 		line.line[i] = c;
-< 	}
-< 	while(c > 0)
-< 		c = get();
-< 	maktty(line.line);
-< 	if(access(tty, 06) < 0)
-< 		goto bad;
-< 	return(1);
-< 
-< bad:
-< 	line.flag = '0';
----
-> 	puts("init: multi-user\n");
-> 	(void)exec("/etc/getty");
-> 	puts("init: cannot exec getty\n");
-172,301d10
-< }
-< 
-< maktty(lin)
-< char *lin;
-< {
-< 	register i, j;
-< 
-< 	for(i=0; dev[i]; i++)
-< 		tty[i] = dev[i];
-< 	for(j=0; lin[j]; j++) {
-< 		tty[i] = lin[j];
-< 		i++;
-< 	}
-< 	tty[i] = 0;
-< }
-< 
-< get()
-< {
-< 	char b;
-< 
-< 	if(read(fi, &b, 1) != 1)
-< 		return(-1);
-< 	if(b == '\n')
-< 		return(0);
-< 	return(b);
-< }
-< 
-< merge()
-< {
-< 	register struct tab *p, *q;
-< 	register i;
-< 
-< 	close(creat(utmp, 0644));
-< 	signal(SIGINT, merge);
-< 	fi = open(ifile, 0);
-< 	if(fi < 0)
-< 		return;
-< 	q = &itab[0];
-< 	while(rline()) {
-< 		if(line.flag == '0')
-< 			continue;
-< 		for(ALL) {
-< 			if(p->line[0] != 0)
-< 			for(i=0; i<8; i++)
-< 				if(p->line[i] != line.line[i])
-< 					goto contin;
-< 			if(p >= q) {
-< 				i = p->pid;
-< 				p->pid = q->pid;
-< 				q->pid = i;
-< 				for(i=0; i<8; i++)
-< 					p->line[i] = q->line[i];
-< 				p->comn = q->comn;
-< 				for(i=0; i<8; i++)
-< 					q->line[i] = line.line[i];
-< 				q->comn = line.comn;
-< 				q++;
-< 			}
-< 			break;
-< 		contin:
-< 			;
-< 		}
-< 	}
-< 	close(fi);
-< 	for(; q < &itab[TABSIZ]; q++)
-< 		term(q);
-< 	for(ALL)
-< 		if(p->line[0] != 0 && p->pid == 0)
-< 			dfork(p);
-< }
-< 
-< dfork(p)
-< struct tab *p;
-< {
-< 	register pid;
-< 
-< 	pid = fork();
-< 	if(pid == 0) {
-< 		signal(SIGHUP, SIG_DFL);
-< 		signal(SIGINT, SIG_DFL);
-< 		maktty(p->line);
-< 		chown(tty, 0, 0);
-< 		chmod(tty, 0622);
-< 		open(tty, 2);
-< 		dup(0);
-< 		dup(0);
-< 		tty[0] = p->comn;
-< 		tty[1] = 0;
-< 		execl(getty, minus, tty, (char *)0);
-< 		exit(0);
-< 	}
-< 	p->pid = pid;
-< }
-< 
-< rmut(p)
-< register struct tab *p;
-< {
-< 	register i, f;
-< 
-< 	f = open(utmp, 2);
-< 	if(f >= 0) {
-< 		while(read(f, (char *)&wtmp, sizeof(wtmp)) == sizeof(wtmp)) {
-< 			for(i=0; i<8; i++)
-< 				if(wtmp.ut_line[i] != p->line[i])
-< 					goto contin;
-< 			lseek(f, -(long)sizeof(wtmp), 1);
-< 			for(i=0; i<8; i++)
-< 				wtmp.ut_name[i] = 0;
-< 			time(&wtmp.ut_time);
-< 			write(f, (char *)&wtmp, sizeof(wtmp));
-< 		contin:;
-< 		}
-< 		close(f);
-< 	}
-< 	f = open(wtmpf, 1);
-< 	if (f >= 0) {
-< 		for(i=0; i<8; i++) {
-< 			wtmp.ut_name[i] = 0;
-< 			wtmp.ut_line[i] = p->line[i];
-< 		}
-< 		time(&wtmp.ut_time);
-< 		lseek(f, (long)0, 2);
-< 		write(f, (char *)&wtmp, sizeof(wtmp));
-< 		close(f);
-< 	}
-< }
-< 
-< reset()
-< {
-< 	longjmp(sjbuf, 1);
-```
-
 ### cmd/login.c
 
 Local test:
@@ -6494,28 +6181,13 @@ Expect:
 ---
 > int
 > main(int argc, char **argv)
-40,41c40,41
-< 	signal(SIGQUIT, SIG_IGN);
-< 	signal(SIGINT, SIG_IGN);
----
-> 	signal(SIGQUIT, (int)SIG_IGN);
-> 	signal(SIGINT, (int)SIG_IGN);
-123,124c123,124
-< 	signal(SIGQUIT, SIG_DFL);
-< 	signal(SIGINT, SIG_DFL);
----
-> 	signal(SIGQUIT, (int)SIG_DFL);
-> 	signal(SIGINT, (int)SIG_DFL);
 131c131,132
 < catch()
 ---
 > void
 > catch(int sig)
-133c134,135
-< 	signal(SIGINT, SIG_IGN);
----
+132a134
 > 	(void)sig;
-> 	signal(SIGINT, (int)SIG_IGN);
 137c139,140
 < showmotd()
 ---
@@ -6529,10 +6201,6 @@ Expect:
 < 	signal(SIGINT, catch);
 ---
 > 	signal(SIGINT, (int)catch);
-148c151
-< 	signal(SIGINT, SIG_IGN);
----
-> 	signal(SIGINT, (int)SIG_IGN);
 ```
 
 ### cmd/ls.c
@@ -6975,24 +6643,7 @@ diff unix-v7-c99/v7/usr/sys/h/inode.h unix-v7-c99/h/inode.h || true
 Expect:
 
 ```
-37c37
-< 	union {
----
-> 	union i_un {
-41c41
-< 		};
----
-> 		} i_f;
-45c45
-< 		};
----
-> 		} i_d;
-47a48,52
-> 
-> #define	i_addr	i_un.i_f.i_addr
-> #define	i_lastr	i_un.i_f.i_lastr
-> #define	i_rdev	i_un.i_d.i_rdev
-> #define	i_group	i_un.i_d.i_group
+
 ```
 
 ### h/map.h
@@ -7041,6 +6692,10 @@ Expect:
 < typedef	unsigned int	ino_t;
 ---
 > typedef	unsigned short	ino_t;
+133c136
+< typedef	int		label_t[6];	/* regs 2-7 */
+---
+> typedef	int		label_t[10];	/* ARM callee-saved: r4-r11, sp, lr (see h/reg.h) */
 144a148,149
 > 
 > #endif
@@ -7077,25 +6732,7 @@ diff unix-v7-c99/v7/usr/sys/h/user.h unix-v7-c99/h/user.h || true
 Expect:
 
 ```
-0a1,5
-> #ifndef USER_H
-> #define USER_H
-> 
-> #include "../h/dir.h"
-> 
-34,35c39,40
-< 	union {				/* syscall return values */
-< 		struct	{
----
-> 	union ret {				/* syscall return values */
-> 		struct r	{
-38c43
-< 		};
----
-> 		} r;
-135a141,142
-> 
-> #endif
+
 ```
 
 ### include/ctype.h
@@ -7109,7 +6746,7 @@ diff unix-v7-c99/v7/usr/include/ctype.h unix-v7-c99/include/ctype.h || true
 Expect:
 
 ```
-1,24c1,7
+1,24c1,8
 < #define	_U	01
 < #define	_L	02
 < #define	_N	04
@@ -7142,6 +6779,7 @@ Expect:
 > #define	isalnum(c)	(isalpha(c)||isdigit(c))
 > #define	isspace(c)	((c)==' '||(c)=='\t'||(c)=='\n'||(c)=='\r'||(c)=='\f')
 > #define	toupper(c)	(islower(c)?(c)-'a'+'A':(c))
+> #define	tolower(c)	(isupper(c)?(c)-'A'+'a':(c))
 ```
 
 ### include/errno.h
@@ -7271,63 +6909,6 @@ Expect:
 > #define	SIG_IGN	1
 ```
 
-### include/stdio.h
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/include/stdio.h unix-v7-c99/include/stdio.h || true
-```
-
-Expect:
-
-```
-1,41c1
-< #define	BUFSIZ	512
-< #define	_NFILE	20
-< # ifndef FILE
-< extern	struct	_iobuf {
-< 	char	*_ptr;
-< 	int	_cnt;
-< 	char	*_base;
-< 	char	_flag;
-< 	char	_file;
-< } _iob[_NFILE];
-< # endif
-< 
-< #define	_IOREAD	01
-< #define	_IOWRT	02
-< #define	_IONBF	04
-< #define	_IOMYBUF	010
-< #define	_IOEOF	020
-< #define	_IOERR	040
-< #define	_IOSTRG	0100
-< #define	_IORW	0200
-< 
-< #define	NULL	0
-< #define	FILE	struct _iobuf
-< #define	EOF	(-1)
-< 
-< #define	stdin	(&_iob[0])
-< #define	stdout	(&_iob[1])
-< #define	stderr	(&_iob[2])
-< #define	getc(p)		(--(p)->_cnt>=0? *(p)->_ptr++&0377:_filbuf(p))
-< #define	getchar()	getc(stdin)
-< #define putc(x,p) (--(p)->_cnt>=0? ((int)(*(p)->_ptr++=(unsigned)(x))):_flsbuf((unsigned)(x),p))
-< #define	putchar(x)	putc(x,stdout)
-< #define	feof(p)		(((p)->_flag&_IOEOF)!=0)
-< #define	ferror(p)	(((p)->_flag&_IOERR)!=0)
-< #define	fileno(p)	p->_file
-< 
-< FILE	*fopen();
-< FILE	*freopen();
-< FILE	*fdopen();
-< long	ftell();
-< char	*fgets();
----
-> #include "../lib/u.h"
-```
-
 ### include/sys/dir.h
 
 Local test:
@@ -7339,12 +6920,10 @@ diff unix-v7-c99/v7/usr/include/sys/dir.h unix-v7-c99/include/sys/dir.h || true
 Expect:
 
 ```
-0a1,4
+0a1,2
 > #ifndef SYS_DIR_H
 > #define SYS_DIR_H
-> #include <sys/types.h>
-> 
-8a13
+8a11
 > #endif
 ```
 
@@ -7370,7 +6949,7 @@ Expect:
 ---
 > 	short	st_uid;
 > 	short	st_gid;
-16,28c20,28
+16,28c20,31
 < #define	S_IFMT	0170000		/* type of file */
 < #define		S_IFDIR	0040000	/* directory */
 < #define		S_IFCHR	0020000	/* character special */
@@ -7393,6 +6972,9 @@ Expect:
 > #define	S_IREAD	0000400
 > #define	S_IWRITE	0000200
 > #define	S_IEXEC	0000100
+> #define	S_ISUID	0004000
+> #define	S_ISGID	0002000
+> #define	S_ISVTX	0001000
 > #endif
 ```
 
@@ -7407,10 +6989,11 @@ diff unix-v7-c99/v7/usr/include/sys/timeb.h unix-v7-c99/include/sys/timeb.h || t
 Expect:
 
 ```
-0a1,2
+0a1,3
 > #ifndef SYS_TIMEB_H
 > #define SYS_TIMEB_H
-9a12
+> #include <sys/types.h>
+9a13
 > #endif
 ```
 
@@ -7803,2739 +7386,7 @@ diff unix-v7-c99/v7/usr/sys/sys/prim.c unix-v7-c99/sys/prim.c || true
 Expect:
 
 ```
-1,326c1,326
-< #include "../h/param.h"
-< #include "../h/tty.h"
-< #include "../h/systm.h"
-< #include "../h/conf.h"
-< #include "../h/buf.h"
-< 
-< struct cblock {
-< 	struct cblock *c_next;
-< 	char	c_info[CBSIZE];
-< };
-< 
-< struct	cblock	cfree[NCLIST];
-< struct	cblock	*cfreelist;
-< int	cbad;
-< 
-< /*
-<  * Character list get/put
-<  */
-< getc(p)
-< register struct clist *p;
-< {
-< 	register struct cblock *bp;
-< 	register int c, s;
-< 
-< 	s = spl6();
-< 	if (p->c_cc <= 0) {
-< 		c = -1;
-< 		p->c_cc = 0;
-< 		p->c_cf = p->c_cl = NULL;
-< 	} else {
-< 		c = *p->c_cf++ & 0377;
-< 		if (--p->c_cc<=0) {
-< 			bp = (struct cblock *)(p->c_cf-1);
-< 			bp = (struct cblock *) ((int)bp & ~CROUND);
-< 			p->c_cf = NULL;
-< 			p->c_cl = NULL;
-< 			bp->c_next = cfreelist;
-< 			cfreelist = bp;
-< 		} else if (((int)p->c_cf & CROUND) == 0){
-< 			bp = (struct cblock *)(p->c_cf);
-< 			bp--;
-< 			p->c_cf = bp->c_next->c_info;
-< 			bp->c_next = cfreelist;
-< 			cfreelist = bp;
-< 		}
-< 	}
-< 	splx(s);
-< 	return(c);
-< }
-< 
-< /*
-<  * copy clist to buffer.
-<  * return number of bytes moved.
-<  */
-< q_to_b(q, cp, cc)
-< register struct clist *q;
-< register char *cp;
-< {
-< 	register struct cblock *bp;
-< 	register int s;
-< 	char *acp;
-< 
-< 	if (cc <= 0)
-< 		return(0);
-< 	s = spl6();
-< 	if (q->c_cc <= 0) {
-< 		q->c_cc = 0;
-< 		q->c_cf = q->c_cl = NULL;
-< 		return(0);
-< 	}
-< 	acp = cp;
-< 	cc++;
-< 
-< 	while (--cc) {
-< 		*cp++ = *q->c_cf++;
-< 		if (--q->c_cc <= 0) {
-< 			bp = (struct cblock *)(q->c_cf-1);
-< 			bp = (struct cblock *)((int)bp & ~CROUND);
-< 			q->c_cf = q->c_cl = NULL;
-< 			bp->c_next = cfreelist;
-< 			cfreelist = bp;
-< 			break;
-< 		}
-< 		if (((int)q->c_cf & CROUND) == 0) {
-< 			bp = (struct cblock *)(q->c_cf);
-< 			bp--;
-< 			q->c_cf = bp->c_next->c_info;
-< 			bp->c_next = cfreelist;
-< 			cfreelist = bp;
-< 		}
-< 	}
-< 	splx(s);
-< 	return(cp-acp);
-< }
-< 
-< 
-< /*
-<  * Return count of contiguous characters
-<  * in clist starting at q->c_cf.
-<  * Stop counting if flag&character is non-null.
-<  */
-< ndqb(q, flag)
-< register struct clist *q;
-< {
-< register cc;
-< int s;
-< 
-< 	s = spl6();
-< 	if (q->c_cc <= 0) {
-< 		cc = -q->c_cc;
-< 		goto out;
-< 	}
-< 	cc = ((int)q->c_cf + CBSIZE) & ~CROUND;
-< 	cc -= (int)q->c_cf;
-< 	if (q->c_cc < cc)
-< 		cc = q->c_cc;
-< 	if (flag) {
-< 		register char *p, *end;
-< 
-< 		p = q->c_cf;
-< 		end = p;
-< 		end += cc;
-< 		while (p < end) {
-< 			if (*p & flag) {
-< 				cc = (int)p;
-< 				cc -= (int)q->c_cf;
-< 				break;
-< 			}
-< 			p++;
-< 		}
-< 	}
-< out:
-< 	splx(s);
-< 	return(cc);
-< }
-< 
-< 
-< 
-< /*
-<  * Update clist to show that cc characters
-<  * were removed.  It is assumed that cc < CBSIZE.
-<  */
-< ndflush(q, cc)
-< register struct clist *q;
-< register cc;
-< {
-< register s;
-< 
-< 	s = spl6();
-< 	if (q->c_cc < 0) {
-< 		if (q->c_cf != NULL) {
-< 			q->c_cc += cc;
-< 			q->c_cf += cc;
-< 			goto out;
-< 		}
-< 		q->c_cc = 0;
-< 		goto out;
-< 	}
-< 	if (q->c_cc == 0) {
-< 		goto out;
-< 	}
-< 	if (cc > CBSIZE || cc <= 0) {
-< 		cbad++;
-< 		goto out;
-< 	}
-< 	q->c_cc -= cc;
-< 	q->c_cf += cc;
-< 	if (((int)q->c_cf & CROUND) == 0) {
-< 		register struct cblock *bp;
-< 
-< 		bp = (struct cblock *)(q->c_cf) -1;
-< 		if (bp->c_next) {
-< 			q->c_cf = bp->c_next->c_info;
-< 		} else {
-< 			q->c_cf = q->c_cl = NULL;
-< 		}
-< 		bp->c_next = cfreelist;
-< 		cfreelist = bp;
-< 	} else
-< 	if (q->c_cc == 0) {
-< 		register struct cblock *bp;
-< 		q->c_cf = (char *)((int)q->c_cf & ~CROUND);
-< 		bp = (struct cblock *)(q->c_cf);
-< 		bp->c_next = cfreelist;
-< 		cfreelist = bp;
-< 		q->c_cf = q->c_cl = NULL;
-< 	}
-< out:
-< 	splx(s);
-< }
-< putc(c, p)
-< register struct clist *p;
-< {
-< 	register struct cblock *bp;
-< 	register char *cp;
-< 	register s;
-< 
-< 	s = spl6();
-< 	if ((cp = p->c_cl) == NULL || p->c_cc < 0 ) {
-< 		if ((bp = cfreelist) == NULL) {
-< 			splx(s);
-< 			return(-1);
-< 		}
-< 		cfreelist = bp->c_next;
-< 		bp->c_next = NULL;
-< 		p->c_cf = cp = bp->c_info;
-< 	} else if (((int)cp & CROUND) == 0) {
-< 		bp = (struct cblock *)cp - 1;
-< 		if ((bp->c_next = cfreelist) == NULL) {
-< 			splx(s);
-< 			return(-1);
-< 		}
-< 		bp = bp->c_next;
-< 		cfreelist = bp->c_next;
-< 		bp->c_next = NULL;
-< 		cp = bp->c_info;
-< 	}
-< 	*cp++ = c;
-< 	p->c_cc++;
-< 	p->c_cl = cp;
-< 	splx(s);
-< 	return(0);
-< }
-< 
-< 
-< 
-< /*
-<  * copy buffer to clist.
-<  * return number of bytes not transfered.
-<  */
-< b_to_q(cp, cc, q)
-< register char *cp;
-< struct clist *q;
-< register int cc;
-< {
-< 	register char *cq;
-< 	register struct cblock *bp;
-< 	register s, acc;
-< 
-< 	if (cc <= 0)
-< 		return(0);
-< 	acc = cc;
-< 
-< 
-< 	s = spl6();
-< 	if ((cq = q->c_cl) == NULL || q->c_cc < 0) {
-< 		if ((bp = cfreelist) == NULL) 
-< 			goto out;
-< 		cfreelist = bp->c_next;
-< 		bp->c_next = NULL;
-< 		q->c_cf = cq = bp->c_info;
-< 	}
-< 
-< 	while (cc) {
-< 		if (((int)cq & CROUND) == 0) {
-< 			bp = (struct cblock *) cq - 1;
-< 			if ((bp->c_next = cfreelist) == NULL) 
-< 				goto out;
-< 			bp = bp->c_next;
-< 			cfreelist = bp->c_next;
-< 			bp->c_next = NULL;
-< 			cq = bp->c_info;
-< 		}
-< 		*cq++ = *cp++;
-< 		cc--;
-< 	}
-< out:
-< 	q->c_cl = cq;
-< 	q->c_cc += acc-cc;
-< 	splx(s);
-< 	return(cc);
-< }
-< 
-< /*
-<  * Initialize clist by freeing all character blocks, then count
-<  * number of character devices. (Once-only routine)
-<  */
-< cinit()
-< {
-< 	register int ccp;
-< 	register struct cblock *cp;
-< 	register struct cdevsw *cdp;
-< 
-< 	ccp = (int)cfree;
-< 	ccp = (ccp+CROUND) & ~CROUND;
-< 	for(cp=(struct cblock *)ccp; cp <= &cfree[NCLIST-1]; cp++) {
-< 		cp->c_next = cfreelist;
-< 		cfreelist = cp;
-< 	}
-< 	ccp = 0;
-< 	for(cdp = cdevsw; cdp->d_open; cdp++)
-< 		ccp++;
-< 	nchrdev = ccp;
-< }
-< 
-< 
-< /*
-<  * integer (2-byte) get/put
-<  * using clists
-<  */
-< getw(p)
-< register struct clist *p;
-< {
-< 	register int s;
-< 
-< 	if (p->c_cc <= 1)
-< 		return(-1);
-< 	s = getc(p);
-< 	return(s | (getc(p)<<8));
-< }
-< 
-< putw(c, p)
-< register struct clist *p;
-< {
-< 	register s;
-< 
-< 	s = spl6();
-< 	if (cfreelist==NULL) {
-< 		splx(s);
-< 		return(-1);
-< 	}
-< 	putc(c, p);
-< 	putc(c>>8, p);
-< 	splx(s);
-< 	return(0);
-< }
----
-> //#include "../h/param.h"
-> //#include "../h/tty.h"
-> //#include "../h/systm.h"
-> //#include "../h/conf.h"
-> //#include "../h/buf.h"
-> //
-> //struct cblock {
-> //	struct cblock *c_next;
-> //	char	c_info[CBSIZE];
-> //};
-> //
-> //struct	cblock	cfree[NCLIST];
-> //struct	cblock	*cfreelist;
-> //int	cbad;
-> //
-> ///*
-> // * Character list get/put
-> // */
-> //getc(p)
-> //register struct clist *p;
-> //{
-> //	register struct cblock *bp;
-> //	register int c, s;
-> //
-> //	s = spl6();
-> //	if (p->c_cc <= 0) {
-> //		c = -1;
-> //		p->c_cc = 0;
-> //		p->c_cf = p->c_cl = NULL;
-> //	} else {
-> //		c = *p->c_cf++ & 0377;
-> //		if (--p->c_cc<=0) {
-> //			bp = (struct cblock *)(p->c_cf-1);
-> //			bp = (struct cblock *) ((int)bp & ~CROUND);
-> //			p->c_cf = NULL;
-> //			p->c_cl = NULL;
-> //			bp->c_next = cfreelist;
-> //			cfreelist = bp;
-> //		} else if (((int)p->c_cf & CROUND) == 0){
-> //			bp = (struct cblock *)(p->c_cf);
-> //			bp--;
-> //			p->c_cf = bp->c_next->c_info;
-> //			bp->c_next = cfreelist;
-> //			cfreelist = bp;
-> //		}
-> //	}
-> //	splx(s);
-> //	return(c);
-> //}
-> //
-> ///*
-> // * copy clist to buffer.
-> // * return number of bytes moved.
-> // */
-> //q_to_b(q, cp, cc)
-> //register struct clist *q;
-> //register char *cp;
-> //{
-> //	register struct cblock *bp;
-> //	register int s;
-> //	char *acp;
-> //
-> //	if (cc <= 0)
-> //		return(0);
-> //	s = spl6();
-> //	if (q->c_cc <= 0) {
-> //		q->c_cc = 0;
-> //		q->c_cf = q->c_cl = NULL;
-> //		return(0);
-> //	}
-> //	acp = cp;
-> //	cc++;
-> //
-> //	while (--cc) {
-> //		*cp++ = *q->c_cf++;
-> //		if (--q->c_cc <= 0) {
-> //			bp = (struct cblock *)(q->c_cf-1);
-> //			bp = (struct cblock *)((int)bp & ~CROUND);
-> //			q->c_cf = q->c_cl = NULL;
-> //			bp->c_next = cfreelist;
-> //			cfreelist = bp;
-> //			break;
-> //		}
-> //		if (((int)q->c_cf & CROUND) == 0) {
-> //			bp = (struct cblock *)(q->c_cf);
-> //			bp--;
-> //			q->c_cf = bp->c_next->c_info;
-> //			bp->c_next = cfreelist;
-> //			cfreelist = bp;
-> //		}
-> //	}
-> //	splx(s);
-> //	return(cp-acp);
-> //}
-> //
-> //
-> ///*
-> // * Return count of contiguous characters
-> // * in clist starting at q->c_cf.
-> // * Stop counting if flag&character is non-null.
-> // */
-> //ndqb(q, flag)
-> //register struct clist *q;
-> //{
-> //register cc;
-> //int s;
-> //
-> //	s = spl6();
-> //	if (q->c_cc <= 0) {
-> //		cc = -q->c_cc;
-> //		goto out;
-> //	}
-> //	cc = ((int)q->c_cf + CBSIZE) & ~CROUND;
-> //	cc -= (int)q->c_cf;
-> //	if (q->c_cc < cc)
-> //		cc = q->c_cc;
-> //	if (flag) {
-> //		register char *p, *end;
-> //
-> //		p = q->c_cf;
-> //		end = p;
-> //		end += cc;
-> //		while (p < end) {
-> //			if (*p & flag) {
-> //				cc = (int)p;
-> //				cc -= (int)q->c_cf;
-> //				break;
-> //			}
-> //			p++;
-> //		}
-> //	}
-> //out:
-> //	splx(s);
-> //	return(cc);
-> //}
-> //
-> //
-> //
-> ///*
-> // * Update clist to show that cc characters
-> // * were removed.  It is assumed that cc < CBSIZE.
-> // */
-> //ndflush(q, cc)
-> //register struct clist *q;
-> //register cc;
-> //{
-> //register s;
-> //
-> //	s = spl6();
-> //	if (q->c_cc < 0) {
-> //		if (q->c_cf != NULL) {
-> //			q->c_cc += cc;
-> //			q->c_cf += cc;
-> //			goto out;
-> //		}
-> //		q->c_cc = 0;
-> //		goto out;
-> //	}
-> //	if (q->c_cc == 0) {
-> //		goto out;
-> //	}
-> //	if (cc > CBSIZE || cc <= 0) {
-> //		cbad++;
-> //		goto out;
-> //	}
-> //	q->c_cc -= cc;
-> //	q->c_cf += cc;
-> //	if (((int)q->c_cf & CROUND) == 0) {
-> //		register struct cblock *bp;
-> //
-> //		bp = (struct cblock *)(q->c_cf) -1;
-> //		if (bp->c_next) {
-> //			q->c_cf = bp->c_next->c_info;
-> //		} else {
-> //			q->c_cf = q->c_cl = NULL;
-> //		}
-> //		bp->c_next = cfreelist;
-> //		cfreelist = bp;
-> //	} else
-> //	if (q->c_cc == 0) {
-> //		register struct cblock *bp;
-> //		q->c_cf = (char *)((int)q->c_cf & ~CROUND);
-> //		bp = (struct cblock *)(q->c_cf);
-> //		bp->c_next = cfreelist;
-> //		cfreelist = bp;
-> //		q->c_cf = q->c_cl = NULL;
-> //	}
-> //out:
-> //	splx(s);
-> //}
-> //putc(c, p)
-> //register struct clist *p;
-> //{
-> //	register struct cblock *bp;
-> //	register char *cp;
-> //	register s;
-> //
-> //	s = spl6();
-> //	if ((cp = p->c_cl) == NULL || p->c_cc < 0 ) {
-> //		if ((bp = cfreelist) == NULL) {
-> //			splx(s);
-> //			return(-1);
-> //		}
-> //		cfreelist = bp->c_next;
-> //		bp->c_next = NULL;
-> //		p->c_cf = cp = bp->c_info;
-> //	} else if (((int)cp & CROUND) == 0) {
-> //		bp = (struct cblock *)cp - 1;
-> //		if ((bp->c_next = cfreelist) == NULL) {
-> //			splx(s);
-> //			return(-1);
-> //		}
-> //		bp = bp->c_next;
-> //		cfreelist = bp->c_next;
-> //		bp->c_next = NULL;
-> //		cp = bp->c_info;
-> //	}
-> //	*cp++ = c;
-> //	p->c_cc++;
-> //	p->c_cl = cp;
-> //	splx(s);
-> //	return(0);
-> //}
-> //
-> //
-> //
-> ///*
-> // * copy buffer to clist.
-> // * return number of bytes not transfered.
-> // */
-> //b_to_q(cp, cc, q)
-> //register char *cp;
-> //struct clist *q;
-> //register int cc;
-> //{
-> //	register char *cq;
-> //	register struct cblock *bp;
-> //	register s, acc;
-> //
-> //	if (cc <= 0)
-> //		return(0);
-> //	acc = cc;
-> //
-> //
-> //	s = spl6();
-> //	if ((cq = q->c_cl) == NULL || q->c_cc < 0) {
-> //		if ((bp = cfreelist) == NULL) 
-> //			goto out;
-> //		cfreelist = bp->c_next;
-> //		bp->c_next = NULL;
-> //		q->c_cf = cq = bp->c_info;
-> //	}
-> //
-> //	while (cc) {
-> //		if (((int)cq & CROUND) == 0) {
-> //			bp = (struct cblock *) cq - 1;
-> //			if ((bp->c_next = cfreelist) == NULL) 
-> //				goto out;
-> //			bp = bp->c_next;
-> //			cfreelist = bp->c_next;
-> //			bp->c_next = NULL;
-> //			cq = bp->c_info;
-> //		}
-> //		*cq++ = *cp++;
-> //		cc--;
-> //	}
-> //out:
-> //	q->c_cl = cq;
-> //	q->c_cc += acc-cc;
-> //	splx(s);
-> //	return(cc);
-> //}
-> //
-> ///*
-> // * Initialize clist by freeing all character blocks, then count
-> // * number of character devices. (Once-only routine)
-> // */
-> //cinit()
-> //{
-> //	register int ccp;
-> //	register struct cblock *cp;
-> //	register struct cdevsw *cdp;
-> //
-> //	ccp = (int)cfree;
-> //	ccp = (ccp+CROUND) & ~CROUND;
-> //	for(cp=(struct cblock *)ccp; cp <= &cfree[NCLIST-1]; cp++) {
-> //		cp->c_next = cfreelist;
-> //		cfreelist = cp;
-> //	}
-> //	ccp = 0;
-> //	for(cdp = cdevsw; cdp->d_open; cdp++)
-> //		ccp++;
-> //	nchrdev = ccp;
-> //}
-> //
-> //
-> ///*
-> // * integer (2-byte) get/put
-> // * using clists
-> // */
-> //getw(p)
-> //register struct clist *p;
-> //{
-> //	register int s;
-> //
-> //	if (p->c_cc <= 1)
-> //		return(-1);
-> //	s = getc(p);
-> //	return(s | (getc(p)<<8));
-> //}
-> //
-> //putw(c, p)
-> //register struct clist *p;
-> //{
-> //	register s;
-> //
-> //	s = spl6();
-> //	if (cfreelist==NULL) {
-> //		splx(s);
-> //		return(-1);
-> //	}
-> //	putc(c, p);
-> //	putc(c>>8, p);
-> //	splx(s);
-> //	return(0);
-> //}
-```
 
-### sys/slp.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/sys/sys/slp.c unix-v7-c99/sys/slp.c || true
-```
-
-Expect:
-
-```
-1,575c1,575
-< #include "../h/param.h"
-< #include "../h/systm.h"
-< #include "../h/dir.h"
-< #include "../h/user.h"
-< #include "../h/proc.h"
-< #include "../h/text.h"
-< #include "../h/map.h"
-< #include "../h/file.h"
-< #include "../h/inode.h"
-< #include "../h/buf.h"
-< 
-< #define SQSIZE 0100	/* Must be power of 2 */
-< #define HASH(x)	(( (int) x >> 5) & (SQSIZE-1))
-< struct proc *slpque[SQSIZE];
-< 
-< /*
-<  * Give up the processor till a wakeup occurs
-<  * on chan, at which time the process
-<  * enters the scheduling queue at priority pri.
-<  * The most important effect of pri is that when
-<  * pri<=PZERO a signal cannot disturb the sleep;
-<  * if pri>PZERO signals will be processed.
-<  * Callers of this routine must be prepared for
-<  * premature return, and check that the reason for
-<  * sleeping has gone away.
-<  */
-< sleep(chan, pri)
-< caddr_t chan;
-< {
-< 	register struct proc *rp;
-< 	register s, h;
-< 
-< 	rp = u.u_procp;
-< 	s = spl6();
-< 	if (chan==0)
-< 		panic("zero wchan");
-< 	rp->p_stat = SSLEEP;
-< 	rp->p_wchan = chan;
-< 	if (chan==0)
-< 		panic("Sleeping on wchan 0");
-< 	rp->p_pri = pri;
-< 	h = HASH(chan);
-< 	rp->p_link = slpque[h];
-< 	slpque[h] = rp;
-< 	if(pri > PZERO) {
-< 		if(issig()) {
-< 			rp->p_wchan = 0;
-< 			rp->p_stat = SRUN;
-< 			slpque[h] = rp->p_link;
-< 			spl0();
-< 			goto psig;
-< 		}
-< 		spl0();
-< 		if(runin != 0) {
-< 			runin = 0;
-< 			wakeup((caddr_t)&runin);
-< 		}
-< 		swtch();
-< 		if(issig())
-< 			goto psig;
-< 	} else {
-< 		spl0();
-< 		swtch();
-< 	}
-< 	splx(s);
-< 	return;
-< 
-< 	/*
-< 	 * If priority was low (>PZERO) and
-< 	 * there has been a signal,
-< 	 * execute non-local goto to
-< 	 * the qsav location.
-< 	 * (see trap1/trap.c)
-< 	 */
-< psig:
-< 	resume(u.u_procp->p_addr, u.u_qsav);
-< }
-< 
-< /*
-<  * Wake up all processes sleeping on chan.
-<  */
-< wakeup(chan)
-< register caddr_t chan;
-< {
-< 	register struct proc *p, *q;
-< 	register i;
-< 	int s;
-< 
-< 	s = spl6();
-< 	i = HASH(chan);
-< 	p = slpque[i];
-< 	q = NULL;
-< 	while(p != NULL) {
-< 		if(p->p_wchan==chan && p->p_stat!=SZOMB) {
-< 			struct proc *sp;
-< 
-< 			if (q == NULL)
-< 				sp = slpque[i] = p->p_link;
-< 			else
-< 				sp = q->p_link = p->p_link;
-< 			p->p_wchan = 0;
-< 			setrun(p);
-< 			p = sp;
-< 			continue;
-< 		}
-< 		q = p;
-< 		p = p->p_link;
-< 	}
-< 	splx(s);
-< }
-< 
-< /*
-<  * when you are sure that it
-<  * is impossible to get the
-<  * 'proc on q' diagnostic, the
-<  * diagnostic loop can be removed.
-<  */
-< setrq(p)
-< struct proc *p;
-< {
-< 	register struct proc *q;
-< 	register s;
-< 
-< 	s = spl6();
-< 	for(q=runq; q!=NULL; q=q->p_link)
-< 		if(q == p) {
-< 			printf("proc on q\n");
-< 			goto out;
-< 		}
-< 	p->p_link = runq;
-< 	runq = p;
-< out:
-< 	splx(s);
-< }
-< 
-< /*
-<  * Set the process running;
-<  * arrange for it to be swapped in if necessary.
-<  */
-< setrun(p)
-< register struct proc *p;
-< {
-< 	register caddr_t w;
-< 
-< 	if (p->p_stat==0 || p->p_stat==SZOMB)
-< 		panic("Running a dead proc");
-< 	/*
-< 	 * The assignment to w is necessary because of
-< 	 * race conditions. (Interrupt between test and use)
-< 	 */
-< 	if (w = p->p_wchan) {
-< 		wakeup(w);
-< 		return;
-< 	}
-< 	p->p_stat = SRUN;
-< 	setrq(p);
-< 	if(p->p_pri < curpri)
-< 		runrun++;
-< 	if(runout != 0 && (p->p_flag&SLOAD) == 0) {
-< 		runout = 0;
-< 		wakeup((caddr_t)&runout);
-< 	}
-< }
-< 
-< /*
-<  * Set user priority.
-<  * The rescheduling flag (runrun)
-<  * is set if the priority is better
-<  * than the currently running process.
-<  */
-< setpri(pp)
-< register struct proc *pp;
-< {
-< 	register p;
-< 
-< 	p = (pp->p_cpu & 0377)/16;
-< 	p += PUSER + pp->p_nice - NZERO;
-< 	if(p > 127)
-< 		p = 127;
-< 	if(p < curpri)
-< 		runrun++;
-< 	pp->p_pri = p;
-< 	return(p);
-< }
-< 
-< /*
-<  * The main loop of the scheduling (swapping)
-<  * process.
-<  * The basic idea is:
-<  *  see if anyone wants to be swapped in;
-<  *  swap out processes until there is room;
-<  *  swap him in;
-<  *  repeat.
-<  * The runout flag is set whenever someone is swapped out.
-<  * Sched sleeps on it awaiting work.
-<  *
-<  * Sched sleeps on runin whenever it cannot find enough
-<  * core (by swapping out or otherwise) to fit the
-<  * selected swapped process.  It is awakened when the
-<  * core situation changes and in any case once per second.
-<  */
-< sched()
-< {
-< 	register struct proc *rp, *p;
-< 	register outage, inage;
-< 	int maxsize;
-< 
-< 	/*
-< 	 * find user to swap in;
-< 	 * of users ready, select one out longest
-< 	 */
-< 
-< loop:
-< 	spl6();
-< 	outage = -20000;
-< 	for (rp = &proc[0]; rp < &proc[NPROC]; rp++)
-< 	if (rp->p_stat==SRUN && (rp->p_flag&SLOAD)==0 &&
-< 	    rp->p_time - (rp->p_nice-NZERO)*8 > outage) {
-< 		p = rp;
-< 		outage = rp->p_time - (rp->p_nice-NZERO)*8;
-< 	}
-< 	/*
-< 	 * If there is no one there, wait.
-< 	 */
-< 	if (outage == -20000) {
-< 		runout++;
-< 		sleep((caddr_t)&runout, PSWP);
-< 		goto loop;
-< 	}
-< 	spl0();
-< 
-< 	/*
-< 	 * See if there is core for that process;
-< 	 * if so, swap it in.
-< 	 */
-< 
-< 	if (swapin(p))
-< 		goto loop;
-< 
-< 	/*
-< 	 * none found.
-< 	 * look around for core.
-< 	 * Select the largest of those sleeping
-< 	 * at bad priority; if none, select the oldest.
-< 	 */
-< 
-< 	spl6();
-< 	p = NULL;
-< 	maxsize = -1;
-< 	inage = -1;
-< 	for (rp = &proc[0]; rp < &proc[NPROC]; rp++) {
-< 		if (rp->p_stat==SZOMB
-< 		 || (rp->p_flag&(SSYS|SLOCK|SULOCK|SLOAD))!=SLOAD)
-< 			continue;
-< 		if (rp->p_textp && rp->p_textp->x_flag&XLOCK)
-< 			continue;
-< 		if (rp->p_stat==SSLEEP&&rp->p_pri>=PZERO || rp->p_stat==SSTOP) {
-< 			if (maxsize < rp->p_size) {
-< 				p = rp;
-< 				maxsize = rp->p_size;
-< 			}
-< 		} else if (maxsize<0 && (rp->p_stat==SRUN||rp->p_stat==SSLEEP)) {
-< 			if (rp->p_time+rp->p_nice-NZERO > inage) {
-< 				p = rp;
-< 				inage = rp->p_time+rp->p_nice-NZERO;
-< 			}
-< 		}
-< 	}
-< 	spl0();
-< 	/*
-< 	 * Swap found user out if sleeping at bad pri,
-< 	 * or if he has spent at least 2 seconds in core and
-< 	 * the swapped-out process has spent at least 3 seconds out.
-< 	 * Otherwise wait a bit and try again.
-< 	 */
-< 	if (maxsize>=0 || (outage>=3 && inage>=2)) {
-< 		p->p_flag &= ~SLOAD;
-< 		xswap(p, 1, 0);
-< 		goto loop;
-< 	}
-< 	spl6();
-< 	runin++;
-< 	sleep((caddr_t)&runin, PSWP);
-< 	goto loop;
-< }
-< 
-< /*
-<  * Swap a process in.
-<  * Allocate data and possible text separately.
-<  * It would be better to do largest first.
-<  */
-< swapin(p)
-< register struct proc *p;
-< {
-< 	register struct text *xp;
-< 	register int a;
-< 	int x;
-< 
-< 	if ((a = malloc(coremap, p->p_size)) == NULL)
-< 		return(0);
-< 	if (xp = p->p_textp) {
-< 		xlock(xp);
-< 		if (xp->x_ccount==0) {
-< 			if ((x = malloc(coremap, xp->x_size)) == NULL) {
-< 				xunlock(xp);
-< 				mfree(coremap, p->p_size, a);
-< 				return(0);
-< 			}
-< 			xp->x_caddr = x;
-< 			if ((xp->x_flag&XLOAD)==0)
-< 				swap(xp->x_daddr,x,xp->x_size,B_READ);
-< 		}
-< 		xp->x_ccount++;
-< 		xunlock(xp);
-< 	}
-< 	swap(p->p_addr, a, p->p_size, B_READ);
-< 	mfree(swapmap, ctod(p->p_size), p->p_addr);
-< 	p->p_addr = a;
-< 	p->p_flag |= SLOAD;
-< 	p->p_time = 0;
-< 	return(1);
-< }
-< 
-< /*
-<  * put the current process on
-<  * the Q of running processes and
-<  * call the scheduler.
-<  */
-< qswtch()
-< {
-< 
-< 	setrq(u.u_procp);
-< 	swtch();
-< }
-< 
-< /*
-<  * This routine is called to reschedule the CPU.
-<  * if the calling process is not in RUN state,
-<  * arrangements for it to restart must have
-<  * been made elsewhere, usually by calling via sleep.
-<  * There is a race here. A process may become
-<  * ready after it has been examined.
-<  * In this case, idle() will be called and
-<  * will return in at most 1HZ time.
-<  * i.e. its not worth putting an spl() in.
-<  */
-< swtch()
-< {
-< 	register n;
-< 	register struct proc *p, *q, *pp, *pq;
-< 
-< 	/*
-< 	 * If not the idle process, resume the idle process.
-< 	 */
-< 	if (u.u_procp != &proc[0]) {
-< 		if (save(u.u_rsav)) {
-< 			sureg();
-< 			return;
-< 		}
-< 		if (u.u_fpsaved==0) {
-< 			savfp(&u.u_fps);
-< 			u.u_fpsaved = 1;
-< 		}
-< 		resume(proc[0].p_addr, u.u_qsav);
-< 	}
-< 	/*
-< 	 * The first save returns nonzero when proc 0 is resumed
-< 	 * by another process (above); then the second is not done
-< 	 * and the process-search loop is entered.
-< 	 *
-< 	 * The first save returns 0 when swtch is called in proc 0
-< 	 * from sched().  The second save returns 0 immediately, so
-< 	 * in this case too the process-search loop is entered.
-< 	 * Thus when proc 0 is awakened by being made runnable, it will
-< 	 * find itself and resume itself at rsav, and return to sched().
-< 	 */
-< 	if (save(u.u_qsav)==0 && save(u.u_rsav))
-< 		return;
-< loop:
-< 	spl6();
-< 	runrun = 0;
-< 	pp = NULL;
-< 	q = NULL;
-< 	n = 128;
-< 	/*
-< 	 * Search for highest-priority runnable process
-< 	 */
-< 	for(p=runq; p!=NULL; p=p->p_link) {
-< 		if((p->p_stat==SRUN) && (p->p_flag&SLOAD)) {
-< 			if(p->p_pri < n) {
-< 				pp = p;
-< 				pq = q;
-< 				n = p->p_pri;
-< 			}
-< 		}
-< 		q = p;
-< 	}
-< 	/*
-< 	 * If no process is runnable, idle.
-< 	 */
-< 	p = pp;
-< 	if(p == NULL) {
-< 		idle();
-< 		goto loop;
-< 	}
-< 	q = pq;
-< 	if(q == NULL)
-< 		runq = p->p_link;
-< 	else
-< 		q->p_link = p->p_link;
-< 	curpri = n;
-< 	spl0();
-< 	/*
-< 	 * The rsav (ssav) contents are interpreted in the new address space
-< 	 */
-< 	n = p->p_flag&SSWAP;
-< 	p->p_flag &= ~SSWAP;
-< 	resume(p->p_addr, n? u.u_ssav: u.u_rsav);
-< }
-< 
-< /*
-<  * Create a new process-- the internal version of
-<  * sys fork.
-<  * It returns 1 in the new process, 0 in the old.
-<  */
-< newproc()
-< {
-< 	int a1, a2;
-< 	struct proc *p, *up;
-< 	register struct proc *rpp, *rip;
-< 	register n;
-< 
-< 	p = NULL;
-< 	/*
-< 	 * First, just locate a slot for a process
-< 	 * and copy the useful info from this process into it.
-< 	 * The panic "cannot happen" because fork has already
-< 	 * checked for the existence of a slot.
-< 	 */
-< retry:
-< 	mpid++;
-< 	if(mpid >= 30000) {
-< 		mpid = 0;
-< 		goto retry;
-< 	}
-< 	for(rpp = &proc[0]; rpp < &proc[NPROC]; rpp++) {
-< 		if(rpp->p_stat == NULL && p==NULL)
-< 			p = rpp;
-< 		if (rpp->p_pid==mpid || rpp->p_pgrp==mpid)
-< 			goto retry;
-< 	}
-< 	if ((rpp = p)==NULL)
-< 		panic("no procs");
-< 
-< 	/*
-< 	 * make proc entry for new proc
-< 	 */
-< 
-< 	rip = u.u_procp;
-< 	up = rip;
-< 	rpp->p_stat = SRUN;
-< 	rpp->p_clktim = 0;
-< 	rpp->p_flag = SLOAD;
-< 	rpp->p_uid = rip->p_uid;
-< 	rpp->p_pgrp = rip->p_pgrp;
-< 	rpp->p_nice = rip->p_nice;
-< 	rpp->p_textp = rip->p_textp;
-< 	rpp->p_pid = mpid;
-< 	rpp->p_ppid = rip->p_pid;
-< 	rpp->p_time = 0;
-< 	rpp->p_cpu = 0;
-< 
-< 	/*
-< 	 * make duplicate entries
-< 	 * where needed
-< 	 */
-< 
-< 	for(n=0; n<NOFILE; n++)
-< 		if(u.u_ofile[n] != NULL)
-< 			u.u_ofile[n]->f_count++;
-< 	if(up->p_textp != NULL) {
-< 		up->p_textp->x_count++;
-< 		up->p_textp->x_ccount++;
-< 	}
-< 	u.u_cdir->i_count++;
-< 	if (u.u_rdir)
-< 		u.u_rdir->i_count++;
-< 	/*
-< 	 * Partially simulate the environment
-< 	 * of the new process so that when it is actually
-< 	 * created (by copying) it will look right.
-< 	 */
-< 	rpp = p;
-< 	u.u_procp = rpp;
-< 	rip = up;
-< 	n = rip->p_size;
-< 	a1 = rip->p_addr;
-< 	rpp->p_size = n;
-< 	/*
-< 	 * When the resume is executed for the new process,
-< 	 * here's where it will resume.
-< 	 */
-< 	if (save(u.u_ssav)) {
-< 		sureg();
-< 		return(1);
-< 	}
-< 	a2 = malloc(coremap, n);
-< 	/*
-< 	 * If there is not enough core for the
-< 	 * new process, swap out the current process to generate the
-< 	 * copy.
-< 	 */
-< 	if(a2 == NULL) {
-< 		rip->p_stat = SIDL;
-< 		rpp->p_addr = a1;
-< 		xswap(rpp, 0, 0);
-< 		rip->p_stat = SRUN;
-< 	} else {
-< 		/*
-< 		 * There is core, so just copy.
-< 		 */
-< 		rpp->p_addr = a2;
-< 		while(n--)
-< 			copyseg(a1++, a2++);
-< 	}
-< 	u.u_procp = rip;
-< 	setrq(rpp);
-< 	rpp->p_flag |= SSWAP;
-< 	return(0);
-< }
-< 
-< /*
-<  * Change the size of the data+stack regions of the process.
-<  * If the size is shrinking, it's easy-- just release the extra core.
-<  * If it's growing, and there is core, just allocate it
-<  * and copy the image, taking care to reset registers to account
-<  * for the fact that the system's stack has moved.
-<  * If there is no core, arrange for the process to be swapped
-<  * out after adjusting the size requirement-- when it comes
-<  * in, enough core will be allocated.
-<  *
-<  * After the expansion, the caller will take care of copying
-<  * the user's stack towards or away from the data area.
-<  */
-< expand(newsize)
-< {
-< 	register i, n;
-< 	register struct proc *p;
-< 	register a1, a2;
-< 
-< 	p = u.u_procp;
-< 	n = p->p_size;
-< 	p->p_size = newsize;
-< 	a1 = p->p_addr;
-< 	if(n >= newsize) {
-< 		mfree(coremap, n-newsize, a1+newsize);
-< 		return;
-< 	}
-< 	if (save(u.u_ssav)) {
-< 		sureg();
-< 		return;
-< 	}
-< 	a2 = malloc(coremap, newsize);
-< 	if(a2 == NULL) {
-< 		xswap(p, 1, n);
-< 		p->p_flag |= SSWAP;
-< 		qswtch();
-< 		/* no return */
-< 	}
-< 	p->p_addr = a2;
-< 	for(i=0; i<n; i++)
-< 		copyseg(a1+i, a2+i);
-< 	mfree(coremap, n, a1);
-< 	resume(a2, u.u_ssav);
-< }
----
-> //#include "../h/param.h"
-> //#include "../h/systm.h"
-> //#include "../h/dir.h"
-> //#include "../h/user.h"
-> //#include "../h/proc.h"
-> //#include "../h/text.h"
-> //#include "../h/map.h"
-> //#include "../h/file.h"
-> //#include "../h/inode.h"
-> //#include "../h/buf.h"
-> //
-> //#define SQSIZE 0100	/* Must be power of 2 */
-> //#define HASH(x)	(( (int) x >> 5) & (SQSIZE-1))
-> //struct proc *slpque[SQSIZE];
-> //
-> ///*
-> // * Give up the processor till a wakeup occurs
-> // * on chan, at which time the process
-> // * enters the scheduling queue at priority pri.
-> // * The most important effect of pri is that when
-> // * pri<=PZERO a signal cannot disturb the sleep;
-> // * if pri>PZERO signals will be processed.
-> // * Callers of this routine must be prepared for
-> // * premature return, and check that the reason for
-> // * sleeping has gone away.
-> // */
-> //sleep(chan, pri)
-> //caddr_t chan;
-> //{
-> //	register struct proc *rp;
-> //	register s, h;
-> //
-> //	rp = u.u_procp;
-> //	s = spl6();
-> //	if (chan==0)
-> //		panic("zero wchan");
-> //	rp->p_stat = SSLEEP;
-> //	rp->p_wchan = chan;
-> //	if (chan==0)
-> //		panic("Sleeping on wchan 0");
-> //	rp->p_pri = pri;
-> //	h = HASH(chan);
-> //	rp->p_link = slpque[h];
-> //	slpque[h] = rp;
-> //	if(pri > PZERO) {
-> //		if(issig()) {
-> //			rp->p_wchan = 0;
-> //			rp->p_stat = SRUN;
-> //			slpque[h] = rp->p_link;
-> //			spl0();
-> //			goto psig;
-> //		}
-> //		spl0();
-> //		if(runin != 0) {
-> //			runin = 0;
-> //			wakeup((caddr_t)&runin);
-> //		}
-> //		swtch();
-> //		if(issig())
-> //			goto psig;
-> //	} else {
-> //		spl0();
-> //		swtch();
-> //	}
-> //	splx(s);
-> //	return;
-> //
-> //	/*
-> //	 * If priority was low (>PZERO) and
-> //	 * there has been a signal,
-> //	 * execute non-local goto to
-> //	 * the qsav location.
-> //	 * (see trap1/trap.c)
-> //	 */
-> //psig:
-> //	resume(u.u_procp->p_addr, u.u_qsav);
-> //}
-> //
-> ///*
-> // * Wake up all processes sleeping on chan.
-> // */
-> //wakeup(chan)
-> //register caddr_t chan;
-> //{
-> //	register struct proc *p, *q;
-> //	register i;
-> //	int s;
-> //
-> //	s = spl6();
-> //	i = HASH(chan);
-> //	p = slpque[i];
-> //	q = NULL;
-> //	while(p != NULL) {
-> //		if(p->p_wchan==chan && p->p_stat!=SZOMB) {
-> //			struct proc *sp;
-> //
-> //			if (q == NULL)
-> //				sp = slpque[i] = p->p_link;
-> //			else
-> //				sp = q->p_link = p->p_link;
-> //			p->p_wchan = 0;
-> //			setrun(p);
-> //			p = sp;
-> //			continue;
-> //		}
-> //		q = p;
-> //		p = p->p_link;
-> //	}
-> //	splx(s);
-> //}
-> //
-> ///*
-> // * when you are sure that it
-> // * is impossible to get the
-> // * 'proc on q' diagnostic, the
-> // * diagnostic loop can be removed.
-> // */
-> //setrq(p)
-> //struct proc *p;
-> //{
-> //	register struct proc *q;
-> //	register s;
-> //
-> //	s = spl6();
-> //	for(q=runq; q!=NULL; q=q->p_link)
-> //		if(q == p) {
-> //			printf("proc on q\n");
-> //			goto out;
-> //		}
-> //	p->p_link = runq;
-> //	runq = p;
-> //out:
-> //	splx(s);
-> //}
-> //
-> ///*
-> // * Set the process running;
-> // * arrange for it to be swapped in if necessary.
-> // */
-> //setrun(p)
-> //register struct proc *p;
-> //{
-> //	register caddr_t w;
-> //
-> //	if (p->p_stat==0 || p->p_stat==SZOMB)
-> //		panic("Running a dead proc");
-> //	/*
-> //	 * The assignment to w is necessary because of
-> //	 * race conditions. (Interrupt between test and use)
-> //	 */
-> //	if (w = p->p_wchan) {
-> //		wakeup(w);
-> //		return;
-> //	}
-> //	p->p_stat = SRUN;
-> //	setrq(p);
-> //	if(p->p_pri < curpri)
-> //		runrun++;
-> //	if(runout != 0 && (p->p_flag&SLOAD) == 0) {
-> //		runout = 0;
-> //		wakeup((caddr_t)&runout);
-> //	}
-> //}
-> //
-> ///*
-> // * Set user priority.
-> // * The rescheduling flag (runrun)
-> // * is set if the priority is better
-> // * than the currently running process.
-> // */
-> //setpri(pp)
-> //register struct proc *pp;
-> //{
-> //	register p;
-> //
-> //	p = (pp->p_cpu & 0377)/16;
-> //	p += PUSER + pp->p_nice - NZERO;
-> //	if(p > 127)
-> //		p = 127;
-> //	if(p < curpri)
-> //		runrun++;
-> //	pp->p_pri = p;
-> //	return(p);
-> //}
-> //
-> ///*
-> // * The main loop of the scheduling (swapping)
-> // * process.
-> // * The basic idea is:
-> // *  see if anyone wants to be swapped in;
-> // *  swap out processes until there is room;
-> // *  swap him in;
-> // *  repeat.
-> // * The runout flag is set whenever someone is swapped out.
-> // * Sched sleeps on it awaiting work.
-> // *
-> // * Sched sleeps on runin whenever it cannot find enough
-> // * core (by swapping out or otherwise) to fit the
-> // * selected swapped process.  It is awakened when the
-> // * core situation changes and in any case once per second.
-> // */
-> //sched()
-> //{
-> //	register struct proc *rp, *p;
-> //	register outage, inage;
-> //	int maxsize;
-> //
-> //	/*
-> //	 * find user to swap in;
-> //	 * of users ready, select one out longest
-> //	 */
-> //
-> //loop:
-> //	spl6();
-> //	outage = -20000;
-> //	for (rp = &proc[0]; rp < &proc[NPROC]; rp++)
-> //	if (rp->p_stat==SRUN && (rp->p_flag&SLOAD)==0 &&
-> //	    rp->p_time - (rp->p_nice-NZERO)*8 > outage) {
-> //		p = rp;
-> //		outage = rp->p_time - (rp->p_nice-NZERO)*8;
-> //	}
-> //	/*
-> //	 * If there is no one there, wait.
-> //	 */
-> //	if (outage == -20000) {
-> //		runout++;
-> //		sleep((caddr_t)&runout, PSWP);
-> //		goto loop;
-> //	}
-> //	spl0();
-> //
-> //	/*
-> //	 * See if there is core for that process;
-> //	 * if so, swap it in.
-> //	 */
-> //
-> //	if (swapin(p))
-> //		goto loop;
-> //
-> //	/*
-> //	 * none found.
-> //	 * look around for core.
-> //	 * Select the largest of those sleeping
-> //	 * at bad priority; if none, select the oldest.
-> //	 */
-> //
-> //	spl6();
-> //	p = NULL;
-> //	maxsize = -1;
-> //	inage = -1;
-> //	for (rp = &proc[0]; rp < &proc[NPROC]; rp++) {
-> //		if (rp->p_stat==SZOMB
-> //		 || (rp->p_flag&(SSYS|SLOCK|SULOCK|SLOAD))!=SLOAD)
-> //			continue;
-> //		if (rp->p_textp && rp->p_textp->x_flag&XLOCK)
-> //			continue;
-> //		if (rp->p_stat==SSLEEP&&rp->p_pri>=PZERO || rp->p_stat==SSTOP) {
-> //			if (maxsize < rp->p_size) {
-> //				p = rp;
-> //				maxsize = rp->p_size;
-> //			}
-> //		} else if (maxsize<0 && (rp->p_stat==SRUN||rp->p_stat==SSLEEP)) {
-> //			if (rp->p_time+rp->p_nice-NZERO > inage) {
-> //				p = rp;
-> //				inage = rp->p_time+rp->p_nice-NZERO;
-> //			}
-> //		}
-> //	}
-> //	spl0();
-> //	/*
-> //	 * Swap found user out if sleeping at bad pri,
-> //	 * or if he has spent at least 2 seconds in core and
-> //	 * the swapped-out process has spent at least 3 seconds out.
-> //	 * Otherwise wait a bit and try again.
-> //	 */
-> //	if (maxsize>=0 || (outage>=3 && inage>=2)) {
-> //		p->p_flag &= ~SLOAD;
-> //		xswap(p, 1, 0);
-> //		goto loop;
-> //	}
-> //	spl6();
-> //	runin++;
-> //	sleep((caddr_t)&runin, PSWP);
-> //	goto loop;
-> //}
-> //
-> ///*
-> // * Swap a process in.
-> // * Allocate data and possible text separately.
-> // * It would be better to do largest first.
-> // */
-> //swapin(p)
-> //register struct proc *p;
-> //{
-> //	register struct text *xp;
-> //	register int a;
-> //	int x;
-> //
-> //	if ((a = malloc(coremap, p->p_size)) == NULL)
-> //		return(0);
-> //	if (xp = p->p_textp) {
-> //		xlock(xp);
-> //		if (xp->x_ccount==0) {
-> //			if ((x = malloc(coremap, xp->x_size)) == NULL) {
-> //				xunlock(xp);
-> //				mfree(coremap, p->p_size, a);
-> //				return(0);
-> //			}
-> //			xp->x_caddr = x;
-> //			if ((xp->x_flag&XLOAD)==0)
-> //				swap(xp->x_daddr,x,xp->x_size,B_READ);
-> //		}
-> //		xp->x_ccount++;
-> //		xunlock(xp);
-> //	}
-> //	swap(p->p_addr, a, p->p_size, B_READ);
-> //	mfree(swapmap, ctod(p->p_size), p->p_addr);
-> //	p->p_addr = a;
-> //	p->p_flag |= SLOAD;
-> //	p->p_time = 0;
-> //	return(1);
-> //}
-> //
-> ///*
-> // * put the current process on
-> // * the Q of running processes and
-> // * call the scheduler.
-> // */
-> //qswtch()
-> //{
-> //
-> //	setrq(u.u_procp);
-> //	swtch();
-> //}
-> //
-> ///*
-> // * This routine is called to reschedule the CPU.
-> // * if the calling process is not in RUN state,
-> // * arrangements for it to restart must have
-> // * been made elsewhere, usually by calling via sleep.
-> // * There is a race here. A process may become
-> // * ready after it has been examined.
-> // * In this case, idle() will be called and
-> // * will return in at most 1HZ time.
-> // * i.e. its not worth putting an spl() in.
-> // */
-> //swtch()
-> //{
-> //	register n;
-> //	register struct proc *p, *q, *pp, *pq;
-> //
-> //	/*
-> //	 * If not the idle process, resume the idle process.
-> //	 */
-> //	if (u.u_procp != &proc[0]) {
-> //		if (save(u.u_rsav)) {
-> //			sureg();
-> //			return;
-> //		}
-> //		if (u.u_fpsaved==0) {
-> //			savfp(&u.u_fps);
-> //			u.u_fpsaved = 1;
-> //		}
-> //		resume(proc[0].p_addr, u.u_qsav);
-> //	}
-> //	/*
-> //	 * The first save returns nonzero when proc 0 is resumed
-> //	 * by another process (above); then the second is not done
-> //	 * and the process-search loop is entered.
-> //	 *
-> //	 * The first save returns 0 when swtch is called in proc 0
-> //	 * from sched().  The second save returns 0 immediately, so
-> //	 * in this case too the process-search loop is entered.
-> //	 * Thus when proc 0 is awakened by being made runnable, it will
-> //	 * find itself and resume itself at rsav, and return to sched().
-> //	 */
-> //	if (save(u.u_qsav)==0 && save(u.u_rsav))
-> //		return;
-> //loop:
-> //	spl6();
-> //	runrun = 0;
-> //	pp = NULL;
-> //	q = NULL;
-> //	n = 128;
-> //	/*
-> //	 * Search for highest-priority runnable process
-> //	 */
-> //	for(p=runq; p!=NULL; p=p->p_link) {
-> //		if((p->p_stat==SRUN) && (p->p_flag&SLOAD)) {
-> //			if(p->p_pri < n) {
-> //				pp = p;
-> //				pq = q;
-> //				n = p->p_pri;
-> //			}
-> //		}
-> //		q = p;
-> //	}
-> //	/*
-> //	 * If no process is runnable, idle.
-> //	 */
-> //	p = pp;
-> //	if(p == NULL) {
-> //		idle();
-> //		goto loop;
-> //	}
-> //	q = pq;
-> //	if(q == NULL)
-> //		runq = p->p_link;
-> //	else
-> //		q->p_link = p->p_link;
-> //	curpri = n;
-> //	spl0();
-> //	/*
-> //	 * The rsav (ssav) contents are interpreted in the new address space
-> //	 */
-> //	n = p->p_flag&SSWAP;
-> //	p->p_flag &= ~SSWAP;
-> //	resume(p->p_addr, n? u.u_ssav: u.u_rsav);
-> //}
-> //
-> ///*
-> // * Create a new process-- the internal version of
-> // * sys fork.
-> // * It returns 1 in the new process, 0 in the old.
-> // */
-> //newproc()
-> //{
-> //	int a1, a2;
-> //	struct proc *p, *up;
-> //	register struct proc *rpp, *rip;
-> //	register n;
-> //
-> //	p = NULL;
-> //	/*
-> //	 * First, just locate a slot for a process
-> //	 * and copy the useful info from this process into it.
-> //	 * The panic "cannot happen" because fork has already
-> //	 * checked for the existence of a slot.
-> //	 */
-> //retry:
-> //	mpid++;
-> //	if(mpid >= 30000) {
-> //		mpid = 0;
-> //		goto retry;
-> //	}
-> //	for(rpp = &proc[0]; rpp < &proc[NPROC]; rpp++) {
-> //		if(rpp->p_stat == NULL && p==NULL)
-> //			p = rpp;
-> //		if (rpp->p_pid==mpid || rpp->p_pgrp==mpid)
-> //			goto retry;
-> //	}
-> //	if ((rpp = p)==NULL)
-> //		panic("no procs");
-> //
-> //	/*
-> //	 * make proc entry for new proc
-> //	 */
-> //
-> //	rip = u.u_procp;
-> //	up = rip;
-> //	rpp->p_stat = SRUN;
-> //	rpp->p_clktim = 0;
-> //	rpp->p_flag = SLOAD;
-> //	rpp->p_uid = rip->p_uid;
-> //	rpp->p_pgrp = rip->p_pgrp;
-> //	rpp->p_nice = rip->p_nice;
-> //	rpp->p_textp = rip->p_textp;
-> //	rpp->p_pid = mpid;
-> //	rpp->p_ppid = rip->p_pid;
-> //	rpp->p_time = 0;
-> //	rpp->p_cpu = 0;
-> //
-> //	/*
-> //	 * make duplicate entries
-> //	 * where needed
-> //	 */
-> //
-> //	for(n=0; n<NOFILE; n++)
-> //		if(u.u_ofile[n] != NULL)
-> //			u.u_ofile[n]->f_count++;
-> //	if(up->p_textp != NULL) {
-> //		up->p_textp->x_count++;
-> //		up->p_textp->x_ccount++;
-> //	}
-> //	u.u_cdir->i_count++;
-> //	if (u.u_rdir)
-> //		u.u_rdir->i_count++;
-> //	/*
-> //	 * Partially simulate the environment
-> //	 * of the new process so that when it is actually
-> //	 * created (by copying) it will look right.
-> //	 */
-> //	rpp = p;
-> //	u.u_procp = rpp;
-> //	rip = up;
-> //	n = rip->p_size;
-> //	a1 = rip->p_addr;
-> //	rpp->p_size = n;
-> //	/*
-> //	 * When the resume is executed for the new process,
-> //	 * here's where it will resume.
-> //	 */
-> //	if (save(u.u_ssav)) {
-> //		sureg();
-> //		return(1);
-> //	}
-> //	a2 = malloc(coremap, n);
-> //	/*
-> //	 * If there is not enough core for the
-> //	 * new process, swap out the current process to generate the
-> //	 * copy.
-> //	 */
-> //	if(a2 == NULL) {
-> //		rip->p_stat = SIDL;
-> //		rpp->p_addr = a1;
-> //		xswap(rpp, 0, 0);
-> //		rip->p_stat = SRUN;
-> //	} else {
-> //		/*
-> //		 * There is core, so just copy.
-> //		 */
-> //		rpp->p_addr = a2;
-> //		while(n--)
-> //			copyseg(a1++, a2++);
-> //	}
-> //	u.u_procp = rip;
-> //	setrq(rpp);
-> //	rpp->p_flag |= SSWAP;
-> //	return(0);
-> //}
-> //
-> ///*
-> // * Change the size of the data+stack regions of the process.
-> // * If the size is shrinking, it's easy-- just release the extra core.
-> // * If it's growing, and there is core, just allocate it
-> // * and copy the image, taking care to reset registers to account
-> // * for the fact that the system's stack has moved.
-> // * If there is no core, arrange for the process to be swapped
-> // * out after adjusting the size requirement-- when it comes
-> // * in, enough core will be allocated.
-> // *
-> // * After the expansion, the caller will take care of copying
-> // * the user's stack towards or away from the data area.
-> // */
-> //expand(newsize)
-> //{
-> //	register i, n;
-> //	register struct proc *p;
-> //	register a1, a2;
-> //
-> //	p = u.u_procp;
-> //	n = p->p_size;
-> //	p->p_size = newsize;
-> //	a1 = p->p_addr;
-> //	if(n >= newsize) {
-> //		mfree(coremap, n-newsize, a1+newsize);
-> //		return;
-> //	}
-> //	if (save(u.u_ssav)) {
-> //		sureg();
-> //		return;
-> //	}
-> //	a2 = malloc(coremap, newsize);
-> //	if(a2 == NULL) {
-> //		xswap(p, 1, n);
-> //		p->p_flag |= SSWAP;
-> //		qswtch();
-> //		/* no return */
-> //	}
-> //	p->p_addr = a2;
-> //	for(i=0; i<n; i++)
-> //		copyseg(a1+i, a2+i);
-> //	mfree(coremap, n, a1);
-> //	resume(a2, u.u_ssav);
-> //}
-```
-
-### tools/mkfs.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/mkfs.c unix-v7-c99/tools/mkfs.c || true
-```
-
-Expect:
-
-```
-1,11c1,3
-< /*
-<  * Make a file system prototype.
-<  * usage: mkfs filsys proto/size [ m n ]
-<  */
-< #define	NIPB	(BSIZE/sizeof(struct dinode))
-< #define	NINDIR	(BSIZE/sizeof(daddr_t))
-< #define	NDIRECT	(BSIZE/sizeof(struct direct))
-< #define	LADDR	10
-< #define	MAXFN	500
-< #define	itoo(x)	(int)((x+15)&07)
-< #ifndef STANDALONE
----
-> #include <dirent.h>
-> #include <errno.h>
-> #include <stdint.h>
-13c5,19
-< #include <a.out.h>
----
-> #include <stdlib.h>
-> #include <string.h>
-> #include <sys/stat.h>
-> 
-> #define	BSIZE	512
-> #define	DIRSIZ	14
-> #define	DIRENT	16
-> #define	NADDR	13
-> #define	NICFREE	50
-> #define	NICINOD	100
-> #define	IFDIR	0040000
-> #define	IFREG	0100000
-> #define	ROOTINO	2
-> #ifndef FSSIZE
-> #define	FSSIZE	4096
-15,25c21,22
-< #include <sys/param.h>
-< #include <sys/ino.h>
-< #include <sys/inode.h>
-< #include <sys/filsys.h>
-< #include <sys/fblk.h>
-< #include <sys/dir.h>
-< time_t	utime;
-< #ifndef STANDALONE
-< FILE 	*fin;
-< #else
-< int	fin;
----
-> #ifndef ISIZE
-> #define	ISIZE	16
-27,36c24,25
-< int	fsi;
-< int	fso;
-< char	*charp;
-< char	buf[BSIZE];
-< union {
-< 	struct fblk fb;
-< 	char pad1[BSIZE];
-< } fbuf;
-< #ifndef STANDALONE
-< struct exec head;
----
-> #ifndef MAXINO
-> #define	MAXINO	128
-38,99c27,28
-< char	string[50];
-< union {
-< 	struct filsys fs;
-< 	char pad2[BSIZE];
-< } filsys;
-< char	*fsys;
-< char	*proto;
-< int	f_n	= MAXFN;
-< int	f_m	= 3;
-< int	error;
-< ino_t	ino;
-< long	getnum();
-< daddr_t	alloc();
-< 
-< main(argc, argv)
-< char *argv[];
-< {
-< 	int f, c;
-< 	long n;
-< 
-< #ifndef STANDALONE
-< 	time(&utime);
-< 	if(argc < 3) {
-< 		printf("usage: mkfs filsys proto/size [ m n ]\n");
-< 		exit(1);
-< 	}
-< 	fsys = argv[1];
-< 	proto = argv[2];
-< #else
-< 	{
-< 		static char protos[60];
-< 
-< 		printf("file sys size: ");
-< 		gets(protos);
-< 		proto = protos;
-< 	}
-< #endif
-< #ifdef STANDALONE
-< 	{
-< 		char fsbuf[100];
-< 
-< 		do {
-< 			printf("file system: ");
-< 			gets(fsbuf);
-< 			fso = open(fsbuf, 1);
-< 			fsi = open(fsbuf, 0);
-< 		} while (fso < 0 || fsi < 0);
-< 	}
-< 	fin = NULL;
-< 	argc = 0;
-< #else
-< 	fso = creat(fsys, 0666);
-< 	if(fso < 0) {
-< 		printf("%s: cannot create\n", fsys);
-< 		exit(1);
-< 	}
-< 	fsi = open(fsys, 0);
-< 	if(fsi < 0) {
-< 		printf("%s: cannot open\n", fsys);
-< 		exit(1);
-< 	}
-< 	fin = fopen(proto, "r");
----
-> #ifndef MAXBLK
-> #define	MAXBLK	4096
-101,145d29
-< 	if(fin == NULL) {
-< 		n = 0;
-< 		for(f=0; c=proto[f]; f++) {
-< 			if(c<'0' || c>'9') {
-< 				printf("%s: cannot open\n", proto);
-< 				exit(1);
-< 			}
-< 			n = n*10 + (c-'0');
-< 		}
-< 		filsys.s_fsize = n;
-< 		n = n/25;
-< 		if(n <= 0)
-< 			n = 1;
-< 		if(n > 65500/NIPB)
-< 			n = 65500/NIPB;
-< 		filsys.s_isize = n + 2;
-< 		printf("isize = %D\n", n*NIPB);
-< 		charp = "d--777 0 0 $ ";
-< 		goto f3;
-< 	}
-< 
-< #ifndef STANDALONE
-< 	/*
-< 	 * get name of boot load program
-< 	 * and read onto block 0
-< 	 */
-< 
-< 	getstr();
-< 	f = open(string, 0);
-< 	if(f < 0) {
-< 		printf("%s: cannot  open init\n", string);
-< 		goto f2;
-< 	}
-< 	read(f, (char *)&head, sizeof head);
-< 	if(head.a_magic != A_MAGIC1) {
-< 		printf("%s: bad format\n", string);
-< 		goto f1;
-< 	}
-< 	c = head.a_text + head.a_data;
-< 	if(c > BSIZE) {
-< 		printf("%s: too big\n", string);
-< 		goto f1;
-< 	}
-< 	read(f, buf, c);
-< 	wtfs((long)0, buf);
-147,148c31,39
-< f1:
-< 	close(f);
----
-> struct node {
-> 	char path[128];
-> 	char host[256];
-> 	int ino;
-> 	int mode;
-> 	int size;
-> 	int blocks[MAXBLK];
-> 	int nblock;
-> };
-150,159c41,45
-< 	/*
-< 	 * get total disk size
-< 	 * and inode block size
-< 	 */
-< 
-< f2:
-< 	filsys.s_fsize = getnum();
-< 	n = getnum();
-< 	n /= NIPB;
-< 	filsys.s_isize = n + 3;
----
-> static unsigned char image[FSSIZE][BSIZE];
-> static struct node nodes[MAXINO];
-> static int nnodes;
-> static int nextino = ROOTINO;
-> static int nextblk = 2 + ISIZE;
-161,186c47,49
-< #endif
-< f3:
-< 	if(argc >= 5) {
-< 		f_m = atoi(argv[3]);
-< 		f_n = atoi(argv[4]);
-< 		if(f_n <= 0 || f_n >= MAXFN)
-< 			f_n = MAXFN;
-< 		if(f_m <= 0 || f_m > f_n)
-< 			f_m = 3;
-< 	}
-< 	filsys.s_m = f_m;
-< 	filsys.s_n = f_n;
-< 	printf("m/n = %d %d\n", f_m, f_n);
-< 	if(filsys.s_isize >= filsys.s_fsize) {
-< 		printf("%ld/%ld: bad ratio\n", filsys.s_fsize, filsys.s_isize-2);
-< 		exit(1);
-< 	}
-< 	filsys.s_tfree = 0;
-< 	filsys.s_tinode = 0;
-< 	for(c=0; c<BSIZE; c++)
-< 		buf[c] = 0;
-< 	for(n=2; n!=filsys.s_isize; n++) {
-< 		wtfs(n, buf);
-< 		filsys.s_tinode += NIPB;
-< 	}
-< 	ino = 0;
----
-> static void
-> put16(unsigned char *p, unsigned int v)
-> {
-188c51,53
-< 	bflist();
----
-> 	p[0] = v & 0377;
-> 	p[1] = (v >> 8) & 0377;
-> }
-190c55,57
-< 	cfile((struct inode *)0);
----
-> static void
-> put32(unsigned char *p, unsigned int v)
-> {
-192,224c59,63
-< 	filsys.s_time = utime;
-< 	wtfs((long)1, (char *)&filsys);
-< 	exit(error);
-< }
-< 
-< cfile(par)
-< struct inode *par;
-< {
-< 	struct inode in;
-< 	int dbc, ibc;
-< 	char db[BSIZE];
-< 	daddr_t ib[NINDIR];
-< 	int i, f, c;
-< 
-< 	/*
-< 	 * get mode, uid and gid
-< 	 */
-< 
-< 	getstr();
-< 	in.i_mode = gmode(string[0], "-bcd", IFREG, IFBLK, IFCHR, IFDIR);
-< 	in.i_mode |= gmode(string[1], "-u", 0, ISUID, 0, 0);
-< 	in.i_mode |= gmode(string[2], "-g", 0, ISGID, 0, 0);
-< 	for(i=3; i<6; i++) {
-< 		c = string[i];
-< 		if(c<'0' || c>'7') {
-< 			printf("%c/%s: bad octal mode digit\n", c, string);
-< 			error = 1;
-< 			c = 0;
-< 		}
-< 		in.i_mode |= (c-'0')<<(15-3*i);
-< 	}
-< 	in.i_uid = getnum();
-< 	in.i_gid = getnum();
----
-> 	p[0] = v & 0377;
-> 	p[1] = (v >> 8) & 0377;
-> 	p[2] = (v >> 16) & 0377;
-> 	p[3] = (v >> 24) & 0377;
-> }
-226,267c65,67
-< 	/*
-< 	 * general initialization prior to
-< 	 * switching on format
-< 	 */
-< 
-< 	ino++;
-< 	in.i_number = ino;
-< 	for(i=0; i<BSIZE; i++)
-< 		db[i] = 0;
-< 	for(i=0; i<NINDIR; i++)
-< 		ib[i] = (daddr_t)0;
-< 	in.i_nlink = 1;
-< 	in.i_size = 0;
-< 	for(i=0; i<NADDR; i++)
-< 		in.i_un.i_addr[i] = (daddr_t)0;
-< 	if(par == (struct inode *)0) {
-< 		par = &in;
-< 		in.i_nlink--;
-< 	}
-< 	dbc = 0;
-< 	ibc = 0;
-< 	switch(in.i_mode&IFMT) {
-< 
-< 	case IFREG:
-< 		/*
-< 		 * regular file
-< 		 * contents is a file name
-< 		 */
-< 
-< 		getstr();
-< 		f = open(string, 0);
-< 		if(f < 0) {
-< 			printf("%s: cannot open\n", string);
-< 			error = 1;
-< 			break;
-< 		}
-< 		while((i=read(f, db, BSIZE)) > 0) {
-< 			in.i_size += i;
-< 			newblk(&dbc, db, &ibc, ib);
-< 		}
-< 		close(f);
-< 		break;
----
-> static void
-> put24(unsigned char *p, unsigned int v)
-> {
-269,306c69,71
-< 	case IFBLK:
-< 	case IFCHR:
-< 		/*
-< 		 * special file
-< 		 * content is maj/min types
-< 		 */
-< 
-< 		i = getnum() & 0377;
-< 		f = getnum() & 0377;
-< 		in.i_un.i_addr[0] = (i<<8) | f;
-< 		break;
-< 
-< 	case IFDIR:
-< 		/*
-< 		 * directory
-< 		 * put in extra links
-< 		 * call recursively until
-< 		 * name of "$" found
-< 		 */
-< 
-< 		par->i_nlink++;
-< 		in.i_nlink++;
-< 		entry(in.i_number, ".", &dbc, db, &ibc, ib);
-< 		entry(par->i_number, "..", &dbc, db, &ibc, ib);
-< 		in.i_size = 2*sizeof(struct direct);
-< 		for(;;) {
-< 			getstr();
-< 			if(string[0]=='$' && string[1]=='\0')
-< 				break;
-< 			entry(ino+1, string, &dbc, db, &ibc, ib);
-< 			in.i_size += sizeof(struct direct);
-< 			cfile(&in);
-< 		}
-< 		break;
-< 	}
-< 	if(dbc != 0)
-< 		newblk(&dbc, db, &ibc, ib);
-< 	iput(&in, &ibc, ib);
----
-> 	p[0] = v & 0377;
-> 	p[1] = (v >> 8) & 0377;
-> 	p[2] = (v >> 16) & 0377;
-309,310c74,75
-< gmode(c, s, m0, m1, m2, m3)
-< char c, *s;
----
-> static struct node *
-> find(char *path)
-314,339c79,82
-< 	for(i=0; s[i]; i++)
-< 		if(c == s[i])
-< 			return((&m0)[i]);
-< 	printf("%c/%s: bad mode\n", c, string);
-< 	error = 1;
-< 	return(0);
-< }
-< 
-< long
-< getnum()
-< {
-< 	int i, c;
-< 	long n;
-< 
-< 	getstr();
-< 	n = 0;
-< 	i = 0;
-< 	for(i=0; c=string[i]; i++) {
-< 		if(c<'0' || c>'9') {
-< 			printf("%s: bad number\n", string);
-< 			error = 1;
-< 			return((long)0);
-< 		}
-< 		n = n*10 + (c-'0');
-< 	}
-< 	return(n);
----
-> 	for(i=0; i<nnodes; i++)
-> 		if(strcmp(nodes[i].path, path) == 0)
-> 			return(&nodes[i]);
-> 	return(NULL);
-342c85,86
-< getstr()
----
-> static struct node *
-> addnode(char *path, int mode)
-344,360c88
-< 	int i, c;
-< 
-< loop:
-< 	switch(c=getch()) {
-< 
-< 	case ' ':
-< 	case '\t':
-< 	case '\n':
-< 		goto loop;
-< 
-< 	case '\0':
-< 		printf("EOF\n");
-< 		exit(1);
-< 
-< 	case ':':
-< 		while(getch() != '\n');
-< 		goto loop;
----
-> 	struct node *np;
-362,397c90,100
-< 	}
-< 	i = 0;
-< 
-< 	do {
-< 		string[i++] = c;
-< 		c = getch();
-< 	} while(c!=' '&&c!='\t'&&c!='\n'&&c!='\0');
-< 	string[i] = '\0';
-< }
-< 
-< rdfs(bno, bf)
-< daddr_t bno;
-< char *bf;
-< {
-< 	int n;
-< 
-< 	lseek(fsi, bno*BSIZE, 0);
-< 	n = read(fsi, bf, BSIZE);
-< 	if(n != BSIZE) {
-< 		printf("read error: %ld\n", bno);
-< 		exit(1);
-< 	}
-< }
-< 
-< wtfs(bno, bf)
-< daddr_t bno;
-< char *bf;
-< {
-< 	int n;
-< 
-< 	lseek(fso, bno*BSIZE, 0);
-< 	n = write(fso, bf, BSIZE);
-< 	if(n != BSIZE) {
-< 		printf("write error: %D\n", bno);
-< 		exit(1);
-< 	}
----
-> 	np = find(path);
-> 	if(np != NULL)
-> 		return(np);
-> 	if(nnodes >= MAXINO)
-> 		exit(2);
-> 	np = &nodes[nnodes++];
-> 	memset(np, 0, sizeof(*np));
-> 	(void)snprintf(np->path, sizeof(np->path), "%s", path);
-> 	np->ino = nextino++;
-> 	np->mode = mode;
-> 	return(np);
-400,401c103,104
-< daddr_t
-< alloc()
----
-> static void
-> parent(char *path, char *buf)
-403,404c106
-< 	int i;
-< 	daddr_t bno;
----
-> 	char *p;
-406,418c108,113
-< 	filsys.s_tfree--;
-< 	bno = filsys.s_free[--filsys.s_nfree];
-< 	if(bno == 0) {
-< 		printf("out of free space\n");
-< 		exit(1);
-< 	}
-< 	if(filsys.s_nfree <= 0) {
-< 		rdfs(bno, (char *)&fbuf);
-< 		filsys.s_nfree = fbuf.df_nfree;
-< 		for(i=0; i<NICFREE; i++)
-< 			filsys.s_free[i] = fbuf.df_free[i];
-< 	}
-< 	return(bno);
----
-> 	(void)snprintf(buf, 128, "%s", path);
-> 	p = strrchr(buf, '/');
-> 	if(p == buf)
-> 		p[1] = 0;
-> 	else if(p != NULL)
-> 		*p = 0;
-421,422c116,117
-< bfree(bno)
-< daddr_t bno;
----
-> static char *
-> base(char *path)
-424c119
-< 	int i;
----
-> 	char *p;
-426,434c121,122
-< 	filsys.s_tfree++;
-< 	if(filsys.s_nfree >= NICFREE) {
-< 		fbuf.df_nfree = filsys.s_nfree;
-< 		for(i=0; i<NICFREE; i++)
-< 			fbuf.df_free[i] = filsys.s_free[i];
-< 		wtfs(bno, (char *)&fbuf);
-< 		filsys.s_nfree = 0;
-< 	}
-< 	filsys.s_free[filsys.s_nfree++] = bno;
----
-> 	p = strrchr(path, '/');
-> 	return(p == NULL ? path : p+1);
-437,442c125,126
-< entry(inum, str, adbc, db, aibc, ib)
-< ino_t inum;
-< char *str;
-< int *adbc, *aibc;
-< char *db;
-< daddr_t *ib;
----
-> static void
-> mkdirs(char *path)
-444,445c128,138
-< 	struct direct *dp;
-< 	int i;
----
-> 	char tmp[128];
-> 	char *p;
-> 
-> 	(void)snprintf(tmp, sizeof(tmp), "%s", path);
-> 	for(p=tmp+1; *p; p++)
-> 		if(*p == '/') {
-> 			*p = 0;
-> 			(void)addnode(tmp, IFDIR | 0755);
-> 			*p = '/';
-> 		}
-> }
-447,463c140,141
-< 	dp = (struct direct *)db;
-< 	dp += *adbc;
-< 	(*adbc)++;
-< 	dp->d_ino = inum;
-< 	for(i=0; i<DIRSIZ; i++)
-< 		dp->d_name[i] = 0;
-< 	for(i=0; i<DIRSIZ; i++)
-< 		if((dp->d_name[i] = str[i]) == 0)
-< 			break;
-< 	if(*adbc >= NDIRECT)
-< 		newblk(adbc, db, aibc, ib);
-< }
-< 
-< newblk(adbc, db, aibc, ib)
-< int *adbc, *aibc;
-< char *db;
-< daddr_t *ib;
----
-> static void
-> addfile(char *path, char *host)
-465,466c143
-< 	int i;
-< 	daddr_t bno;
----
-> 	struct node *np;
-468,479c145,147
-< 	bno = alloc();
-< 	wtfs(bno, db);
-< 	for(i=0; i<BSIZE; i++)
-< 		db[i] = 0;
-< 	*adbc = 0;
-< 	ib[*aibc] = bno;
-< 	(*aibc)++;
-< 	if(*aibc >= NINDIR) {
-< 		printf("indirect block full\n");
-< 		error = 1;
-< 		*aibc = 0;
-< 	}
----
-> 	mkdirs(path);
-> 	np = addnode(path, IFREG | 0755);
-> 	(void)snprintf(np->host, sizeof(np->host), "%s", host);
-482c150,151
-< getch()
----
-> static void
-> allocblock(struct node *np, unsigned char *data, int n)
-485,491c154,158
-< #ifndef STANDALONE
-< 	if(charp)
-< #endif
-< 		return(*charp++);
-< #ifndef STANDALONE
-< 	return(getc(fin));
-< #endif
----
-> 	if(np->nblock >= MAXBLK || nextblk >= MAXBLK)
-> 		exit(3);
-> 	np->blocks[np->nblock++] = nextblk;
-> 	memcpy(image[nextblk], data, n);
-> 	nextblk++;
-494c161,162
-< bflist()
----
-> static void
-> loadfiles(void)
-496,513c164,166
-< 	struct inode in;
-< 	daddr_t ib[NINDIR];
-< 	int ibc;
-< 	char flg[MAXFN];
-< 	int adr[MAXFN];
-< 	int i, j;
-< 	daddr_t f, d;
-< 
-< 	for(i=0; i<f_n; i++)
-< 		flg[i] = 0;
-< 	i = 0;
-< 	for(j=0; j<f_n; j++) {
-< 		while(flg[i])
-< 			i = (i+1)%f_n;
-< 		adr[j] = i+1;
-< 		flg[i]++;
-< 		i = (i+f_m)%f_n;
-< 	}
----
-> 	FILE *fp;
-> 	unsigned char buf[BSIZE];
-> 	int i, n;
-515,545c168,181
-< 	ino++;
-< 	in.i_number = ino;
-< 	in.i_mode = IFREG;
-< 	in.i_uid = 0;
-< 	in.i_gid = 0;
-< 	in.i_nlink = 0;
-< 	in.i_size = 0;
-< 	for(i=0; i<NADDR; i++)
-< 		in.i_un.i_addr[i] = (daddr_t)0;
-< 
-< 	for(i=0; i<NINDIR; i++)
-< 		ib[i] = (daddr_t)0;
-< 	ibc = 0;
-< 	bfree((daddr_t)0);
-< 	d = filsys.s_fsize-1;
-< 	while(d%f_n)
-< 		d++;
-< 	for(; d > 0; d -= f_n)
-< 	for(i=0; i<f_n; i++) {
-< 		f = d - adr[i];
-< 		if(f < filsys.s_fsize && f >= filsys.s_isize)
-< 			if(badblk(f)) {
-< 				if(ibc >= NINDIR) {
-< 					printf("too many bad blocks\n");
-< 					error = 1;
-< 					ibc = 0;
-< 				}
-< 				ib[ibc] = f;
-< 				ibc++;
-< 			} else
-< 				bfree(f);
----
-> 	for(i=0; i<nnodes; i++) {
-> 		if((nodes[i].mode & IFREG) == 0)
-> 			continue;
-> 		fp = fopen(nodes[i].host, "rb");
-> 		if(fp == NULL) {
-> 			perror(nodes[i].host);
-> 			exit(1);
-> 		}
-> 		while((n = (int)fread(buf, 1, sizeof(buf), fp)) > 0) {
-> 			allocblock(&nodes[i], buf, n);
-> 			nodes[i].size += n;
-> 			memset(buf, 0, sizeof(buf));
-> 		}
-> 		(void)fclose(fp);
-547d182
-< 	iput(&in, &ibc, ib);
-550,553c185,186
-< iput(ip, aibc, ib)
-< struct inode *ip;
-< int *aibc;
-< daddr_t *ib;
----
-> static void
-> dirent(unsigned char *p, int ino, char *name)
-555,557d187
-< 	struct dinode *dp;
-< 	daddr_t d;
-< 	int i;
-559,593c189,222
-< 	filsys.s_tinode--;
-< 	d = itod(ip->i_number);
-< 	if(d >= filsys.s_isize) {
-< 		if(error == 0)
-< 			printf("ilist too small\n");
-< 		error = 1;
-< 		return;
-< 	}
-< 	rdfs(d, buf);
-< 	dp = (struct dinode *)buf;
-< 	dp += itoo(ip->i_number);
-< 
-< 	dp->di_mode = ip->i_mode;
-< 	dp->di_nlink = ip->i_nlink;
-< 	dp->di_uid = ip->i_uid;
-< 	dp->di_gid = ip->i_gid;
-< 	dp->di_size = ip->i_size;
-< 	dp->di_atime = utime;
-< 	dp->di_mtime = utime;
-< 	dp->di_ctime = utime;
-< 
-< 	switch(ip->i_mode&IFMT) {
-< 
-< 	case IFDIR:
-< 	case IFREG:
-< 		for(i=0; i<*aibc; i++) {
-< 			if(i >= LADDR)
-< 				break;
-< 			ip->i_un.i_addr[i] = ib[i];
-< 		}
-< 		if(*aibc >= LADDR) {
-< 			ip->i_un.i_addr[LADDR] = alloc();
-< 			for(i=0; i<NINDIR-LADDR; i++) {
-< 				ib[i] = ib[i+LADDR];
-< 				ib[i+LADDR] = (daddr_t)0;
----
-> 	memset(p, 0, DIRENT);
-> 	put16(p, (unsigned int)ino);
-> 	(void)strncpy((char *)p+2, name, DIRSIZ);
-> }
-> 
-> static void
-> makedirs(void)
-> {
-> 	struct node *dp;
-> 	unsigned char buf[BSIZE];
-> 	char par[128];
-> 	int i, off;
-> 
-> 	for(i=0; i<nnodes; i++) {
-> 		dp = &nodes[i];
-> 		if((dp->mode & IFDIR) == 0)
-> 			continue;
-> 		memset(buf, 0, sizeof(buf));
-> 		off = 0;
-> 		dirent(&buf[off], dp->ino, ".");
-> 		off += DIRENT;
-> 		parent(dp->path, par);
-> 		dirent(&buf[off], find(par)->ino, "..");
-> 		off += DIRENT;
-> 		for(int j=0; j<nnodes; j++) {
-> 			parent(nodes[j].path, par);
-> 			if(strcmp(par, dp->path) == 0 && strcmp(nodes[j].path, dp->path) != 0) {
-> 				if(off + DIRENT > BSIZE) {
-> 					allocblock(dp, buf, BSIZE);
-> 					memset(buf, 0, sizeof(buf));
-> 					off = 0;
-> 				}
-> 				dirent(&buf[off], nodes[j].ino, base(nodes[j].path));
-> 				off += DIRENT;
-595d223
-< 			wtfs(ip->i_un.i_addr[LADDR], (char *)ib);
-596a225,230
-> 		dp->size = off;
-> 		if(dp->nblock)
-> 			dp->size += (dp->nblock * BSIZE);
-> 		allocblock(dp, buf, BSIZE);
-> 	}
-> }
-598,605c232,270
-< 	case IFBLK:
-< 	case IFCHR:
-< 		ltol3(dp->di_addr, ip->i_un.i_addr, NADDR);
-< 		break;
-< 
-< 	default:
-< 		printf("bad mode %o\n", ip->i_mode);
-< 		exit(1);
----
-> static void
-> writeinode(struct node *np)
-> {
-> 	unsigned char *p;
-> 	int i, b, o, ib, dib, n;
-> 
-> 	b = (np->ino + 15) / 8;
-> 	o = ((np->ino + 15) & 7) * 64;
-> 	p = &image[b][o];
-> 	put16(p+0, (unsigned int)np->mode);
-> 	put16(p+2, 1);
-> 	put16(p+4, 0);
-> 	put16(p+6, 0);
-> 	put32(p+8, (unsigned int)np->size);
-> 	for(i=0; i<np->nblock && i<NADDR-3; i++)
-> 		put24(p+12+i*3, (unsigned int)np->blocks[i]);
-> 	if(np->nblock > NADDR-3) {
-> 		if(nextblk >= MAXBLK)
-> 			exit(3);
-> 		ib = nextblk++;
-> 		put24(p+12+(NADDR-3)*3, (unsigned int)ib);
-> 		for(i=NADDR-3; i<np->nblock && i<NADDR-3+128; i++)
-> 			put32(&image[ib][(i-(NADDR-3))*4], (unsigned int)np->blocks[i]);
-> 	}
-> 	if(np->nblock > NADDR-3+128) {
-> 		if(nextblk >= MAXBLK)
-> 			exit(3);
-> 		dib = nextblk++;
-> 		put24(p+12+(NADDR-2)*3, (unsigned int)dib);
-> 		for(i=NADDR-3+128; i<np->nblock; i++) {
-> 			n = i - (NADDR-3+128);
-> 			if(n % 128 == 0) {
-> 				if(nextblk >= MAXBLK)
-> 					exit(3);
-> 				ib = nextblk++;
-> 				put32(&image[dib][(n/128)*4], (unsigned int)ib);
-> 			}
-> 			put32(&image[ib][(n%128)*4], (unsigned int)np->blocks[i]);
-> 		}
-607d271
-< 	wtfs(d, buf);
-610,611c274,275
-< badblk(bno)
-< daddr_t bno;
----
-> static void
-> super(void)
-612a277,285
-> 	unsigned char *p;
-> 
-> 	p = image[1];
-> 	put16(p+0, ISIZE);
-> 	put32(p+2, FSSIZE);
-> 	put16(p+6, 0);
-> 	put16(p+6+4*NICFREE, 0);
-> 	put32(p+6+4*NICFREE+2+4*NICINOD+4, 1);
-> }
-613a287,318
-> int
-> main(int argc, char **argv)
-> {
-> 	FILE *fp;
-> 	int i;
-> 	char *eq;
-> 
-> 	if(argc < 3) {
-> 		(void)fprintf(stderr, "usage: mkfs image path=file ...\n");
-> 		return(1);
-> 	}
-> 	memset(image, 0, sizeof(image));
-> 	addnode("/", IFDIR | 0755);
-> 	for(i=2; i<argc; i++) {
-> 		eq = strchr(argv[i], '=');
-> 		if(eq == NULL)
-> 			return(1);
-> 		*eq++ = 0;
-> 		addfile(argv[i], eq);
-> 	}
-> 	loadfiles();
-> 	makedirs();
-> 	for(i=0; i<nnodes; i++)
-> 		writeinode(&nodes[i]);
-> 	super();
-> 	fp = fopen(argv[1], "wb");
-> 	if(fp == NULL) {
-> 		perror(argv[1]);
-> 		return(1);
-> 	}
-> 	(void)fwrite(image, sizeof(image), 1, fp);
-> 	(void)fclose(fp);
 ```
 
 ### cmd/mount.c
@@ -10608,7 +7459,7 @@ Expect:
 
 ```
 0a1
-> #include "u.h"
+> #include <stdio.h>
 ```
 
 ### lib/getpwuid.c
@@ -10657,7 +7508,7 @@ Expect:
 
 ```
 6a7
-> #include "u.h"
+> #include <stdio.h>
 9c10
 < char	*getttys();
 ---
@@ -10684,7 +7535,7 @@ Expect:
 
 ```
 4a5
-> #include "u.h"
+> #include <stdio.h>
 9,10c10,11
 < char	*execat(), *getenv();
 < extern	errno;
@@ -10721,16 +7572,14 @@ Expect:
 
 ```
 4a5
-> #include "u.h"
-6,7c7,12
+> #include <stdio.h>
+6,7c7,10
 < extern	char **environ;
 < char	*nvmatch();
 ---
-> 
 > static char *empty[] = { 0 };
 > char **environ = empty;
 > int errno;
-> 
 > static char *nvmatch();
 ```
 
@@ -10920,7 +7769,7 @@ Expect:
 
 ```
 4a5
-> #include "u.h"
+> #include <stdio.h>
 6a8
 > int
 7a10
@@ -10938,15 +7787,14 @@ diff unix-v7-c99/v7/usr/src/libc/gen/perror.c unix-v7-c99/lib/perror.c || true
 Expect:
 
 ```
-5a6,7
-> #include "u.h"
-> 
-8c10,11
+4a5
+> #include <stdio.h>
+8c9,10
 < char	*sys_errlist[];
 ---
 > char	*sys_errlist[1];
 > void
-13c16
+13c15
 < 	register n;
 ---
 > 	register int n;
@@ -10999,10 +7847,9 @@ diff unix-v7-c99/v7/usr/src/libc/gen/mktemp.c unix-v7-c99/lib/mktemp.c || true
 Expect:
 
 ```
-0a1,2
-> #include "u.h"
-> 
-7c9
+0a1
+> #include <stdio.h>
+7c8
 < 	register i;
 ---
 > 	register int i;
@@ -11034,11 +7881,5530 @@ Expect:
 
 ```
 7a8
-> #include "u.h"
+> #include <stdio.h>
 17a19
 > int f;
 23c25
 < 	register df;
 ---
 > 	register int df;
+```
+
+### lib/qsort.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/qsort.c unix-v7-c99/lib/qsort.c || true
+```
+
+Expect:
+
+```
+3a4
+> static void qs1(), qsexc(), qstexc();
+4a6
+> void
+6c8
+< char *a;
+---
+> void *a;
+13c15
+< 	qs1(a, a+n*es);
+---
+> 	qs1(a, (char *)a+n*es);
+16c18,19
+< static qs1(a, l)
+---
+> static void
+> qs1(a, l)
+20,21c23
+< 	register es;
+< 	char **k;
+---
+> 	register int es;
+30c32
+< 	if((n=l-a) <= es)
+---
+> 	if((n=l-a) <= (unsigned)es)
+87c89,90
+< static qsexc(i, j)
+---
+> static void
+> qsexc(i, j)
+103c106,107
+< static qstexc(i, j, k)
+---
+> static void
+> qstexc(i, j, k)
+```
+
+### lib/calloc.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/calloc.c unix-v7-c99/lib/calloc.c || true
+```
+
+Expect:
+
+```
+2a3
+> #include <stdio.h>
+4d4
+< #define NULL 0
+11d10
+< 	char *malloc();
+13c12
+< 	register m;
+---
+> 	register int m;
+25a25
+> int
+29a30
+> 	(void)num; (void)size;
+30a32
+> 	return(0);
+```
+
+### lib/tell.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/tell.c unix-v7-c99/lib/tell.c || true
+```
+
+Expect:
+
+```
+5c5
+< long	lseek();
+---
+> extern long lseek(int, long, int);
+7a8
+> int f;
+```
+
+### lib/system.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/system.c unix-v7-c99/lib/system.c || true
+```
+
+Expect:
+
+```
+0a1
+> #include	<stdio.h>
+2a4
+> int
+13,14c15,16
+< 	istat = signal(SIGINT, SIG_IGN);
+< 	qstat = signal(SIGQUIT, SIG_IGN);
+---
+> 	istat = (int (*)())signal(SIGINT, (int)SIG_IGN);
+> 	qstat = (int (*)())signal(SIGQUIT, (int)SIG_IGN);
+19,20c21,22
+< 	signal(SIGINT, istat);
+< 	signal(SIGQUIT, qstat);
+---
+> 	signal(SIGINT, (int)istat);
+> 	signal(SIGQUIT, (int)qstat);
+```
+
+### lib/timezone.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/timezone.c unix-v7-c99/lib/timezone.c || true
+```
+
+Expect:
+
+```
+8a9
+> #include <stdio.h>
+24a26
+> int zone, dst;
+```
+
+### lib/getlogin.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/getlogin.c unix-v7-c99/lib/getlogin.c || true
+```
+
+Expect:
+
+```
+0a1
+> #include <stdio.h>
+1a3
+> extern int ttyslot(void);
+9c11
+< 	register me, uf;
+---
+> 	register int me, uf;
+16c18
+< 	lseek( uf, (long)(me*sizeof(ubuf)), 0 );
+---
+> 	lseek( uf, (long)(me*(int)sizeof(ubuf)), 0 );
+```
+
+### lib/atof.c
+
+On disk but not linked into LIB: pulling libgcc's softfp helpers into every
+binary overflows the rootfs.  See `lib/Makefile`.
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/atof.c unix-v7-c99/lib/atof.c || true
+```
+
+Expect:
+
+```
+5d4
+< #include <math.h>
+6a6,15
+> #define LOGHUGE 39
+> static double
+> ldexp(value, n)
+> double value;
+> int n;
+> {
+> 	while (n > 0) { value *= 2.0; n--; }
+> 	while (n < 0) { value *= 0.5; n++; }
+> 	return(value);
+> }
+12c21
+< 	register c;
+---
+> 	register int c;
+15d23
+< 	double ldexp();
+17c25
+< 	register eexp, exp, neg, negexp, bexp;
+---
+> 	register int eexp, exp, neg, negexp, bexp;
+```
+
+
+### lib/clrerr.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/clrerr.c unix-v7-c99/lib/clrerr.c || true
+```
+
+Expect:
+
+```
+2a3
+> void
+```
+
+### lib/data.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/data.c unix-v7-c99/lib/data.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/doscan.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/doscan.c unix-v7-c99/lib/doscan.c || true
+```
+
+Expect:
+
+```
+2a3
+> #include	<stdarg.h>
+13a15
+> int	_innum(), _instr();
+25a28
+> int
+29c32
+< register int **argp;
+---
+> va_list *argp;
+30a34
+> 	int *slot;
+44,46c48,51
+< 		if (ch != '*')
+< 			ptr = argp++;
+< 		else
+---
+> 		if (ch != '*') {
+> 			slot = va_arg(*argp, int *);
+> 			ptr = &slot;
+> 		} else
+96a102
+> int
+98a105
+> int type, len, size;
+104c111
+< 	register c, base;
+---
+> 	register int c, base;
+204a212
+> int
+206a215
+> int type, len;
+210c219
+< 	register ch;
+---
+> 	register int ch;
+254c263
+< 	register c, t;
+---
+> 	register int c, t;
+```
+
+### lib/endopen.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/endopen.c unix-v7-c99/lib/endopen.c || true
+```
+
+Expect:
+
+```
+2a3
+> static int create();
+```
+
+### lib/fgetc.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fgetc.c unix-v7-c99/lib/fgetc.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+```
+
+### lib/fgets.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fgets.c unix-v7-c99/lib/fgets.c || true
+```
+
+Expect:
+
+```
+6a7
+> int n;
+8c9
+< 	register c;
+---
+> 	register int c;
+```
+
+### lib/filbuf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/filbuf.c unix-v7-c99/lib/filbuf.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/findiop.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/findiop.c unix-v7-c99/lib/findiop.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/flsbuf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/flsbuf.c unix-v7-c99/lib/flsbuf.c || true
+```
+
+Expect:
+
+```
+11c11
+< 	register n, rn;
+---
+> 	register int n, rn;
+63c63
+< 	register n;
+---
+> 	register int n;
+80a81
+> void
+94c95
+< 	register r;
+---
+> 	register int r;
+107,108c108,109
+< 	iop->_flag &=
+< 		~(_IOREAD|_IOWRT|_IONBF|_IOMYBUF|_IOERR|_IOEOF|_IOSTRG|_IORW);
+---
+> 	iop->_flag = (char)(iop->_flag &
+> 		~(_IOREAD|_IOWRT|_IONBF|_IOMYBUF|_IOERR|_IOEOF|_IOSTRG|_IORW));
+```
+
+### lib/fopen.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fopen.c unix-v7-c99/lib/fopen.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/fprintf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fprintf.c unix-v7-c99/lib/fprintf.c || true
+```
+
+Expect:
+
+```
+1a2,3
+> #include	<stdarg.h>
+> extern void _doprnt();
+3,5c5,6
+< fprintf(iop, fmt, args)
+< FILE *iop;
+< char *fmt;
+---
+> int
+> fprintf(FILE *iop, char *fmt, ...)
+7c8,11
+< 	_doprnt(fmt, &args, iop);
+---
+> 	va_list ap;
+> 	va_start(ap, fmt);
+> 	_doprnt(fmt, &ap, iop);
+> 	va_end(ap);
+```
+
+### lib/fputc.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fputc.c unix-v7-c99/lib/fputc.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+3a5
+> int c;
+```
+
+### lib/fputs.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fputs.c unix-v7-c99/lib/fputs.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+7,8c8,9
+< 	register r;
+< 	register c;
+---
+> 	register int r;
+> 	register int c;
+```
+
+### lib/freopen.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/freopen.c unix-v7-c99/lib/freopen.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### lib/fseek.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/fseek.c unix-v7-c99/lib/fseek.c || true
+```
+
+Expect:
+
+```
+8a9
+> int
+11a13
+> 	int ptrname;
+```
+
+### lib/ftell.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/ftell.c unix-v7-c99/lib/ftell.c || true
+```
+
+Expect:
+
+```
+14c14
+< 	register adjust;
+---
+> 	register int adjust;
+```
+
+### lib/getchar.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/getchar.c unix-v7-c99/lib/getchar.c || true
+```
+
+Expect:
+
+```
+7a8
+> int
+```
+
+### lib/getpass.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/getpass.c unix-v7-c99/lib/getpass.c || true
+```
+
+Expect:
+
+```
+12c12
+< 	register c;
+---
+> 	register int c;
+15d14
+< 	int (*signal())();
+22c21
+< 	sig = signal(SIGINT, SIG_IGN);
+---
+> 	sig = (int (*)())signal(SIGINT, (int)SIG_IGN);
+36c35
+< 	signal(SIGINT, sig);
+---
+> 	signal(SIGINT, (int)sig);
+```
+
+### lib/gets.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/gets.c unix-v7-c99/lib/gets.c || true
+```
+
+Expect:
+
+```
+7c7
+< 	register c;
+---
+> 	register int c;
+```
+
+### lib/printf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/printf.c unix-v7-c99/lib/printf.c || true
+```
+
+Expect:
+
+```
+1a2,3
+> #include	<stdarg.h>
+> extern void _doprnt();
+3,4c5,6
+< printf(fmt, args)
+< char *fmt;
+---
+> int
+> printf(char *fmt, ...)
+6c8,11
+< 	_doprnt(fmt, &args, stdout);
+---
+> 	va_list ap;
+> 	va_start(ap, fmt);
+> 	_doprnt(fmt, &ap, stdout);
+> 	va_end(ap);
+```
+
+### lib/putchar.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/putchar.c unix-v7-c99/lib/putchar.c || true
+```
+
+Expect:
+
+```
+7a8
+> int
+9c10
+< register c;
+---
+> register int c;
+11c12
+< 	putc(c, stdout);
+---
+> 	return(putc(c, stdout));
+```
+
+### lib/puts.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/puts.c unix-v7-c99/lib/puts.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+6c7
+< 	register c;
+---
+> 	register int c;
+```
+
+### lib/rdwr.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/rdwr.c unix-v7-c99/lib/rdwr.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+8c9
+< 	register c;
+---
+> 	register int c;
+24a26
+> int
+```
+
+### lib/rew.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/rew.c unix-v7-c99/lib/rew.c || true
+```
+
+Expect:
+
+```
+2a3
+> void
+```
+
+### lib/scanf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/scanf.c unix-v7-c99/lib/scanf.c || true
+```
+
+Expect:
+
+```
+1a2,3
+> #include	<stdarg.h>
+> int	_doscan();
+3,4c5,6
+< scanf(fmt, args)
+< char *fmt;
+---
+> int
+> scanf(char *fmt, ...)
+6c8,13
+< 	return(_doscan(stdin, fmt, &args));
+---
+> 	va_list ap;
+> 	int r;
+> 	va_start(ap, fmt);
+> 	r = _doscan(stdin, fmt, &ap);
+> 	va_end(ap);
+> 	return(r);
+9,11c16,17
+< fscanf(iop, fmt, args)
+< FILE *iop;
+< char *fmt;
+---
+> int
+> fscanf(FILE *iop, char *fmt, ...)
+13c19,24
+< 	return(_doscan(iop, fmt, &args));
+---
+> 	va_list ap;
+> 	int r;
+> 	va_start(ap, fmt);
+> 	r = _doscan(iop, fmt, &ap);
+> 	va_end(ap);
+> 	return(r);
+16,18c27,28
+< sscanf(str, fmt, args)
+< register char *str;
+< char *fmt;
+---
+> int
+> sscanf(char *str, char *fmt, ...)
+20a31,32
+> 	va_list ap;
+> 	int r;
+27c39,42
+< 	return(_doscan(&_strbuf, fmt, &args));
+---
+> 	va_start(ap, fmt);
+> 	r = _doscan(&_strbuf, fmt, &ap);
+> 	va_end(ap);
+> 	return(r);
+```
+
+### lib/setbuf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/setbuf.c unix-v7-c99/lib/setbuf.c || true
+```
+
+Expect:
+
+```
+2a3
+> void
+```
+
+### lib/sprintf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/sprintf.c unix-v7-c99/lib/sprintf.c || true
+```
+
+Expect:
+
+```
+1a2,3
+> #include	<stdarg.h>
+> extern void _doprnt();
+3,4c5,6
+< char *sprintf(str, fmt, args)
+< char *str, *fmt;
+---
+> char *
+> sprintf(char *str, char *fmt, ...)
+6a9
+> 	va_list ap;
+11c14,16
+< 	_doprnt(fmt, &args, &_strbuf);
+---
+> 	va_start(ap, fmt);
+> 	_doprnt(fmt, &ap, &_strbuf);
+> 	va_end(ap);
+```
+
+### lib/strout.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/strout.c unix-v7-c99/lib/strout.c || true
+```
+
+Expect:
+
+```
+2a3
+> void
+5c6
+< register count;
+---
+> register int count;
+7a9
+> int fillch;
+```
+
+### lib/ungetc.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/ungetc.c unix-v7-c99/lib/ungetc.c || true
+```
+
+Expect:
+
+```
+2a3
+> int
+3a5
+> int c;
+10c12
+< 			*iop->_ptr++;
+---
+> 			iop->_ptr++;
+```
+
+### lib/ctime.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/ctime.c unix-v7-c99/lib/ctime.c || true
+```
+
+Expect:
+
+```
+30c30
+<  *	Thu Jan 01 00:00:00 1970n0\\
+---
+>  *	Thu Jan 01 00:00:00 1970n0\\
+72c72
+< char		*ct_numb();
+---
+> static char	*ct_numb();
+76a77,79
+> static int	sunday();
+> int	dysize();
+> int	ftime();
+91c94
+< 	register daylbegin, daylend;
+---
+> 	register int daylbegin, daylend;
+122c125
+< static
+---
+> static int
+226a230
+> int
+227a232
+> int y;
+236a242
+> int n;
+```
+### cmd/getty.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/getty.c unix-v7-c99/cmd/getty.c || true
+```
+
+Expect:
+
+```
+10a11,20
+> int read(int fd, char *buf, int n);
+> int write(int fd, char *buf, int n);
+> int ioctl(int fd, int cmd, void *arg);
+> int stty(int fd, void *buf);
+> int execl(char *path, char *arg0, ...);
+> void exit(int n);
+> int getname(void);
+> void puts(char *as);
+> void putchr(int cc);
+> 
+128,129c138,139
+< main(argc, argv)
+< char **argv;
+---
+> int
+> main(int argc, char *argv[])
+178c188,189
+< getname()
+---
+> int
+> getname(void)
+181c192
+< 	register c;
+---
+> 	register int c;
+222,223c233,234
+< puts(as)
+< char *as;
+---
+> void
+> puts(char *as)
+232c243,244
+< putchr(cc)
+---
+> void
+> putchr(int cc)
+```
+
+### cmd/init.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/init.c unix-v7-c99/cmd/init.c || true
+```
+
+Expect:
+
+```
+4a5
+> #include <stdio.h>
+38c39,53
+< main()
+---
+> int shutdown(void);
+> int single(void);
+> int runcom(void);
+> int multiple(void);
+> int merge(void);
+> int term(struct tab *p);
+> int rline(void);
+> int maktty(char *lin);
+> int get(void);
+> int dfork(struct tab *p);
+> int rmut(struct tab *p);
+> void reset(void);
+> 
+> int
+> main(void)
+40d54
+< 	int reset();
+43c57
+< 	signal(SIGHUP, reset);
+---
+> 	signal(SIGHUP, (int)reset);
+50a65
+> 	return(0);
+53c68,69
+< shutdown()
+---
+> int
+> shutdown(void)
+55c71
+< 	register i;
+---
+> 	register int i;
+61c77
+< 	signal(SIGALRM, reset);
+---
+> 	signal(SIGALRM, (int)reset);
+70a87
+> 	return(0);
+73c90,91
+< single()
+---
+> int
+> single(void)
+75c93
+< 	register pid;
+---
+> 	register int pid;
+92a111
+> 	return(0);
+95c114,115
+< runcom()
+---
+> int
+> runcom(void)
+97c117
+< 	register pid;
+---
+> 	register int pid;
+108a129
+> 	return(0);
+111c132,133
+< multiple()
+---
+> int
+> multiple(void)
+114c136
+< 	register pid;
+---
+> 	register int pid;
+119c141
+< 			return;
+---
+> 			return(0);
+128,129c150,151
+< term(p)
+< register struct tab *p;
+---
+> int
+> term(struct tab *p)
+137a160
+> 	return(0);
+140c163,164
+< rline()
+---
+> int
+> rline(void)
+142c166
+< 	register c, i;
+---
+> 	register int c, i;
+174,175c198,199
+< maktty(lin)
+< char *lin;
+---
+> int
+> maktty(char *lin)
+177c201
+< 	register i, j;
+---
+> 	register int i, j;
+185a210
+> 	return(0);
+188c213,214
+< get()
+---
+> int
+> get(void)
+199c225,226
+< merge()
+---
+> int
+> merge(void)
+202c229
+< 	register i;
+---
+> 	register int i;
+205c232
+< 	signal(SIGINT, merge);
+---
+> 	signal(SIGINT, (int)merge);
+208c235
+< 		return;
+---
+> 		return(0);
+240a268
+> 	return(0);
+243,244c271,272
+< dfork(p)
+< struct tab *p;
+---
+> int
+> dfork(struct tab *p)
+246c274
+< 	register pid;
+---
+> 	register int pid;
+263a292
+> 	return(0);
+266,267c295,296
+< rmut(p)
+< register struct tab *p;
+---
+> int
+> rmut(struct tab *p)
+269c298
+< 	register i, f;
+---
+> 	register int i, f;
+296a326
+> 	return(0);
+299c329,330
+< reset()
+---
+> void
+> reset(void)
+```
+
+
+### cmd/accton.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/accton.c unix-v7-c99/cmd/accton.c || true
+```
+
+Expect:
+
+```
+0a1,3
+> #include <stdio.h>
+> 
+> int
+1a5
+> int argc;
+4c8,9
+< 	extern errno;
+---
+> 	extern int errno;
+> 	int acct();
+```
+
+### cmd/update.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/update.c unix-v7-c99/cmd/update.c || true
+```
+
+Expect:
+
+```
+5a6
+> #include <stdio.h>
+7a9,10
+> int	dosync();
+> 
+14a18
+> int
+30a35
+> int
+34c39
+< 	signal(SIGALRM, dosync);
+---
+> 	signal(SIGALRM, (int)dosync);
+35a41
+> 	return(0);
+```
+
+### cmd/atrun.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/atrun.c unix-v7-c99/cmd/atrun.c || true
+```
+
+Expect:
+
+```
+13a14,15
+> int	makenowtime(), updatetime(), run();
+> 
+17a20
+> int
+18a22
+> int argc;
+24a29
+> 	(void)argc; (void)argv;
+51a57
+> int
+55d60
+< 	struct tm *localtime();
+62a68
+> 	return(0);
+64a71
+> int
+65a73
+> int t;
+74a83
+> 	return(0);
+76a86
+> int
+81c91
+< 	register pid, i;
+---
+> 	register int pid, i;
+85c95
+< 		return;
+---
+> 		return(0);
+99,100c109,110
+< 		wait((int *)0);
+< 		unlink(file);
+---
+> 	wait((int *)0);
+> 	unlink(file);
+107a118
+> 	return(0);
+```
+
+### cmd/passwd.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/passwd.c unix-v7-c99/cmd/passwd.c || true
+```
+
+Expect:
+
+```
+13,14d12
+< struct	passwd *getpwent();
+< int	endpwent();
+22a21
+> int
+24c23,24
+< char *argv[];
+---
+> int	argc;
+> char	*argv[];
+111,113c111,113
+< 	signal(SIGHUP, SIG_IGN);
+< 	signal(SIGINT, SIG_IGN);
+< 	signal(SIGQUIT, SIG_IGN);
+---
+> 	signal(SIGHUP, (int)SIG_IGN);
+> 	signal(SIGINT, (int)SIG_IGN);
+> 	signal(SIGQUIT, (int)SIG_IGN);
+```
+
+### cmd/diff3.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/diff3.c unix-v7-c99/cmd/diff3.c || true
+```
+
+Expect:
+
+```
+6c6
+< /* diff3 [-e] d13 d23 f1 f2 f3 
+---
+> /* diff3 [-e] d13 d23 f1 f2 f3
+44a45,49
+> int readin(), number(), digit(), getchange(), getline(), merge(),
+>     separate(), change(), prange(), keep(), skip(), duplicate(),
+>     repos(), trouble(), edit(), edscript();
+> 
+> int
+45a51
+> int argc;
+48c54
+< 	register i,m,n;
+---
+> 	register int i,m,n;
+74a81
+> 	return(0);
+84a92
+> int
+89c97
+< 	register i;
+---
+> 	register int i;
+127a136
+> int
+131c140
+< 	register nn;
+---
+> 	register int nn;
+137a147
+> int
+138a149
+> int c;
+142a154
+> int
+151a164
+> int
+155,156c168,169
+< 	register i, c;
+< 	for(i=0;i<sizeof(line)-1;i++) {
+---
+> 	register int i, c;
+> 	for(i=0;i<(int)sizeof(line)-1;i++) {
+168a182
+> int
+169a184
+> int m1, m2;
+265a281
+> 	return(0);
+267a284
+> int
+271a289
+> 	return(0);
+277a296
+> int
+278a298
+> int i;
+279a300
+> int dup;
+285c306
+< 		return;
+---
+> 		return(0);
+287c308
+< 		return;
+---
+> 		return(0);
+290a312
+> 	return(0);
+295a318
+> int
+306a330
+> 	return(0);
+313a338
+> int
+314a340
+> int i;
+317c343
+< 	register delta;
+---
+> 	register int delta;
+318a345
+> 	(void)rold;
+322a350
+> 	return(0);
+328a357
+> int
+329a359
+> int i, from;
+332c362
+< 	register j,n;
+---
+> 	register int j,n;
+346a377
+> int
+350,351c381,382
+< 	register c,d;
+< 	register nchar;
+---
+> 	register int c,d;
+> 	register int nchar;
+367c398
+< 				return;
+---
+> 				return(0);
+374a406
+> int
+375a408
+> int nchar;
+377,378c410,411
+< 	register i;
+< 	for(i=0;i<2;i++) 
+---
+> 	register int i;
+> 	for(i=0;i<2;i++)
+379a413
+> 	return(0);
+381a416
+> int
+385a421
+> 	return(0);
+389a426
+> int
+391a429
+> int dup, j;
+405a444
+> int
+406a446
+> int n;
+408c448
+< 	register j,k;
+---
+> 	register int j,k;
+420a461
+> 	return(0);
+```
+
+### cmd/fortune.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/games/fortune.c unix-v7-c99/cmd/fortune.c || true
+```
+
+Expect:
+
+```
+5a6
+> int
+```
+
+### cmd/arithmetic.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/games/arithmetic.c unix-v7-c99/cmd/arithmetic.c || true
+```
+
+Expect:
+
+```
+0a1
+> #include <stdio.h>
+4a6,7
+> int	getnum(), random(), skrand(), score(), getline(), delete();
+> 
+13a17
+> int
+14a19
+> int	argc;
+20c25
+< 	extern	delete();
+---
+> 	extern int delete();
+22c27
+< 	signal(SIGINT, delete);
+---
+> 	signal(SIGINT, (int)delete);
+120a126
+> int
+139a146
+> 	return(0);
+141a149
+> int
+155a164
+> int
+156a166
+> int range;
+161c171,174
+< skrand(range){
+---
+> int
+> skrand(range)
+> int range;
+> {
+167a181
+> int
+175c189
+< 	if(rights == 0)	return;
+---
+> 	if(rights == 0)	return(0);
+182a197
+> 	return(0);
+184a200
+> int
+192a209
+> 	return(0);
+```
+
+### cmd/hangman.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/games/hangman.c unix-v7-c99/cmd/hangman.c || true
+```
+
+Expect:
+
+```
+8a9,11
+> int	setup(), startnew(), stateout(), getguess(), wordout(),
+> 	youwon(), fatal(), getword(), pscore();
+> double	frand();
+14c17,18
+< main(argc,argv) char **argv;
+---
+> int
+> main(argc,argv) int argc; char **argv;
+30a35
+> int
+34c39
+< 	time(tvec);
+---
+> 	time((long *)tvec);
+38a44
+> 	return(0);
+44a51
+> int
+55a63
+> 	return(0);
+56a65
+> int
+63a73
+> 	return(0);
+64a75
+> int
+92c103
+< 		return;
+---
+> 		return(0);
+95c106
+< 		if(word[i]=='.') return;
+---
+> 		if(word[i]=='.') return(0);
+98c109
+< 	return;
+---
+> 	return(0);
+99a111
+> int
+103a116
+> 	return(0);
+104a118
+> int
+107a122
+> 	return(0);
+108a124
+> int
+112a129
+> 	return(0);
+113a131
+> int
+133a152
+> 	return(0);
+135,136c154,155
+< long int freq[]
+< {	42066,	9228,	24412,	14500,	55162,
+---
+> long int freq[]={
+> 	42066,	9228,	24412,	14500,	55162,
+142a162
+> int
+145a166
+> 	return(0);
+```
+
+### cmd/ac.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/ac.c unix-v7-c99/cmd/ac.c || true
+```
+
+Expect:
+
+```
+35c35,39
+< main(argc, argv) 
+---
+> int	loop(), print(), upall(), update(), among(), newday(), pdate();
+> 
+> int
+> main(argc, argv)
+> int argc;
+39c43
+< 	register i;
+---
+> 	register int i;
+91a96
+> int
+94c99
+< 	register i;
+---
+> 	register int i;
+100c105
+< 		return;
+---
+> 		return(0);
+104c109
+< 			return;
+---
+> 			return(0);
+108c113
+< 		return;
+---
+> 		return(0);
+125c130
+< 		return;
+---
+> 		return(0);
+134a140
+> 	return(0);
+136a143
+> int
+157a165
+> 	return(0);
+159a168
+> int
+160a170
+> int f;
+165a176
+> 	return(0);
+167a179
+> int
+169a182
+> int f;
+186c199
+< 		return;
+---
+> 		return(0);
+189c202
+< 		return;
+---
+> 		return(0);
+200a214
+> 	return(0);
+202a217
+> int
+203a219
+> int i;
+205c221
+< 	register j, k;
+---
+> 	register int j, k;
+222a239
+> int
+237a255
+> 	return(0);
+239a258
+> int
+246c265
+< 		return;
+---
+> 		return(0);
+248a268
+> 	return(0);
+```
+
+### cmd/at.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/at.c unix-v7-c99/cmd/at.c || true
+```
+
+Expect:
+
+```
+10a11
+> #define	utime	at_utime
+28c29
+< 	char *mname; 
+---
+> 	char *mname;
+56a58
+> int	pclose(FILE *f);
+57a60,62
+> int	makeutime(), makeuday(), filename(), onintr();
+> 
+> int
+58a64
+> int argc;
+61,62c67,68
+< 	extern onintr();
+< 	register c;
+---
+> 	extern int onintr();
+> 	register int c;
+92,93c98,99
+< 	if (signal(SIGINT, SIG_IGN) != SIG_IGN)
+< 		signal(SIGINT, onintr);
+---
+> 	if ((int (*)())signal(SIGINT, (int)SIG_IGN) != (int (*)())SIG_IGN)
+> 		signal(SIGINT, (int)onintr);
+117a124
+> int
+119c126
+< char *pp; 
+---
+> char *pp;
+121c128
+< 	register val;
+---
+> 	register int val;
+197a205
+> 	return(0);
+200a209
+> int
+201a211
+> int argc;
+287a298
+> int
+289a301
+> int y, d, t;
+291c303
+< 	register i;
+---
+> 	register int i;
+297c309
+< 			return;
+---
+> 			return(0);
+300a313
+> int
+304a318
+> 	return(0);
+```
+
+### cmd/cron.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/cron.c unix-v7-c99/cmd/cron.c || true
+```
+
+Expect:
+
+```
+24a25,27
+> int	slp(), ex(), init(), number();
+> 
+> int
+38,40c41,43
+< 	signal(SIGHUP, SIG_IGN);
+< 	signal(SIGINT, SIG_IGN);
+< 	signal(SIGQUIT, SIG_IGN);
+---
+> 	signal(SIGHUP, (int)SIG_IGN);
+> 	signal(SIGINT, (int)SIG_IGN);
+> 	signal(SIGQUIT, (int)SIG_IGN);
+70a74
+> 	return(0);
+75a80
+> int v;
+109a115
+> int
+112c118
+< 	register i;
+---
+> 	register int i;
+118a125
+> 	return(0);
+120a128
+> int
+128c136
+< 		return;
+---
+> 		return(0);
+134a143
+> 	return(0);
+136a146
+> int
+139c149
+< 	register i, c;
+---
+> 	register int i, c;
+232c242
+< 			return;
+---
+> 			return(0);
+238a249
+> int
+240c251
+< register c;
+---
+> register int c;
+242c253
+< 	register n = 0;
+---
+> 	register int n = 0;
+```
+
+### cmd/quot.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/quot.c unix-v7-c99/cmd/quot.c || true
+```
+
+Expect:
+
+```
+44a45
+> int	scanf(char *fmt, ...);
+45a47,49
+> int	check(), acct(), bread(), qcmp(), report();
+> 
+> int
+46a51
+> int argc;
+86a92
+> int
+91c97
+< 	register c;
+---
+> 	register int c;
+96c102
+< 		return;
+---
+> 		return(0);
+115a122
+> 	return(0);
+117a125
+> int
+121c129
+< 	register n;
+---
+> 	register int n;
+123c131
+< 	static fino;
+---
+> 	static int fino;
+126c134
+< 		return;
+---
+> 		return(0);
+129c137
+< 			return;
+---
+> 			return(0);
+136c144
+< 		return;
+---
+> 		return(0);
+139c147
+< 		return;
+---
+> 		return(0);
+146,149c154,157
+< 				return;
+< 		if (fino > ino)
+< 			return;
+< 		if (fino<ino) {
+---
+> 				return(0);
+> 		if (fino > (int)ino)
+> 			return(0);
+> 		if (fino<(int)ino) {
+167a176
+> 	return(0);
+169a179
+> int
+172a183
+> int cnt;
+179a191
+> 	return(0);
+181a194
+> int
+191a205
+> int
+194c208
+< 	register i;
+---
+> 	register int i;
+197c211
+< 		return;
+---
+> 		return(0);
+206c220
+< 		return;
+---
+> 		return(0);
+211c225
+< 			return;
+---
+> 			return(0);
+219a234
+> 	return(0);
+227c242
+< 	register n;
+---
+> 	register int n;
+```
+
+### cmd/dump.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/dump.c unix-v7-c99/cmd/dump.c || true
+```
+
+Expect:
+
+```
+52a53,55
+> int	pass(), otape(), bread(), spclrec(), bitmap(), bmapest(), CLR(),
+> 	getitime(), putitime(), est(), indir(), flusht(), taprec();
+> int	l3tol();
+57a61
+> int
+58a63
+> int argc;
+62c67
+< 	register i;
+---
+> 	register int i;
+174a180
+> int
+179c185
+< 	register i, j;
+---
+> 	register int i, j;
+210a217
+> 	return(0);
+212a220
+> int
+217c225
+< 	register i;
+---
+> 	register int i;
+228a237
+> 	return(0);
+230a240
+> int
+233a244
+> int n;
+235c246
+< 	register i;
+---
+> 	register int i;
+242c253
+< 		for(i=0; i<NINDIR; i++) {
+---
+> 		for(i=0; i<(int)NINDIR; i++) {
+249c260
+< 		for(i=0; i<NINDIR; i++) {
+---
+> 		for(i=0; i<(int)NINDIR; i++) {
+254a266
+> 	return(0);
+256a269
+> int
+260c273
+< 	register f;
+---
+> 	register int f;
+264c277
+< 		return;
+---
+> 		return(0);
+272c285
+< 			return;
+---
+> 			return(0);
+274a288
+> 	return(0);
+276a291
+> int
+282c297
+< 		return;
+---
+> 		return(0);
+293a309
+> 	return(0);
+295a312
+> int
+299c316
+< 	register i;
+---
+> 	register int i;
+312c329
+< 		return;
+---
+> 		return(0);
+314a332
+> 	return(0);
+316a335
+> int
+318a338
+> int n;
+320c340
+< 	register i, t;
+---
+> 	register int i, t;
+329a350
+> 	return(0);
+331a353
+> int
+333a356
+> int typ;
+335c358
+< 	register i, n;
+---
+> 	register int i, n;
+343c366
+< 		return;
+---
+> 		return(0);
+351a375
+> 	return(0);
+353a378
+> int
+356c381
+< 	register i, *ip, s;
+---
+> 	register int i, *ip, s;
+363c388
+< 	for(i=0; i<BSIZE/sizeof(*ip); i++)
+---
+> 	for(i=0; i<(int)(BSIZE/sizeof(*ip)); i++)
+366a392
+> 	return(0);
+368a395
+> int
+373c400
+< 	register i;
+---
+> 	register int i;
+378c405
+< 		return;
+---
+> 		return(0);
+380c407
+< 	for(i=0; i<DIRPB; i++) {
+---
+> 	for(i=0; i<(int)DIRPB; i++) {
+393c420
+< 			return;
+---
+> 			return(0);
+397a425
+> 	return(0);
+399a428
+> int
+401a431
+> 	return(0);
+403a434
+> int
+406a438
+> int c;
+408c440
+< 	register n;
+---
+> 	register int n;
+413a446
+> 	return(0);
+415a449
+> int
+419c453
+< 	register n;
+---
+> 	register int n;
+424a459
+> 	return(0);
+431a467
+> int
+435c471
+< 	register i;
+---
+> 	register int i;
+443a480
+> 	return(0);
+445a483
+> int
+451c489
+< 		return;
+---
+> 		return(0);
+456a495
+> 	return(0);
+458a498
+> int
+462c502
+< 	register i, si;
+---
+> 	register int i, si;
+490a531
+> 	return(0);
+492a534
+> int
+504a547
+> 	return(0);
+519a563
+> int
+522c566
+< 	register i, df;
+---
+> 	register int i, df;
+545c589
+< 		return;
+---
+> 		return(0);
+560a605
+> int
+563c608
+< 	register i, n, df;
+---
+> 	register int i, n, df;
+568c613
+< 		return;
+---
+> 		return(0);
+608a654
+> 	return(0);
+610a657
+> int
+623a671
+> 	return(0);
+625a674
+> int
+629c678
+< 	register i, n;
+---
+> 	register int i, n;
+636c685
+< 		return;
+---
+> 		return(0);
+638a688
+> 	return(0);
+```
+
+### cmd/dumpdir.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/dumpdir.c unix-v7-c99/cmd/dumpdir.c || true
+```
+
+Expect:
+
+```
+50a51,56
+> int	readhdr(), checkvol(), pass1(), printem(), gethead(), checktype(),
+> 	readbits(), flsh(), getfile(), putent(), mseek(), getent(), direq(),
+> 	search(), readtape(), clearbuf(), flsht(), copy(), writec(), readc(),
+> 	checksum(), putdir(), null();
+> 
+> int
+51a58
+> int argc;
+86c93
+< 	i = 0;
+---
+> int	i = 0;
+90a98
+> int
+93c101
+< 	register i;
+---
+> 	register int i;
+113c121
+< 			return;
+---
+> 			return(0);
+126a135
+> int
+139c148
+< 	return;
+---
+> 	return(0);
+145c154
+< 			return;
+---
+> 			return(0);
+168a178
+> int
+174c184
+< 	register i;
+---
+> 	register int i;
+177a188
+> 	(void)n;
+187c198
+< 			return;
+---
+> 			return(0);
+205c216
+< 				return;
+---
+> 				return(0);
+214a226
+> int
+218c230
+< 	register i;
+---
+> 	register int i;
+249c261
+< 			return;
+---
+> 			return(0);
+252a265
+> 	return(0);
+254a268
+> int
+257a272
+> 	return(0);
+259a275
+> int
+261a278
+> int s;
+263c280
+< 	register i;
+---
+> 	register int i;
+268a286
+> 	return(0);
+270a289
+> int
+274c293
+< 	register i;
+---
+> 	register int i;
+279a299
+> 	return(0);
+285a306
+> int
+289c310
+< 	register i;
+---
+> 	register int i;
+291c312
+< 	for (i = 0; i < sizeof(ino_t); i++)
+---
+> 	for (i = 0; i < (int)sizeof(ino_t); i++)
+296c317
+< 			return;
+---
+> 			return(0);
+298c319
+< 	return;
+---
+> 	return(0);
+300a322
+> int
+304c326
+< 	register i;
+---
+> 	register int i;
+306c328
+< 	for (i = 0; i < sizeof(ino_t); i++)
+---
+> 	for (i = 0; i < (int)sizeof(ino_t); i++)
+310,311c332,333
+< 			return;
+< 	return;
+---
+> 			return(0);
+> 	return(0);
+316a339
+> int
+321a345
+> 	return(0);
+323a348
+> int
+331a357
+> int
+335a362
+> 	return(0);
+337a365
+> int
+340a369
+> 	return(0);
+346a376
+> int
+350c380
+< 	register low, high, probe;
+---
+> 	register int low, high, probe;
+367a398
+> int
+371c402
+< 	register i;
+---
+> 	register int i;
+385a417
+> int
+397a430
+> int
+405a439
+> int
+409c443
+< 	register i, j;
+---
+> 	register int i, j;
+422a457
+> int
+431a467
+> int
+441a478
+> int
+446c483
+< 	register i;
+---
+> 	register int i;
+452a490
+> 	return(0);
+457a496
+> int
+461c500
+< 	register i;
+---
+> 	register int i;
+470a510
+> 	return(0);
+473c513
+< null() { ; }
+---
+> int null() { return(0); }
+```
+
+### cmd/restor.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/restor.c unix-v7-c99/cmd/restor.c || true
+```
+
+Expect:
+
+```
+83a84,93
+> int	doit(), readhdr(), checkvol(), pass1(), readbits(), gethead(),
+> 	checktype(), ishead(), readtape(), flsht(), getfile(), psearch(),
+> 	getdino(), putdino(), itrunc(), clri(), dread(), dwrite(),
+> 	rstrfile(), rstrskip(), xtrfile(), skip(), checksum(), putent(),
+> 	putdir(), null(), copy(), clearbuf(), writec(), readc(), mseek(),
+> 	getent(), direq(), flsh(), bfree(), tloop();
+> int	l3tol(), ltol3();
+> daddr_t	balloc(), bmap();
+> 
+> int
+84a95
+> int argc;
+120,123c131,134
+< 		if (signal(SIGINT, done) == SIG_IGN)
+< 			signal(SIGINT, SIG_IGN);
+< 		if (signal(SIGTERM, done) == SIG_IGN)
+< 			signal(SIGTERM, SIG_IGN);
+---
+> 		if (signal(SIGINT, (int)done) == (int)SIG_IGN)
+> 			signal(SIGINT, (int)SIG_IGN);
+> 		if (signal(SIGTERM, (int)done) == (int)SIG_IGN)
+> 			signal(SIGTERM, (int)SIG_IGN);
+142a154
+> int
+149c161
+< 	register i, k;
+---
+> 	register int i, k;
+179c191
+< 		return;
+---
+> 		return(0);
+208c220
+< 			return;
+---
+> 			return(0);
+251c263
+< 					return;
+---
+> 					return(0);
+300c312
+< 			if (gets(tbf) == EOF) {
+---
+> 			if ((int)gets(tbf) == EOF) {
+340c352
+< 				return;
+---
+> 				return(0);
+397a410
+> 	return(0);
+404a418
+> int
+407c421
+< 	register i;
+---
+> 	register int i;
+427c441
+< 			return;
+---
+> 			return(0);
+445a460
+> int
+451c466
+< 	register i;
+---
+> 	register int i;
+466c481
+< 			return;
+---
+> 			return(0);
+485c500
+< 				return;
+---
+> 				return(0);
+494a510
+> int
+498c514
+< 	register i;
+---
+> 	register int i;
+533c549
+< 			return;
+---
+> 			return(0);
+536a553
+> 	return(0);
+538a556
+> int
+541a560
+> 	return(0);
+543a563
+> int
+545a566
+> int s;
+547c568
+< 	register i;
+---
+> 	register int i;
+552a574
+> 	return(0);
+554a577
+> int
+558c581
+< 	register i;
+---
+> 	register int i;
+563a587
+> 	return(0);
+570a595
+> int
+574c599
+< 	register i;
+---
+> 	register int i;
+576c601
+< 	for (i = 0; i < sizeof(ino_t); i++)
+---
+> 	for (i = 0; i < (int)sizeof(ino_t); i++)
+581c606
+< 			return;
+---
+> 			return(0);
+583c608
+< 	return;
+---
+> 	return(0);
+585a611
+> int
+589c615
+< 	register i;
+---
+> 	register int i;
+591c617
+< 	for (i = 0; i < sizeof(ino_t); i++)
+---
+> 	for (i = 0; i < (int)sizeof(ino_t); i++)
+595,596c621,622
+< 			return;
+< 	return;
+---
+> 			return(0);
+> 	return(0);
+601a628
+> int
+610a638
+> 	return(0);
+612a641
+> int
+621a651
+> int
+626a657
+> 	return(0);
+628a660
+> int
+631a664
+> 	return(0);
+643c676
+< 	register i;
+---
+> 	register int i;
+664a698
+> int
+692a727
+> int
+696c731
+< 	register i;
+---
+> 	register int i;
+711a747
+> int
+716c752
+< 	register i;
+---
+> 	register int i;
+735a772
+> 	return(0);
+737a775
+> int
+740a779
+> int cnt;
+742c781
+< 	register i, j;
+---
+> 	register int i, j;
+751c790
+< 			return;
+---
+> 			return(0);
+771a811
+> 	return(0);
+778a819
+> int
+787a829
+> 	return(0);
+792a835
+> int
+796c839
+< 	register i;
+---
+> 	register int i;
+800c843
+< 		return;
+---
+> 		return(0);
+803c846
+< 		return;
+---
+> 		return(0);
+826a870
+> 	return(0);
+828a873
+> int
+833c878
+< 	register i;
+---
+> 	register int i;
+850a896
+> 	return(0);
+852a899
+> int
+856c903
+< 	register i;
+---
+> 	register int i;
+863c910
+< 		fbuf.df_nfree = sblock.s_nfree;
+---
+> 		fbuf.frees.df_nfree = sblock.s_nfree;
+865c912
+< 			fbuf.df_free[i] = sblock.s_free[i];
+---
+> 			fbuf.frees.df_free[i] = sblock.s_free[i];
+869a917
+> 	return(0);
+879c927
+< 	register i;
+---
+> 	register int i;
+896c944
+< 		sblock.s_nfree = fbuf.df_nfree;
+---
+> 		sblock.s_nfree = fbuf.frees.df_nfree;
+898c946
+< 			sblock.s_free[i] = fbuf.df_free[i];
+---
+> 			sblock.s_free[i] = fbuf.frees.df_free[i];
+914c962
+< 	register i;
+---
+> 	register int i;
+975a1024
+> int
+987a1037
+> int
+995a1046
+> int
+1003a1055
+> int
+1007c1059
+< 	register i, j;
+---
+> 	register int i, j;
+1020a1073
+> int
+1029a1083
+> int
+1044a1099
+> int
+1049a1105
+> 	return(0);
+1052c1108
+< null() {;}
+---
+> int null() {return(0);}
+1053a1110
+> int
+1056a1114
+> 	return(0);
+1060a1119
+> int
+1066a1126
+> 	(void)s;
+1069a1130
+> 	return(0);
+1071a1133
+> int
+1075a1138
+> 	(void)b; (void)s;
+1076a1140
+> 	return(0);
+1079a1144
+> int
+1084c1149
+< 	register i;
+---
+> 	register int i;
+1090a1156
+> 	return(0);
+1096a1163
+> int
+1107a1175
+> 	return(0);
+1109a1178
+> int
+1120a1190
+> 	return(0);
+1125a1196
+> int
+1129c1200
+< 	register i;
+---
+> 	register int i;
+1138a1210
+> 	return(0);
+1140a1213
+> int
+1146a1220
+> 	return(0);
+```
+
+### cmd/tk.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/tk.c unix-v7-c99/cmd/tk.c || true
+```
+
+Expect:
+
+```
+36a37,39
+> int	init(), sendpt(), kwait(), execom();
+> 
+> int
+41,42c44,45
+< 	register i, j;
+< 	extern ex();
+---
+> 	register int i, j;
+> 	extern int ex();
+67c70
+< 	signal(SIGINT, ex);
+---
+> 	signal(SIGINT, (int)ex);
+150a154
+> 	return(0);
+152a157
+> int
+168a174
+> 	return(0);
+170a177
+> int
+177a185
+> 	return(0);
+179a188
+> int
+182c191
+< 	register c;
+---
+> 	register int c;
+186c195
+< 		return;
+---
+> 		return(0);
+196a206
+> 	return(0);
+198a209
+> int
+204,205c215,216
+< 		si = signal(SIGINT, SIG_IGN);
+< 		sq = signal(SIGQUIT, SIG_IGN);
+---
+> 		si = (int (*)())signal(SIGINT, (int)SIG_IGN);
+> 		sq = (int (*)())signal(SIGQUIT, (int)SIG_IGN);
+207,209c218,220
+< 		signal(SIGINT, si);
+< 		signal(SIGQUIT, sq);
+< 		return;
+---
+> 		signal(SIGINT, (int)si);
+> 		signal(SIGQUIT, (int)sq);
+> 		return(0);
+215a227
+> 	return(0);
+217a230
+> int
+218a232
+> int a;
+220c234
+< 	register zz;
+---
+> 	register int zz;
+224c238
+< 		return;
+---
+> 		return(0);
+247a262
+> 	return(0);
+```
+
+### cmd/units.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/units.c unix-v7-c99/cmd/units.c || true
+```
+
+Expect:
+
+```
+9a10
+> int	init(), convr(), units(), pu(), lookup(), equal(), get();
+51a53
+> int
+52a55
+> int argc;
+55c58
+< 	register i;
+---
+> 	register int i;
+72c75
+< 	signal(8, fperr);
+---
+> 	signal(8, (int)fperr);
+108a112
+> int
+113c117
+< 	register f, i;
+---
+> 	register int f, i;
+126a131
+> 	return(0);
+128a134
+> int
+129a136
+> int u, i, f;
+146a154
+> int
+151c159
+< 	register c;
+---
+> 	register int c;
+197a206
+> int
+200a210
+> int den, c;
+204c214
+< 	register i;
+---
+> 	register int i;
+251a262
+> int
+264a276
+> int
+301c313
+< 		return;
+---
+> 		return(0);
+361c373
+< 	register c, i, dp;
+---
+> 	register int c, i, dp;
+414a427
+> int
+417c430
+< 	register c;
+---
+> 	register int c;
+458a472
+> int
+462c476
+< 	signal(8, fperr);
+---
+> 	signal(8, (int)fperr);
+463a478
+> 	return(0);
+```
+
+### cmd/ptx.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/ptx.c unix-v7-c99/cmd/ptx.c || true
+```
+
+Expect:
+
+```
+36a37,38
+> int diag(), msg(), storeh(), hash(), cmpline(), getsort(), cmpword(),
+>     putline(), putout(), onintr();
+68a71
+> int
+77c80
+< 	extern onintr();
+---
+> 	extern int onintr();
+82,87c85,90
+< 	if(signal(SIGHUP,onintr)==SIG_IGN)
+< 		signal(SIGHUP,SIG_IGN);
+< 	if(signal(SIGINT,onintr)==SIG_IGN)
+< 		signal(SIGINT,SIG_IGN);
+< 	signal(SIGPIPE,onintr);
+< 	signal(SIGTERM,onintr);
+---
+> 	if(signal(SIGHUP,(int)onintr)==(int)SIG_IGN)
+> 		signal(SIGHUP,(int)SIG_IGN);
+> 	if(signal(SIGINT,(int)onintr)==(int)SIG_IGN)
+> 		signal(SIGINT,(int)SIG_IGN);
+> 	signal(SIGPIPE,(int)onintr);
+> 	signal(SIGTERM,(int)onintr);
+249a253
+> int
+255c259
+< 	return;
+---
+> 	return(0);
+256a261
+> int
+262a268
+> 	return(0);
+269c275
+< 	register c;
+---
+> 	register int c;
+301a308
+> int
+346a354
+> 	return(0);
+348a357
+> int
+362a372
+> int
+376a387
+> 	return(0);
+378a390
+> int
+381c393
+< 	register c;
+---
+> 	register int c;
+456a469
+> 	return(0);
+460a474
+> int d;
+473a488
+> int d;
+484a500
+> int
+494a511
+> 	return(0);
+496a514
+> int
+502a521
+> 	return(0);
+504a524
+> int
+531a552
+> int
+```
+
+### cmd/spline.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/spline.c unix-v7-c99/cmd/spline.c || true
+```
+
+Expect:
+
+```
+141c141,142
+< rhs(i){
+---
+> rhs(i)
+> int i;{
+148a150
+> int
+215a218,219
+> int	getfloat(), numb(), getlim();
+> int
+220c224
+< 		if(!getfloat(&y.val[n])) break; } }
+---
+> 		if(!getfloat(&y.val[n])) break; } return(0); }
+221a226
+> int
+225c230
+< 	register c;
+---
+> 	register int c;
+260a266
+> int
+267c273
+< 	}
+---
+> 	return(0); }
+269a276
+> int
+270a278
+> 	int argc;
+319a328
+> int
+```
+
+### cmd/vpr.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/vpr.c unix-v7-c99/cmd/vpr.c || true
+```
+
+Expect:
+
+```
+26a27
+> int	send(), getline(), putline(), banner();
+27a29
+> int
+28a31
+> int argc;
+71a75
+> int
+74c78
+< 	register nskipped;
+---
+> 	register int nskipped;
+96a101
+> int
+99c104
+< 	register col, maxcol, c;
+---
+> 	register int col, maxcol, c;
+174a180
+> int
+175a182
+> int ff;
+178,179c185,186
+< 	register c;
+< 	extern errno;
+---
+> 	register int c;
+> 	extern int errno;
+188c195
+< 		ioctl(fileno(out), SETSTATE, pltmode);
+---
+> 		ioctl(fileno(out), SETSTATE, (char *)pltmode);
+192c199
+< 		ioctl(fileno(out), SETSTATE, prtmode);
+---
+> 		ioctl(fileno(out), SETSTATE, (char *)prtmode);
+202a210
+> 	return(0);
+204a213
+> int
+232a242
+> 	return(0);
+```
+
+### cmd/graph.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/graph.c unix-v7-c99/cmd/graph.c || true
+```
+
+Evidence summary:
+
+```
+43a44,48
+> int	init(), setopt(), readin(), transpose(), scale(), axes(), title(),
+> 	plot(), erase(), space(), move(), closevt(), numb(), limread(),
+> 	badarg(), getfloat(), getstring(), copystring(), getlim(), setlim(),
+> 	setmark(), submark(), conv(), symbol(), point(), label(), cont(),
+> 	line(), linemod(), axlab(), putsi(), scanf();
+65a71,131
+> [port-local math helpers: fabs, floor, ceil, log10]
+> int
+66a133
+> int argc;
+91a159
+> int
+96a165
+> 	return(0);
+98a168
+> int
+99a170
+> int argc;
+102c173
+< 	char *p1, *p2;
+---
+> 	char *p0, *p1, *p2;
+108a180
+> 		p0 = argv[0];
+193c265,271
+< 			badarg();
+---
+> 			if(p0[0] == '-')
+> 				badarg();
+> 			if(freopen(argv[0],"r",stdin)==NULL) {
+> 				perror(argv[0]);
+> 				exit(1);
+> 			}
+> 			break;
+195a274
+> 	return(0);
+197a277
+> int
+209c289
+< 		return;
+---
+> 		return(0);
+212c292
+< 		return;
+---
+> 		return(0);
+215c295
+< 		return;
+---
+> 		return(0);
+216a297
+> 	return(0);
+218a300
+> int
+237a320
+> int
+240c323
+< 	register t;
+---
+> 	register int t;
+253c336
+< 			return;
+---
+> 			return(0);
+259c342
+< 				return;
+---
+> 				return(0);
+261c344
+< 			return;
+---
+> 			return(0);
+268c351
+< 			return;
+---
+> 			return(0);
+271a355
+> int
+274c358
+< 	register i;
+---
+> 	register int i;
+278c362
+< 		return;
+---
+> 		return(0);
+282a367
+> 	return(0);
+284a370
+> int
+285a372
+> int k;
+288c375
+< 	register i;
+---
+> 	register int i;
+317a405
+> int
+322c410
+< 	register i;
+---
+> 	register int i;
+331a420
+> 	return(0);
+337a427
+> int
+353c443
+< 		return;
+---
+> 		return(0);
+392c482
+< 			return;
+---
+> 			return(0);
+403a494
+> 	return(0);
+407a499
+> int lbf,ubf;
+481a574
+> int
+494a588
+> 	return(0);
+496a591
+> int
+499c594
+< 	register i;
+---
+> 	register int i;
+503c598
+< 		return;
+---
+> 		return(0);
+527a623
+> 	return(0);
+529a626
+> int
+559a657
+> int
+567a666
+> 	return(0);
+569a669
+> int
+594a695
+> 	return(0);
+596a698
+> int
+609a712
+> int
+613c716
+< 	register i;
+---
+> 	register int i;
+618a722
+> int
+621c725
+< 	register i;
+---
+> 	register int i;
+648a753
+> int
+649a755
+> int ix,iy,k;
+664a771
+> int
+676a784
+> 	return(0);
+678a787
+> int
+686a796
+> 	return(0);
+688a799
+> int
+692a804,907
+> 	return(0);
+> [port-local plot emitters: putsi, space, erase, move, cont, line, point,
+> label, linemod, closevt write plot(5)-style bytes directly to stdout]
+```
+
+Graph option/file behavior evidence:
+
+- `graph -z` must follow V7 unknown-option behavior and call `badarg()`; the
+  port-local file fallback must not strip `-` and try to open `z`.
+- `graph datafile` is the only file operand fallback. Bare non-option operands
+  are reopened on `stdin` with `freopen()` so file input remains available in
+  addition to ordinary stdin input.
+
+### cmd/backgammon.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/games/backgammon.c unix-v7-c99/cmd/backgammon.c || true
+```
+
+Expect:
+
+```
+15c15,19
+< int red[]     {0,2,0,0,0,0,0,0,0,0,0,0,5,
+---
+> int	getstr(), play(), nextmove(), prtmov(), update(), piececount(),
+> 	roll(), movegen(), moverecord(), strategy(), eval(),
+> 	instructions(), getprob(), prtbrd(), numline(), colorline(),
+> 	bg_srand(), bg_rand(), _look(), _store();
+> int red[]     = {0,2,0,0,0,0,0,0,0,0,0,0,5,
+18c22
+< int white[]   {0,2,0,0,0,0,0,0,0,0,0,0,5,
+---
+> int white[]   = {0,2,0,0,0,0,0,0,0,0,0,0,5,
+21c25
+< int probability[]{0,11,12,13,14,15,16,
+---
+> int probability[]={0,11,12,13,14,15,16,
+27a32
+> int
+33c38
+< 	srand();
+---
+> 	bg_srand();
+57c62
+< 	    exit();
+---
+> 	    exit(0);
+94c99
+< 	    exit();
+---
+> 	    exit(0);
+98a104
+> int
+103a110
+> 	return(0);
+105a113
+> int
+148a157
+> int
+169a179
+> int
+179a190
+> 	return(0);
+180a192
+> int
+194a207
+> 	return(0);
+195a209
+> int
+202c216
+< 	sum=+player[startrow++];
+---
+> 	sum+=player[startrow++];
+220a235
+> int
+224,225c239,241
+< 	die1=(rand()>>8)%6+1;
+< 	die2=(rand()>>8)%6+1;
+---
+> 	die1=(bg_rand()>>8)%6+1;
+> 	die2=(bg_rand()>>8)%6+1;
+> 	return(0);
+227a244
+> int
+313a331
+> 	return(0);
+314a333
+> int
+353a373
+> 	return(0);
+356a377
+> int
+391c412
+< 	return(goodmoves[(rand()>>4)%n]);
+---
+> 	return(goodmoves[(bg_rand()>>4)%n]);
+393a415
+> int
+441c463
+< 		sum=+ *p++ * n;	/*remove pieces, but just barely*/
+---
+> 		sum+= *p++ * n;	/*remove pieces, but just barely*/
+449c471
+< 	    for(p=newtry;p<q;)sum=- *p++;  /*bad to be on 1st three points*/
+---
+> 	    for(p=newtry;p<q;)sum-= *p++;  /*bad to be on 1st three points*/
+453c475
+< 	    *prob=+ n*getprob(newtry,newother,6*n-5,6*n);
+---
+> 	    *prob+= n*getprob(newtry,newother,6*n-5,6*n);
+455a478
+> int
+482a506
+> 	return(0);
+484a509
+> int
+498c523
+< 		    if(playee[n]!=0)sum=+probability[k];
+---
+> 		    if(playee[n]!=0)sum+=probability[k];
+503a529
+> int
+540a567
+> 	return(0);
+541a569
+> int
+549a578
+> 	return(0);
+550a580
+> int
+562a593
+> 	return(0);
+565c596
+< int rrno 0;
+---
+> int rrno = 0;
+567c598,599
+< srand(){
+---
+> int
+> bg_srand(){
+569a602
+> 	return(0);
+572,574c605,608
+< rand(){
+< 	rrno =* 0106273;
+< 	rrno =+ 020202;
+---
+> int
+> bg_rand(){
+> 	rrno *= 0106273;
+> 	rrno += 020202;
+577a612
+> int
+582c617,618
+< _store( p, numb ) int *p; {
+---
+> int
+> _store( p, numb ) int *p; int numb; {
+583a620
+> 	return(0);
+```
+
+### cmd/fish.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/games/fish.c unix-v7-c99/cmd/fish.c || true
+```
+
+Expect:
+
+```
+14a15,18
+> int	shuffle(), choose(), draw(), error(), empty(), mark(), deal(),
+> 	stats(), phand(), instruct(), game(), move(), madebook(),
+> 	score(), guess(), start(), hedrew(), heguessed(), myguess();
+> 
+24a29
+> int
+30c35
+< 	register i;
+---
+> 	register int i;
+38a44
+> 	return(0);
+41c47,48
+< choose( a, n ) char a[]; {
+---
+> int
+> choose( a, n ) char a[]; int n; {
+44c51
+< 	register j, t;
+---
+> 	register int j, t;
+53a61
+> int
+58a67
+> int
+62a72
+> 	return(0);
+64a75
+> int
+66c77
+< 	register i;
+---
+> 	register int i;
+74c85,86
+< mark( cd, hand ) HAND hand; {
+---
+> int
+> mark( cd, hand ) int cd; HAND hand; {
+84c96,97
+< deal( hand, n ) HAND hand; {
+---
+> int
+> deal( hand, n ) HAND hand; int n; {
+87a101
+> 	return(0);
+90c104
+< char *cname[] {
+---
+> char *cname[] = {
+106a121
+> int
+108c123
+< 	register i, ct, b;
+---
+> 	register int i, ct, b;
+127a143
+> 	return(0);
+129a146
+> int
+131c148
+< 	register i, j;
+---
+> 	register int i, j;
+141c158
+< 			register k;
+---
+> 			register int k;
+154a172
+> 	return(0);
+157c175,176
+< main( argc, argv ) char * argv[]; { 
+---
+> int
+> main( argc, argv ) int argc; char * argv[]; {
+159c178
+< 	register c;
+---
+> 	register int c;
+175a195
+> 	return(0);
+180c200
+< char *inst[] {
+---
+> char *inst[] = {
+207a228
+> int
+215a237
+> 	return(0);
+217a240
+> int
+229c252
+< 		register g;
+---
+> 		register int g;
+256c279,280
+< move( hs, ht, g, v ) HAND hs, ht; {
+---
+> int
+> move( hs, ht, g, v ) HAND hs, ht; int g, v; {
+259c283
+< 	register d;
+---
+> 	register int d;
+315c339,340
+< madebook( x ){
+---
+> int
+> madebook( x ) int x; {
+316a342
+> 	return(0);
+318a345
+> int
+320c347
+< 	register my, your, i;
+---
+> 	register int my, your, i;
+345a373
+> 	return(0);
+349a378
+> int
+352c381
+< 	register g, go;
+---
+> 	register int g, go;
+431a461
+> int
+432a463
+> 	(void)h;
+433a465
+> 	return(0);
+436c468,469
+< hedrew( d ){
+---
+> int
+> hedrew( d ) int d; {
+437a471
+> 	return(0);
+440c474,475
+< heguessed( d ){
+---
+> int
+> heguessed( d ) int d; {
+441a477
+> 	return(0);
+443a480
+> int
+446c483
+< 	register i, lg, t;
+---
+> 	register int i, lg, t;
+```
+
+### cmd/quiz.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/games/quiz.c unix-v7-c99/cmd/quiz.c || true
+```
+
+Expect:
+
+```
+9a10,14
+> int	readline(), cmp(), disj(), string(), eat(), fold(),
+> 	publish(), pub1(), segment(), perm(), find(),
+> 	readindex(), talloc(), query(), next(), done(),
+> 	instruct(), badinfo(), dunno();
+> 
+27a33
+> int
+31c37
+< 	register c;
+---
+> 	register int c;
+59a66
+> int
+71a79
+> int
+72a81
+> int s;
+110a120
+> int
+111a122
+> int s;
+154a166
+> int
+155a168
+> int s;
+170a184
+> int
+178a193
+> int
+183a199
+> 	return(0);
+185a202
+> int
+186a204
+> int s;
+196c214
+< 			return;
+---
+> 			return(0);
+211a230
+> int
+243a263
+> int
+244a265
+> int m, n;
+264a286
+> int
+265a288
+> int m;
+276a300
+> int
+287a312
+> 	return(0);
+289a315
+> int
+294a321
+> 	return(0);
+296a324
+> int
+297a326
+> int argc;
+300c329
+< 	register j;
+---
+> 	register int j;
+306c335
+< 	extern done();
+---
+> 	extern int done();
+315c344
+< 			if(argc>2) 
+---
+> 			if(argc>2)
+335c364
+< 	signal(SIGINT, done);
+---
+> 	signal(SIGINT, (int)done);
+384a414
+> int
+403a434
+> int
+418a450
+> int
+425a458
+> 	return(0);
+426a460
+> int
+462a497
+> 	return(0);
+464a500
+> int
+466a503
+> 	return(0);
+468a506
+> int
+472a511
+> 	return(0);
+```
+
+### cmd/wump.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/games/wump.c unix-v7-c99/cmd/wump.c || true
+```
+
+Expect:
+
+```
+0a1
+> #include <stdio.h>
+12a14,15
+> int	tunnel(), rline(), rnum(), rin(), near(), icomp();
+> 
+19c22
+< char	*intro[]
+---
+> char	*intro[] =
+94a98
+> int
+97c101
+< 	register i, j;
+---
+> 	register int i, j;
+159c163
+< 			p->flag =| PIT;
+---
+> 			p->flag |= PIT;
+166c170
+< 			p->flag =| BAT;
+---
+> 			p->flag |= BAT;
+172c176
+< 	room[i].flag =| WUMP;
+---
+> 	room[i].flag |= WUMP;
+270c274
+< 	p->flag =& ~WUMP;
+---
+> 	p->flag &= ~WUMP;
+274c278
+< 	room[wloc].flag =| WUMP;
+---
+> 	room[wloc].flag |= WUMP;
+284a289
+> 	return(0);
+286a292
+> int
+287a294
+> int i;
+290c297
+< 	register n, j;
+---
+> 	register int n, j;
+308a316
+> int
+317c325
+< 			exit();
+---
+> 			exit(0);
+323a332
+> int
+324a334
+> int n;
+326c336
+< 	static first[2];
+---
+> 	static int first[2];
+329c339
+< 		time(first);
+---
+> 		time((long *)first);
+334a345
+> int
+337c348
+< 	register n, c;
+---
+> 	register int n, c;
+345c356
+< 					exit();
+---
+> 					exit(0);
+355a367
+> int
+357a370
+> int ahaz;
+360c373
+< 	register haz, i;
+---
+> 	register int haz, i;
+369a383
+> int
+```
+
+### cmd/dc/dc.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/dc/dc.c unix-v7-c99/cmd/dc/dc.c || true
+```
+
+Expect:
+
+```
+3a4,10
+> int init(), commnds(), readc(), unreadc(), pushp(), sdump(), chsign(),
+>     subt(), eqk(), binop(), dscale(), release(), log2(), print(),
+>     load(), seekc(), salterwd(), putwd(), command(), cond(),
+>     more(), garbage(), ospace(), redef(), tenot(), oneot(), bigot(),
+>     hexot(), onintr();
+> 
+> int
+9a17
+> 	return(0);
+10a19
+> int
+62c71
+< 			sunputc(p);
+---
+> 			(void)sunputc(p);
+395c404
+< 				for(n = 0;n < PTRSZ-1;n++)sputc(q,0);
+---
+> 				for(n = 0;n < (int)PTRSZ-1;n++)sputc(q,0);
+590c599
+< 		errorrt("divide by 0\n");
+---
+> 		{printf("divide by 0\n"); return((struct blk *)1); }
+696a706
+> int
+728a739
+> int n;
+860a872
+> int
+867,868c879,880
+< 	if (signal(SIGINT, SIG_IGN) != SIG_IGN)
+< 		signal(SIGINT,onintr);
+---
+> 	if (signal(SIGINT, (int)SIG_IGN) != (int)SIG_IGN)
+> 		signal(SIGINT,(int)onintr);
+918c930
+< 	return;
+---
+> 	return(0);
+919a932
+> int
+922c935
+< 	signal(SIGINT,onintr);
+---
+> 	signal(SIGINT,(int)onintr);
+928a942
+> 	return(0);
+929a944
+> int
+935c950
+< 		return;
+---
+> 		return(0);
+939c954
+< 	return;
+---
+> 	return(0);
+1077a1093
+> int
+1110c1126
+< 	return;
+---
+> 	return(0);
+1111a1128
+> int
+1132a1150
+> 	return(0);
+1133a1152
+> int
+1142c1161
+< 	return;
+---
+> 	return(0);
+1143a1163
+> int
+1164c1184
+< 	return;
+---
+> 	return(0);
+1165a1186
+> int
+1181c1202
+< 			return;
+---
+> 			return(0);
+1188c1209
+< 		return;
+---
+> 		return(0);
+1192c1213
+< 	sunputc(p);
+---
+> 	(void)sunputc(p);
+1200c1221
+< 		return;
+---
+> 		return(0);
+1204c1225
+< 		return;
+---
+> 		return(0);
+1208c1229
+< 		return;
+---
+> 		return(0);
+1227c1248
+< 		return;
+---
+> 		return(0);
+1243c1264
+< 	return;
+---
+> 	return(0);
+1248a1270
+> int sc;
+1277a1300
+> int
+1279a1303
+> int sc;
+1295c1319
+< 		return;
+---
+> 		return(0);
+1325c1349
+< 	return;
+---
+> 	return(0);
+1326a1351
+> int
+1328a1354
+> int sc;
+1344c1370
+< 	return;
+---
+> 	return(0);
+1345a1372
+> int
+1347a1375
+> int flg;
+1349a1378
+> 	(void)flg;
+1354c1383
+< 		return;
+---
+> 		return(0);
+1360c1389
+< 		return;
+---
+> 		return(0);
+1363c1392
+< 	return;
+---
+> 	return(0);
+1364a1394
+> int
+1366a1397
+> int flg;
+1409c1440
+< 			sunputc(strptr);
+---
+> 			(void)sunputc(strptr);
+1414c1445
+< 	return;
+---
+> 	return(0);
+1462a1494
+> int
+1494a1527
+> int n;
+1525a1559
+> int n;
+1540a1575
+> int
+1551a1587
+> int
+1555c1591
+< 	register (*savint)(),pid,rpid;
+---
+> 	register int (*savint)(),pid,rpid;
+1574c1610
+< 		savint = signal(SIGINT, SIG_IGN);
+---
+> 		savint = (int (*)())signal(SIGINT, (int)SIG_IGN);
+1576c1612
+< 		signal(SIGINT,savint);
+---
+> 		signal(SIGINT,(int)savint);
+1580a1617
+> int
+1589c1626
+< 	sunputc(p);
+---
+> 	(void)sunputc(p);
+1614c1651
+< 	if((cc<0 && (c == '<' || c == NG)) ||
+---
+> 	if(((signed char)cc<0 && (c == '<' || c == NG)) ||
+1621a1659
+> int
+1653c1691
+< 	return;
+---
+> 	return(0);
+1654a1693
+> int
+1740a1780
+> int
+1749a1790
+> 	return(0);
+1750a1792
+> int
+1752a1795
+> int n;
+1769c1812
+< 		return;
+---
+> 		return(0);
+1773c1816
+< 	return;
+---
+> 	return(0);
+1774a1818
+> int
+1782c1826
+< 	return;
+---
+> 	return(0);
+1783a1828
+> int
+1804c1849
+< 	return;
+---
+> 	return(0);
+1805a1851
+> int
+1813a1860
+> 	return(0);
+1814a1862
+> int
+1822c1870
+< 
+---
+> 	(void)s;
+1859a1908
+> 	return(0);
+1860a1910
+> int
+1864c1914
+< 	register offset;
+---
+> 	register int offset;
+1881a1932
+> 	return(0);
+1883a1935
+> int
+1891a1944
+> 	return(0);
+1905a1959
+> int
+1914a1969
+> 	return(0);
+```
+
+### cmd/dc/dc.h
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/dc/dc.h unix-v7-c99/cmd/dc/dc.h || true
+```
+
+Expect:
+
+```
+112d111
+< int	(*signal())();
+114d112
+< char	*malloc();
+116d113
+< char	*realloc();
+```
+
+### cmd/spell/spell.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/spell/spell.c unix-v7-c99/cmd/spell/spell.c || true
+```
+
+Expect:
+
+```
+0a1
+> #define unix 1
+123a125,128
+> int suffix(), strip(), putsuf(), putw(), monosyl(), vowel(),
+>     ise(), ztos(), dict();
+> 
+> int
+124a130
+> int argc;
+180a187
+> int
+182a190
+> int lev;
+207a216
+> int
+212a222
+> int
+214a225
+> int lev;
+215a227
+> 	(void)d;
+218a231
+> int
+220a234
+> int lev;
+228a243
+> int
+230a246
+> int lev;
+231a248
+> 	(void)d;
+236a254
+> int
+238a257
+> int lev;
+239a259
+> 	(void)a;
+243a264
+> int
+245a267
+> int lev;
+246a269
+> 	(void)a;
+250a274
+> int
+252a277
+> int lev;
+259a285
+> int
+261a288
+> int lev;
+268a296
+> int
+270a299
+> int lev;
+275a305
+> int
+277a308
+> int lev;
+285a317
+> int
+287a320
+> int lev;
+303a337
+> int
+305a340
+> int lev;
+311a347
+> int
+313a350
+> int lev;
+325a363
+> int
+327a366
+> int lev;
+362a402
+> int
+364a405
+> int lev;
+401a443
+> int
+403a446
+> int lev;
+428a472
+> int
+430a475
+> int lev;
+432c477
+< 	register i, j;
+---
+> 	register int i, j;
+460a506
+> int
+485a532
+> int
+486a534
+> int c;
+500a549
+> int
+508a558
+> 	return(0);
+509a560
+> int
+515a567
+> 	return(0);
+517a570
+> int
+524c577
+< 	register i;
+---
+> 	register int i;
+527c580
+< 	for(i=0; i<NP; i++) {
+---
+> 	for(i=0; i<(int)NP; i++) {
+```
+
+### cmd/spell/spell.h
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/spell/spell.h unix-v7-c99/cmd/spell/spell.h || true
+```
+
+Expect:
+
+```
+45c45,46
+< prime(argc, argv) register char **argv;
+---
+> int
+> prime(argc, argv) int argc; register char **argv;
+63c64
+< 	for (i=0; i<NP; i++) {
+---
+> 	for (i=0; i<(int)NP; i++) {
+```
+
+### cmd/spell/spellin.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/spell/spellin.c unix-v7-c99/cmd/spell/spellin.c || true
+```
+
+Expect:
+
+```
+0a1
+> #define unix 1
+7a9
+> int
+8a11
+> int argc;
+11c14
+< 	register i, j;
+---
+> 	register int i, j;
+23c26
+< 		for (i=0; i<NP; i++) {
+---
+> 		for (i=0; i<(int)NP; i++) {
+```
+
+### cmd/spell/spellout.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/spell/spellout.c unix-v7-c99/cmd/spell/spellout.c || true
+```
+
+Expect:
+
+```
+0a1
+> #define unix 1
+2a4
+> int
+3a6
+> int argc;
+6c9
+< 	register i, j;
+---
+> 	register int i, j;
+30c33
+< 		for (i=0; i<NP; i++) {
+---
+> 		for (i=0; i<(int)NP; i++) {
+```
+
+### cmd/plot/chrtab.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/plot/chrtab.c unix-v7-c99/cmd/plot/chrtab.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### cmd/tar/tar.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/tar/tar.c unix-v7-c99/cmd/tar/tar.c || true
+```
+
+Expect:
+
+```
+7,8c7,8
+< char	*sprintf();
+< char	*strcat();
+---
+> char	*sprintf(char *buf, char *fmt, ...);
+> char	*strcat(char *a, char *b);
+9a10,15
+> int	usage(), done(), dorep(), doxtract(), dotable(), getdir(),
+> 	passtape(), endtape(), getwdir(), putfile(), putempty(),
+> 	flushtape(), readtape(), writetape(), backtape(), longt(),
+> 	pmode(), select(), checkdir(), onintr(), onquit(), onhup(),
+> 	onterm(), tomodes(), checksum(), checkw(), response(),
+> 	checkupdate(), prefix(), cmp(), copy();
+54a61
+> int
+140,145c147,152
+< 		if (signal(SIGINT, SIG_IGN) != SIG_IGN)
+< 			signal(SIGINT, onintr);
+< 		if (signal(SIGHUP, SIG_IGN) != SIG_IGN)
+< 			signal(SIGHUP, onhup);
+< 		if (signal(SIGQUIT, SIG_IGN) != SIG_IGN)
+< 			signal(SIGQUIT, onquit);
+---
+> 		if (signal(SIGINT, (int)SIG_IGN) != (int)SIG_IGN)
+> 			signal(SIGINT, (int)onintr);
+> 		if (signal(SIGHUP, (int)SIG_IGN) != (int)SIG_IGN)
+> 			signal(SIGHUP, (int)onhup);
+> 		if (signal(SIGQUIT, (int)SIG_IGN) != (int)SIG_IGN)
+> 			signal(SIGQUIT, (int)onquit);
+194a202
+> int
+198a207
+> 	return(0);
+200a210
+> int
+253a264
+> 	return(0);
+255a267
+> int
+265a278
+> int
+273c286
+< 		return;
+---
+> 		return(0);
+289a303
+> 	return(0);
+291a306
+> int
+298c313
+< 		return;
+---
+> 		return(0);
+304a320
+> 	return(0);
+306a323
+> int
+321c338
+< 		return;
+---
+> 		return(0);
+328c345
+< 		return;
+---
+> 		return(0);
+332c349
+< 		return;
+---
+> 		return(0);
+362c379
+< 		return;
+---
+> 		return(0);
+366c383
+< 		return;
+---
+> 		return(0);
+376c393
+< 		return;
+---
+> 		return(0);
+400c417
+< 			return;
+---
+> 			return(0);
+437a455
+> 	return(0);
+441a460
+> int
+515a535
+> 	return(0);
+517a538
+> int
+531a553
+> 	return(0);
+533a556
+> int
+541a565
+> 	return(0);
+543a568
+> int
+554a580
+> 	return(0);
+580a607
+> int
+587a615
+> 	return(0);
+589a618
+> int
+600a630
+> 	return(0);
+602a633
+> int
+623a655
+> 	return(0);
+625a658
+> int
+628c661
+< 	signal(SIGINT, SIG_IGN);
+---
+> 	signal(SIGINT, (int)SIG_IGN);
+629a663
+> 	return(0);
+631a666
+> int
+634c669
+< 	signal(SIGQUIT, SIG_IGN);
+---
+> 	signal(SIGQUIT, (int)SIG_IGN);
+635a671
+> 	return(0);
+637a674
+> int
+640c677
+< 	signal(SIGHUP, SIG_IGN);
+---
+> 	signal(SIGHUP, (int)SIG_IGN);
+641a679
+> 	return(0);
+643a682
+> int
+646c685
+< 	signal(SIGTERM, SIG_IGN);
+---
+> 	signal(SIGTERM, (int)SIG_IGN);
+647a687
+> 	return(0);
+649a690
+> int
+661a703
+> 	return(0);
+663a706
+> int
+666c709
+< 	register i;
+---
+> 	register int i;
+676a720
+> int
+677a722
+> int c;
+692a738
+> int
+703a750
+> int
+724a772
+> int
+725a774
+> int n;
+728a778
+> 	return(0);
+730a781
+> int
+741a793
+> int
+765a818
+> 	return(0);
+774c827
+< 	register i;
+---
+> 	register int i;
+787a841
+> int n;
+789c843
+< 	register i, j;
+---
+> 	register int i, j;
+829a884
+> int
+831a887
+> int n;
+833c889
+< 	register i;
+---
+> 	register int i;
+845a902
+> int
+856c913
+< 		if ((i = read(mt, tbuf, TBLOCK*j)) < 0) {
+---
+> 		if ((i = read(mt, (char *)tbuf, TBLOCK*j)) < 0) {
+878c935
+< 	copy(buffer, &tbuf[recno++]);
+---
+> 	copy(buffer, (char *)&tbuf[recno++]);
+881a939
+> int
+889c947
+< 		if (write(mt, tbuf, TBLOCK*nblock) < 0) {
+---
+> 		if (write(mt, (char *)tbuf, TBLOCK*nblock) < 0) {
+895c953
+< 	copy(&tbuf[recno++], buffer);
+---
+> 	copy((char *)&tbuf[recno++], buffer);
+897c955
+< 		if (write(mt, tbuf, TBLOCK*nblock) < 0) {
+---
+> 		if (write(mt, (char *)tbuf, TBLOCK*nblock) < 0) {
+905a964
+> int
+911c970
+< 		if (read(mt, tbuf, TBLOCK*nblock) < 0) {
+---
+> 		if (read(mt, (char *)tbuf, TBLOCK*nblock) < 0) {
+916a976
+> 	return(0);
+918a979
+> int
+921c982,983
+< 	write(mt, tbuf, TBLOCK*nblock);
+---
+> 	write(mt, (char *)tbuf, TBLOCK*nblock);
+> 	return(0);
+923a986
+> int
+927c990
+< 	register i;
+---
+> 	register int i;
+932a996
+> 	return(0);
+```
+
+### cmd/awk/awk.def
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/awk.def unix-v7-c99/cmd/awk/awk.def || true
+```
+
+Expect:
+
+```
+2c2
+< #define yfree free
+---
+> #define yfree(p) free((char *)(p))
+```
+
+### cmd/awk/lib.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/lib.c unix-v7-c99/cmd/awk/lib.c || true
+```
+
+Expect:
+
+```
+4a5
+> int error(), fldbld(), setclvar(), member(), isnumber();
+30a32
+> int
+36c38
+< 	register c, sep;
+---
+> 	register int c, sep;
+86a89
+> int
+98a102
+> 	return(0);
+100a105
+> int
+158a164
+> 	return(0);
+160a167
+> int
+167c174
+< 		return;
+---
+> 		return(0);
+181a189
+> 	return(0);
+184a193
+> int n;
+192a202
+> int
+195a206
+> 	return(0);
+198c209,213
+< error(f, s, a1, a2, a3, a4, a5, a6, a7) {
+---
+> int
+> error(f, s, a1, a2, a3, a4, a5, a6, a7)
+> int f, a1, a2, a3, a4, a5, a6, a7;
+> char *s;
+> {
+205a221
+> 	return(0);
+207a224
+> int
+208a226
+> 	(void)s;
+209a228
+> 	return(0);
+213a233
+> int
+217c237
+< 	register d1, d2;
+---
+> 	register int d1, d2;
+```
+
+### cmd/awk/parse.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/parse.c unix-v7-c99/cmd/awk/parse.c || true
+```
+
+Expect:
+
+```
+3a4
+> int error();
+4a6
+> int n;
+17a20
+> int a;
+24a28
+> int a;
+32a37
+> int a;
+41a47
+> int a;
+51a58
+> int a;
+62a70
+> int a;
+68a77
+> int a;
+74a84
+> int a;
+80a91
+> int a;
+86a98
+> int a;
+92a105
+> int a;
+98a112
+> int a;
+104a119
+> int b;
+111a127
+> int a;
+```
+
+### cmd/awk/proc.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/proc.c unix-v7-c99/cmd/awk/proc.c || true
+```
+
+Expect:
+
+```
+0a1
+> #include "stdio.h"
+2a4
+> char *tokname();
+7c9
+< } proc[] {
+---
+> } proc[] = {
+60a63
+> int
+81a85
+> 	return(0);
+```
+
+### cmd/awk/run.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/run.c unix-v7-c99/cmd/awk/run.c || true
+```
+
+Expect:
+
+```
+4a5
+> #undef NULL
+5a7
+> int error(), fldbld(), tempfree(), redirprint(), getrec(), match(), freesymtab();
+24a27
+> int
+35a39
+> 	(void)printname;
+62a67
+> int n;
+64a70
+> 	(void)n;
+94a101
+> int n;
+97a105
+> 	(void)n;
+110a119
+> 	(void)i;
+126a136
+> int n;
+143a154
+> int n;
+174a186
+> int n;
+207a220
+> int
+210c223
+< 	if (!istemp(a)) return;
+---
+> 	if (!istemp(a)) return(0);
+212a226
+> 	return(0);
+232a247
+> int n;
+236a252
+> 	(void)n;
+247a264
+> int nnn;
+251a269
+> 	(void)nnn;
+286a305
+> int nnn;
+289a309
+> 	(void)nnn;
+381a402
+> int n;
+385a407
+> 	(void)n;
+397a420
+> int n;
+440a464
+> int n;
+461a486
+> int n;
+504a530
+> int q;
+508a535
+> 	(void)q;
+526a554
+> int n;
+528a557
+> 	(void)n;
+541a571
+> int n;
+562a593
+> int n;
+564a596
+> 	(void)n;
+576a609
+> int nnn;
+583a617
+> 	(void)nnn;
+629a664
+> int n;
+631a667
+> 	(void)n;
+645a682
+> int n;
+647a685
+> 	(void)n;
+664a703
+> int n;
+666a706
+> 	(void)n;
+687a728
+> int n;
+691a733
+> 	(void)n;
+712a755
+> 	return(true);
+715a759
+> int n;
+717a762
+> 	(void)a;
+740a786
+> int n;
+744a791
+> 	(void)n;
+766a814
+> int n;
+770a819
+> 	(void)n;
+792c841
+< obj nullproc() {}
+---
+> obj nullproc() { obj x = {0,0,0}; return(x); }
+805c854,855
+< redirprint(s, a, b) char *s; node *b;
+---
+> int
+> redirprint(s, a, b) char *s; int a; node *b;
+831a882
+> 	return(0);
+```
+
+### cmd/awk/token.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/token.c unix-v7-c99/cmd/awk/token.c || true
+```
+
+Expect:
+
+```
+0a1
+> #include "stdio.h"
+82a84
+> int
+83a86
+> int n;
+89c92
+< 	return;
+---
+> 	return(0);
+92a96
+> int n;
+```
+
+### cmd/awk/tran.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/tran.c unix-v7-c99/cmd/awk/tran.c || true
+```
+
+Expect:
+
+```
+18a19
+> int error(), recbld(), checkval(), hash(), isnumber();
+19a21
+> int
+34a37
+> 	return(0);
+42c45
+< 	cp = (char *) malloc(MAXSYM * sizeof(cell *));
+---
+> 	cp = (cell **) malloc(MAXSYM * sizeof(cell *));
+49a53
+> int
+57c61
+< 		return;
+---
+> 		return(0);
+63c67
+< 			free(cp);
+---
+> 			free((char *)cp);
+66a71
+> 	return(0);
+75c80
+< 	register h;
+---
+> 	register int h;
+99a105
+> int
+204a211
+> int
+212a220
+> 	return(0);
+226a235
+> int
+230a240
+> 	return(0);
+```
+
+### include/dumprestor.h
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/include/dumprestor.h unix-v7-c99/include/dumprestor.h || true
+```
+
+Expect:
+
+```
+
+```
+
+### cmd/awk/b.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/b.c unix-v7-c99/cmd/awk/b.c || true
+```
+
+Expect:
+
+```
+3a4
+> int error(), overflo(), penter(), follow(), first(), notin(), cfoll(), freetr();
+59a61
+> int
+82a85
+> 	return(0);
+84a88
+> int
+106a111
+> 	return(0);
+111c116
+< 	register i, c;
+---
+> 	register int i, c;
+138a144
+> int
+141a148
+> 	return(0);
+143a151
+> int
+147c155
+< 	register i;
+---
+> 	register int i;
+173a182
+> 	return(0);
+175a185
+> int
+179c189
+< 	register b;
+---
+> 	register int b;
+209a220
+> int
+216c227
+< 		return;
+---
+> 		return(0);
+222c233
+< 				return;
+---
+> 				return(0);
+226c237
+< 				return;
+---
+> 				return(0);
+231c242
+< 						return;
+---
+> 						return(0);
+236c247
+< 				return;
+---
+> 				return(0);
+241c252
+< 				return;
+---
+> 				return(0);
+242a254
+> 	return(0);
+244a257
+> int
+253a267
+> int
+255a270
+> int n;
+257c272
+< 	register i, j;
+---
+> 	register int i, j;
+272c287
+< int *add(n) {		/* remember setvec */
+---
+> int *add(n) int n; {		/* remember setvec */
+274c289
+< 	register i;
+---
+> 	register int i;
+290c305
+< 	register i, k;
+---
+> 	register int i, k;
+506a522
+> int
+511c527
+< 	register count;
+---
+> 	register int count;
+```
+
+### cmd/awk/main.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/main.c unix-v7-c99/cmd/awk/main.c || true
+```
+
+Expect:
+
+```
+3a4
+> int logit(), syminit(), run(), msgfiles(), error(), yyparse();
+10c11
+< extern	errorflag;	/* non-zero if any syntax errors; set by yyerror */
+---
+> extern int	errorflag;	/* non-zero if any syntax errors; set by yyerror */
+14a16
+> int
+71c73
+< 		write(ansfd, &errorflag, sizeof(errorflag));
+---
+> 		write(ansfd, (char *)&errorflag, sizeof(errorflag));
+77c79,80
+< logit(n, s) char *s[];
+---
+> int
+> logit(n, s) int n; char *s[];
+82,84c85,87
+< 		return;
+< 	time(tvec);
+< 	fprintf(f, "%-8s %s", getlogin(), ctime(tvec));
+---
+> 		return(0);
+> 	time((long *)tvec);
+> 	fprintf(f, "%-8s %s", getlogin(), ctime((long *)tvec));
+90c93
+< 		return;
+---
+> 		return(0);
+94c97
+< 		return;
+---
+> 		return(0);
+99a103
+> 	return(0);
+101a106
+> int
+106a112
+> int
+134c140
+< 	xargv=s=svargv=malloc(n*sizeof(char *));
+---
+> 	xargv=s=svargv=(char **)malloc(n*sizeof(char *));
+139a146
+> 	return(0);
+```
+
+### cmd/tp/tp.h
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/tp/tp.h unix-v7-c99/cmd/tp/tp.h || true
+```
+
+Expect:
+
+```
+
+```
+
+### cmd/tp/tp0.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/tp/tp0.c unix-v7-c99/cmd/tp/tp0.c || true
+```
+
+Expect:
+
+```
+
+```
+
+### cmd/tp/tp1.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/tp/tp1.c unix-v7-c99/cmd/tp/tp1.c || true
+```
+
+Expect:
+
+```
+1a2
+> #include <stdio.h>
+2a4,9
+> int	optap(), setcom(), useerr(), check(), done(), encode(),
+> 	decode(), cmd(), cmr(), cmt(), cmx(),
+> 	clrdir(), clrent(), rddir(), gettape(), wrdir(), getfiles(),
+> 	update(), delete(), taboc(), extract(), usage();
+> 
+> int
+3a11
+> int argc;
+7c15,16
+< 	extern cmd(), cmr(),cmx(), cmt();
+---
+> 	extern int cmd(), cmr(),cmx(), cmt();
+> 	(void)argc;
+62a72
+> 	return(0);
+64a75
+> int
+67c78
+< 	extern cmr();
+---
+> 	extern int cmr();
+86a98
+> 	return(0);
+88a101
+> int
+92c105
+< 	extern cmr();
+---
+> 	extern int cmr();
+95a109
+> 	return(0);
+97a112
+> int
+101a117
+> 	return(0);
+104c120
+< /*/* COMMANDS */
+---
+> /* COMMANDS */
+105a122
+> int
+108c125
+< 	extern delete();
+---
+> 	extern int delete();
+115a133
+> 	return(0);
+117a136
+> int
+124a144
+> 	return(0);
+126a147
+> int
+129c150
+< 	extern taboc();
+---
+> 	extern int taboc();
+136a158
+> 	return(0);
+138a161
+> int
+141c164
+< 	extern extract();
+---
+> 	extern int extract();
+146a170
+> 	return(0);
+148a173
+> int
+152a178
+> 	return(0);
+154a181
+> int
+158a186
+> 	return(0);
+160a189
+> int
+168c197
+< 	register n;
+---
+> 	register int n;
+185a215
+> 	return(0);
+187a218
+> int
+194a226
+> 	return(0);
+```
+
+### cmd/tp/tp2.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/tp/tp2.c unix-v7-c99/cmd/tp/tp2.c || true
+```
+
+Expect:
+
+```
+6a7,10
+> int	rseek(), wseek(), tread(), twrite(), seekerr(), swabdir(),
+> 	encode(), decode(), done(), bitmap(), fserr(), callout(),
+> 	expand(), clrent();
+> 
+9a14
+> int
+12c17
+< 	register j, *p;
+---
+> 	register int j, *p;
+17a23
+> 	return(0);
+19a26
+> int
+23c30
+< 	register *p, j;
+---
+> 	register int *p, j;
+32c39
+< 			return;
+---
+> 			return(0);
+34a42
+> 	return(0);
+37a46
+> int
+68c77
+< 		for(i=0;i<sizeof(struct tent)/sizeof(short);i++)
+---
+> 		for(i=0;i<(int)(sizeof(struct tent)/sizeof(short));i++)
+100c109
+< 			return;
+---
+> 			return(0);
+102a112
+> 	return(0);
+105a116
+> int
+130c141
+< 		if (count == 0)  return;
+---
+> 		if (count == 0)  return(0);
+149c160
+< 				for(i=0;i<sizeof(struct tent)/sizeof(short)-1;i++)
+---
+> 				for(i=0;i<(int)(sizeof(struct tent)/sizeof(short))-1;i++)
+156c167
+< 				for(i=0;i<sizeof(struct tent)/sizeof(short);i++)
+---
+> 				for(i=0;i<(int)(sizeof(struct tent)/sizeof(short));i++)
+163a175
+> int
+166c178
+< 	register j, *ptr;
+---
+> 	register int j, *ptr;
+175a188
+> 	return(0);
+177a191
+> int
+184a199
+> 	return(0);
+186a202
+> int
+187a204
+> int blk;
+190a208
+> 	return(0);
+192a211
+> int
+193a213
+> int blk;
+195c215
+< 	register amt, b;
+---
+> 	register int amt, b;
+204a225
+> 	return(0);
+206a228
+> int
+210a233
+> 	return(0);
+212a236
+> int
+213a238
+> int key;
+215c240
+< 	register c;
+---
+> 	register int c;
+234a260
+> int
+244a271
+> 	return(0);
+247a275
+> int
+258c286
+< 				return;
+---
+> 				return(0);
+276a305
+> int
+280a310
+> 	return(0);
+282a313
+> int
+295c326
+< 		if(mode != S_IFREG) return;
+---
+> 		if(mode != S_IFREG) return(0);
+316c347
+< 				return;
+---
+> 				return(0);
+318c349
+< 		if (verify('r') < 0)	return;
+---
+> 		if (verify('r') < 0)	return(0);
+330c361
+< 	if (verify('a') < 0)		return;
+---
+> 	if (verify('a') < 0)		return(0);
+338a370
+> 	return(0);
+340a373
+> int
+346a380
+> 	return(0);
+```
+
+### cmd/tp/tp_defs.h
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/include/tp_defs.h unix-v7-c99/cmd/tp/tp_defs.h || true
+```
+
+Expect:
+
+```
+
+```
+
+### cmd/tp/tp3.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/tp/tp3.c unix-v7-c99/cmd/tp/tp3.c || true
+```
+
+Expect:
+
+```
+1a2
+> #include <stdio.h>
+2a4,8
+> int	decode(), verify(), clrent(), bitmap(), maperr(), setmap(),
+> 	wrdir(), update1(), wseek(), twrite(), phserr(), done(),
+> 	rseek(), tread(), usage();
+> 
+> int
+30a37
+> 	return(0);
+32a40
+> int
+37a46
+> 	return(0);
+40a50
+> int
+44c54
+< 	register b, last;
+---
+> 	register int b, last;
+67a78
+> 	return(0);
+70a82
+> int
+74c86
+< 	register index;
+---
+> 	register int index;
+88c100
+< 		if ((d = id) == 0)	return;
+---
+> 		if ((d = id) == 0)	return(0);
+109a122
+> int
+111c124
+< {	printf("%s -- Phase error \n", name);  }
+---
+> {	printf("%s -- Phase error \n", name); return(0);  }
+113a127
+> int
+117c131
+< 	register count;
+---
+> 	register int count;
+127a142
+> 	return(0);
+129a145
+> int
+140c156
+< 	if ((c += block) >= tapsiz)		maperr();
+---
+> 	if ((c += block) >= (unsigned)tapsiz)		maperr();
+146a163
+> 	return(0);
+148a166
+> int
+152a171
+> 	return(0);
+155a175
+> int
+158c178
+< 	register reg,count;
+---
+> 	register int reg,count;
+160c180
+< 	static lused;
+---
+> 	static int lused;
+186a207
+> 	return(0);
+189a211
+> int
+193,194c215,216
+< 	register  mode;
+< 	register *m;
+---
+> 	register int mode;
+> 	register int *m;
+196c218
+< 	int count, *localtime();
+---
+> 	int count;
+215c237
+< 		m = localtime(&dd->d_time);
+---
+> 		m = (int *)localtime(&dd->d_time);
+218a241
+> 	return(0);
+221a245
+> int
+225c249
+< 	register count, id;
+---
+> 	register int count, id;
+227,228c251,252
+< 	if (d->d_size==0)	return;
+< 	if (verify('x') < 0)			return;
+---
+> 	if (d->d_size==0)	return(0);
+> 	if (verify('x') < 0)			return(0);
+243c267
+< 			return;
+---
+> 			return(0);
+247a272
+> 	return(0);
+```
+
+### sys/slp.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/sys/slp.c unix-v7-c99/sys/slp.c || true
+```
+
+Expect:
+
+```
+
+```
+
+## WIP
+
+### tools/mkfs.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/mkfs.c unix-v7-c99/tools/mkfs.c || true
+```
+
+Expect:
+
+```
+13c13,16
+< #include <a.out.h>
+---
+> #include <stdlib.h>
+> #include <unistd.h>
+> #include <fcntl.h>
+> #include <time.h>
+15,20c18,32
+< #include <sys/param.h>
+< #include <sys/ino.h>
+< #include <sys/inode.h>
+< #include <sys/filsys.h>
+< #include <sys/fblk.h>
+< #include <sys/dir.h>
+---
+> #include "../include/sys/param.h"
+> #include "../include/sys/ino.h"
+> #include "../include/sys/inode.h"
+> #include "../include/sys/filsys.h"
+> #include "../include/sys/fblk.h"
+> #include "../include/sys/dir.h"
+> /* Pack longs into pure LE 24-bit; matches arch/armboot.c::addr(). */
+> int ltol3(cp, lp, n) char *cp; long *lp; int n; {
+> 	int i; long v;
+> 	for(i=0; i<n; i++) {
+> 		v = lp[i];
+> 		*cp++ = v; *cp++ = v >> 8; *cp++ = v >> 16;
+> 	}
+> 	return(0);
+> }
+32c44
+< 	struct fblk fb;
+---
+> 	struct fblk;
+35,37d46
+< #ifndef STANDALONE
+< struct exec head;
+< #endif
+40c49
+< 	struct filsys fs;
+---
+> 	struct filsys;
+117c126
+< 		printf("isize = %D\n", n*NIPB);
+---
+> 		printf("isize = %ld\n", n*NIPB);
+125c134
+< 	 * and read onto block 0
+---
+> 	 * (skipped: PDP-11 a.out format is not used on this port)
+130,148c139,142
+< 	if(f < 0) {
+< 		printf("%s: cannot  open init\n", string);
+< 		goto f2;
+< 	}
+< 	read(f, (char *)&head, sizeof head);
+< 	if(head.a_magic != A_MAGIC1) {
+< 		printf("%s: bad format\n", string);
+< 		goto f1;
+< 	}
+< 	c = head.a_text + head.a_data;
+< 	if(c > BSIZE) {
+< 		printf("%s: too big\n", string);
+< 		goto f1;
+< 	}
+< 	read(f, buf, c);
+< 	wtfs((long)0, buf);
+< 
+< f1:
+< 	close(f);
+---
+> 	if(f < 0)
+> 		printf("%s: cannot open init\n", string);
+> 	else
+> 		close(f);
+155d148
+< f2:
+312a306
+> 	int m[4] = {m0, m1, m2, m3};
+316c310
+< 			return((&m0)[i]);
+---
+> 			return(m[i]);
+395c389
+< 		printf("write error: %D\n", bno);
+---
+> 		printf("write error: %ld\n", bno);
 ```
