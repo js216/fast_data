@@ -18,173 +18,88 @@ Expect:
 LICENSE
 Makefile
 README
-arch/arm.c
-arch/arm.h
-arch/arm.ld
-arch/arm.s
-cmd/awk/awk.g.c
-cmd/awk/awk.h
-cmd/awk/awk.lx.c
-cmd/awk/awk_math.c
-cmd/awk/proctab.c
-conf/arm_qemu/auxfs.proto
-conf/arm_qemu/conf.c
-conf/arm_qemu/config.mk
-conf/arm_qemu/root.proto
-dev/msgbuf.c
-dev/pl011.c
-dev/virtio_blk.c
-h/proto.h
-h/v7_bridge.h
-lib/Makefile
-lib/compat.c
-lib/crt0.c
-lib/doprnt.c
-lib/math_helpers.c
-lib/memcpy.c
-lib/mkdir.c
-lib/sys.s
-lib/u.ld
-sys/Makefile
-sys/v7_bridge.c
-sys/v7stubs.c
-tools/extract-old-ar.py
-tools/qemu-shell.py
+usr/src/cmd/chroot.c
+usr/src/cmd/factor.c
+usr/src/cmd/link.c
+usr/src/cmd/primes.c
+usr/src/cmd/unlink.c
+usr/src/libc/crt0.c
+usr/src/libc/crt0.s
+usr/src/libc/doprnt.c
+usr/src/libc/gen/abort.c
+usr/src/libc/gen/exit.c
+usr/src/libc/math_helpers.c
+usr/src/libc/memcpy.c
+usr/src/libc/mkdir.c
+usr/src/libc/sys/access.s
+usr/src/libc/sys/acct.s
+usr/src/libc/sys/alarm.c
+usr/src/libc/sys/brk.c
+usr/src/libc/sys/chdir.s
+usr/src/libc/sys/chmod.s
+usr/src/libc/sys/chown.s
+usr/src/libc/sys/chroot.s
+usr/src/libc/sys/close.s
+usr/src/libc/sys/creat.s
+usr/src/libc/sys/dup.c
+usr/src/libc/sys/execl.c
+usr/src/libc/sys/execv.c
+usr/src/libc/sys/execve.c
+usr/src/libc/sys/exit.s
+usr/src/libc/sys/fork.s
+usr/src/libc/sys/fstat.s
+usr/src/libc/sys/getgid.s
+usr/src/libc/sys/getpid.s
+usr/src/libc/sys/getuid.s
+usr/src/libc/sys/ioctl.s
+usr/src/libc/sys/kill.s
+usr/src/libc/sys/link.s
+usr/src/libc/sys/lock.s
+usr/src/libc/sys/lseek.s
+usr/src/libc/sys/mknod.s
+usr/src/libc/sys/mount.s
+usr/src/libc/sys/nice.s
+usr/src/libc/sys/open.c
+usr/src/libc/sys/pause.c
+usr/src/libc/sys/pipe.s
+usr/src/libc/sys/profil.s
+usr/src/libc/sys/ptrace.s
+usr/src/libc/sys/read.s
+usr/src/libc/sys/setgid.s
+usr/src/libc/sys/setuid.s
+usr/src/libc/sys/signal.s
+usr/src/libc/sys/stat.s
+usr/src/libc/sys/stime.c
+usr/src/libc/sys/sync.s
+usr/src/libc/sys/time.c
+usr/src/libc/sys/times.s
+usr/src/libc/sys/umask.s
+usr/src/libc/sys/umount.s
+usr/src/libc/sys/unlink.s
+usr/src/libc/sys/utime.s
+usr/src/libc/sys/wait.s
+usr/src/libc/sys/write.s
+usr/src/libc/syscall.s
+usr/src/libc/u.ld
+usr/sys/arch/arm.c
+usr/sys/arch/arm.h
+usr/sys/arch/arm.ld
+usr/sys/arch/arm.s
+usr/sys/conf/arm_qemu
+usr/sys/conf/auxfs.proto
+usr/sys/conf/root.proto
+usr/sys/dev/msgbuf.c
+usr/sys/dev/pl011.c
+usr/sys/dev/virtio_blk.c
+
 ```
 
-### cmd/chroot.c
+### usr/src/cmd/mktemp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/sys/chroot.s unix-v7-c99/cmd/chroot.c | sed 's/[[:blank:]]*$//' || true
-```
-
-Expect:
-
-```
-1c1,3
-< / C library -- chroot
----
-> /* chroot -- run command with NEWROOT as the root directory.  Calls the
->  * v7 chroot(2) syscall (which requires root) then execs argv[2..]; with
->  * no command, falls back to /bin/sh. */
-3c5,8
-< / error = chroot(string);
----
-> #include <stdio.h>
-> extern int chroot(char *path);
-> extern int execvp(char *file, char **argv);
-> extern int chdir(char *path);
-5,22c10,31
-< .globl	_chroot
-< .globl	cerror
-< .chroot = 61.
-<
-< _chroot:
-< 	mov	r5,-(sp)
-< 	mov	sp,r5
-< 	mov	4(r5),0f
-< 	sys	0; 9f
-< 	bec	1f
-< 	jmp	cerror
-< 1:
-< 	clr	r0
-< 	mov	(sp)+,r5
-< 	rts	pc
-< .data
-< 9:
-< 	sys	.chroot; 0:..
----
-> int
-> main(int argc, char *argv[])
-> {
-> 	static char *shargv[] = { "sh", 0 };
-> 	if (argc < 2) {
-> 		fprintf(stderr, "usage: chroot newroot [cmd [args...]]\n");
-> 		exit(2);
-> 	}
-> 	if (chroot(argv[1]) < 0) {
-> 		fprintf(stderr, "chroot: %s: cannot chroot\n", argv[1]);
-> 		exit(1);
-> 	}
-> 	(void)chdir("/");
-> 	if (argc >= 3) {
-> 		execvp(argv[2], &argv[2]);
-> 		fprintf(stderr, "chroot: %s: exec failed\n", argv[2]);
-> 		exit(127);
-> 	}
-> 	execvp("/bin/sh", shargv);
-> 	fprintf(stderr, "chroot: /bin/sh: exec failed\n");
-> 	exit(127);
-> }
-```
-
-### cmd/link.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/sys/link.s unix-v7-c99/cmd/link.c | sed 's/[[:blank:]]*$//' || true
-```
-
-Expect:
-
-```
-1c1,4
-< / C library -- link
----
-> /* link FILE1 FILE2  -- create a hard link FILE2 pointing at FILE1.
->  * POSIX-mandated thin wrapper over the link(2) syscall.  Differs from
->  * ln(1) in that it takes exactly two args and never resolves the
->  * target as a directory. */
-3c6,7
-< / error = link(old-file, new-file);
----
-> #include <stdio.h>
-> extern int link(char *, char *);
-5,23c9,21
-< .globl	_link
-< .globl	cerror
-< .link = 9.
-<
-< _link:
-< 	mov	r5,-(sp)
-< 	mov	sp,r5
-< 	mov	4(r5),0f
-< 	mov	6(r5),0f+2
-< 	sys	0; 9f
-< 	bec	1f
-< 	jmp	cerror
-< 1:
-< 	clr	r0
-< 	mov	(sp)+,r5
-< 	rts	pc
-< .data
-< 9:
-< 	sys	.link; 0:..; ..
----
-> int
-> main(int argc, char *argv[])
-> {
-> 	if (argc != 3) {
-> 		fprintf(stderr, "usage: link FILE1 FILE2\n");
-> 		exit(1);
-> 	}
-> 	if (link(argv[1], argv[2]) < 0) {
-> 		fprintf(stderr, "link: %s -> %s: failed\n", argv[1], argv[2]);
-> 		exit(1);
-> 	}
-> 	exit(0);
-> }
-```
-
-### cmd/mktemp.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/mktemp.c unix-v7-c99/cmd/mktemp.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/libc/gen/mktemp.c unix-v7-c99/usr/src/cmd/mktemp.c | sed 's/[[:blank:]]*$//' || true
 ```
 
 Expect:
@@ -266,14 +181,15 @@ Expect:
 ---
 > 	puts(buf);
 > 	exit(0);
+
 ```
 
-### cmd/printf.c
+### usr/src/cmd/printf.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/printf.c unix-v7-c99/cmd/printf.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/printf.c unix-v7-c99/usr/src/cmd/printf.c | sed 's/[[:blank:]]*$//' || true
 ```
 
 Expect:
@@ -442,86 +358,1384 @@ Expect:
 > 			break;
 > 	}
 > 	exit(0);
+
 ```
 
-### cmd/unlink.c
+### usr/src/cmd/cmake
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/sys/unlink.s unix-v7-c99/cmd/unlink.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/cmd/cmake unix-v7-c99/usr/src/cmd/cmake | sed 's/[[:blank:]]*$//' || true
 ```
 
 Expect:
 
 ```
-1c1,4
-< / C library -- unlink
+24c24
+< 	bc)	yacc bc.y && mv y.tab.c bc.c && cc -n -s -O bc.c -o bc && rm bc.c ;;
 ---
-> /* unlink FILE -- remove FILE via the unlink(2) syscall.  POSIX-
->  * mandated thin wrapper.  Unlike rm, doesn't prompt or check perms;
->  * unlink(2) returns failure if FILE doesn't exist or isn't writable
->  * (for the parent directory). */
-3c6,7
-< / error = unlink(string);
+> 	bc)	bison -y bc.y && mv y.tab.c bc.c && cc -n -s -O bc.c -o bc && rm bc.c ;;
+56,57c56,57
+< 	egrep)	yacc egrep.y && mv y.tab.c egrep.c && cc -n -s -O egrep.c -o egrep && rm egrep.c ;;
+< 	expr)	yacc expr.y && mv y.tab.c expr.c && cc -n -s -O expr.c -o expr && rm expr.c ;;
 ---
-> #include <stdio.h>
-> extern int unlink(char *);
-5,22c9,21
-< .globl	_unlink,
-< .globl	cerror
-< .unlink = 10.
-<
-< _unlink:
-< 	mov	r5,-(sp)
-< 	mov	sp,r5
-< 	mov	4(r5),0f
-< 	sys	0; 9f
-< 	bec	1f
-< 	jmp	cerror
-< 1:
-< 	clr	r0
-< 	mov	(sp)+,r5
-< 	rts	pc
-< .data
-< 9:
-< 	sys	.unlink; 0:..
+> 	egrep)	bison -y egrep.y && mv y.tab.c egrep.c && cc -n -s -O egrep.c -o egrep && rm egrep.c ;;
+> 	expr)	bison -y expr.y && mv y.tab.c expr.c && cc -n -s -O expr.c -o expr && rm expr.c ;;
+
+```
+
+### usr/src/cmd/awk/awk.lx.l
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/awk.lx.l unix-v7-c99/usr/src/cmd/awk/awk.lx.l | sed 's/[[:blank:]]*$//' || true
+```
+
+Expect:
+
+```
+0a1
+> %option noyywrap noinput nounistd
+10c11
+< int	lineno	1;
+---
+> int	lineno = 1;
+19a21,26
+> static int awk_input(void);
+> #define YY_INPUT(buf,result,max_size) \
+> 	do { int c = awk_input(); (void)(max_size); \
+> 		if (c == 0) result = YY_NULL; \
+> 		else { (buf)[0] = (char)c; result = 1; } \
+> 	} while (0)
+28c35
+< 	switch (yybgin-yysvec-1) {	/* witchcraft */
+---
+> 	switch (YY_START) {
+148c155,156
+< input()
+---
+> static int
+> awk_input(void)
+153,155c161
+< 	if (yysptr > yysbuf)
+< 		c = U(*--yysptr);
+< 	else if (yyin == NULL)
+---
+> 	if (lexprog != NULL)
+165a172,174
+> int input(void) { return awk_input(); }
+>
+> void
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/sh/makefile unix-v7-c99/usr/src/cmd/sh/makefile || true
+```
+
+Expect:
+
+```
+
+```
+
+### usr/src/libc/Makefile
+
+Local test:
+
+```
+diff /dev/null unix-v7-c99/usr/src/libc/Makefile || true
+```
+
+Expect:
+
+```
+0a1,298
+> CC = arm-none-eabi-gcc
+> AR = arm-none-eabi-ar
+> ROOT = ../../..
+> CFLAGS = -std=c99 -Wall -Wextra -Wpedantic -Werror -fcommon -fno-builtin -ffreestanding -nostdlib -mcpu=cortex-a7 -marm -I../../include -I../..
+> # awk binaries: strict CFLAGS plus the -Os/unwind/define flags that keep
+> # the flat binary under v7 mkfs' 64KB single-file limit.  The one int<->
+> # pointer conversions in yacc-generated awk.g.c are build-only noise:
+> # the generated source is removed again after awk is linked.
+> AWKCFLAGS = $(CFLAGS) -Os -fno-asynchronous-unwind-tables -fno-unwind-tables -Dmalloc=malloc -Dfree=free -I../cmd/awk -Wno-int-conversion -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wno-implicit-function-declaration -Wno-builtin-declaration-mismatch -Wno-implicit-int -Wno-return-type -Wno-unused-function -Wno-discarded-qualifiers
+> LDFLAGS = -nostdlib -T u.ld
+> LDLIBS = -L. -lc -lgcc
+> 
+> # crt0 is link-line head, not in libc.a (the entry symbol must come first
+> # and is not pulled out of an archive on demand).
+> CRT = crt0.o crt0c.o
+> 
+> # Objects packed into libc.a.  The linker pulls these in only on demand,
+> # so atof can finally live here without bloating every binary.
+> SYSOBJ = access.o acct.o alarm.o brk.o chdir.o chmod.o chown.o chroot.o \
+>       close.o creat.o dup.o execv.o execl.o execve.o exit_sys.o fork.o \
+>       fstat.o ftime.o getgid.o getpid.o getuid.o gtty.o ioctl.o kill.o \
+>       link.o lock.o lseek.o mknod.o mount.o nice.o open.o pause.o pipe.o \
+>       profil.o ptrace.o read.o setgid.o setuid.o signal.o \
+>       stat.o stime.o stty.o sync.o time_sys.o times.o umask.o umount.o \
+>       unlink.o utime.o wait.o write.o
+> GENOBJ = abort.o exit.o sleep.o popen.o
+> 
+> LIBOBJ = syscall.o $(SYSOBJ) $(GENOBJ) v7crypt.o l3.o \
+>       getpwent.o getpwnam.o getpwuid.o strncat.o ttyslot.o execvp.o getenv.o \
+>       atoi.o atol.o atof.o index.o rindex.o isatty.o perror.o \
+>       strcat.o strcmp.o strcpy.o strlen.o strncmp.o strncpy.o \
+>       swab.o rand.o mktemp.o errlst.o ttyname.o mkdir.o \
+>       qsort.o calloc.o tell.o timezone.o getlogin.o \
+>       data.o fopen.o freopen.o findiop.o endopen.o filbuf.o flsbuf.o \
+>       fgetc.o fputc.o fgets.o fputs.o gets.o puts.o rdwr.o \
+>       fseek.o ftell.o rew.o setbuf.o ungetc.o clrerr.o \
+>       getchar.o putchar.o strout.o doprnt.o printf.o fprintf.o sprintf.o \
+>       doscan.o scanf.o malloc.o getpass.o ctime.o system.o memcpy.o nlist.o \
+>       math_helpers.o \
+>       ecvt.o fdopen.o gcvt.o getgrent.o getgrgid.o getgrnam.o \
+>       getw.o putw.o
+> # math_helpers.o replaces v7's PDP-11 frexp11.s/ldexp11.s/modf11.s --
+> # the IEEE-754 doubles are decomposed via union bit-manipulation now
+> # that the host ABI is AAPCS softfloat instead of pdp11 fp.
+> # ecvt/fdopen/gcvt/getgrent/getgrgid/getgrnam/getw/putw are
+> # carried over verbatim from v7/usr/src/libc/{gen,stdio}; the only edit
+> # is ecvt.c gaining a file-scope static forward decl for its private
+> # `cvt` helper (same K&R extern-vs-static linkage fix used in libm/sin
+> # et al).  ctype_.c is intentionally NOT carried over: the port's
+> # include/ctype.h uses inline range checks rather than the v7 _ctype_
+> # lookup table.
+> 
+> # v7 sh has its own internal `getenv()` (a void(void) that walks
+> # environ[] and registers each entry as a sh variable -- not libc
+> # getenv).  Build sh's libc.a without getenv to avoid a duplicate
+> # symbol clash.
+> SHLIBOBJ = $(filter-out getenv.o,$(LIBOBJ))
+> 
+> # libm.a -- v7 math library (1166 LoC, K&R sources from v7/usr/src/libm
+> # carried over verbatim except for four files where the v7 K&R idiom of
+> # block-scope `double f();` extern decls + later `static double f(...)`
+> # definitions of the same symbol no longer compiles under C99's
+> # static/extern linkage check.  Those four (sin.c, atan.c, j0.c, j1.c)
+> # got file-scope `static` forward decls and lost the block-scope ones;
+> # no body line changed.
+> LIBMOBJ = m_asin.o m_atan.o m_exp.o m_fabs.o m_floor.o m_hypot.o \
+>       m_j0.o m_j1.o m_jn.o m_log.o m_pow.o m_sin.o m_sinh.o m_sqrt.o \
+>       m_tan.o m_tanh.o
+> 
+> # v7 usr/doc/regen says single-file commands are rebuilt through
+> # /usr/src/cmd/cmake; subdirectory commands use their own makefiles.
+> # This cross build cannot execute cmake directly because it names the
+> # native v7 cc/as/yacc toolchain, but it does use cmd/cmake as the
+> # inventory for ordinary command names.
+> CMAKE = ../cmd/cmake
+> ETC = init getty accton update atrun cron
+> BIN = login cat echo ls pwd sync arcv rev yes wc basename sum tty cmp comm cal od tail grep test look cp rm ln mkdir rmdir mv chmod chown chgrp sleep tee touch tr uniq du date kill nice mknod who mesg time split checkeq calendar tsort file join col fgrep egrep su newgrp random crypt pr dd stty tabs diff wall write df clri dcheck icheck ncheck cb sp find sort mount umount passwd diff3 at units spline restor tk dmesg sa ptx vpr dump dumpdir graph factor primes expr ac iostat printf chroot mktemp link unlink prof tc
+> # ps/pstat share a private build loop only so their
+> # objects are kept out of the BIN loop's automatic crt0/libc linking
+> # pattern -- the source-level flags are the project's strict CFLAGS.
+> PSBIN = ps pstat
+> USRLIB = makekey diffh
+> USRGAMES = fortune arithmetic hangman backgammon fish quiz wump
+> SHSRC = args blok builtin cmd ctype error expand fault io macro main msg name print service setbrk stak string word xec
+> SHOBJ = args.o blok.o builtin.o cmd.o ctype.o error.o expand.o fault.o io.o macro.o main.o msg.o name.o print.o service.o setbrk.o stak.o string.o word.o xec.o
+> CMAKE_CMDS = $(filter-out awk chroot dc link mktemp printf sed sh spell tar tp unlink,$(ETC) $(BIN) $(USRLIB) $(PSBIN))
+> 
+> all:	check-cmake $(CRT) libc.a libsh.a libm.a
+> 	mkdir -p $(ROOT)/etc $(ROOT)/bin $(ROOT)/usr/lib $(ROOT)/usr/games
+> 	cp $(ROOT)/v7/bin/1 $(ROOT)/bin/1
+> 	cp $(ROOT)/v7/bin/true $(ROOT)/bin/true
+> 	cp $(ROOT)/v7/bin/false $(ROOT)/bin/false
+> 	cp $(ROOT)/v7/bin/nohup $(ROOT)/bin/nohup
+> 	chmod 755 $(ROOT)/bin/1 $(ROOT)/bin/true $(ROOT)/bin/false $(ROOT)/bin/nohup
+> 	set -e; for i in $(ETC); do \
+> 		$(CC) $(CFLAGS) -c ../cmd/$$i.c -o cmd-$$i.o; \
+> 		$(CC) $(CFLAGS) $(LDFLAGS) -o $$i.elf $(CRT) cmd-$$i.o $(LDLIBS); \
+> 		arm-none-eabi-objcopy -O binary $$i.elf $(ROOT)/etc/$$i; \
+> 	done
+> 	set -e; for i in $(BIN); do \
+> 		$(CC) $(CFLAGS) -c ../cmd/$$i.c -o cmd-$$i.o; \
+> 		$(CC) $(CFLAGS) $(LDFLAGS) -o $$i.elf $(CRT) cmd-$$i.o $(LDLIBS); \
+> 		arm-none-eabi-objcopy -O binary $$i.elf $(ROOT)/bin/$$i; \
+> 	done
+> 	$(CC) $(CFLAGS) -c ../cmd/deroff.c
+> 	$(CC) $(CFLAGS) $(LDFLAGS) -o deroff.elf $(CRT) deroff.o $(LDLIBS)
+> 	arm-none-eabi-objcopy -O binary deroff.elf $(ROOT)/bin/deroff
+> 	set -e; for i in $(USRLIB); do \
+> 		$(CC) $(CFLAGS) -c ../cmd/$$i.c; \
+> 		$(CC) $(CFLAGS) $(LDFLAGS) -o $$i.elf $(CRT) $$i.o $(LDLIBS); \
+> 		arm-none-eabi-objcopy -O binary $$i.elf $(ROOT)/usr/lib/$$i; \
+> 	done
+> 	set -e; for i in $(USRGAMES); do \
+> 		$(CC) $(CFLAGS) -c ../cmd/$$i.c; \
+> 		$(CC) $(CFLAGS) $(LDFLAGS) -o $$i.elf $(CRT) $$i.o $(LDLIBS); \
+> 		arm-none-eabi-objcopy -O binary $$i.elf $(ROOT)/usr/games/$$i; \
+> 	done
+> 	$(CC) $(CFLAGS) -c ../cmd/ed.c
+> 	$(CC) $(CFLAGS) $(LDFLAGS) -o ed.elf $(CRT) ed.o $(LDLIBS)
+> 	arm-none-eabi-objcopy -O binary ed.elf $(ROOT)/bin/ed
+> 	set -e; for i in sed0 sed1; do \
+> 		$(CC) $(CFLAGS) -I../cmd/sed -c ../cmd/sed/$$i.c; \
+> 	done
+> 	$(CC) $(CFLAGS) $(LDFLAGS) -o sed.elf $(CRT) sed0.o sed1.o $(LDLIBS)
+> 	arm-none-eabi-objcopy -O binary sed.elf $(ROOT)/bin/sed
+> 	# awk(1): follow v7's awk/makefile pattern: generate parser,
+> 	# lexer, and proctab, link awk, then remove generated sources.
+> 	cd ../cmd/awk && bison -y -d awk.g.y && mv y.tab.c awk.g.c && mv y.tab.h awk.h
+> 	cd ../cmd/awk && flex -o awk.lx.c awk.lx.l
+> 	cd ../cmd/awk && sed -i '/#include <string.h>/d;/#include <stdlib.h>/d' awk.lx.c
+> 	cd ../cmd/awk && sed -i '1i #include <stddef.h>' awk.lx.c
+> 	cd ../cmd/awk && perl -0pi -e 's/#define ECHO [^\n]+/#define ECHO do { } while (0)/' awk.lx.c
+> 	cd ../cmd/awk && cc -std=gnu89 -w -c token.c -o proc-token.o && cc -std=gnu89 -w -o proc proc.c proc-token.o && ./proc > proctab.c && rm -f proc proc-token.o
+> 	set -e; for i in awk.g awk.lx b main token tran lib run parse proctab; do \
+> 		$(CC) $(AWKCFLAGS) -c ../cmd/awk/$$i.c; \
+> 	done
+> 	$(CC) $(AWKCFLAGS) $(LDFLAGS) -o awk.elf $(CRT) awk.g.o awk.lx.o b.o main.o token.o tran.o lib.o run.o parse.o proctab.o -L. -lm -lc -lgcc
+> 	arm-none-eabi-objcopy -O binary awk.elf $(ROOT)/bin/awk
+> 	rm -f ../cmd/awk/awk.g.c ../cmd/awk/awk.h ../cmd/awk/awk.lx.c ../cmd/awk/proctab.c
+> 	# quot(1) carries its own file-scope `int acct(struct dinode *)`
+> 	# helper that collides with the new libc syscall stub for acct(2)
+> 	# in sys.s.  Compile quot.c with `-Dacct=quot_acct` to rename the
+> 	# local symbol; the BIN-loop above can't carry the extra flag, so
+> 	# quot gets its own one-off rule here.
+> 	$(CC) $(CFLAGS) -Dacct=quot_acct -c ../cmd/quot.c
+> 	$(CC) $(CFLAGS) $(LDFLAGS) -o quot.elf $(CRT) quot.o $(LDLIBS)
+> 	arm-none-eabi-objcopy -O binary quot.elf $(ROOT)/bin/quot
+> 	set -e; for i in $(PSBIN); do \
+> 		$(CC) $(CFLAGS) -c ../cmd/$$i.c; \
+> 		$(CC) $(CFLAGS) $(LDFLAGS) -o $$i.elf $(CRT) $$i.o $(LDLIBS); \
+> 		arm-none-eabi-objcopy -O binary $$i.elf $(ROOT)/bin/$$i; \
+> 	done
+> 	set -e; for i in $(SHSRC); do \
+> 		$(CC) $(CFLAGS) -I../cmd/sh -c ../cmd/sh/$$i.c; \
+> 	done
+> 	$(CC) $(CFLAGS) $(LDFLAGS) -o sh.elf $(CRT) $(SHOBJ) -L. -lsh -lgcc
+> 	arm-none-eabi-objcopy -O binary sh.elf $(ROOT)/bin/sh
+> 	# osh(1): the v7 Thompson-shell carryover.  Pre-K&R compound-assignment
+> 	# operators (=+, =-, =|) were mechanically rewritten to +=/-=/|= so the
+> 	# C99 parser accepts the file; later passes added prototypes, pointer/int
+> 	# casts at the K&R "packed pointer" sites (t[DLEF] etc.), explicit
+> 	# fallthrough markers, and trailing return(0) in int-returning functions.
+> 	$(CC) $(CFLAGS) -c ../cmd/osh.c
+> 	$(CC) $(CFLAGS) $(LDFLAGS) -o osh.elf $(CRT) osh.o $(LDLIBS)
+> 	arm-none-eabi-objcopy -O binary osh.elf $(ROOT)/bin/osh
+> 	$(CC) $(CFLAGS) -I../cmd/dc -c ../cmd/dc/dc.c
+> 	$(CC) $(CFLAGS) $(LDFLAGS) -o dc.elf $(CRT) dc.o $(LDLIBS)
+> 	arm-none-eabi-objcopy -O binary dc.elf $(ROOT)/bin/dc
+> 	$(CC) $(CFLAGS) -I../cmd/tar -c ../cmd/tar/tar.c
+> 	$(CC) $(CFLAGS) $(LDFLAGS) -o tar.elf $(CRT) tar.o $(LDLIBS)
+> 	arm-none-eabi-objcopy -O binary tar.elf $(ROOT)/bin/tar
+> 	set -e; for i in tp0 tp1 tp2 tp3; do \
+> 		$(CC) $(CFLAGS) -I../cmd/tp -c ../cmd/tp/$$i.c; \
+> 	done
+> 	$(CC) $(CFLAGS) $(LDFLAGS) -o tp.elf $(CRT) tp0.o tp1.o tp2.o tp3.o $(LDLIBS)
+> 	arm-none-eabi-objcopy -O binary tp.elf $(ROOT)/bin/tp
+> 	set -e; for i in spell spellin spellout; do \
+> 		$(CC) $(CFLAGS) -I../cmd/spell -c ../cmd/spell/$$i.c; \
+> 		$(CC) $(CFLAGS) $(LDFLAGS) -o $$i.elf $(CRT) $$i.o $(LDLIBS); \
+> 		arm-none-eabi-objcopy -O binary $$i.elf $(ROOT)/usr/lib/$$i; \
+> 	done
+> 
+> check-cmake:
+> 	@set -e; for i in $(CMAKE_CMDS); do \
+> 		grep -q "^[	 ]*$$i)" $(CMAKE) || { echo "missing $$i in $(CMAKE)"; exit 1; }; \
+> 	done
+> 
+> libc.a: $(LIBOBJ)
+> 	rm -f libc.a
+> 	$(AR) rcs libc.a $(LIBOBJ)
+> 
+> libsh.a: $(SHLIBOBJ)
+> 	rm -f libsh.a
+> 	$(AR) rcs libsh.a $(SHLIBOBJ)
+> 
+> # Pattern rule for libm.  v7 sources live under ../libm; the m_<x>.o
+> # names avoid colliding with similarly named sources elsewhere (e.g.
+> # lib/atof.c's local ldexp/etc).
+> m_%.o: ../libm/%.c
+> 	$(CC) $(CFLAGS) -c $< -o $@
+> 
+> libm.a: $(LIBMOBJ)
+> 	rm -f libm.a
+> 	$(AR) rcs libm.a $(LIBMOBJ)
+> 
+> crt0.o: crt0.s
+> 	$(CC) $(CFLAGS) -c crt0.s
+> 
+> crt0c.o: crt0.c
+> 	$(CC) $(CFLAGS) -c crt0.c -o crt0c.o
+> 
+> v7crypt.o: crypt.c
+> 	$(CC) $(CFLAGS) -c crypt.c -o v7crypt.o
+> 
+> exit_sys.o: sys/exit.s
+> 	$(CC) $(CFLAGS) -c sys/exit.s -o exit_sys.o
+> 
+> time_sys.o: sys/time.c
+> 	$(CC) $(CFLAGS) -c sys/time.c -o time_sys.o
+> 
+> abort.o: gen/abort.c
+> 	$(CC) $(CFLAGS) -c gen/abort.c -o abort.o
+> 
+> exit.o: gen/exit.c
+> 	$(CC) $(CFLAGS) -c gen/exit.c -o exit.o
+> 
+> sleep.o: gen/sleep.c
+> 	$(CC) $(CFLAGS) -c gen/sleep.c -o sleep.o
+> 
+> popen.o: stdio/popen.c
+> 	$(CC) $(CFLAGS) -c stdio/popen.c -o popen.o
+> 
+> %.o: sys/%.s
+> 	$(CC) $(CFLAGS) -c $< -o $@
+> 
+> %.o: sys/%.c
+> 	$(CC) $(CFLAGS) -c $< -o $@
+> 
+> 
+> .s.o:
+> 	$(CC) $(CFLAGS) -c $<
+> 
+> .c.o:
+> 	$(CC) $(CFLAGS) -c $<
+> 
+> clean:
+> 	rm -f *.o *.elf *.a m_*.o $(ROOT)/etc/init $(ROOT)/etc/getty $(ROOT)/etc/update
+> 	rm -f $(ROOT)/bin/login $(ROOT)/bin/sh $(ROOT)/bin/cat
+> 	rm -f $(ROOT)/bin/echo $(ROOT)/bin/ls $(ROOT)/bin/pwd $(ROOT)/bin/sync
+> 	rm -f $(ROOT)/bin/rev
+> 	rm -f $(ROOT)/bin/arcv
+> 	rm -f $(ROOT)/bin/yes $(ROOT)/bin/wc $(ROOT)/bin/basename $(ROOT)/bin/sum
+> 	rm -f $(ROOT)/bin/tty $(ROOT)/bin/cmp $(ROOT)/bin/comm $(ROOT)/bin/cal
+> 	rm -f $(ROOT)/bin/od $(ROOT)/bin/head $(ROOT)/bin/tail $(ROOT)/bin/grep $(ROOT)/bin/test
+> 	rm -f $(ROOT)/bin/look $(ROOT)/bin/cp $(ROOT)/bin/rm $(ROOT)/bin/ln
+> 	rm -f $(ROOT)/bin/mkdir $(ROOT)/bin/rmdir $(ROOT)/bin/mv
+> 	rm -f $(ROOT)/bin/chmod $(ROOT)/bin/chown $(ROOT)/bin/chgrp
+> 	rm -f $(ROOT)/bin/sleep $(ROOT)/bin/tee $(ROOT)/bin/touch $(ROOT)/bin/tr
+> 	rm -f $(ROOT)/bin/uniq $(ROOT)/bin/du $(ROOT)/bin/date $(ROOT)/bin/kill
+> 	rm -f $(ROOT)/bin/nice $(ROOT)/bin/mknod $(ROOT)/bin/who $(ROOT)/bin/mesg
+> 	rm -f $(ROOT)/bin/time $(ROOT)/bin/split
+> 	rm -f $(ROOT)/bin/checkeq $(ROOT)/bin/calendar $(ROOT)/bin/tsort
+> 	rm -f $(ROOT)/bin/file
+> 	rm -f $(ROOT)/bin/join
+> 	rm -f $(ROOT)/bin/col
+> 	rm -f $(ROOT)/bin/fgrep $(ROOT)/bin/egrep
+> 	rm -f $(ROOT)/bin/su $(ROOT)/bin/newgrp
+> 	rm -f $(ROOT)/bin/passwd
+> 	rm -f $(ROOT)/bin/random
+> 	rm -f $(ROOT)/bin/crypt $(ROOT)/usr/lib/makekey $(ROOT)/usr/lib/diffh
+> 	rm -f $(ROOT)/bin/pr
+> 	rm -f $(ROOT)/bin/dd
+> 	rm -f $(ROOT)/bin/stty
+> 	rm -f $(ROOT)/bin/tabs
+> 	rm -f $(ROOT)/bin/diff
+> 	rm -f $(ROOT)/bin/wall
+> 	rm -f $(ROOT)/bin/write
+> 	rm -f $(ROOT)/bin/df
+> 	rm -f $(ROOT)/bin/clri
+> 	rm -f $(ROOT)/bin/dcheck $(ROOT)/bin/icheck $(ROOT)/bin/ncheck
+> 	rm -f $(ROOT)/bin/cb
+> 	rm -f $(ROOT)/bin/sp
+> 	rm -f $(ROOT)/bin/find
+> 	rm -f $(ROOT)/bin/sort
+> 	rm -f $(ROOT)/bin/spell $(ROOT)/bin/deroff
+> 	rm -f $(ROOT)/bin/ed
+> 	rm -f $(ROOT)/bin/sed
+> 	rm -f $(ROOT)/bin/awk
+> 	rm -f $(ROOT)/bin/1
+> 	rm -f $(ROOT)/bin/true $(ROOT)/bin/false
+> 	rm -f $(ROOT)/bin/dmesg
+> 	rm -f $(ROOT)/bin/factor $(ROOT)/bin/primes
+> 	rm -f $(ROOT)/bin/expr
+> 	rm -f $(ROOT)/bin/iostat
+> 	rm -f $(ROOT)/bin/dc
+> 	rm -f $(ROOT)/bin/tar
+> 	rm -f $(ROOT)/bin/tp
+> 	rm -f $(ROOT)/bin/nohup
+
+```
+
+### usr/sys/conf/makefile
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/conf/makefile unix-v7-c99/usr/sys/conf/makefile || true
+```
+
+Expect:
+
+```
+1,2c1,2
+< unix:	l.o mch.o c.o ../sys/LIB1 ../dev/LIB2
+< 	ld -o unix -X -i l.o mch.o c.o ../sys/LIB1 ../dev/LIB2
+---
+> CC = arm-none-eabi-gcc
+> AS = arm-none-eabi-as
+4,29c4,50
+< all:
+< 	cd ../sys; cc -c -O *.c; mklib; rm *.o
+< 	cd ../dev; cc -c -O *.c; mklib; rm *.o
+< 
+< mch.o:	mch0.s mch.s
+< 	as -o mch.o mch0.s mch.s
+< 
+< allsystems:
+< 	mkconf <hphtconf
+< 	make unix
+< 	mv unix hphtunix
+< 	mkconf <hptmconf
+< 	make unix
+< 	mv unix hptmunix
+< 	mkconf <rptmconf
+< 	make unix
+< 	mv unix rptmunix
+< 	mkconf <rphtconf
+< 	make unix
+< 	mv unix rphtunix
+< 	mkconf <rktmconf
+< 	make unix
+< 	mv unix rktmunix
+< 	mkconf <rkhtconf
+< 	make unix
+< 	mv unix rkhtunix
+---
+> CONF ?= arm_qemu
+> 
+> VPATH = ../sys
+> 
+> CFLAGS  = -std=c99 -Wall -Wextra -Wpedantic -Werror -fno-builtin -fcommon -mcpu=cortex-a7 -marm -ffreestanding
+> LDFLAGS = -nostdlib -T ../arch/arm.ld -Wl,-z,max-page-size=0x200
+> DEVS = ../dev/pl011.o ../dev/virtio_blk.o
+> QEMU_ARGS = -machine virt -cpu cortex-a7 -nographic \
+> 	-kernel ../../../unix -drive if=none,file=../../../root.img,format=raw,id=hd0 \
+> 	-device virtio-blk-device,drive=hd0
+> 
+> V7OBJS = alloc.o subr.o fio.o sys2.o sys3.o sys4.o clock.o acct.o ureg.o text.o rdwri.o sig.o slp.o sys1.o pipe.o
+> 
+> OBJS = malloc.o prf.o iget.o nami.o machdep_arm.o $(V7OBJS) ../arch/arm.o ../dev/bio.o ../dev/msgbuf.o c.o
+> 
+> unix: ../../../unix
+> 
+> ../../../unix: ../arch/arm_asm.o main.o $(OBJS) $(DEVS)
+> 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+> 
+> ../arch/arm_asm.o: ../arch/arm.s
+> 	$(AS) -mcpu=cortex-a7 -o ../arch/arm_asm.o ../arch/arm.s
+> 
+> malloc.o: malloc.c ../h/map.h ../h/param.h
+> prf.o:    prf.c ../h/param.h
+> iget.o:   iget.c ../h/param.h ../h/systm.h ../h/mount.h ../h/dir.h ../h/user.h ../h/inode.h ../h/ino.h ../h/filsys.h ../h/buf.h
+> nami.o:   nami.c ../h/param.h ../h/systm.h ../h/inode.h ../h/mount.h ../h/dir.h ../h/user.h ../h/buf.h
+> ../dev/bio.o: ../dev/bio.c ../h/buf.h ../h/conf.h ../h/param.h ../h/systm.h ../h/user.h ../h/dir.h
+> ../dev/virtio_blk.o: ../dev/virtio_blk.c ../h/buf.h ../h/param.h
+> ../arch/arm.o: ../arch/arm.c ../arch/arm.h ../h/buf.h ../h/conf.h ../h/param.h ../h/dir.h ../h/user.h
+> machdep_arm.o: machdep_arm.c ../arch/arm.h ../h/buf.h ../h/param.h
+> c.c: mkconf $(CONF)
+> 	./mkconf <$(CONF) >c.c
+> 
+> mkconf: mkconf.c
+> 	cc -o mkconf mkconf.c
+> 
+> c.o: c.c ../h/conf.h ../h/buf.h ../h/param.h
+> 
+> .c.o:
+> 	$(CC) $(CFLAGS) -c $< -o $@
+> 
+> clean:
+> 	rm -f $(OBJS) $(DEVS) ../arch/*.o main.o unix ../../../unix c.c mkconf
+> 
+> qemu: unix
+> 	qemu-system-arm $(QEMU_ARGS)
+
+```
+
+### usr/sys/conf/mkconf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/conf/mkconf.c unix-v7-c99/usr/sys/conf/mkconf.c || true
+```
+
+Expect:
+
+```
+1a2
+> #include <string.h>
+3,714c4,5
+< #define CHAR	01
+< #define BLOCK	02
+< #define INTR	04
+< #define EVEN	010
+< #define KL	020
+< #define ROOT	040
+< #define	SWAP	0100
+< #define	PIPE	0200
+< 
+< char	*btab[] =
+< {
+< 	"rk",
+< 	"rp",
+< 	"rf",
+< 	"tm",
+< 	"tc",
+< 	"hs",
+< 	"hp",
+< 	"ht",
+< 	"rl",
+< 	0
+< };
+< char	*ctab[] =
+< {
+< 	"console",
+< 	"pc",
+< 	"lp",
+< 	"dc",
+< 	"dh",
+< 	"dp",
+< 	"dj",
+< 	"dn",
+< 	"mem",
+< 	"rk",
+< 	"rf",
+< 	"rp",
+< 	"tm",
+< 	"hs",
+< 	"hp",
+< 	"ht",
+< 	"du",
+< 	"tty",
+< 	"rl",
+< 	0
+< };
+< struct tab
+< {
+< 	char	*name;
+< 	int	count;
+< 	int	address;
+< 	int	key;
+< 	char	*codea;
+< 	char	*codeb;
+< 	char	*codec;
+< 	char	*coded;
+< 	char	*codee;
+< 	char	*codef;
+< 	char	*codeg;
+< } table[] =
+< {
+< 	"console",
+< 	-1, 60, CHAR+INTR+KL,
+< 	"	klin; br4\n	klou; br4\n",
+< 	".globl	_klrint\nklin:	jsr	r0,call; jmp _klrint\n",
+< 	".globl	_klxint\nklou:	jsr	r0,call; jmp _klxint\n",
+< 	"",
+< 	"	klopen, klclose, klread, klwrite, klioctl, nulldev, 0,",
+< 	"",
+< 	"int	klopen(), klclose(), klread(), klwrite(), klioctl();",
+< 
+< 	"mem",
+< 	-1, 300, CHAR,
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 	"	nulldev, nulldev, mmread, mmwrite, nodev, nulldev, 0, ",
+< 	"",
+< 	"int	mmread(), mmwrite();",
+< 
+< 	"pc",
+< 	0, 70, CHAR+INTR,
+< 	"	pcin; br4\n	pcou; br4\n",
+< 	".globl	_pcrint\npcin:	jsr	r0,call; jmp _pcrint\n",
+< 	".globl	_pcpint\npcou:	jsr	r0,call; jmp _pcpint\n",
+< 	"",
+< 	"	pcopen, pcclose, pcread, pcwrite, nodev, nulldev, 0, ",
+< 	"",
+< 	"int	pcopen(), pcclose(), pcread(), pcwrite();",
+< 
+< 	"clock",
+< 	-2, 100, INTR,
+< 	"	kwlp; br6\n",
+< 	".globl	_clock\n",
+< 	"kwlp:	jsr	r0,call; jmp _clock\n",
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 
+< 	"parity",
+< 	-1, 114, INTR,
+< 	"	trap; br7+7.		/ 11/70 parity\n",
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 
+< /*
+<  * 110 unused
+<  * 114 memory parity
+<  * 120 XY plotter
+<  * 124 DR11-B
+<  * 130 AD01 & RL01
+< */
+< 
+< 	"rl",
+< 	0, 130, BLOCK+CHAR+INTR,
+< 	"	rlio; br5\n",
+< 	".globl	_rlintr\n",
+< 	"rlio:	jsr	r0,call; jmp _rlintr\n",
+< 	"	nulldev, nulldev, rlstrategy, &rltab,",
+< 	"	rlopen, rlclose, rlread, rlwrite, nodev, nulldev, 0,",
+< 	"int	rlstrategy();\nstruct	buf	rltab;",
+< 	"int	rlopen(), rlclose(), rlread(), rlwrite();",
+< 
+< /*
+<  * 134 AFC11
+<  * 140 AA11
+<  * 144 AA11
+<  * 150-174 unused
+<  */
+< 
+< 	"lp",
+< 	0, 200, CHAR+INTR,
+< 	"	lpou; br4\n",
+< 	"",
+< 	".globl	_lpint\nlpou:	jsr	r0,call; jmp _lpint\n",
+< 	"",
+< 	"	lpopen, lpclose, nodev, lpwrite, nodev, nulldev, 0,",
+< 	"",
+< 	"int	lpopen(), lpclose(), lpwrite();",
+< 
+< 	"rf",
+< 	0, 204, BLOCK+CHAR+INTR,
+< 	"	rfio; br5\n",
+< 	".globl	_rfintr\n",
+< 	"rfio:	jsr	r0,call; jmp _rfintr\n",
+< 	"	nulldev, nulldev, rfstrategy, &rftab, ",
+< 	"	nulldev, nulldev, rfread, rfwrite, nodev, nulldev, 0,",
+< 	"int	rfstrategy();\nstruct	buf	rftab;",
+< 	"int	rfread(), rfwrite();",
+< 
+< 	"hs",
+< 	0, 204, BLOCK+CHAR+INTR,
+< 	"	hsio; br5\n",
+< 	".globl	_hsintr\n",
+< 	"hsio:	jsr	r0,call; jmp _hsintr\n",
+< 	"	nulldev, nulldev, hsstrategy, &hstab, ",
+< 	"	nulldev, nulldev, hsread, hswrite, nodev, nulldev, 0,",
+< 	"int	hsstrategy();\nstruct	buf	hstab;",
+< 	"int	hsread(), hswrite();",
+< 
+< /*
+<  * 210 RC
+<  */
+< 
+< 	"tc",
+< 	0, 214, BLOCK+INTR,
+< 	"	tcio; br6\n",
+< 	".globl	_tcintr\n",
+< 	"tcio:	jsr	r0,call; jmp _tcintr\n",
+< 	"	nulldev, tcclose, tcstrategy, &tctab,",
+< 	"",
+< 	"int	tcstrategy(), tcclose();\nstruct	buf	tctab;",
+< 	"",
+< 
+< 	"rk",
+< 	0, 220, BLOCK+CHAR+INTR,
+< 	"	rkio; br5\n",
+< 	".globl	_rkintr\n",
+< 	"rkio:	jsr	r0,call; jmp _rkintr\n",
+< 	"	nulldev, nulldev, rkstrategy, &rktab,",
+< 	"	nulldev, nulldev, rkread, rkwrite, nodev, nulldev, 0,",
+< 	"int	rkstrategy();\nstruct	buf	rktab;",
+< 	"int	rkread(), rkwrite();",
+< 
+< 	"tm",
+< 	0, 224, BLOCK+CHAR+INTR,
+< 	"	tmio; br5\n",
+< 	".globl	_tmintr\n",
+< 	"tmio:	jsr	r0,call; jmp _tmintr\n",
+< 	"	tmopen, tmclose, tmstrategy, &tmtab, ",
+< 	"	tmopen, tmclose, tmread, tmwrite, nodev, nulldev, 0,",
+< 	"int	tmopen(), tmclose(), tmstrategy();\nstruct	buf	tmtab;",
+< 	"int	tmread(), tmwrite();",
+< 
+< 	"ht",
+< 	0, 224, BLOCK+CHAR+INTR,
+< 	"	htio; br5\n",
+< 	".globl	_htintr\n",
+< 	"htio:	jsr	r0,call; jmp _htintr\n",
+< 	"	htopen, htclose, htstrategy, &httab,",
+< 	"	htopen, htclose, htread, htwrite, nodev, nulldev, 0,",
+< 	"int	htopen(), htclose(), htstrategy();\nstruct	buf	httab;",
+< 	"int	htread(), htwrite();",
+< 
+< 	"cr",
+< 	0, 230, CHAR+INTR,
+< 	"	crin; br6\n",
+< 	"",
+< 	".globl	_crint\ncrin:	jsr	r0,call; jmp _crint\n",
+< 	"",
+< 	"	cropen, crclose, crread, nodev, nodev, nulldev, 0,",
+< 	"",
+< 	"int	cropen(), crclose(), crread();",
+< 
+< /*
+<  * 234 UDC11
+<  */
+< 
+< 	"rp",
+< 	0, 254, BLOCK+CHAR+INTR,
+< 	"	rpio; br5\n",
+< 	".globl	_rpintr\n",
+< 	"rpio:	jsr	r0,call; jmp _rpintr\n",
+< 	"	nulldev, nulldev, rpstrategy, &rptab,",
+< 	"	nulldev, nulldev, rpread, rpwrite, nodev, nulldev, 0,",
+< 	"int	rpstrategy();\nstruct	buf	rptab;",
+< 	"int	rpread(), rpwrite();",
+< 
+< 	"hp",
+< 	0, 254, BLOCK+CHAR+INTR,
+< 	"	hpio; br5\n",
+< 	".globl	_hpintr\n",
+< 	"hpio:	jsr	r0,call; jmp _hpintr\n",
+< 	"	nulldev, nulldev, hpstrategy, &hptab,",
+< 	"	nulldev, nulldev, hpread, hpwrite, nodev, nulldev, 0,",
+< 	"int	hpstrategy();\nstruct	buf	hptab;",
+< 	"int	hpread(), hpwrite();",
+< 
+< /*
+<  * 260 TA11
+<  * 264-274 unused
+<  */
+< 
+< 	"dc",
+< 	0, 308, CHAR+INTR,
+< 	"	dcin; br5+%d.\n	dcou; br5+%d.\n",
+< 	".globl	_dcrint\ndcin:	jsr	r0,call; jmp _dcrint\n",
+< 	".globl	_dcxint\ndcou:	jsr	r0,call; jmp _dcxint\n",
+< 	"",
+< 	"	dcopen, dcclose, dcread, dcwrite, dcioctl, nulldev, dc11,",
+< 	"",
+< 	"int	dcopen(), dcclose(), dcread(), dcwrite(), dcioctl();\nstruct	tty	dc11[];",
+< 
+< 	"kl",
+< 	0, 308, INTR+KL,
+< 	"	klin; br4+%d.\n	klou; br4+%d.\n",
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 
+< 	"dp",
+< 	0, 308, CHAR+INTR,
+< 	"	dpin; br6+%d.\n	dpou; br6+%d.\n",
+< 	".globl	_dprint\ndpin:	jsr	r0,call; jmp _dprint\n",
+< 	".globl	_dpxint\ndpou:	jsr	r0,call; jmp _dpxint\n",
+< 	"",
+< 	"	dpopen, dpclose, dpread, dpwrite, nodev, nulldev, 0,",
+< 	"",
+< 	"int	dpopen(), dpclose(), dpread(), dpwrite();",
+< 
+< /*
+<  * DM11-A
+<  */
+< 
+< 	"dn",
+< 	0, 304, CHAR+INTR,
+< 	"	dnou; br5+%d.\n",
+< 	"",
+< 	".globl	_dnint\ndnou:	jsr	r0,call; jmp _dnint\n",
+< 	"",
+< 	"	dnopen, dnclose, nodev, dnwrite, nodev, nulldev, 0,",
+< 	"",
+< 	"int	dnopen(), dnclose(), dnwrite();",
+< 
+< 	"dhdm",
+< 	0, 304, INTR,
+< 	"	dmin; br4+%d.\n",
+< 	"",
+< 	".globl	_dmint\ndmin:	jsr	r0,call; jmp _dmint\n",
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 
+< /*
+<  * DR11-A+
+<  * DR11-C+
+<  * PA611+
+<  * PA611+
+<  * DT11+
+<  * DX11+
+<  */
+< 
+< 	"dl",
+< 	0, 308, INTR+KL,
+< 	"	klin; br4+%d.\n	klou; br4+%d.\n",
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 
+< /*
+<  * DJ11
+<  */
+< 
+< 	"dh",
+< 	0, 308, CHAR+INTR+EVEN,
+< 	"	dhin; br5+%d.\n	dhou; br5+%d.\n",
+< 	".globl	_dhrint\ndhin:	jsr	r0,call; jmp _dhrint\n",
+< 	".globl	_dhxint\ndhou:	jsr	r0,call; jmp _dhxint\n",
+< 	"",
+< 	"	dhopen, dhclose, dhread, dhwrite, dhioctl, dhstop, dh11,",
+< 	"",
+< 	"int	dhopen(), dhclose(), dhread(), dhwrite(), dhioctl(), dhstop();\nstruct	tty	dh11[];",
+< 
+< /*
+<  * GT40
+<  * LPS+
+<  * DQ11
+<  * KW11-W
+<  */
+< 
+< 	"du",
+< 	0, 308, CHAR+INTR,
+< 	"	duin; br6+%d.\n	duou; br6+%d.\n",
+< 	".globl	_durint\nduin:	jsr	r0,call; jmp _durint\n",
+< 	".globl	_duxint\nduou:	jsr	r0,call; jmp _duxint\n",
+< 	"",
+< 	"	duopen, duclose, duread, duwrite, nodev, nulldev, 0,",
+< 	"",
+< 	"int	duopen(), duclose(), duread(), duwrite();",
+< 
+< 	"tty",
+< 	1, 0, CHAR,
+< 	"",
+< 	"",
+< 	"",
+< 	"",
+< 	"	syopen, nulldev, syread, sywrite, sysioctl, nulldev, 0,",
+< 	"",
+< 	"int	syopen(), syread(), sywrite(), sysioctl();",
+< 
+< 	0
+< };
+< 
+< char	*stra[] =
+< {
+< 	"/ low core",
+< 	"",
+< 	".data",
+< 	"ZERO:",
+< 	"",
+< 	"br4 = 200",
+< 	"br5 = 240",
+< 	"br6 = 300",
+< 	"br7 = 340",
+< 	"",
+< 	". = ZERO+0",
+< 	"	br	1f",
+< 	"	4",
+< 	"",
+< 	"/ trap vectors",
+< 	"	trap; br7+0.		/ bus error",
+< 	"	trap; br7+1.		/ illegal instruction",
+< 	"	trap; br7+2.		/ bpt-trace trap",
+< 	"	trap; br7+3.		/ iot trap",
+< 	"	trap; br7+4.		/ power fail",
+< 	"	trap; br7+5.		/ emulator trap",
+< 	"	start;br7+6.		/ system  (overlaid by 'trap')",
+< 	"",
+< 	". = ZERO+40",
+< 	".globl	start, dump",
+< 	"1:	jmp	start",
+< 	"	jmp	dump",
+< 	"",
+< 	0,
+< };
+< 
+< char	*strb[] =
+< {
+< 	"",
+< 	". = ZERO+240",
+< 	"	trap; br7+7.		/ programmed interrupt",
+< 	"	trap; br7+8.		/ floating point",
+< 	"	trap; br7+9.		/ segmentation violation",
+< 	0
+< };
+< 
+< char	*strc[] =
+< {
+< 	"",
+< 	"/ floating vectors",
+< 	". = ZERO+300",
+< 	0,
+< };
+< 
+< char	*strd[] =
+< {
+< 	"",
+< 	"//////////////////////////////////////////////////////",
+< 	"/		interface code to C",
+< 	"//////////////////////////////////////////////////////",
+< 	"",
+< 	".text",
+< 	".globl	call, trap",
+< 	0
+< };
+< 
+< char	*stre[] =
+< {
+< 	"#include \"../h/param.h\"",
+< 	"#include \"../h/systm.h\"",
+< 	"#include \"../h/buf.h\"",
+< 	"#include \"../h/tty.h\"",
+< 	"#include \"../h/conf.h\"",
+< 	"#include \"../h/proc.h\"",
+< 	"#include \"../h/text.h\"",
+< 	"#include \"../h/dir.h\"",
+< 	"#include \"../h/user.h\"",
+< 	"#include \"../h/file.h\"",
+< 	"#include \"../h/inode.h\"",
+< 	"#include \"../h/acct.h\"",
+< 	"",
+< 	"int	nulldev();",
+< 	"int	nodev();",
+< 	0
+< };
+< 
+< char	*stre1[] =
+< {
+< 	"struct	bdevsw	bdevsw[] =",
+< 	"{",
+< 	0,
+< };
+< 
+< char	*strf[] =
+< {
+< 	"	0",
+< 	"};",
+< 	"",
+< 	0,
+< };
+< 
+< char	*strf1[] =
+< {
+< 	"",
+< 	"struct	cdevsw	cdevsw[] =",
+< 	"{",
+< 	0,
+< };
+< 
+< char	strg[] =
+< {
+< "	0\n\
+< };\n\
+< int	rootdev	= makedev(%d, %d);\n\
+< int	swapdev	= makedev(%d, %d);\n\
+< int	pipedev = makedev(%d, %d);\n\
+< int	nldisp = %d;\n\
+< daddr_t	swplo	= %ld;\n\
+< int	nswap	= %l;\n\
+< "};
+< 
+< char	strg1[] =
+< {
+< "	\n\
+< struct	buf	buf[NBUF];\n\
+< struct	file	file[NFILE];\n\
+< struct	inode	inode[NINODE];\n"
+< };
+< 
+< char	*strg1a[] =
+< {
+< 	"int	mpxchan();",
+< 	"int	(*ldmpx)() = mpxchan;",
+< 	0
+< };
+< 
+< char	strg2[] =
+< {
+< "struct	proc	proc[NPROC];\n\
+< struct	text	text[NTEXT];\n\
+< struct	buf	bfreelist;\n\
+< struct	acct	acctbuf;\n\
+< struct	inode	*acctp;\n"
+< };
+< 
+< char	*strh[] =
+< {
+< 	"	0",
+< 	"};",
+< 	"",
+< 	"int	ttyopen(), ttyclose(), ttread(), ttwrite(), ttyinput(), ttstart();",
+< 	0
+< };
+< 
+< char	*stri[] =
+< {
+< 	"int	pkopen(), pkclose(), pkread(), pkwrite(), pkioctl(), pkrint(), pkxint();",
+< 	0
+< };
+< 
+< char	*strj[] =
+< {
+< 	"struct	linesw	linesw[] =",
+< 	"{",
+< 	"	ttyopen, nulldev, ttread, ttwrite, nodev, ttyinput, ttstart, /* 0 */",
+< 	0
+< };
+< 
+< char	*strk[] =
+< {
+< 	"	pkopen, pkclose, pkread, pkwrite, pkioctl, pkrint, pkxint, /* 1 */",
+< 	0
+< };
+< 
+< int	pack;
+< int	mpx;
+< int	rootmaj = -1;
+< int	rootmin;
+< int	swapmaj = -1;
+< int	swapmin;
+< int	pipemaj = -1;
+< int	pipemin;
+< long	swplo	= 4000;
+< int	nswap = 872;
+< int	pack;
+< int	nldisp = 1;
+< 
+< main()
+< {
+< 	register struct tab *p;
+< 	register char *q;
+< 	int i, n, ev, nkl;
+< 	int flagf, flagb, dumpht;
+< 
+< 	while(input());
+< 
+< /*
+<  * pass1 -- create interrupt vectors
+<  */
+< 	nkl = 0;
+< 	flagf = flagb = 1;
+< 	freopen("l.s", "w", stdout);
+< 	puke(stra);
+< 	ev = 0;
+< 	for(p=table; p->name; p++)
+< 	if(p->count != 0 && p->key & INTR) {
+< 		if(p->address>240 && flagb) {
+< 			flagb = 0;
+< 			puke(strb);
+< 		}
+< 		if(p->address >= 300) {
+< 			if(flagf) {
+< 				ev = 0;
+< 				flagf = 0;
+< 				puke(strc);
+< 			}
+< 			if(p->key & EVEN && ev & 07) {
+< 				printf("	.=.+4\n");
+< 				ev += 4;
+< 			}
+< 			printf("/%s %o\n", p->name, 0300+ev);
+< 		} else
+< 			printf("\n. = ZERO+%d\n", p->address);
+< 		n = p->count;
+< 		if(n < 0)
+< 			n = -n;
+< 		for(i=0; i<n; i++) {
+< 			if(p->key & KL) {
+< 				printf(p->codea, nkl, nkl);
+< 				nkl++;
+< 			} else
+< 				printf(p->codea, i, i);
+< 			if (p->address<300)
+< 				fprintf(stderr, "%s at %d\n", p->name, p->address+4*i);
+< 			else
+< 				fprintf(stderr, "%s at %o\n", p->name, 0300+ev);
+< 			ev += p->address - 300;
+< 		}
+< 	}
+< 	if(flagb)
+< 		puke(strb);
+< 	puke(strd);
+< 	for(p=table; p->name; p++)
+< 	if(p->count != 0 && p->key & INTR)
+< 		printf("\n%s%s", p->codeb, p->codec);
+< 
+< /*
+<  * pass 2 -- create configuration table
+<  */
+< 
+< 	freopen("c.c", "w", stdout);
+< 	/*
+< 	 * declarations
+< 	 */
+< 	puke(stre);
+< 	for (i=0; q=btab[i]; i++) {
+< 		for (p=table; p->name; p++)
+< 		if (equal(q, p->name) &&
+< 		   (p->key&BLOCK) && p->count && *p->codef)
+< 			printf("%s\n", p->codef);
+< 	}
+< 	puke(stre1);
+< 	for(i=0; q=btab[i]; i++) {
+< 		for(p=table; p->name; p++)
+< 		if(equal(q, p->name) &&
+< 		   (p->key&BLOCK) && p->count) {
+< 			printf("%s	/* %s = %d */\n", p->coded, q, i);
+< 			if(p->key & ROOT)
+< 				rootmaj = i;
+< 			if (p->key & SWAP)
+< 				swapmaj = i;
+< 			if (p->key & PIPE)
+< 				pipemaj = i;
+< 			goto newb;
+< 		}
+< 		printf("	nodev, nodev, nodev, 0, /* %s = %d */\n", q, i);
+< 	newb:;
+< 	}
+< 	if (swapmaj == -1) {
+< 		swapmaj = rootmaj;
+< 		swapmin = rootmin;
+< 	}
+< 	if (pipemaj == -1) {
+< 		pipemaj = rootmaj;
+< 		pipemin = rootmin;
+< 	}
+< 	puke(strf);
+< 	for (i=0; q=ctab[i]; i++) {
+< 		for (p=table; p->name; p++)
+< 		if (equal(q, p->name) &&
+< 		   (p->key&CHAR) && p->count && *p->codeg)
+< 			printf("%s\n", p->codeg);
+< 	}
+< 	puke(strf1);
+< 	for(i=0; q=ctab[i]; i++) {
+< 		for(p=table; p->name; p++)
+< 		if(equal(q, p->name) &&
+< 		   (p->key&CHAR) && p->count) {
+< 			printf("%s	/* %s = %d */\n", p->codee, q, i);
+< 			goto newc;
+< 		}
+< 		printf("	nodev, nodev, nodev, nodev, nodev, nulldev, 0, /* %s = %d */\n", q, i);
+< 	newc:;
+< 	}
+< 	puke(strh);
+< 	if (pack) {
+< 		nldisp++;
+< 		puke(stri);
+< 	}
+< 	puke(strj);
+< 	if (pack)
+< 		puke(strk);
+< 	printf(strg, rootmaj, rootmin,
+< 		swapmaj, swapmin,
+< 		pipemaj, pipemin,
+< 		nldisp,
+< 		swplo, nswap);
+< 	printf(strg1);
+< 	if (!mpx)
+< 		puke(strg1a);
+< 	printf(strg2);
+< 	if(rootmaj < 0)
+< 		fprintf(stderr, "No root device given\n");
+< 	freopen("mch0.s", "w", stdout);
+< 	dumpht = 0;
+< 	for (i=0; table[i].name; i++) {
+< 		if (equal(table[i].name, "ht") && table[i].count)
+< 			dumpht = 1;
+< 	}
+< 	if (dumpht) {
+< 		printf("HTDUMP = 1\n");
+< 		printf("TUDUMP = 0\n");
+< 	} else {
+< 		printf("HTDUMP = 0\n");
+< 		printf("TUDUMP = 1\n");
+< 	}
+< }
+< 
+< puke(s, a)
+< char **s;
+< {
+< 	char *c;
+< 
+< 	while(c = *s++) {
+< 		printf(c, a);
+< 		printf("\n");
+< 	}
+< }
+< 
+< input()
+---
+> static int
+> has(char *want)
+716,720c7,8
+< 	char line[100];
+< 	register struct tab *q;
+< 	int count, n;
+< 	long num;
+< 	char keyw[32], dev[32];
+---
+> 	char line[80];
+> 	int yes;
+722,814c10,14
+< 	if (fgets(line, 100, stdin) == NULL)
+< 		return(0);
+< 	count = -1;
+< 	n = sscanf(line, "%d%s%s%ld", &count, keyw, dev, &num);
+< 	if (count == -1 && n>0) {
+< 		count = 1;
+< 		n++;
+< 	}
+< 	if (n<2)
+< 		goto badl;
+< 	for(q=table; q->name; q++)
+< 	if(equal(q->name, keyw)) {
+< 		if(q->count < 0) {
+< 			fprintf(stderr, "%s: no more, no less\n", keyw);
+< 			return(1);
+< 		}
+< 		q->count += count;
+< 		if(q->address < 300 && q->count > 1) {
+< 			q->count = 1;
+< 			fprintf(stderr, "%s: only one\n", keyw);
+< 		}
+< 		return(1);
+< 	}
+< 	if (equal(keyw, "nswap")) {
+< 		if (n<3)
+< 			goto badl;
+< 		if (sscanf(dev, "%ld", &num) <= 0)
+< 			goto badl;
+< 		nswap = num;
+< 		return(1);
+< 	}
+< 	if (equal(keyw, "swplo")) {
+< 		if (n<3)
+< 			goto badl;
+< 		if (sscanf(dev, "%ld", &num) <= 0)
+< 			goto badl;
+< 		swplo = num;
+< 		return(1);
+< 	}
+< 	if (equal(keyw, "pack")) {
+< 		pack++;
+< 		return(1);
+< 	}
+< 	if (equal(keyw, "mpx")) {
+< 		mpx++;
+< 		return(1);
+< 	}
+< 	if(equal(keyw, "done"))
+< 		return(0);
+< 	if (equal(keyw, "root")) {
+< 		if (n<4)
+< 			goto badl;
+< 		for (q=table; q->name; q++) {
+< 			if (equal(q->name, dev)) {
+< 				q->key |= ROOT;
+< 				rootmin = num;
+< 				return(1);
+< 			}
+< 		}
+< 		fprintf(stderr, "Can't find root\n");
+< 		return(1);
+< 	}
+< 	if (equal(keyw, "swap")) {
+< 		if (n<4)
+< 			goto badl;
+< 		for (q=table; q->name; q++) {
+< 			if (equal(q->name, dev)) {
+< 				q->key |= SWAP;
+< 				swapmin = num;
+< 				return(1);
+< 			}
+< 		}
+< 		fprintf(stderr, "Can't find swap\n");
+< 		return(1);
+< 	}
+< 	if (equal(keyw, "pipe")) {
+< 		if (n<4)
+< 			goto badl;
+< 		for (q=table; q->name; q++) {
+< 			if (equal(q->name, dev)) {
+< 				q->key |= PIPE;
+< 				pipemin = num;
+< 				return(1);
+< 			}
+< 		}
+< 		fprintf(stderr, "Can't find pipe\n");
+< 		return(1);
+< 	}
+< 	fprintf(stderr, "%s: cannot find\n", keyw);
+< 	return(1);
+< badl:
+< 	fprintf(stderr, "Bad line: %s", line);
+< 	return(1);
+---
+> 	yes = 0;
+> 	while(fgets(line, sizeof line, stdin) != NULL)
+> 		if(strstr(line, want) != NULL)
+> 			yes = 1;
+> 	return yes;
+817,818c17,18
+< equal(a, b)
+< char *a, *b;
 ---
 > int
-> main(int argc, char *argv[])
-> {
-> 	if (argc != 2) {
-> 		fprintf(stderr, "usage: unlink FILE\n");
-> 		exit(1);
-> 	}
-> 	if (unlink(argv[1]) < 0) {
-> 		fprintf(stderr, "unlink: %s: failed\n", argv[1]);
-> 		exit(1);
-> 	}
-> 	exit(0);
-> }
+> main(void)
+820c20,52
+< 	return(!strcmp(a, b));
+---
+> 	if(!has("virtio"))
+> 		return 1;
+> 	printf("/* generated by mkconf from usr/sys/conf/arm_qemu */\n");
+> 	printf("#include \"../h/param.h\"\n");
+> 	printf("#include \"../h/acct.h\"\n");
+> 	printf("#include \"../h/buf.h\"\n");
+> 	printf("#include \"../h/conf.h\"\n");
+> 	printf("#include \"../h/dir.h\"\n");
+> 	printf("#include \"../h/file.h\"\n");
+> 	printf("#include \"../h/filsys.h\"\n");
+> 	printf("#include \"../h/inode.h\"\n");
+> 	printf("#include \"../h/mount.h\"\n");
+> 	printf("#include \"../h/proc.h\"\n");
+> 	printf("#include \"../h/systm.h\"\n");
+> 	printf("#include \"../h/text.h\"\n");
+> 	printf("#include \"../h/user.h\"\n\n");
+> 	printf("extern struct buf virtio_tab;\n");
+> 	printf("extern int virtio_strategy(struct buf *bp);\n");
+> 	printf("static int nulldev_dev(dev_t dev, int flag) { (void)dev; (void)flag; return 0; }\n");
+> 	printf("dev_t rootdev = 0;\n");
+> 	printf("int nblkdev = 0;\n");
+> 	printf("struct bdevsw bdevsw[2] = { { nulldev_dev, nulldev_dev, virtio_strategy, &virtio_tab }, { 0, 0, 0, 0 } };\n");
+> 	printf("struct proc proc[NPROC];\n");
+> 	printf("struct file file[NFILE];\n");
+> 	printf("struct inode inode[NINODE];\n");
+> 	printf("struct text text[NTEXT];\n");
+> 	printf("struct user u;\n");
+> 	printf("struct buf bfreelist;\n");
+> 	printf("struct buf buf[NBUF];\n");
+> 	printf("struct inode *acctp;\n");
+> 	printf("struct acct acctbuf;\n");
+> 	printf("struct cdevsw cdevsw[1];\n");
+> 	return 0;
+
 ```
 
-### cmd/sh/makefile
+### usr/sys/sys/machdep_arm.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/makefile unix-v7-c99/cmd/sh/makefile || true
-```
-
-Expect:
-
-```
-
-```
-
-### sys/machdep_arm.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/sys/sys/machdep.c unix-v7-c99/sys/machdep_arm.c || true
+diff unix-v7-c99/v7/usr/sys/sys/machdep.c unix-v7-c99/usr/sys/sys/machdep_arm.c || true
 ```
 
 Expect:
@@ -537,7 +1751,7 @@ Expect:
 < #include "../h/seg.h"
 < #include "../h/map.h"
 < #include "../h/reg.h"
-12,195c3,33
+12,195c3,81
 < 
 < /*
 <  * Icode is the octal bootstrap
@@ -724,7 +1938,55 @@ Expect:
 < 	maplock = 0;
 ---
 > #include "../h/systm.h"
-> #include "../h/proto.h"
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > #include "../arch/arm.h"
 > void startup(void)
 > {
@@ -754,14 +2016,15 @@ Expect:
 > 	      | ((unsigned int)raw[5] << 24);
 > 	printf("v7: sb isize=%d fsize=%d\n", (int)isize, (int)fsize);
 > 	brelse(bp);
+
 ```
 
-### cmd/echo.c
+### usr/src/cmd/echo.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/echo.c unix-v7-c99/cmd/echo.c || true
+diff unix-v7-c99/v7/usr/src/cmd/echo.c unix-v7-c99/usr/src/cmd/echo.c || true
 ```
 
 Expect:
@@ -774,14 +2037,15 @@ Expect:
 ---
 > int
 > main(int argc, char *argv[])
+
 ```
 
-### cmd/cat.c
+### usr/src/cmd/cat.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/cat.c unix-v7-c99/cmd/cat.c || true
+diff unix-v7-c99/v7/usr/src/cmd/cat.c unix-v7-c99/usr/src/cmd/cat.c || true
 ```
 
 Expect:
@@ -835,14 +2099,15 @@ Expect:
 58a84,85
 > 			at_line_start = (c == '\n');
 > 		}
+
 ```
 
-### cmd/sync.c
+### usr/src/cmd/sync.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sync.c unix-v7-c99/cmd/sync.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sync.c unix-v7-c99/usr/src/cmd/sync.c || true
 ```
 
 Expect:
@@ -855,14 +2120,15 @@ Expect:
 > 
 > int
 > main(void)
+
 ```
 
-### cmd/rev.c
+### usr/src/cmd/rev.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/rev.c unix-v7-c99/cmd/rev.c || true
+diff unix-v7-c99/v7/usr/src/cmd/rev.c unix-v7-c99/usr/src/cmd/rev.c || true
 ```
 
 Expect:
@@ -878,14 +2144,15 @@ Expect:
 < 	register i,c;
 ---
 > 	register int i,c;
+
 ```
 
-### cmd/yes.c
+### usr/src/cmd/yes.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/yes.c unix-v7-c99/cmd/yes.c || true
+diff unix-v7-c99/v7/usr/src/cmd/yes.c unix-v7-c99/usr/src/cmd/yes.c || true
 ```
 
 Expect:
@@ -899,14 +2166,15 @@ Expect:
 > 
 > int
 > main(int argc, char *argv[])
+
 ```
 
-### cmd/wc.c
+### usr/src/cmd/wc.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/wc.c unix-v7-c99/cmd/wc.c || true
+diff unix-v7-c99/v7/usr/src/cmd/wc.c unix-v7-c99/usr/src/cmd/wc.c || true
 ```
 
 Expect:
@@ -964,14 +2232,15 @@ Expect:
 > 
 > 	case 'L':
 > 		printf("%7ld", longest);
+
 ```
 
-### cmd/basename.c
+### usr/src/cmd/basename.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/basename.c unix-v7-c99/cmd/basename.c || true
+diff unix-v7-c99/v7/usr/src/cmd/basename.c unix-v7-c99/usr/src/cmd/basename.c || true
 ```
 
 Expect:
@@ -1003,14 +2272,15 @@ Expect:
 < 	puts(p2, stdout);
 ---
 > 	puts(p2);
+
 ```
 
-### cmd/sum.c
+### usr/src/cmd/sum.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sum.c unix-v7-c99/cmd/sum.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sum.c unix-v7-c99/usr/src/cmd/sum.c || true
 ```
 
 Expect:
@@ -1026,14 +2296,15 @@ Expect:
 < 	register i, c;
 ---
 > 	register int i, c;
+
 ```
 
-### cmd/tty.c
+### usr/src/cmd/tty.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tty.c unix-v7-c99/cmd/tty.c || true
+diff unix-v7-c99/v7/usr/src/cmd/tty.c unix-v7-c99/usr/src/cmd/tty.c || true
 ```
 
 Expect:
@@ -1052,14 +2323,15 @@ Expect:
 ---
 > int
 > main(int argc, char *argv[])
+
 ```
 
-### cmd/cmp.c
+### usr/src/cmd/cmp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/cmp.c unix-v7-c99/cmd/cmp.c || true
+diff unix-v7-c99/v7/usr/src/cmd/cmp.c unix-v7-c99/usr/src/cmd/cmp.c || true
 ```
 
 Expect:
@@ -1085,14 +2357,15 @@ Expect:
 ---
 > long
 > otoi(char *s)
+
 ```
 
-### cmd/comm.c
+### usr/src/cmd/comm.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/comm.c unix-v7-c99/cmd/comm.c || true
+diff unix-v7-c99/v7/usr/src/cmd/comm.c unix-v7-c99/usr/src/cmd/comm.c || true
 ```
 
 Expect:
@@ -1143,14 +2416,15 @@ Expect:
 ---
 > FILE *
 > openfil(char *s)
+
 ```
 
-### cmd/od.c
+### usr/src/cmd/od.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/od.c unix-v7-c99/cmd/od.c || true
+diff unix-v7-c99/v7/usr/src/cmd/od.c unix-v7-c99/usr/src/cmd/od.c || true
 ```
 
 Expect:
@@ -1216,14 +2490,15 @@ Expect:
 ---
 > void
 > offset(register char *s)
+
 ```
 
-### cmd/tail.c
+### usr/src/cmd/tail.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tail.c unix-v7-c99/cmd/tail.c || true
+diff unix-v7-c99/v7/usr/src/cmd/tail.c unix-v7-c99/usr/src/cmd/tail.c || true
 ```
 
 Expect:
@@ -1283,14 +2558,15 @@ Expect:
 ---
 > int
 > digit(int c)
+
 ```
 
-### cmd/test.c
+### usr/src/cmd/test.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/test.c unix-v7-c99/cmd/test.c || true
+diff unix-v7-c99/v7/usr/src/cmd/test.c unix-v7-c99/usr/src/cmd/test.c || true
 ```
 
 Expect:
@@ -1376,14 +2652,15 @@ Expect:
 ---
 > int
 > length(char *s)
+
 ```
 
-### cmd/look.c
+### usr/src/cmd/look.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/look.c unix-v7-c99/cmd/look.c || true
+diff unix-v7-c99/v7/usr/src/cmd/look.c unix-v7-c99/usr/src/cmd/look.c || true
 ```
 
 Expect:
@@ -1443,14 +2720,15 @@ Expect:
 < 	register c;
 ---
 > 	register int c;
+
 ```
 
-### cmd/rm.c
+### usr/src/cmd/rm.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/rm.c unix-v7-c99/cmd/rm.c || true
+diff unix-v7-c99/v7/usr/src/cmd/rm.c unix-v7-c99/usr/src/cmd/rm.c || true
 ```
 
 Expect:
@@ -1507,14 +2785,15 @@ Expect:
 ---
 > int
 > yes(void)
+
 ```
 
-### cmd/ln.c
+### usr/src/cmd/ln.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/ln.c unix-v7-c99/cmd/ln.c || true
+diff unix-v7-c99/v7/usr/src/cmd/ln.c unix-v7-c99/usr/src/cmd/ln.c || true
 ```
 
 Expect:
@@ -1530,14 +2809,15 @@ Expect:
 ---
 > int
 > main(int argc, char **argv)
+
 ```
 
-### cmd/mkdir.c
+### usr/src/cmd/mkdir.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/mkdir.c unix-v7-c99/cmd/mkdir.c || true
+diff unix-v7-c99/v7/usr/src/cmd/mkdir.c unix-v7-c99/usr/src/cmd/mkdir.c || true
 ```
 
 Expect:
@@ -1566,14 +2846,15 @@ Expect:
 < 	register i, slash = 0;
 ---
 > 	register int i, slash = 0;
+
 ```
 
-### cmd/rmdir.c
+### usr/src/cmd/rmdir.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/rmdir.c unix-v7-c99/cmd/rmdir.c || true
+diff unix-v7-c99/v7/usr/src/cmd/rmdir.c unix-v7-c99/usr/src/cmd/rmdir.c || true
 ```
 
 Expect:
@@ -1601,14 +2882,15 @@ Expect:
 ---
 > void
 > rmdir(char *d)
+
 ```
 
-### cmd/tee.c
+### usr/src/cmd/tee.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tee.c unix-v7-c99/cmd/tee.c || true
+diff unix-v7-c99/v7/usr/src/cmd/tee.c unix-v7-c99/usr/src/cmd/tee.c || true
 ```
 
 Expect:
@@ -1650,14 +2932,15 @@ Expect:
 ---
 > void
 > puts(char *s)
+
 ```
 
-### cmd/uniq.c
+### usr/src/cmd/uniq.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/uniq.c unix-v7-c99/cmd/uniq.c || true
+diff unix-v7-c99/v7/usr/src/cmd/uniq.c unix-v7-c99/usr/src/cmd/uniq.c || true
 ```
 
 Expect:
@@ -1715,14 +2998,15 @@ Expect:
 ---
 > void
 > printe(char *p, char *s)
+
 ```
 
-### cmd/date.c
+### usr/src/cmd/date.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/date.c unix-v7-c99/cmd/date.c || true
+diff unix-v7-c99/v7/usr/src/cmd/date.c unix-v7-c99/usr/src/cmd/date.c || true
 ```
 
 Expect:
@@ -1800,14 +3084,15 @@ Expect:
 ---
 > int
 > gp(int dfault)
+
 ```
 
-### cmd/kill.c
+### usr/src/cmd/kill.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/kill.c unix-v7-c99/cmd/kill.c || true
+diff unix-v7-c99/v7/usr/src/cmd/kill.c unix-v7-c99/usr/src/cmd/kill.c || true
 ```
 
 Expect:
@@ -1851,14 +3136,15 @@ Expect:
 > 		for (s = 1; s <= 15; s++)
 > 			printf("%2d) SIG%s\n", s, names[s]);
 > 		return 0;
+
 ```
 
-### cmd/nice.c
+### usr/src/cmd/nice.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/nice.c unix-v7-c99/cmd/nice.c || true
+diff unix-v7-c99/v7/usr/src/cmd/nice.c unix-v7-c99/usr/src/cmd/nice.c || true
 ```
 
 Expect:
@@ -1881,14 +3167,15 @@ Expect:
 10,11d15
 < 	extern errno;
 < 	extern char *sys_errlist[];
+
 ```
 
-### cmd/mknod.c
+### usr/src/cmd/mknod.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/mknod.c unix-v7-c99/cmd/mknod.c || true
+diff unix-v7-c99/v7/usr/src/cmd/mknod.c unix-v7-c99/usr/src/cmd/mknod.c || true
 ```
 
 Expect:
@@ -1915,14 +3202,15 @@ Expect:
 < 	while(c = *s++) {
 ---
 > 	while((c = *s++)) {
+
 ```
 
-### cmd/who.c
+### usr/src/cmd/who.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/who.c unix-v7-c99/cmd/who.c || true
+diff unix-v7-c99/v7/usr/src/cmd/who.c unix-v7-c99/usr/src/cmd/who.c || true
 ```
 
 Expect:
@@ -1949,14 +3237,15 @@ Expect:
 ---
 > void
 > putline(void)
+
 ```
 
-### cmd/mesg.c
+### usr/src/cmd/mesg.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/mesg.c unix-v7-c99/cmd/mesg.c || true
+diff unix-v7-c99/v7/usr/src/cmd/mesg.c unix-v7-c99/usr/src/cmd/mesg.c || true
 ```
 
 Expect:
@@ -1987,14 +3276,15 @@ Expect:
 ---
 > void
 > newmode(int m)
+
 ```
 
-### cmd/time.c
+### usr/src/cmd/time.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/time.c unix-v7-c99/cmd/time.c || true
+diff unix-v7-c99/v7/usr/src/cmd/time.c unix-v7-c99/usr/src/cmd/time.c || true
 ```
 
 Expect:
@@ -2028,14 +3318,15 @@ Expect:
 < 	register i;
 ---
 > 	register int i;
+
 ```
 
-### cmd/checkeq.c
+### usr/src/cmd/checkeq.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/checkeq.c unix-v7-c99/cmd/checkeq.c || true
+diff unix-v7-c99/v7/usr/src/cmd/checkeq.c unix-v7-c99/usr/src/cmd/checkeq.c || true
 ```
 
 Expect:
@@ -2056,14 +3347,15 @@ Expect:
 ---
 > void
 > check(FILE *f)
+
 ```
 
-### cmd/calendar.c
+### usr/src/cmd/calendar.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/calendar.c unix-v7-c99/cmd/calendar.c || true
+diff unix-v7-c99/v7/usr/src/cmd/calendar.c unix-v7-c99/usr/src/cmd/calendar.c || true
 ```
 
 Expect:
@@ -2093,14 +3385,15 @@ Expect:
 > 		/* FALLTHROUGH */
 47a54
 > 		/* FALLTHROUGH */
+
 ```
 
-### cmd/col.c
+### usr/src/cmd/col.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/col.c unix-v7-c99/cmd/col.c || true
+diff unix-v7-c99/v7/usr/src/cmd/col.c unix-v7-c99/usr/src/cmd/col.c || true
 ```
 
 Expect:
@@ -2161,14 +3454,15 @@ Expect:
 ---
 > void
 > decr(void)
+
 ```
 
-### cmd/fgrep.c
+### usr/src/cmd/fgrep.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/fgrep.c unix-v7-c99/cmd/fgrep.c || true
+diff unix-v7-c99/v7/usr/src/cmd/fgrep.c unix-v7-c99/usr/src/cmd/fgrep.c || true
 ```
 
 Expect:
@@ -2229,14 +3523,15 @@ Expect:
 ---
 > void
 > cfail(void) {
+
 ```
 
-### cmd/su.c
+### usr/src/cmd/su.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/su.c unix-v7-c99/cmd/su.c || true
+diff unix-v7-c99/v7/usr/src/cmd/su.c unix-v7-c99/usr/src/cmd/su.c || true
 ```
 
 Expect:
@@ -2257,14 +3552,15 @@ Expect:
 ---
 > int
 > main(int argc, char **argv)
+
 ```
 
-### cmd/newgrp.c
+### usr/src/cmd/newgrp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/newgrp.c unix-v7-c99/cmd/newgrp.c || true
+diff unix-v7-c99/v7/usr/src/cmd/newgrp.c unix-v7-c99/usr/src/cmd/newgrp.c || true
 ```
 
 Expect:
@@ -2300,14 +3596,15 @@ Expect:
 < 	register i;
 ---
 > 	register int i;
+
 ```
 
-### cmd/random.c
+### usr/src/cmd/random.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/random.c unix-v7-c99/cmd/random.c || true
+diff unix-v7-c99/v7/usr/src/cmd/random.c unix-v7-c99/usr/src/cmd/random.c || true
 ```
 
 Expect:
@@ -2322,14 +3619,15 @@ Expect:
 ---
 > int
 > main(int argc, char **argv)
+
 ```
 
-### cmd/crypt.c
+### usr/src/cmd/crypt.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/crypt.c unix-v7-c99/cmd/crypt.c || true
+diff unix-v7-c99/v7/usr/src/cmd/crypt.c unix-v7-c99/usr/src/cmd/crypt.c || true
 ```
 
 Expect:
@@ -2355,14 +3653,15 @@ Expect:
 < 	register i, n1, n2;
 ---
 > 	register int i, n1, n2;
+
 ```
 
-### cmd/makekey.c
+### usr/src/cmd/makekey.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/makekey.c unix-v7-c99/cmd/makekey.c || true
+diff unix-v7-c99/v7/usr/src/cmd/makekey.c unix-v7-c99/usr/src/cmd/makekey.c || true
 ```
 
 Expect:
@@ -2379,14 +3678,15 @@ Expect:
 ---
 > int
 > main(void)
+
 ```
 
-### cmd/diffh.c
+### usr/src/cmd/diffh.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/diffh.c unix-v7-c99/cmd/diffh.c || true
+diff unix-v7-c99/v7/usr/src/cmd/diffh.c unix-v7-c99/usr/src/cmd/diffh.c || true
 ```
 
 Expect:
@@ -2546,14 +3846,15 @@ Expect:
 ---
 > int
 > hardsynch(void)
+
 ```
 
-### cmd/stty.c
+### usr/src/cmd/stty.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/stty.c unix-v7-c99/cmd/stty.c || true
+diff unix-v7-c99/v7/usr/src/cmd/stty.c unix-v7-c99/usr/src/cmd/stty.c || true
 ```
 
 Expect:
@@ -2862,14 +4163,15 @@ Expect:
 ---
 > void
 > prspeed(char *c, int s)
+
 ```
 
-### cmd/tabs.c
+### usr/src/cmd/tabs.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tabs.c unix-v7-c99/cmd/tabs.c || true
+diff unix-v7-c99/v7/usr/src/cmd/tabs.c unix-v7-c99/usr/src/cmd/tabs.c || true
 ```
 
 Expect:
@@ -2967,14 +4269,15 @@ Expect:
 ---
 > void
 > misc(void)
+
 ```
 
-### cmd/wall.c
+### usr/src/cmd/wall.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/wall.c unix-v7-c99/cmd/wall.c || true
+diff unix-v7-c99/v7/usr/src/cmd/wall.c unix-v7-c99/usr/src/cmd/wall.c || true
 ```
 
 Expect:
@@ -3007,14 +4310,15 @@ Expect:
 < 	register i;
 ---
 > 	register int i;
+
 ```
 
-### cmd/df.c
+### usr/src/cmd/df.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/df.c unix-v7-c99/cmd/df.c || true
+diff unix-v7-c99/v7/usr/src/cmd/df.c unix-v7-c99/usr/src/cmd/df.c || true
 ```
 
 Expect:
@@ -3057,14 +4361,15 @@ Expect:
 > bread(daddr_t bno, char *buf, int cnt)
 88d88
 < 	extern errno;
+
 ```
 
-### cmd/clri.c
+### usr/src/cmd/clri.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/clri.c unix-v7-c99/cmd/clri.c || true
+diff unix-v7-c99/v7/usr/src/cmd/clri.c unix-v7-c99/usr/src/cmd/clri.c || true
 ```
 
 Expect:
@@ -3103,14 +4408,15 @@ Expect:
 < 	while(c = *s++)
 ---
 > 	while((c = *s++))
+
 ```
 
-### cmd/cb.c
+### usr/src/cmd/cb.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/cb.c unix-v7-c99/cmd/cb.c || true
+diff unix-v7-c99/v7/usr/src/cmd/cb.c unix-v7-c99/usr/src/cmd/cb.c || true
 ```
 
 Expect:
@@ -3193,14 +4499,15 @@ Expect:
 > comment(void){
 363a388
 > 	return(0);
+
 ```
 
-### cmd/sp.c
+### usr/src/cmd/sp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sp.c unix-v7-c99/cmd/sp.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sp.c unix-v7-c99/usr/src/cmd/sp.c || true
 ```
 
 Expect:
@@ -3239,14 +4546,15 @@ Expect:
 ---
 > int
 > main(int argc, char *argv[])
+
 ```
 
-### cmd/ed.c
+### usr/src/cmd/ed.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/ed.c unix-v7-c99/cmd/ed.c || true
+diff unix-v7-c99/v7/usr/src/cmd/ed.c unix-v7-c99/usr/src/cmd/ed.c || true
 ```
 
 Expect:
@@ -3886,14 +5194,301 @@ Expect:
 > makekey(char *a, char *b)
 1761a1880
 > 	return(0);
+
 ```
 
-### lib/l3.c
+
+
+### usr/src/libc/sys/ftime.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/l3.c unix-v7-c99/lib/l3.c || true
+diff unix-v7-c99/v7/usr/src/libc/v6/ftime.c unix-v7-c99/usr/src/libc/sys/ftime.c || true
+```
+
+Expect:
+
+```
+1d0
+< #include <sys/types.h>
+3,12c2,5
+< 
+< static struct timeb gorp = {
+< 	0L,
+< 	0,
+< 	5*60,
+< 	1
+< };
+< 
+< ftime(gorpp)
+< struct timeb *gorpp;
+---
+> #define S_FTIME 35
+> int syscall3(int, int, int, int);
+> int
+> ftime(struct timeb *t)
+14,15c7
+< 	*gorpp = gorp;
+< 	return(0);
+---
+> 	return(syscall3(S_FTIME, (int)t, 0, 0));
+
+```
+
+### usr/src/libc/sys/gtty.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/v6/gtty.c unix-v7-c99/usr/src/libc/sys/gtty.c || true
+```
+
+Expect:
+
+```
+1,3c1,4
+< gtty(fd, buf)
+< int fd;
+< int *buf;
+---
+> #define S_GTTY 32
+> int syscall3(int, int, int, int);
+> int
+> gtty(int fd, char *buf)
+5,7c6
+< 	if (syscall(32, fd, 0, buf, 0, 0) < 0)
+< 		return(-1);
+< 	return(0);
+---
+> 	return(syscall3(S_GTTY, fd, (int)buf, 0));
+
+```
+
+### usr/src/libc/sys/stty.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/stty.c unix-v7-c99/usr/src/libc/sys/stty.c || true
+```
+
+Expect:
+
+```
+1,8c1,4
+< /*
+<  * Writearound to old stty and gtty system calls
+<  */
+< 
+< #include <sgtty.h>
+< 
+< stty(fd, ap)
+< struct sgtty *ap;
+---
+> #define S_STTY 31
+> int syscall3(int, int, int, int);
+> int
+> stty(int fd, char *buf)
+10,16c6
+< 	return(ioctl(fd, TIOCSETP, ap));
+< }
+< 
+< gtty(fd, ap)
+< struct sgtty *ap;
+< {
+< 	return(ioctl(fd, TIOCGETP, ap));
+---
+> 	return(syscall3(S_STTY, fd, (int)buf, 0));
+
+```
+
+### usr/src/libc/gen/sleep.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/sleep.c unix-v7-c99/usr/src/libc/gen/sleep.c || true
+```
+
+Expect:
+
+```
+1d0
+< #include <signal.h>
+3,7c2,13
+< 
+< static jmp_buf jmp;
+< 
+< sleep(n)
+< unsigned n;
+---
+> static jmp_buf sleep_jmp;
+> static void
+> sleepx(int signo)
+> {
+> 	(void)signo;
+> 	longjmp(sleep_jmp, 1);
+> }
+> extern int signal(int sig, void (*fun)(int));
+> extern int alarm(int n);
+> extern int pause(void);
+> unsigned
+> sleep(unsigned n)
+9d14
+< 	int sleepx();
+11c16
+< 	int (*alsig)() = SIG_DFL;
+---
+> 	void (*alsig)(int) = (void (*)(int))0;
+13,19c18,24
+< 	if (n==0)
+< 		return;
+< 	altime = alarm(1000);	/* time to maneuver */
+< 	if (setjmp(jmp)) {
+< 		signal(SIGALRM, alsig);
+< 		alarm(altime);
+< 		return;
+---
+> 	if(n == 0)
+> 		return(0);
+> 	altime = (unsigned)alarm(1000);
+> 	if(setjmp(sleep_jmp)) {
+> 		(void)signal(14, alsig);
+> 		(void)alarm((int)altime);
+> 		return(0);
+21,22c26,27
+< 	if (altime) {
+< 		if (altime > n)
+---
+> 	if(altime) {
+> 		if(altime > n)
+29,30c34,35
+< 	alsig = signal(SIGALRM, sleepx);
+< 	alarm(n);
+---
+> 	alsig = (void (*)(int))(long)signal(14, sleepx);
+> 	(void)alarm((int)n);
+32,39c37
+< 		pause();
+< 	/*NOTREACHED*/
+< }
+< 
+< static
+< sleepx()
+< {
+< 	longjmp(jmp, 1);
+---
+> 		(void)pause();
+
+```
+
+### usr/src/libc/stdio/popen.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/popen.c unix-v7-c99/usr/src/libc/stdio/popen.c || true
+```
+
+Expect:
+
+```
+1,6c1,9
+< #include <stdio.h>
+< #include <signal.h>
+< #define	tst(a,b)	(*mode == 'r'? (b) : (a))
+< #define	RDR	0
+< #define	WTR	1
+< static	int	popen_pid[20];
+---
+> #define S_EXIT 1
+> #define S_FORK 2
+> #define S_CLOSE 6
+> #define S_EXEC 11
+> #define S_DUP 41
+> #define S_PIPE 42
+> #define S_WAIT 7
+> int syscall3(int, int, int, int);
+> typedef struct { int fd; } FILE;
+9,11c12
+< popen(cmd,mode)
+< char	*cmd;
+< char	*mode;
+---
+> popen(char *cmd, char *mode)
+13,14c14,16
+< 	int p[2];
+< 	register myside, hisside, pid;
+---
+> 	static FILE f;
+> 	int fd[2];
+> 	char *argv[4];
+16,26c18,30
+< 	if(pipe(p) < 0)
+< 		return NULL;
+< 	myside = tst(p[WTR], p[RDR]);
+< 	hisside = tst(p[RDR], p[WTR]);
+< 	if((pid = fork()) == 0) {
+< 		/* myside and hisside reverse roles in child */
+< 		close(myside);
+< 		dup2(hisside, tst(0, 1));
+< 		close(hisside);
+< 		execl("/bin/sh", "sh", "-c", cmd, 0);
+< 		_exit(1);
+---
+> 	if(*mode != 'r')
+> 		return(0);
+> 	if(syscall3(S_PIPE, (int)fd, 0, 0) < 0)
+> 		return(0);
+> 	if(syscall3(S_FORK, 0, 0, 0) == 0) {
+> 		(void)syscall3(S_CLOSE, fd[0], 0, 0);
+> 		(void)syscall3(S_DUP, fd[1], 1, 0);
+> 		argv[0] = "sh";
+> 		argv[1] = "-c";
+> 		argv[2] = cmd;
+> 		argv[3] = 0;
+> 		(void)syscall3(S_EXEC, (int)"/bin/sh", (int)argv, 0);
+> 		(void)syscall3(S_EXIT, 1, 0, 0);
+28,32c32,34
+< 	if(pid == -1)
+< 		return NULL;
+< 	popen_pid[myside] = pid;
+< 	close(hisside);
+< 	return(fdopen(myside, mode));
+---
+> 	(void)syscall3(S_CLOSE, fd[1], 0, 0);
+> 	f.fd = fd[0];
+> 	return(&f);
+35,36c37,38
+< pclose(ptr)
+< FILE *ptr;
+---
+> int
+> pclose(FILE *f)
+38,53c40,41
+< 	register f, r, (*hstat)(), (*istat)(), (*qstat)();
+< 	int status;
+< 
+< 	f = fileno(ptr);
+< 	fclose(ptr);
+< 	istat = signal(SIGINT, SIG_IGN);
+< 	qstat = signal(SIGQUIT, SIG_IGN);
+< 	hstat = signal(SIGHUP, SIG_IGN);
+< 	while((r = wait(&status)) != popen_pid[f] && r != -1)
+< 		;
+< 	if(r == -1)
+< 		status = -1;
+< 	signal(SIGINT, istat);
+< 	signal(SIGQUIT, qstat);
+< 	signal(SIGHUP, hstat);
+< 	return(status);
+---
+> 	(void)syscall3(S_CLOSE, f->fd, 0, 0);
+> 	return(syscall3(S_WAIT, 0, 0, 0));
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/l3.c unix-v7-c99/usr/src/libc/l3.c || true
 ```
 
 Expect:
@@ -3935,14 +5530,23 @@ Expect:
 > 		*a++ = 0;
 51a49
 > 	return(0);
+
 ```
 
-### include/sys/filsys.h
+### usr/include/sys/filsys.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/sys/filsys.h unix-v7-c99/include/sys/filsys.h || true
+diff unix-v7-c99/v7/usr/include/sys/filsys.h unix-v7-c99/usr/include/sys/filsys.h || true
+```
+
+Expect:
+
+```
+
+```
+diff unix-v7-c99/v7/usr/include/sys/fblk.h unix-v7-c99/usr/include/sys/fblk.h || true
 ```
 
 Expect:
@@ -3950,12 +5554,20 @@ Expect:
 ```
 ```
 
-### include/sys/fblk.h
+### usr/include/sys/ino.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/sys/fblk.h unix-v7-c99/include/sys/fblk.h || true
+diff unix-v7-c99/v7/usr/include/sys/ino.h unix-v7-c99/usr/include/sys/ino.h || true
+```
+
+Expect:
+
+```
+
+```
+diff unix-v7-c99/v7/usr/include/sgtty.h unix-v7-c99/usr/include/sgtty.h || true
 ```
 
 Expect:
@@ -3963,51 +5575,20 @@ Expect:
 ```
 ```
 
-### include/sys/ino.h
+### usr/sys/h/acct.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/sys/ino.h unix-v7-c99/include/sys/ino.h || true
+diff unix-v7-c99/v7/usr/sys/h/acct.h unix-v7-c99/usr/sys/h/acct.h || true
 ```
 
 Expect:
 
 ```
-```
-
-### include/sgtty.h
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/sgtty.h unix-v7-c99/include/sgtty.h || true
-```
-
-Expect:
-
-```
-```
-
-### h/acct.h
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/sys/h/acct.h unix-v7-c99/h/acct.h || true
-```
-
-Expect:
-
-```
-```
-
-### h/conf.h
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/sys/h/conf.h unix-v7-c99/h/conf.h || true
+diff unix-v7-c99/v7/usr/sys/h/conf.h unix-v7-c99/usr/sys/h/conf.h || true
 ```
 
 Expect:
@@ -4060,25 +5641,20 @@ Expect:
 < } linesw[];
 ```
 
-### h/fblk.h
+### usr/sys/h/fblk.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/fblk.h unix-v7-c99/h/fblk.h || true
+diff unix-v7-c99/v7/usr/sys/h/fblk.h unix-v7-c99/usr/sys/h/fblk.h || true
 ```
 
 Expect:
 
 ```
-```
-
-### h/file.h
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/file.h unix-v7-c99/h/file.h || true
+diff unix-v7-c99/v7/usr/sys/h/file.h unix-v7-c99/usr/sys/h/file.h || true
 ```
 
 Expect:
@@ -4108,12 +5684,20 @@ Expect:
 >  * on this port; FMP was never set, so the bit-test branches were dead. */
 ```
 
-### h/filsys.h
+### usr/sys/h/filsys.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/filsys.h unix-v7-c99/h/filsys.h || true
+diff unix-v7-c99/v7/usr/sys/h/filsys.h unix-v7-c99/usr/sys/h/filsys.h || true
+```
+
+Expect:
+
+```
+
+```
+diff unix-v7-c99/v7/usr/sys/h/ino.h unix-v7-c99/usr/sys/h/ino.h || true
 ```
 
 Expect:
@@ -4121,38 +5705,20 @@ Expect:
 ```
 ```
 
-### h/ino.h
+### usr/sys/h/mount.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/ino.h unix-v7-c99/h/ino.h || true
+diff unix-v7-c99/v7/usr/sys/h/mount.h unix-v7-c99/usr/sys/h/mount.h || true
 ```
 
 Expect:
 
 ```
-```
-
-### h/mount.h
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/mount.h unix-v7-c99/h/mount.h || true
-```
-
-Expect:
-
-```
-```
-
-### h/seg.h
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/sys/h/seg.h unix-v7-c99/h/seg.h || true
+diff unix-v7-c99/v7/usr/sys/h/seg.h unix-v7-c99/usr/sys/h/seg.h || true
 ```
 
 Expect:
@@ -4185,12 +5751,12 @@ Expect:
 < #define	UBMAP	((physadr)0170200)
 ```
 
-### h/stat.h
+### usr/sys/h/stat.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/stat.h unix-v7-c99/h/stat.h || true
+diff unix-v7-c99/v7/usr/sys/h/stat.h unix-v7-c99/usr/sys/h/stat.h || true
 ```
 
 Expect:
@@ -4202,14 +5768,23 @@ Expect:
 ---
 > /* S_IFMPC/S_IFMPB (mpx multiplexor char/block) removed -- mpx is not
 >  * wired on this port and no userspace code names these. */
+
 ```
 
-### h/text.h
+### usr/sys/h/text.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/text.h unix-v7-c99/h/text.h || true
+diff unix-v7-c99/v7/usr/sys/h/text.h unix-v7-c99/usr/sys/h/text.h || true
+```
+
+Expect:
+
+```
+
+```
+diff unix-v7-c99/v7/usr/sys/h/timeb.h unix-v7-c99/usr/sys/h/timeb.h || true
 ```
 
 Expect:
@@ -4217,25 +5792,12 @@ Expect:
 ```
 ```
 
-### h/timeb.h
+### usr/sys/h/tty.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/timeb.h unix-v7-c99/h/timeb.h || true
-```
-
-Expect:
-
-```
-```
-
-### h/tty.h
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/sys/h/tty.h unix-v7-c99/h/tty.h || true
+diff unix-v7-c99/v7/usr/sys/h/tty.h unix-v7-c99/usr/sys/h/tty.h || true
 ```
 
 Expect:
@@ -4266,14 +5828,15 @@ Expect:
 63,64d48
 < 
 < #define	tun	tp->t_un
+
 ```
 
-### sys/acct.c
+### usr/sys/sys/acct.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/acct.c unix-v7-c99/sys/acct.c || true
+diff unix-v7-c99/v7/usr/sys/sys/acct.c unix-v7-c99/usr/sys/sys/acct.c || true
 ```
 
 Expect:
@@ -4343,14 +5906,15 @@ Expect:
 < 	}
 ---
 > 	(void)suser();
+
 ```
 
-### sys/alloc.c
+### usr/sys/sys/alloc.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/alloc.c unix-v7-c99/sys/alloc.c || true
+diff unix-v7-c99/v7/usr/sys/sys/alloc.c unix-v7-c99/usr/sys/sys/alloc.c || true
 ```
 
 Expect:
@@ -4358,27 +5922,75 @@ Expect:
 ```
 6d5
 < #include "../h/conf.h"
-11a11
-> #include "../h/proto.h"
-13a14,18
-> /* bread/getblk/brelse/bwrite/bflush/clrbuf/sleep/wakeup/panic/prdev come from h/proto.h.
+11a11,59
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
+13a62,66
+> /* bread/getblk/brelse/bwrite/bflush/clrbuf/sleep/wakeup/panic/prdev come from local declarations.
 >  * iget/iput/iupdat/bcopy come from h/systm.h. */
 > 
 > int badblock(register struct filsys *fp, daddr_t bn, dev_t dev);
 > 
-26,27c31
+26,27c79
 < alloc(dev)
 < dev_t dev;
 ---
 > alloc(dev_t dev)
-78,80c82,83
+78,80c130,131
 < free(dev, bno)
 < dev_t dev;
 < daddr_t bno;
 ---
 > void
 > free(dev_t dev, daddr_t bno)
-120,123c123,124
+120,123c171,172
 < badblock(fp, bn, dev)
 < register struct filsys *fp;
 < daddr_t bn;
@@ -4386,36 +5998,37 @@ Expect:
 ---
 > int
 > badblock(register struct filsys *fp, daddr_t bn, dev_t dev)
-145,146c146
+145,146c194
 < ialloc(dev)
 < dev_t dev;
 ---
 > ialloc(dev_t dev)
-223,225c223,224
+223,225c271,272
 < ifree(dev, ino)
 < dev_t dev;
 < ino_t ino;
 ---
 > void
 > ifree(dev_t dev, ino_t ino)
-257,258c256
+257,258c304
 < getfs(dev)
 < dev_t dev;
 ---
 > getfs(dev_t dev)
-286c284,285
+286c332,333
 < update()
 ---
 > void
 > update(void)
+
 ```
 
-### sys/clock.c
+### usr/sys/sys/clock.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/clock.c unix-v7-c99/sys/clock.c || true
+diff unix-v7-c99/v7/usr/sys/sys/clock.c unix-v7-c99/usr/sys/sys/clock.c || true
 ```
 
 Expect:
@@ -4424,25 +6037,73 @@ Expect:
 3,4d2
 < #include "../h/callo.h"
 < #include "../h/seg.h"
-8c6,9
+8c6,57
 < #include "../h/reg.h"
 ---
-> #include "../h/proto.h"
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
-> extern void addupc(caddr_t pc, void *prof, int inc);	/* sys/v7stubs.c stub */
-> /* wakeup/spl1 come from h/proto.h.  psignal/setpri come from h/systm.h. */
-28,30c29,30
+> extern void addupc(caddr_t pc, void *prof, int inc);	/* sys/arch/arm.c stub */
+> /* wakeup/spl1 come from local declarations.  psignal/setpri come from h/systm.h. */
+28,30c77,78
 < clock(dev, sp, r1, nps, r0, pc, ps)
 < dev_t dev;
 < caddr_t pc;
 ---
 > void
 > clock(dev_t dev, int sp, int r1, int nps, int r0, caddr_t pc, int ps)
-32d31
+32d79
 < 	register struct callo *p1, *p2;
-35a35
+35a83
 > 	(void)dev; (void)sp; (void)r1; (void)nps; (void)r0;
-37,59c37,42
+37,59c85,90
 < 	/*
 < 	 * restart clock
 < 	 */
@@ -4473,7 +6134,7 @@ Expect:
 > 	 * no front panel, so both calls are gone. */
 > 	/* v7's per-tick callout[] dispatch is gone on this port -- nothing
 > 	 * registers via timeout() so the callout table is permanently empty. */
-68,87d50
+68,87d98
 < 	 * callout
 < 	 */
 < 
@@ -4494,7 +6155,7 @@ Expect:
 < 	}
 < 
 < 	/*
-140,185c103,106
+140,185c151,154
 < /*
 <  * timeout is called to arrange that
 <  * fun(arg) is called in tim/HZ seconds.
@@ -4546,14 +6207,15 @@ Expect:
 >  * seconds via the callout[] table.  No driver on this port registers
 >  * timeouts (the v7 callers were in dh.c / kl.c / etc., none of which
 >  * exist here), so the function and the table are removed. */
+
 ```
 
-### sys/fio.c
+### usr/sys/sys/fio.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/fio.c unix-v7-c99/sys/fio.c || true
+diff unix-v7-c99/v7/usr/sys/sys/fio.c unix-v7-c99/usr/sys/sys/fio.c || true
 ```
 
 Expect:
@@ -4561,30 +6223,78 @@ Expect:
 ```
 9d8
 < #include "../h/reg.h"
-10a10,13
-> #include "../h/proto.h"
+10a10,61
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
-> /* wakeup() is declared in h/proto.h.
+> /* wakeup() is declared in local declarations.
 >  * plock/iput/getfs/namei/uchar/suser/ufalloc/xrele come from h/systm.h. */
-20,21c23
+20,21c71
 < getf(f)
 < register int f;
 ---
 > getf(register int f)
-45,46c47,48
+45,46c95,96
 < closef(fp)
 < register struct file *fp;
 ---
 > void
 > closef(register struct file *fp)
-51,52c53
+51,52c101
 < 	register int (*cfunc)();
 < 	struct chan *cp;
 ---
 > 	register int (*cfunc)(dev_t, int);
-62d62
+62d110
 < 	cp = fp->f_un.f_chan;
-90,94c90,93
+90,94c138,141
 < 	if ((flag & FMP) == 0)
 < 		for(fp=file; fp < &file[NFILE]; fp++)
 < 			if (fp->f_count && fp->f_inode==ip)
@@ -4595,7 +6305,7 @@ Expect:
 > 		if (fp->f_count && fp->f_inode==ip)
 > 			return;
 > 	(*cfunc)(dev, flag);
-97,129c96,99
+97,129c144,147
 < /*
 <  * openi called to allow handler
 <  * of special files to initialize and
@@ -4634,35 +6344,35 @@ Expect:
 >  * open(2) on this port routes through arch/arm.c::kopen(), which
 >  * handles the pseudo-fds and IFREG itself.  The cdevsw[]/bdevsw[]
 >  * d_open hook was never reached. */
-144,145c114,115
+144,145c162,163
 < access(ip, mode)
 < register struct inode *ip;
 ---
 > int
 > access(register struct inode *ip, int mode)
-147c117
+147c165
 < 	register m;
 ---
 > 	register int m;
-185c155
+185c203
 < owner()
 ---
 > owner(void)
-204c174,175
+204c222,223
 < suser()
 ---
 > int
 > suser(void)
-218c189,190
+218c237,238
 < ufalloc()
 ---
 > int
 > ufalloc(void)
-220c192
+220c240
 < 	register i;
 ---
 > 	register int i;
-232,260c204,206
+232,260c252,254
 < /*
 <  * Allocate a user file descriptor
 <  * and a file structure.
@@ -4696,27 +6406,76 @@ Expect:
 > /* v7 falloc() (allocate fd + file slot, return file*) is gone -- its
 >  * only callers were sys2.c::open1 and pipe.c::pipe, both removed.
 >  * arch/arm.c uses its own files[NFD] table instead of file[NFILE]. */
+
 ```
 
-### sys/pipe.c
+### usr/sys/sys/pipe.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/pipe.c unix-v7-c99/sys/pipe.c || true
+diff unix-v7-c99/v7/usr/sys/sys/pipe.c unix-v7-c99/usr/sys/sys/pipe.c || true
 ```
 
 Expect:
 
 ```
-7c7,10
+7c7,58
 < #include "../h/reg.h"
 ---
-> #include "../h/proto.h"
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
 > /* readi/writei/plock/prele/psignal/min come from h/systm.h.
->  * sleep/wakeup come from h/proto.h. */
-19,56c22,27
+>  * sleep/wakeup come from local declarations. */
+19,56c70,75
 < /*
 <  * The sys-pipe entry.
 <  * Allocate an inode on the root device.
@@ -4762,23 +6521,23 @@ Expect:
 >  * readp() and writep() are still kept because v7's read(2)/write(2)
 >  * fast path on FPIPE-flagged file structs lands here, even though new
 >  * pipe creation no longer creates such structs in this port. */
-61,62c32,33
+61,62c80,81
 < readp(fp)
 < register struct file *fp;
 ---
 > void
 > readp(register struct file *fp)
-116,117c87,88
+116,117c135,136
 < writep(fp)
 < register struct file *fp;
 ---
 > void
 > writep(register struct file *fp)
-119c90
+119c138
 < 	register c;
 ---
 > 	register int c;
-184,216c155,157
+184,216c203,205
 < /*
 <  * Lock a pipe.
 <  * If its already locked,
@@ -4813,62 +6572,111 @@ Expect:
 < 	}
 < }
 ---
-> /* v7's plock/prele are in sys/v7stubs.c -- cooperative-scheduling
+> /* v7's plock/prele are in sys/arch/arm.c -- cooperative-scheduling
 >  * variants that just flip ILOCK without ever sleeping, since the ARM
 >  * port runs without the v7 sleep()/wakeup() handoff path. */
+
 ```
 
-### sys/rdwri.c
+### usr/sys/sys/rdwri.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/rdwri.c unix-v7-c99/sys/rdwri.c || true
+diff unix-v7-c99/v7/usr/sys/sys/rdwri.c unix-v7-c99/usr/sys/sys/rdwri.c || true
 ```
 
 Expect:
 
 ```
-7a8,12
-> #include "../h/proto.h"
+7a8,60
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
-> /* bread/breada/getblk/geteblk/brelse/bdwrite/clrbuf come from h/proto.h.
+> /* bread/breada/getblk/geteblk/brelse/bdwrite/clrbuf come from local declarations.
 >  * cpass/passc/copyin/copyout/bmap/min come from h/systm.h. */
 > extern void iomove(register caddr_t cp, register int n, int flag);
-19,20c24,25
+19,20c72,73
 < readi(ip)
 < register struct inode *ip;
 ---
 > void
 > readi(register struct inode *ip)
-26,27c31,32
+26,27c79,80
 < 	register on, n;
 < 	register type;
 ---
 > 	register int on, n;
 > 	register int type;
-39c44,45
+39c92,93
 < 		return((*cdevsw[major(dev)].d_read)(dev));
 ---
 > 		(*cdevsw[major(dev)].d_read)(dev);
 > 		return;
-83,84c89,90
+83,84c137,138
 < writei(ip)
 < register struct inode *ip;
 ---
 > void
 > writei(register struct inode *ip)
-89,90c95,96
+89,90c143,144
 < 	register n, on;
 < 	register type;
 ---
 > 	register int n, on;
 > 	register int type;
-116c122
+116c170
 < 		if(n == BSIZE) 
 ---
 > 		if(n == BSIZE)
-132,143d137
+132,143d185
 < /*
 <  * Return the logical maximum
 <  * of the 2 arguments.
@@ -4881,70 +6689,119 @@ Expect:
 < 		return(a);
 < 	return(b);
 < }
-149,150c143,144
+149,150c191,192
 < min(a, b)
 < unsigned a, b;
 ---
 > unsigned
 > min(unsigned a, unsigned b)
-173,175c167,168
+173,175c215,216
 < iomove(cp, n, flag)
 < register caddr_t cp;
 < register n;
 ---
 > void
 > iomove(register caddr_t cp, register int n, int flag)
-177c170
+177c218
 < 	register t;
 ---
 > 	register int t;
-181c174,177
+181c222,225
 < 	if(u.u_segflg != 1 &&
 ---
 > 	/* v7 had a u_segflg==2 (user I-space) branch here that called
 > 	 * copyiin/copyiout; this port never sets u_segflg to 2, so the
 > 	 * fast path is just user (==0) vs system (==1). */
 > 	if(u.u_segflg == 0 &&
-186,189c182
+186,189c230
 < 			if (u.u_segflg==0)
 < 				t = copyin(u.u_base, (caddr_t)cp, n);
 < 			else
 < 				t = copyiin(u.u_base, (caddr_t)cp, n);
 ---
 > 			t = copyin(u.u_base, (caddr_t)cp, n);
-191,194c184
+191,194c232
 < 			if (u.u_segflg==0)
 < 				t = copyout((caddr_t)cp, u.u_base, n);
 < 			else
 < 				t = copyiout((caddr_t)cp, u.u_base, n);
 ---
 > 			t = copyout((caddr_t)cp, u.u_base, n);
+
 ```
 
-### sys/sig.c
+### usr/sys/sys/sig.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/sig.c unix-v7-c99/sys/sig.c || true
+diff unix-v7-c99/v7/usr/sys/sys/sig.c unix-v7-c99/usr/sys/sys/sig.c || true
 ```
 
 Expect:
 
 ```
-6,9c6,11
+6,9c6,59
 < #include "../h/inode.h"
 < #include "../h/reg.h"
 < #include "../h/text.h"
 < #include "../h/seg.h"
 ---
-> #include "../h/proto.h"
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
-> /* setrun comes from h/systm.h.  wakeup/sleep come from h/proto.h. */
+> /* setrun comes from h/systm.h.  wakeup/sleep come from local declarations. */
 > 
 > int fsig(struct proc *p);
 > void psignal(struct proc *p, int sig);
-32,49c34,37
+32,49c82,85
 < /*
 <  * Send the specified signal to
 <  * all processes with 'pgrp' as
@@ -4966,25 +6823,25 @@ Expect:
 ---
 > /* v7's signal(pgrp, sig) (broadcast sig to every proc in pgrp) is gone
 >  * -- its only caller was sys/tty.c (the v7 line-discipline interrupt
->  * path), which this port doesn't compile.  sys/v7_bridge.c has its own
+>  * path), which this port doesn't compile.  arch/arm.c has its own
 >  * v7_signal_pgrp that walks armproc[] instead of proc[]. */
-55,57c43,44
+55,57c91,92
 < psignal(p, sig)
 < register struct proc *p;
 < register sig;
 ---
 > void
 > psignal(register struct proc *p, register int sig)
-81c68,69
+81c116,117
 < issig()
 ---
 > int
 > issig(void)
-83c71
+83c119
 < 	register n;
 ---
 > 	register int n;
-96,166c84,92
+96,166c132,140
 < /*
 <  * Enter the tracing STOP state.
 <  * In this state, the parent is
@@ -5066,17 +6923,17 @@ Expect:
 >  * psig() is never called from C; the resume(u_qsav) path in slp.c's
 >  * sleep() loop still uses its own local `psig:` label for the
 >  * longjmp-back-on-signal idiom. */
-172,173c98,99
+172,173c146,147
 < fsig(p)
 < struct proc *p;
 ---
 > int
 > fsig(struct proc *p)
-175c101
+175c149
 < 	register n, i;
 ---
 > 	register int n, i;
-186,262c112,113
+186,262c160,161
 < /*
 <  * Create a core image on the file "core"
 <  * If you are looking for protection glitches,
@@ -5157,31 +7014,31 @@ Expect:
 ---
 > /* v7's core() wrote a process's u-area + data + stack to ./core on a
 >  * fatal signal.  Called from psig(); removed alongside it. */
-265a117,122
+265a165,170
 >  *
 >  * v7's PDP-11 libc/sys/ptrace.s shuffled C args -- it copied req, pid,
 >  * addr into trailing-word indirect slots and put data in r0 -- so the
 >  * kernel's struct a came out (data, pid, addr, req).  On this ARM port
 >  * the SYS macro passes args straight in r0..r3, so u.u_arg[0..3] is
 >  * (req, pid, addr, data) -- the natural C order.  Match that here.
-267c124,125
+267c172,173
 < ptrace()
 ---
 > void
 > ptrace(void)
-271c129
+271c177
 < 		int	data;
 ---
 > 		int	req;
-274c132
+274c180
 < 		int	req;
 ---
 > 		int	data;
-282c140
+282c188
 < 	for (p=proc; p < &proc[NPROC]; p++) 
 ---
 > 	for (p=proc; p < &proc[NPROC]; p++)
-308,417c166
+308,417c214
 < /*
 <  * Code that the child process
 <  * executes to implement the command
@@ -5294,14 +7151,15 @@ Expect:
 < }
 ---
 > /* procxmt() removed -- see comment above. */
+
 ```
 
-### sys/subr.c
+### usr/sys/sys/subr.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/subr.c unix-v7-c99/sys/subr.c || true
+diff unix-v7-c99/v7/usr/sys/sys/subr.c unix-v7-c99/usr/sys/sys/subr.c || true
 ```
 
 Expect:
@@ -5309,32 +7167,80 @@ Expect:
 ```
 3d2
 < #include "../h/conf.h"
-7a7,10
-> #include "../h/proto.h"
+7a7,58
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
-> /* bread/bdwrite/brelse come from h/proto.h.
+> /* bread/bdwrite/brelse come from local declarations.
 >  * alloc/subyte/fubyte come from h/systm.h. */
-18,20c21
+18,20c69
 < bmap(ip, bn, rwflg)
 < register struct inode *ip;
 < daddr_t bn;
 ---
 > bmap(register struct inode *ip, daddr_t bn, int rwflg)
-22c23
+22c71
 < 	register i;
 ---
 > 	register int i;
-117c118
+117c166
 < 	if(i < NINDIR-1)
 ---
 > 	if((unsigned)i < NINDIR-1)
-128,129c129,130
+128,129c177,178
 < passc(c)
 < register c;
 ---
 > int
 > passc(register int c)
-131,133c132,134
+131,133c180,182
 < 	register id;
 < 
 < 	if((id = u.u_segflg) == 1)
@@ -5342,7 +7248,7 @@ Expect:
 > 	/* v7 had a u_segflg==2 (user I-space) branch dispatching to
 > 	 * suibyte; this port never sets u_segflg to 2. */
 > 	if(u.u_segflg == 1)
-135,139c136,139
+135,139c184,187
 < 	else
 < 		if(id?suibyte(u.u_base, c):subyte(u.u_base, c) < 0) {
 < 			u.u_error = EFAULT;
@@ -5353,20 +7259,20 @@ Expect:
 > 		u.u_error = EFAULT;
 > 		return(-1);
 > 	}
-153c153,154
+153c201,202
 < cpass()
 ---
 > int
 > cpass(void)
-155c156
+155c204
 < 	register c, id;
 ---
 > 	register int c;
-159c160
+159c208
 < 	if((id = u.u_segflg) == 1)
 ---
 > 	if(u.u_segflg == 1)
-161,165c162,165
+161,165c210,213
 < 	else
 < 		if((c = id==0?fubyte(u.u_base):fuibyte(u.u_base)) < 0) {
 < 			u.u_error = EFAULT;
@@ -5377,7 +7283,7 @@ Expect:
 > 		u.u_error = EFAULT;
 > 		return(-1);
 > 	}
-172,204c172,174
+172,204c220,222
 < /*
 <  * Routine which sets a user error; placed in
 <  * illegal entries in the bdevsw and cdevsw tables.
@@ -5412,17 +7318,18 @@ Expect:
 < 	while(--count);
 < }
 ---
-> /* v7 bcopy lives in sys/v7stubs.c -- byte-loop tuned for AAPCS softfloat
+> /* v7 bcopy lives in sys/arch/arm.c -- byte-loop tuned for AAPCS softfloat
 >  * rather than the PDP-11 mov2/movb instruction layout the original
 >  * carried over from v7/usr/sys/sys/subr.c. */
+
 ```
 
-### sys/sys1.c
+### usr/sys/sys/sys1.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/sys1.c unix-v7-c99/sys/sys1.c || true
+diff unix-v7-c99/v7/usr/sys/sys/sys1.c unix-v7-c99/usr/sys/sys/sys1.c || true
 ```
 
 Expect:
@@ -5435,11 +7342,69 @@ Expect:
 < #include "../h/buf.h"
 < #include "../h/reg.h"
 < #include "../h/inode.h"
-11c6
+11c6,64
 < #include "../h/acct.h"
 ---
-> #include "../h/proto.h"
-13,467c8,16
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
+> 
+> extern int  estabur(unsigned, unsigned, unsigned, int, int);
+> /* copyseg/clearseg come from local declarations. */
+> extern void expand(int);
+> 
+> /* v7 sys/sys1.c held exec/exece/getxfile/setregs/rexit/exit/wait/fork.
+>  * On this port they're all reimplemented inline in arch/arm.c::trap()
+>  * and v7_exec_call(); the v7 versions are linker-dead.  Only sbreak()
+>  * (the break(2) syscall, sysent[17]) is kept -- it still drives the v7
+>  * data-segment grow/shrink via expand()/copyseg(). */
+13,471d65
 < /*
 <  * exec system call, with and without environments.
 <  */
@@ -5895,37 +7860,28 @@ Expect:
 < 		return;
 < 	}
 < 	u.u_r.r_val1 = p2->p_pid;
----
-> extern int  estabur(unsigned, unsigned, unsigned, int, int);
-> /* copyseg/clearseg come from h/proto.h. */
-> extern void expand(int);
-> 
-> /* v7 sys/sys1.c held exec/exece/getxfile/setregs/rexit/exit/wait/fork.
->  * On this port they're all reimplemented inline in arch/arm.c::trap()
->  * and v7_exec_call(); the v7 versions are linker-dead.  Only sbreak()
->  * (the break(2) syscall, sysent[17]) is kept -- it still drives the v7
->  * data-segment grow/shrink via expand()/copyseg(). */
-469,471d17
+< 
 < out:
 < 	u.u_ar0[R7] += NBPW;
 < }
-477c23,24
+477c71,72
 < sbreak()
 ---
 > void
 > sbreak(void)
-482c29
+482c77
 < 	register a, n, d;
 ---
 > 	register int a, n, d;
+
 ```
 
-### sys/sys2.c
+### usr/sys/sys/sys2.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/sys2.c unix-v7-c99/sys/sys2.c || true
+diff unix-v7-c99/v7/usr/sys/sys/sys2.c unix-v7-c99/usr/sys/sys/sys2.c || true
 ```
 
 Expect:
@@ -6097,14 +8053,15 @@ Expect:
 < 	register svuid, svgid;
 ---
 > 	register int svuid, svgid;
+
 ```
 
-### sys/sys3.c
+### usr/sys/sys/sys3.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/sys3.c unix-v7-c99/sys/sys3.c || true
+diff unix-v7-c99/v7/usr/sys/sys/sys3.c unix-v7-c99/usr/sys/sys/sys3.c || true
 ```
 
 Expect:
@@ -6112,27 +8069,75 @@ Expect:
 ```
 5d4
 < #include "../h/reg.h"
-13a13,21
-> #include "../h/proto.h"
+13a13,69
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
 > /* getf/namei/uchar/closef/update/iupdat/ufalloc/iput/plock/prele
 >  * /copyout/bcopy come from h/systm.h.
->  * bread/brelse/geteblk come from h/proto.h. */
+>  * bread/brelse/geteblk come from local declarations. */
 > extern void xumount(dev_t);
 > 
 > void stat1(struct inode *ip, struct stat *ub, off_t pipeadj);
 > dev_t getmdev(void);
-18c26,27
+18c74,75
 < fstat()
 ---
 > void
 > fstat(void)
-36c45,46
+36c93,94
 < stat()
 ---
 > void
 > stat(void)
-56,59c66,67
+56,59c114,115
 < stat1(ip, ub, pipeadj)
 < register struct inode *ip;
 < struct stat *ub;
@@ -6140,41 +8145,42 @@ Expect:
 ---
 > void
 > stat1(register struct inode *ip, struct stat *ub, off_t pipeadj)
-94c102,103
+94c150,151
 < dup()
 ---
 > void
 > dup(void)
-101c110
+101c158
 < 	register i, m;
 ---
 > 	register int i, m;
-131c140,141
+131c188,189
 < smount()
 ---
 > void
 > smount(void)
-197c207,208
+197c255,256
 < sumount()
 ---
 > void
 > sumount(void)
-203,205d213
+203,205d261
 < 	register struct a {
 < 		char	*fspec;
 < 	};
-240c248
+240c296
 < getmdev()
 ---
 > getmdev(void)
+
 ```
 
-### sys/sys4.c
+### usr/sys/sys/sys4.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/sys4.c unix-v7-c99/sys/sys4.c || true
+diff unix-v7-c99/v7/usr/sys/sys/sys4.c unix-v7-c99/usr/sys/sys/sys4.c || true
 ```
 
 Expect:
@@ -6182,154 +8188,202 @@ Expect:
 ```
 5d4
 < #include "../h/reg.h"
-8a8,14
-> #include "../h/proto.h"
+8a8,62
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
 > /* suser/update/namei/uchar/iget/access/owner/iput/writei/prele/plock/iupdat
 >  * /xrele/psignal/copyin/copyout come from h/systm.h.
->  * sleep/spl0/spl7 come from h/proto.h. */
+>  * sleep/spl0/spl7 come from local declarations. */
 > 
 > void chdirec(struct inode **ipp);
-17c23,24
+17c71,72
 < gtime()
 ---
 > void
 > gtime(void)
-26c33,34
+26c81,82
 < ftime()
 ---
 > void
 > ftime(void)
-53c61,62
+53c109,110
 < stime()
 ---
 > void
 > stime(void)
-64c73,74
+64c121,122
 < setuid()
 ---
 > void
 > setuid(void)
-66c76
+66c124
 < 	register uid;
 ---
 > 	register int uid;
-80c90,91
+80c138,139
 < getuid()
 ---
 > void
 > getuid(void)
-87c98,99
+87c146,147
 < setgid()
 ---
 > void
 > setgid(void)
-89c101
+89c149
 < 	register gid;
 ---
 > 	register int gid;
-102c114,115
+102c162,163
 < getgid()
 ---
 > void
 > getgid(void)
-109c122,123
+109c170,171
 < getpid()
 ---
 > void
 > getpid(void)
-115c129,130
+115c177,178
 < sync()
 ---
 > void
 > sync(void)
-121c136,137
+121c184,185
 < nice()
 ---
 > void
 > nice(void)
-123c139
+123c187
 < 	register n;
 ---
 > 	register int n;
-145c161,162
+145c209,210
 < unlink()
 ---
 > void
 > unlink(void)
-148,150d164
+148,150d212
 < 	struct a {
 < 		char	*fname;
 < 	};
-194c208,210
+194c256,258
 < chdir()
 ---
 > 
 > void
 > chdir(void)
-199c215,216
+199c263,264
 < chroot()
 ---
 > void
 > chroot(void)
-205,206c222,223
+205,206c270,271
 < chdirec(ipp)
 < register struct inode **ipp;
 ---
 > void
 > chdirec(register struct inode **ipp)
-209,211d225
+209,211d273
 < 	struct a {
 < 		char	*fname;
 < 	};
-234c248,249
+234c296,297
 < chmod()
 ---
 > void
 > chmod(void)
-255c270,271
+255c318,319
 < chown()
 ---
 > void
 > chown(void)
-273c289,290
+273c337,338
 < ssig()
 ---
 > void
 > ssig(void)
-275c292
+275c340
 < 	register a;
 ---
 > 	register int a;
-292c309,310
+292c357,358
 < kill()
 ---
 > void
 > kill(void)
-295c313
+295c361
 < 	register a;
 ---
 > 	register int a;
-327c345,346
+327c393,394
 < times()
 ---
 > void
 > times(void)
-338c357,358
+338c405,406
 < profil()
 ---
 > void
 > profil(void)
-357c377,378
+357c425,426
 < alarm()
 ---
 > void
 > alarm(void)
-360c381
+360c429
 < 	register c;
 ---
 > 	register int c;
-372,381c393,395
+372,381c441,443
 < /*
 <  * indefinite wait.
 <  * no one should wakeup(&u)
@@ -6344,28 +8398,29 @@ Expect:
 > /* v7's pause(2) implementation is gone -- arch/arm.c has its own
 >  * sys_pause_v7 that uses the mt_block_on_pipe + clock-tick wake path
 >  * instead of the v7 sleep()/wakeup() handoff. */
-386c400,401
+386c448,449
 < umask()
 ---
 > void
 > umask(void)
-391c406
+391c454
 < 	register t;
 ---
 > 	register int t;
-403c418,419
+403c466,467
 < utime()
 ---
 > void
 > utime(void)
+
 ```
 
-### sys/text.c
+### usr/sys/sys/text.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/text.c unix-v7-c99/sys/text.c || true
+diff unix-v7-c99/v7/usr/sys/sys/text.c unix-v7-c99/usr/sys/sys/text.c || true
 ```
 
 Expect:
@@ -6373,10 +8428,59 @@ Expect:
 ```
 3d2
 < #include "../h/map.h"
-10a10,19
-> #include "../h/proto.h"
+10a10,68
+> #include "../h/map.h"
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
-> /* malloc/mfree/panic/wakeup/sleep come from h/proto.h.
+> /* malloc/mfree/panic/wakeup/sleep come from local declarations.
 >  * iput comes from h/systm.h. */
 > extern void xlock(struct text *);
 > extern void xunlock(struct text *);
@@ -6384,23 +8488,23 @@ Expect:
 > extern void xuntext(struct text *);
 > 
 > void xswap(register struct proc *p, int ff, int os);
-22,23c31,32
+22,23c80,81
 < xswap(p, ff, os)
 < register struct proc *p;
 ---
 > void
 > xswap(register struct proc *p, int ff, int os)
-25c34
+25c83
 < 	register a;
 ---
 > 	register int a;
-32d40
+32d89
 < 	p->p_flag |= SLOCK;
-38c46
+38c95
 < 	p->p_flag &= ~(SLOAD|SLOCK);
 ---
 > 	p->p_flag &= ~SLOAD;
-46,166c54,60
+46,166c103,109
 < /*
 <  * relinquish use of the shared text segment
 <  * of a process.
@@ -6530,58 +8634,59 @@ Expect:
 >  * which are also gone.  The remaining text-table operations (xswap,
 >  * xccdec, xumount, xrele, xuntext) stay because they're still reached
 >  * via slp.c::expand and umount(2)/closef(). */
-171,172c65,66
+171,172c114,115
 < xlock(xp)
 < register struct text *xp;
 ---
 > void
 > xlock(register struct text *xp)
-182,183c76,77
+182,183c125,126
 < xunlock(xp)
 < register struct text *xp;
 ---
 > void
 > xunlock(register struct text *xp)
-195,196c89,90
+195,196c138,139
 < xccdec(xp)
 < register struct text *xp;
 ---
 > void
 > xccdec(register struct text *xp)
-216,217c110,111
+216,217c159,160
 < xumount(dev)
 < register dev;
 ---
 > void
 > xumount(register dev_t dev)
-221c115
+221c164
 < 	for (xp = &text[0]; xp < &text[NTEXT]; xp++) 
 ---
 > 	for (xp = &text[0]; xp < &text[NTEXT]; xp++)
-229,230c123,124
+229,230c172,173
 < xrele(ip)
 < register struct inode *ip;
 ---
 > void
 > xrele(register struct inode *ip)
-234c128
+234c177
 < 	if (ip->i_flag&ITEXT==0)
 ---
 > 	if ((ip->i_flag&ITEXT)==0)
-245,246c139,140
+245,246c188,189
 < xuntext(xp)
 < register struct text *xp;
 ---
 > void
 > xuntext(register struct text *xp)
+
 ```
 
-### sys/ureg.c
+### usr/sys/sys/ureg.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/ureg.c unix-v7-c99/sys/ureg.c || true
+diff unix-v7-c99/v7/usr/sys/sys/ureg.c unix-v7-c99/usr/sys/sys/ureg.c || true
 ```
 
 Expect:
@@ -6641,14 +8746,15 @@ Expect:
 < 	if(nt+nd+ns+USIZE > maxmem)
 ---
 > 	if((int)(nt+nd+ns+USIZE) > maxmem)
+
 ```
 
-### cmd/sh/blok.c
+### usr/src/cmd/sh/blok.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/blok.c unix-v7-c99/cmd/sh/blok.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/blok.c unix-v7-c99/usr/src/cmd/sh/blok.c || true
 ```
 
 Expect:
@@ -6681,14 +8787,15 @@ Expect:
 > VOID	free(BLKPTR ap)
 84a83
 > 	return(0);
+
 ```
 
-### cmd/sh/brkincr.h
+### usr/src/cmd/sh/brkincr.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/brkincr.h unix-v7-c99/cmd/sh/brkincr.h || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/brkincr.h unix-v7-c99/usr/src/cmd/sh/brkincr.h || true
 ```
 
 Expect:
@@ -6704,14 +8811,15 @@ Expect:
 >  * on 128 MiB qemu. */
 > #define BRKINCR 010000
 > #define BRKMAX 0200000
+
 ```
 
-### cmd/sh/builtin.c
+### usr/src/cmd/sh/builtin.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/builtin.c unix-v7-c99/cmd/sh/builtin.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/builtin.c unix-v7-c99/usr/src/cmd/sh/builtin.c || true
 ```
 
 Expect:
@@ -6721,14 +8829,15 @@ Expect:
 < builtin()
 ---
 > int builtin(void)
+
 ```
 
-### cmd/sh/cmd.c
+### usr/src/cmd/sh/cmd.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/cmd.c unix-v7-c99/cmd/sh/cmd.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/cmd.c unix-v7-c99/usr/src/cmd/sh/cmd.c || true
 ```
 
 Expect:
@@ -6908,14 +9017,15 @@ Expect:
 > LOCAL VOID	synbad(void)
 405a413
 > 	return(0);
+
 ```
 
-### cmd/sh/ctype.h
+### usr/src/cmd/sh/ctype.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/ctype.h unix-v7-c99/cmd/sh/ctype.h || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/ctype.h unix-v7-c99/usr/src/cmd/sh/ctype.h || true
 ```
 
 Expect:
@@ -6965,27 +9075,23 @@ Expect:
 > #define	letter(c)	(((c)&QUOTE)==0 ANDF _ctype2[(unsigned char)(c)]&(T_IDC))
 > #define alphanum(c)	(((c)&QUOTE)==0 ANDF _ctype2[(unsigned char)(c)]&(_IDCH))
 > #define astchar(c)	(((c)&QUOTE)==0 ANDF _ctype2[(unsigned char)(c)]&(T_AST))
+
 ```
 
-### cmd/sh/dup.h
+### usr/src/cmd/sh/dup.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/dup.h unix-v7-c99/cmd/sh/dup.h || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/dup.h unix-v7-c99/usr/src/cmd/sh/dup.h || true
 ```
 
 Expect:
 
 ```
-```
-
-### cmd/sh/error.c
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/error.c unix-v7-c99/cmd/sh/error.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/error.c unix-v7-c99/usr/src/cmd/sh/error.c || true
 ```
 
 Expect:
@@ -7055,12 +9161,12 @@ Expect:
 > rmtemp(IOPTR base)
 ```
 
-### cmd/sh/fault.c
+### usr/src/cmd/sh/fault.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/fault.c unix-v7-c99/cmd/sh/fault.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/fault.c unix-v7-c99/usr/src/cmd/sh/fault.c || true
 ```
 
 Expect:
@@ -7148,14 +9254,15 @@ Expect:
 > 		IF (t=trapcom[i])
 108a135
 > 	return(0);
+
 ```
 
-### cmd/sh/io.c
+### usr/src/cmd/sh/io.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/io.c unix-v7-c99/cmd/sh/io.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/io.c unix-v7-c99/usr/src/cmd/sh/io.c || true
 ```
 
 Expect:
@@ -7248,14 +9355,15 @@ Expect:
 > 	IF (iop=ioparg)
 132a151
 > 	return(0);
+
 ```
 
-### cmd/sh/mac.h
+### usr/src/cmd/sh/mac.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/mac.h unix-v7-c99/cmd/sh/mac.h || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/mac.h unix-v7-c99/usr/src/cmd/sh/mac.h || true
 ```
 
 Expect:
@@ -7265,14 +9373,15 @@ Expect:
 < #define LOCAL	static
 ---
 > #define LOCAL
+
 ```
 
-### cmd/sh/macro.c
+### usr/src/cmd/sh/macro.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/macro.c unix-v7-c99/cmd/sh/macro.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/macro.c unix-v7-c99/usr/src/cmd/sh/macro.c || true
 ```
 
 Expect:
@@ -7378,14 +9487,15 @@ Expect:
 > LOCAL INT flush(INT ot)
 232a252
 > 	return(0);
+
 ```
 
-### cmd/sh/main.c
+### usr/src/cmd/sh/main.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/main.c unix-v7-c99/cmd/sh/main.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/main.c unix-v7-c99/usr/src/cmd/sh/main.c || true
 ```
 
 Expect:
@@ -7480,14 +9590,15 @@ Expect:
 > INT Ldup(REG INT fa, REG INT fb)
 173a204
 > 	return(0);
+
 ```
 
-### cmd/sh/name.c
+### usr/src/cmd/sh/name.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/name.c unix-v7-c99/cmd/sh/name.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/name.c unix-v7-c99/usr/src/cmd/sh/name.c || true
 ```
 
 Expect:
@@ -7719,27 +9830,23 @@ Expect:
 < 	argnam = er = getstak(namec*BYTESPERWORD+BYTESPERWORD);
 ---
 > 	argnam = er = (STRING *)getstak(namec*BYTESPERWORD+BYTESPERWORD);
+
 ```
 
-### cmd/sh/name.h
+### usr/src/cmd/sh/name.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/name.h unix-v7-c99/cmd/sh/name.h || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/name.h unix-v7-c99/usr/src/cmd/sh/name.h || true
 ```
 
 Expect:
 
 ```
-```
-
-### cmd/sh/print.c
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/print.c unix-v7-c99/cmd/sh/print.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/print.c unix-v7-c99/usr/src/cmd/sh/print.c || true
 ```
 
 Expect:
@@ -7824,12 +9931,12 @@ Expect:
 > 	return(0);
 ```
 
-### cmd/sh/setbrk.c
+### usr/src/cmd/sh/setbrk.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/setbrk.c unix-v7-c99/cmd/sh/setbrk.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/setbrk.c unix-v7-c99/usr/src/cmd/sh/setbrk.c || true
 ```
 
 Expect:
@@ -7841,14 +9948,15 @@ Expect:
 > extern char *sbrk(int incr);
 > 
 > BYTPTR setbrk(INT incr)
+
 ```
 
-### cmd/sh/stak.c
+### usr/src/cmd/sh/stak.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/stak.c unix-v7-c99/cmd/sh/stak.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/stak.c unix-v7-c99/usr/src/cmd/sh/stak.c || true
 ```
 
 Expect:
@@ -7902,27 +10010,23 @@ Expect:
 < 	STKPTR		x;
 ---
 > STKPTR	cpystak(STKPTR x)
+
 ```
 
-### cmd/sh/stak.h
+### usr/src/cmd/sh/stak.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/stak.h unix-v7-c99/cmd/sh/stak.h || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/stak.h unix-v7-c99/usr/src/cmd/sh/stak.h || true
 ```
 
 Expect:
 
 ```
-```
-
-### cmd/sh/string.c
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/string.c unix-v7-c99/cmd/sh/string.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/string.c unix-v7-c99/usr/src/cmd/sh/string.c || true
 ```
 
 Expect:
@@ -7963,12 +10067,20 @@ Expect:
 > 	IF (s=as) THEN WHILE *s++ DONE FI
 ```
 
-### cmd/sh/sym.h
+### usr/src/cmd/sh/sym.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/sym.h unix-v7-c99/cmd/sh/sym.h || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/sym.h unix-v7-c99/usr/src/cmd/sh/sym.h || true
+```
+
+Expect:
+
+```
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/sh/timeout.h unix-v7-c99/usr/src/cmd/sh/timeout.h || true
 ```
 
 Expect:
@@ -7976,25 +10088,12 @@ Expect:
 ```
 ```
 
-### cmd/sh/timeout.h
+### usr/include/execargs.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/timeout.h unix-v7-c99/cmd/sh/timeout.h || true
-```
-
-Expect:
-
-```
-```
-
-### include/execargs.h
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/include/execargs.h unix-v7-c99/include/execargs.h || true
+diff unix-v7-c99/v7/usr/include/execargs.h unix-v7-c99/usr/include/execargs.h || true
 ```
 
 Expect:
@@ -8004,27 +10103,23 @@ Expect:
 < char **execargs = (char**)(-2);
 ---
 > char **execargs = (char **)(-2);
+
 ```
 
-### include/utmp.h
+### usr/include/utmp.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/utmp.h unix-v7-c99/include/utmp.h || true
+diff unix-v7-c99/v7/usr/include/utmp.h unix-v7-c99/usr/include/utmp.h || true
 ```
 
 Expect:
 
 ```
-```
-
-### cmd/pwd.c
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/pwd.c unix-v7-c99/cmd/pwd.c || true
+diff unix-v7-c99/v7/usr/src/cmd/pwd.c unix-v7-c99/usr/src/cmd/pwd.c || true
 ```
 
 Expect:
@@ -8062,12 +10157,12 @@ Expect:
 > 	register int i, j;
 ```
 
-### cmd/cal.c
+### usr/src/cmd/cal.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/cal.c unix-v7-c99/cmd/cal.c || true
+diff unix-v7-c99/v7/usr/src/cmd/cal.c unix-v7-c99/usr/src/cmd/cal.c || true
 ```
 
 Expect:
@@ -8132,14 +10227,15 @@ Expect:
 < 	register y, d;
 ---
 > 	register int y, d;
+
 ```
 
-### cmd/grep.c
+### usr/src/cmd/grep.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/grep.c unix-v7-c99/cmd/grep.c || true
+diff unix-v7-c99/v7/usr/src/cmd/grep.c unix-v7-c99/usr/src/cmd/grep.c || true
 ```
 
 Expect:
@@ -8312,14 +10408,15 @@ Expect:
 ---
 > void
 > errexit(char *s, char *f)
+
 ```
 
-### cmd/cp.c
+### usr/src/cmd/cp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/cp.c unix-v7-c99/cmd/cp.c || true
+diff unix-v7-c99/v7/usr/src/cmd/cp.c unix-v7-c99/usr/src/cmd/cp.c || true
 ```
 
 Expect:
@@ -8519,14 +10616,15 @@ Expect:
 > 	}
 > 	fclose(df);
 > 	return errs;
+
 ```
 
-### cmd/mv.c
+### usr/src/cmd/mv.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/mv.c unix-v7-c99/cmd/mv.c || true
+diff unix-v7-c99/v7/usr/src/cmd/mv.c unix-v7-c99/usr/src/cmd/mv.c || true
 ```
 
 Expect:
@@ -8609,14 +10707,15 @@ Expect:
 ---
 > int
 > chkdot(register char *s)
+
 ```
 
-### cmd/chmod.c
+### usr/src/cmd/chmod.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/chmod.c unix-v7-c99/cmd/chmod.c || true
+diff unix-v7-c99/v7/usr/src/cmd/chmod.c unix-v7-c99/usr/src/cmd/chmod.c || true
 ```
 
 Expect:
@@ -8764,14 +10863,15 @@ Expect:
 < 	register m;
 ---
 > 	register int m;
+
 ```
 
-### cmd/chown.c
+### usr/src/cmd/chown.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/chown.c unix-v7-c99/cmd/chown.c || true
+diff unix-v7-c99/v7/usr/src/cmd/chown.c unix-v7-c99/usr/src/cmd/chown.c || true
 ```
 
 Expect:
@@ -8894,14 +10994,15 @@ Expect:
 ---
 > 	while ((c = *s++))
 > 		if (!isdigit(c))
+
 ```
 
-### cmd/chgrp.c
+### usr/src/cmd/chgrp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/chgrp.c unix-v7-c99/cmd/chgrp.c || true
+diff unix-v7-c99/v7/usr/src/cmd/chgrp.c unix-v7-c99/usr/src/cmd/chgrp.c || true
 ```
 
 Expect:
@@ -9015,14 +11116,15 @@ Expect:
 ---
 > 	while ((c = *s++))
 > 		if (!isdigit(c))
+
 ```
 
-### cmd/sleep.c
+### usr/src/cmd/sleep.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sleep.c unix-v7-c99/cmd/sleep.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sleep.c unix-v7-c99/usr/src/cmd/sleep.c || true
 ```
 
 Expect:
@@ -9039,14 +11141,15 @@ Expect:
 < 	while(c = *s++) {
 ---
 > 	while((c = *s++)) {
+
 ```
 
-### cmd/touch.c
+### usr/src/cmd/touch.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/touch.c unix-v7-c99/cmd/touch.c || true
+diff unix-v7-c99/v7/usr/src/cmd/touch.c unix-v7-c99/usr/src/cmd/touch.c || true
 ```
 
 Expect:
@@ -9074,14 +11177,15 @@ Expect:
 > if( stat(name,&stbuff) < 0) {
 40a40
 > 	}
+
 ```
 
-### cmd/tr.c
+### usr/src/cmd/tr.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tr.c unix-v7-c99/cmd/tr.c || true
+diff unix-v7-c99/v7/usr/src/cmd/tr.c unix-v7-c99/usr/src/cmd/tr.c || true
 ```
 
 Expect:
@@ -9139,14 +11243,15 @@ Expect:
 < 	register c, i, n;
 ---
 > 	register int c, i, n;
+
 ```
 
-### cmd/dmesg.c
+### usr/src/cmd/dmesg.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/dmesg.c unix-v7-c99/cmd/dmesg.c || true
+diff unix-v7-c99/v7/usr/src/cmd/dmesg.c unix-v7-c99/usr/src/cmd/dmesg.c || true
 ```
 
 Expect:
@@ -9189,14 +11294,15 @@ Expect:
 > 	static int firstime;
 112a119
 > 	return(0);
+
 ```
 
-### cmd/du.c
+### usr/src/cmd/du.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/du.c unix-v7-c99/cmd/du.c || true
+diff unix-v7-c99/v7/usr/src/cmd/du.c unix-v7-c99/usr/src/cmd/du.c || true
 ```
 
 Expect:
@@ -9233,14 +11339,15 @@ Expect:
 < 		static linked = 0;
 ---
 > 		static int linked = 0;
+
 ```
 
-### cmd/split.c
+### usr/src/cmd/split.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/split.c unix-v7-c99/cmd/split.c || true
+diff unix-v7-c99/v7/usr/src/cmd/split.c unix-v7-c99/usr/src/cmd/split.c || true
 ```
 
 Expect:
@@ -9262,14 +11369,15 @@ Expect:
 < 	for(i=0; i<count; i++)
 ---
 > 	for(i=0; (unsigned)i<count; i++)
+
 ```
 
-### cmd/tsort.c
+### usr/src/cmd/tsort.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tsort.c unix-v7-c99/cmd/tsort.c || true
+diff unix-v7-c99/v7/usr/src/cmd/tsort.c unix-v7-c99/usr/src/cmd/tsort.c || true
 ```
 
 Expect:
@@ -9351,14 +11459,15 @@ Expect:
 < 				error("error 2");
 ---
 > 				error("error 2",empty);
+
 ```
 
-### cmd/file.c
+### usr/src/cmd/file.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/file.c unix-v7-c99/cmd/file.c || true
+diff unix-v7-c99/v7/usr/src/cmd/file.c unix-v7-c99/usr/src/cmd/file.c || true
 ```
 
 Expect:
@@ -9416,14 +11525,15 @@ Expect:
 ---
 > int
 > english (char *bp, int n)
+
 ```
 
-### cmd/join.c
+### usr/src/cmd/join.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/join.c unix-v7-c99/cmd/join.c || true
+diff unix-v7-c99/v7/usr/src/cmd/join.c unix-v7-c99/usr/src/cmd/join.c || true
 ```
 
 Expect:
@@ -9495,14 +11605,15 @@ Expect:
 ---
 > int
 > cmp(char *s1, char *s2)
+
 ```
 
-### cmd/pr.c
+### usr/src/cmd/pr.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/pr.c unix-v7-c99/cmd/pr.c || true
+diff unix-v7-c99/v7/usr/src/cmd/pr.c unix-v7-c99/usr/src/cmd/pr.c || true
 ```
 
 Expect:
@@ -9605,14 +11716,15 @@ Expect:
 ---
 > void
 > putcp(int c)
+
 ```
 
-### cmd/dd.c
+### usr/src/cmd/dd.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/dd.c unix-v7-c99/cmd/dd.c || true
+diff unix-v7-c99/v7/usr/src/cmd/dd.c unix-v7-c99/usr/src/cmd/dd.c || true
 ```
 
 Expect:
@@ -9728,14 +11840,15 @@ Expect:
 ---
 > void
 > stats(void)
+
 ```
 
-### cmd/diff.c
+### usr/src/cmd/diff.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/diff.c unix-v7-c99/cmd/diff.c || true
+diff unix-v7-c99/v7/usr/src/cmd/diff.c unix-v7-c99/usr/src/cmd/diff.c || true
 ```
 
 Expect:
@@ -10018,14 +12131,15 @@ Expect:
 ---
 > void
 > mesg(char *s, char *t)
+
 ```
 
-### cmd/write.c
+### usr/src/cmd/write.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/write.c unix-v7-c99/cmd/write.c || true
+diff unix-v7-c99/v7/usr/src/cmd/write.c unix-v7-c99/usr/src/cmd/write.c || true
 ```
 
 Expect:
@@ -10111,14 +12225,15 @@ Expect:
 < 	register i;
 ---
 > 	register int i;
+
 ```
 
-### cmd/dcheck.c
+### usr/src/cmd/dcheck.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/dcheck.c unix-v7-c99/cmd/dcheck.c || true
+diff unix-v7-c99/v7/usr/src/cmd/dcheck.c unix-v7-c99/usr/src/cmd/dcheck.c || true
 ```
 
 Expect:
@@ -10228,14 +12343,15 @@ Expect:
 < 	if(i > NINDIR) {
 ---
 > 	if(i > (int)NINDIR) {
+
 ```
 
-### cmd/icheck.c
+### usr/src/cmd/icheck.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/icheck.c unix-v7-c99/cmd/icheck.c || true
+diff unix-v7-c99/v7/usr/src/cmd/icheck.c unix-v7-c99/usr/src/cmd/icheck.c || true
 ```
 
 Expect:
@@ -10426,14 +12542,15 @@ Expect:
 < 	return;
 ---
 > 	return(0);
+
 ```
 
-### cmd/iostat.c
+### usr/src/cmd/iostat.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/iostat.c unix-v7-c99/cmd/iostat.c || true
+diff unix-v7-c99/v7/usr/src/cmd/iostat.c unix-v7-c99/usr/src/cmd/iostat.c || true
 ```
 
 Expect:
@@ -10599,14 +12716,15 @@ Expect:
 > 		return(0);
 270a330
 > 	return(0);
+
 ```
 
-### cmd/ncheck.c
+### usr/src/cmd/ncheck.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/ncheck.c unix-v7-c99/cmd/ncheck.c || true
+diff unix-v7-c99/v7/usr/src/cmd/ncheck.c unix-v7-c99/usr/src/cmd/ncheck.c || true
 ```
 
 Expect:
@@ -10768,14 +12886,15 @@ Expect:
 < 	if(i > NINDIR) {
 ---
 > 	if(i > (int)NINDIR) {
+
 ```
 
-### cmd/find.c
+### usr/src/cmd/find.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/find.c unix-v7-c99/cmd/find.c || true
+diff unix-v7-c99/v7/usr/src/cmd/find.c unix-v7-c99/usr/src/cmd/find.c || true
 ```
 
 Expect:
@@ -11225,14 +13344,15 @@ Expect:
 > pr(char *s)
 722a780
 > 	return(0);
+
 ```
 
-### cmd/sort.c
+### usr/src/cmd/sort.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sort.c unix-v7-c99/cmd/sort.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sort.c unix-v7-c99/usr/src/cmd/sort.c || true
 ```
 
 Expect:
@@ -11572,14 +13692,15 @@ Expect:
 < 		return;
 ---
 > 		return(0);
+
 ```
 
-### lib/crypt.c
+### usr/src/libc/crypt.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/crypt.c unix-v7-c99/lib/crypt.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/crypt.c unix-v7-c99/usr/src/libc/crypt.c || true
 ```
 
 Expect:
@@ -11709,14 +13830,15 @@ Expect:
 < 	register i, j, c;
 ---
 > 	register int i, j, c;
+
 ```
 
-### include/sys/param.h
+### usr/include/sys/param.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/sys/param.h unix-v7-c99/include/sys/param.h || true
+diff unix-v7-c99/v7/usr/include/sys/param.h unix-v7-c99/usr/include/sys/param.h || true
 ```
 
 Expect:
@@ -11798,14 +13920,15 @@ Expect:
 135a125,126
 > #define	SYS_TYPES_H
 > #endif
+
 ```
 
-### include/sys/inode.h
+### usr/include/sys/inode.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/sys/inode.h unix-v7-c99/include/sys/inode.h || true
+diff unix-v7-c99/v7/usr/include/sys/inode.h unix-v7-c99/usr/include/sys/inode.h || true
 ```
 
 Expect:
@@ -11845,14 +13968,15 @@ Expect:
 < struct inode *mpxip;		/* mpx virtual inode */
 ---
 > /* mpxip removed -- v7 mpx subsystem not wired on this port. */
+
 ```
 
-### h/systm.h
+### usr/sys/h/systm.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/systm.h unix-v7-c99/h/systm.h || true
+diff unix-v7-c99/v7/usr/sys/h/systm.h unix-v7-c99/usr/sys/h/systm.h || true
 ```
 
 Expect:
@@ -11954,14 +14078,15 @@ Expect:
 < 	char	sy_nrarg;		/* number of args in registers */
 < 	int	(*sy_call)();		/* handler */
 < } sysent[];
+
 ```
 
-### sys/iget.c
+### usr/sys/sys/iget.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/iget.c unix-v7-c99/sys/iget.c || true
+diff unix-v7-c99/v7/usr/sys/sys/iget.c unix-v7-c99/usr/sys/sys/iget.c || true
 ```
 
 Expect:
@@ -11969,10 +14094,58 @@ Expect:
 ```
 9d8
 < #include "../h/conf.h"
-10a10,20
-> #include "../h/proto.h"
+10a10,68
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
-> /* bread/brelse/bdwrite/sleep/panic come from h/proto.h.
+> /* bread/brelse/bdwrite/sleep/panic come from local declarations.
 >  * free/ifree/ialloc/getfs/prele/writei/bcopy come from h/systm.h. */
 > 
 > void iexpand(register struct inode *ip, register struct dinode *dp);
@@ -11981,116 +14154,165 @@ Expect:
 > void wdir(struct inode *ip);
 > void iput(register struct inode *ip);
 > int iupdat(register struct inode *ip, time_t *ta, time_t *tm);
-30,32c40
+30,32c88
 < iget(dev, ino)
 < dev_t dev;
 < ino_t ino;
 ---
 > iget(dev_t dev, ino_t ino)
-92,94c100,101
+92,94c148,149
 < iexpand(ip, dp)
 < register struct inode *ip;
 < register struct dinode *dp;
 ---
 > void
 > iexpand(register struct inode *ip, register struct dinode *dp)
-109d115
+109d163
 < 		*p1++ = 0;
-111a118
+111a166
 > 		*p1++ = 0;
-122,123c129,130
+122,123c177,178
 < iput(ip)
 < register struct inode *ip;
 ---
 > void
 > iput(register struct inode *ip)
-149,151c156,157
+149,151c204,205
 < iupdat(ip, ta, tm)
 < register struct inode *ip;
 < time_t *ta, *tm;
 ---
 > int
 > iupdat(register struct inode *ip, time_t *ta, time_t *tm)
-161c167
+161c215
 < 			return;
 ---
 > 			return(0);
-165c171
+165c219
 < 			return;
 ---
 > 			return(0);
-177a184,185
+177a232,233
 > 			*p1++ = *p2++;
 > 			*p1++ = *p2++;
-181,182d188
+181,182d236
 < 			*p1++ = *p2++;
 < 			*p1++ = *p2++;
-192a199
+192a247
 > 	return(0);
-204,205c211,212
+204,205c259,260
 < itrunc(ip)
 < register struct inode *ip;
 ---
 > void
 > itrunc(register struct inode *ip)
-207c214
+207c262
 < 	register i;
 ---
 > 	register int i;
-242,244c249,250
+242,244c297,298
 < tloop(dev, bn, f1, f2)
 < dev_t dev;
 < daddr_t bn;
 ---
 > void
 > tloop(dev_t dev, daddr_t bn, int f1, int f2)
-246c252
+246c300
 < 	register i;
 ---
 > 	register int i;
-251a258
+251a306
 > 	bap = NULL;
-280c287
+280c335
 < maknode(mode)
 ---
 > maknode(int mode)
-305,306c312,313
+305,306c360,361
 < wdir(ip)
 < struct inode *ip;
 ---
 > void
 > wdir(struct inode *ip)
+
 ```
 
-### sys/nami.c
+### usr/sys/sys/nami.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/nami.c unix-v7-c99/sys/nami.c || true
+diff unix-v7-c99/v7/usr/sys/sys/nami.c unix-v7-c99/usr/sys/sys/nami.c || true
 ```
 
 Expect:
 
 ```
-7a8,11
-> #include "../h/proto.h"
+7a8,59
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
-> /* bread/brelse come from h/proto.h.
+> /* bread/brelse come from local declarations.
 >  * iget/iput/plock/access/bcopy/bmap/fubyte come from h/systm.h. */
-21,22c25
+21,22c73
 < namei(func, flag)
 < int (*func)();
 ---
 > namei(int (*func)(void), int flag)
-25c28
+25c76
 < 	register c;
 ---
 > 	register int c;
-66,67d68
+66,67d116
 < 		if (mpxip!=NULL && c=='!')
 < 			break;
-76,81c77,78
+76,81c125,126
 < 	if (c == '!' && mpxip != NULL) {
 < 		iput(dp);
 < 		plock(mpxip);
@@ -12100,7 +14322,7 @@ Expect:
 ---
 > 	/* v7's `path!subpath` mpx multiplexor lookup is gone -- mpxip was
 > 	 * never assigned on this port, so the branch was unreachable. */
-202,210c199,201
+202,210c247,249
 < /*
 <  * Return the next character from the
 <  * kernel string pointed at by dirp.
@@ -12114,56 +14336,105 @@ Expect:
 > /* schar() (kernel-side name-fetcher passed to namei) was only used by
 >  * sys/sig.c::core() which is gone on this port; uchar() remains for the
 >  * user-space namei path. */
-216c207,208
+216c255,256
 < uchar()
 ---
 > int
 > uchar(void)
-218c210
+218c258
 < 	register c;
 ---
 > 	register int c;
+
 ```
 
-### dev/bio.c
+### usr/sys/dev/bio.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/dev/bio.c unix-v7-c99/dev/bio.c || true
+diff unix-v7-c99/v7/usr/sys/dev/bio.c unix-v7-c99/usr/sys/dev/bio.c || true
 ```
 
 Expect:
 
 ```
-7,8c7
+7,8c7,55
 < #include "../h/proc.h"
 < #include "../h/seg.h"
 ---
-> #include "../h/proto.h"
-56,58c55
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
+56,58c103
 < bread(dev, blkno)
 < dev_t dev;
 < daddr_t blkno;
 ---
 > bread(dev_t dev, daddr_t blkno)
-84,86c81
+84,86c129
 < breada(dev, blkno, rablkno)
 < dev_t dev;
 < daddr_t blkno, rablkno;
 ---
 > breada(dev_t dev, daddr_t blkno, daddr_t rablkno)
-125,126c120,121
+125,126c168,169
 < bwrite(bp)
 < register struct buf *bp;
 ---
 > void
 > bwrite(struct buf *bp)
-128c123
+128c171
 < 	register flag;
 ---
 > 	register int flag;
-149,152c144,146
+149,152c192,194
 <  * given up (e.g. when writing a partial block where it is
 <  * assumed that another write for the same block will soon follow).
 <  * This can't be done for magtape, since writes must be done
@@ -12172,13 +14443,13 @@ Expect:
 >  * given up.  v7 checked dp->b_flags&B_TAPE here for an
 >  * ordered-write tape path, but this port has no magtape device,
 >  * so the branch was unreachable and is gone.
-154,155c148,149
+154,155c196,197
 < bdwrite(bp)
 < register struct buf *bp;
 ---
 > void
 > bdwrite(struct buf *bp)
-157,165c151,152
+157,165c199,200
 < 	register struct buf *dp;
 < 
 < 	dp = bdevsw[major(bp->b_dev)].d_tab;
@@ -12191,7 +14462,7 @@ Expect:
 ---
 > 	bp->b_flags |= B_DELWRI | B_DONE;
 > 	brelse(bp);
-168,177c155,157
+168,177c203,205
 < /*
 <  * Release the buffer, start I/O on it, but don't wait for completion.
 <  */
@@ -12206,103 +14477,103 @@ Expect:
 > /* v7's bawrite() (asynchronous bwrite) is gone -- its only callers
 >  * were sys1.c::exec (now removed) and the B_TAPE branch of bdwrite
 >  * (also gone). */
-182,183c162,163
+182,183c210,211
 < brelse(bp)
 < register struct buf *bp;
 ---
 > void
 > brelse(struct buf *bp)
-186c166
+186c214
 < 	register s;
 ---
 > 	register int s;
-218,220c198,199
+218,220c246,247
 < incore(dev, blkno)
 < dev_t dev;
 < daddr_t blkno;
 ---
 > int
 > incore(dev_t dev, daddr_t blkno)
-238,240c217
+238,240c265
 < getblk(dev, blkno)
 < dev_t dev;
 < daddr_t blkno;
 ---
 > getblk(dev_t dev, daddr_t blkno)
-245c222
+245c270
 < 	register i;
 ---
 > 	register int i;
-309c286
+309c334
 < geteblk()
 ---
 > geteblk(void)
-343,344c320,321
+343,344c368,369
 < iowait(bp)
 < register struct buf *bp;
 ---
 > void
 > iowait(struct buf *bp)
-358,359c335,336
+358,359c383,384
 < notavail(bp)
 < register struct buf *bp;
 ---
 > void
 > notavail(struct buf *bp)
-361c338
+361c386
 < 	register s;
 ---
 > 	register int s;
-374,375c351,352
+374,375c399,400
 < iodone(bp)
 < register struct buf *bp;
 ---
 > void
 > iodone(struct buf *bp)
-378,379c355,356
+378,379c403,404
 < 	if(bp->b_flags&B_MAP)
 < 		mapfree(bp);
 ---
 > 	/* v7's B_MAP/mapfree path (UNIBUS map release after physio) is gone
 > 	 * -- no buf on this port carries B_MAP, so the branch was dead. */
-392,393c369,370
+392,393c417,418
 < clrbuf(bp)
 < struct buf *bp;
 ---
 > void
 > clrbuf(struct buf *bp)
-395,396c372,373
+395,396c420,421
 < 	register *p;
 < 	register c;
 ---
 > 	register int *p;
 > 	register int c;
-409,410c386,387
+409,410c434,435
 < swap(blkno, coreaddr, count, rdflg)
 < register count;
 ---
 > void
 > swap(daddr_t blkno, int coreaddr, int count, int rdflg)
-413c390
+413c438
 < 	register tcount;
 ---
 > 	register int tcount;
-425c402,405
+425c450,453
 < 		bp->b_flags = B_BUSY | B_PHYS | rdflg;
 ---
 > 		/* v7 set B_PHYS (UNIBUS-mapped physio) and b_xmem (high
 > 		 * 6 bits of an 18-bit phys address); neither is ever read
 > 		 * on this port, so they are dropped. */
 > 		bp->b_flags = B_BUSY | rdflg;
-433d412
+433d460
 < 		bp->b_xmem = (coreaddr>>10) & 077;
-456,457c435,436
+456,457c483,484
 < bflush(dev)
 < dev_t dev;
 ---
 > void
 > bflush(dev_t dev)
-475,551d453
+475,551d501
 <  * Raw I/O. The arguments are
 <  *	The strategy routine for the device
 <  *	A buffer, which will always be a special buffer
@@ -12380,20 +14651,21 @@ Expect:
 < }
 < 
 < /*
-557,558c459,460
+557,558c507,508
 < geterror(bp)
 < register struct buf *bp;
 ---
 > void
 > geterror(struct buf *bp)
+
 ```
 
-### cmd/login.c
+### usr/src/cmd/login.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/login.c unix-v7-c99/cmd/login.c || true
+diff unix-v7-c99/v7/usr/src/cmd/login.c unix-v7-c99/usr/src/cmd/login.c || true
 ```
 
 Expect:
@@ -12446,14 +14718,15 @@ Expect:
 < 	signal(SIGINT, catch);
 ---
 > 	signal(SIGINT, (int)catch);
+
 ```
 
-### cmd/ls.c
+### usr/src/cmd/ls.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/ls.c unix-v7-c99/cmd/ls.c || true
+diff unix-v7-c99/v7/usr/src/cmd/ls.c unix-v7-c99/usr/src/cmd/ls.c || true
 ```
 
 Expect:
@@ -12640,14 +14913,15 @@ Expect:
 ---
 > int
 > compar(struct lbuf **pp1, struct lbuf **pp2)
+
 ```
 
-### cmd/sh/args.c
+### usr/src/cmd/sh/args.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/args.c unix-v7-c99/cmd/sh/args.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/args.c unix-v7-c99/usr/src/cmd/sh/args.c || true
 ```
 
 Expect:
@@ -12760,14 +15034,15 @@ Expect:
 < DOLPTR	useargs()
 ---
 > DOLPTR	useargs(void)
+
 ```
 
-### cmd/sh/ctype.c
+### usr/src/cmd/sh/ctype.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/ctype.c unix-v7-c99/cmd/sh/ctype.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/ctype.c unix-v7-c99/usr/src/cmd/sh/ctype.c || true
 ```
 
 Expect:
@@ -12781,14 +15056,15 @@ Expect:
 < char	_ctype2[] {
 ---
 > char	_ctype2[] = {
+
 ```
 
-### cmd/sh/defs.h
+### usr/src/cmd/sh/defs.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/defs.h unix-v7-c99/cmd/sh/defs.h || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/defs.h unix-v7-c99/usr/src/cmd/sh/defs.h || true
 ```
 
 Expect:
@@ -12991,14 +15267,15 @@ Expect:
 < address	end[];
 ---
 > extern address	end[];
+
 ```
 
-### cmd/sh/expand.c
+### usr/src/cmd/sh/expand.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/expand.c unix-v7-c99/cmd/sh/expand.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/expand.c unix-v7-c99/usr/src/cmd/sh/expand.c || true
 ```
 
 Expect:
@@ -13080,14 +15357,15 @@ Expect:
 > INT makearg(REG ARGPTR args)
 188a195
 > 	return(0);
+
 ```
 
-### cmd/sh/mode.h
+### usr/src/cmd/sh/mode.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/mode.h unix-v7-c99/cmd/sh/mode.h || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/mode.h unix-v7-c99/usr/src/cmd/sh/mode.h || true
 ```
 
 Expect:
@@ -13276,14 +15554,15 @@ Expect:
 > #define regptr  u._reg.regptr
 > #define regcom  u._reg.regcom
 > #define regnxt  u._reg.regnxt
+
 ```
 
-### cmd/sh/msg.c
+### usr/src/cmd/sh/msg.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/msg.c unix-v7-c99/cmd/sh/msg.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/msg.c unix-v7-c99/usr/src/cmd/sh/msg.c || true
 ```
 
 Expect:
@@ -13301,14 +15580,15 @@ Expect:
 < SYSTAB	commands {
 ---
 > SYSTAB	commands = {
+
 ```
 
-### cmd/sh/service.c
+### usr/src/cmd/sh/service.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/service.c unix-v7-c99/cmd/sh/service.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/service.c unix-v7-c99/usr/src/cmd/sh/service.c || true
 ```
 
 Expect:
@@ -13543,14 +15823,15 @@ Expect:
 < 			makearg(argp); count++;
 ---
 > 			makearg(arg); count++;
+
 ```
 
-### cmd/sh/word.c
+### usr/src/cmd/sh/word.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/word.c unix-v7-c99/cmd/sh/word.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/word.c unix-v7-c99/usr/src/cmd/sh/word.c || true
 ```
 
 Expect:
@@ -13607,14 +15888,15 @@ Expect:
 < LOCAL	readb()
 ---
 > LOCAL	INT readb(void)
+
 ```
 
-### cmd/sh/xec.c
+### usr/src/cmd/sh/xec.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/xec.c unix-v7-c99/cmd/sh/xec.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/xec.c unix-v7-c99/usr/src/cmd/sh/xec.c || true
 ```
 
 Expect:
@@ -13820,14 +16102,15 @@ Expect:
 < 	execute(cmd(NL, NLFLG|MTFLG),0);
 ---
 > 	execute(cmd(NL, NLFLG|MTFLG),0,(INT *)0,(INT *)0);
+
 ```
 
-### h/buf.h
+### usr/sys/h/buf.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/buf.h unix-v7-c99/h/buf.h || true
+diff unix-v7-c99/v7/usr/sys/h/buf.h unix-v7-c99/usr/sys/h/buf.h || true
 ```
 
 Expect:
@@ -13864,14 +16147,15 @@ Expect:
 < #define	b_errcnt b_resid
 ---
 > #endif
+
 ```
 
-### h/dir.h
+### usr/sys/h/dir.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/dir.h unix-v7-c99/h/dir.h || true
+diff unix-v7-c99/v7/usr/sys/h/dir.h unix-v7-c99/usr/sys/h/dir.h || true
 ```
 
 Expect:
@@ -13884,14 +16168,15 @@ Expect:
 8a12,13
 > 
 > #endif
+
 ```
 
-### h/inode.h
+### usr/sys/h/inode.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/inode.h unix-v7-c99/h/inode.h || true
+diff unix-v7-c99/v7/usr/sys/h/inode.h unix-v7-c99/usr/sys/h/inode.h || true
 ```
 
 Expect:
@@ -13933,14 +16218,15 @@ Expect:
 ---
 > /* v7 had `struct inode *mpxip` here for the mpx multiplexor server's
 >  * virtual inode; never assigned on this port, so removed. */
+
 ```
 
-### h/map.h
+### usr/sys/h/map.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/map.h unix-v7-c99/h/map.h || true
+diff unix-v7-c99/v7/usr/sys/h/map.h unix-v7-c99/usr/sys/h/map.h || true
 ```
 
 Expect:
@@ -13960,14 +16246,15 @@ Expect:
 > extern struct map swapmap[SMAPSIZ];	/* space for swap allocation */
 > 
 > #endif
+
 ```
 
-### h/param.h
+### usr/sys/h/param.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/param.h unix-v7-c99/h/param.h || true
+diff unix-v7-c99/v7/usr/sys/h/param.h unix-v7-c99/usr/sys/h/param.h || true
 ```
 
 Expect:
@@ -14060,14 +16347,15 @@ Expect:
 144a147,148
 > 
 > #endif
+
 ```
 
-### h/proc.h
+### usr/sys/h/proc.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/proc.h unix-v7-c99/h/proc.h || true
+diff unix-v7-c99/v7/usr/sys/h/proc.h unix-v7-c99/usr/sys/h/proc.h || true
 ```
 
 Expect:
@@ -14100,14 +16388,15 @@ Expect:
 69a72,73
 > 
 > #endif
+
 ```
 
-### h/user.h
+### usr/sys/h/user.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/h/user.h unix-v7-c99/h/user.h || true
+diff unix-v7-c99/v7/usr/sys/h/user.h unix-v7-c99/usr/sys/h/user.h || true
 ```
 
 Expect:
@@ -14152,14 +16441,15 @@ Expect:
 ---
 > 	/* v7 had `short u_fpflag` here (per its comment, "unused now, will
 > 	 * be later") -- it never got a "later".  Dropped. */
+
 ```
 
-### include/ctype.h
+### usr/include/ctype.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/ctype.h unix-v7-c99/include/ctype.h || true
+diff unix-v7-c99/v7/usr/include/ctype.h unix-v7-c99/usr/include/ctype.h || true
 ```
 
 Expect:
@@ -14199,14 +16489,15 @@ Expect:
 > #define	isspace(c)	((c)==' '||(c)=='\t'||(c)=='\n'||(c)=='\r'||(c)=='\f')
 > #define	toupper(c)	(islower(c)?(c)-'a'+'A':(c))
 > #define	tolower(c)	(isupper(c)?(c)-'A'+'a':(c))
+
 ```
 
-### include/errno.h
+### usr/include/errno.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/errno.h unix-v7-c99/include/errno.h || true
+diff unix-v7-c99/v7/usr/include/errno.h unix-v7-c99/usr/include/errno.h || true
 ```
 
 Expect:
@@ -14241,14 +16532,15 @@ Expect:
 > void	exit(int);
 > 
 > #endif
+
 ```
 
-### include/grp.h
+### usr/include/grp.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/grp.h unix-v7-c99/include/grp.h || true
+diff unix-v7-c99/v7/usr/include/grp.h unix-v7-c99/usr/include/grp.h || true
 ```
 
 Expect:
@@ -14264,14 +16556,15 @@ Expect:
 > extern void setgrent(void);
 > extern void endgrent(void);
 > #endif
+
 ```
 
-### include/pwd.h
+### usr/include/pwd.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/pwd.h unix-v7-c99/include/pwd.h || true
+diff unix-v7-c99/v7/usr/include/pwd.h unix-v7-c99/usr/include/pwd.h || true
 ```
 
 Expect:
@@ -14288,14 +16581,15 @@ Expect:
 > extern void setpwent(void);
 > extern void endpwent(void);
 > #endif
+
 ```
 
-### include/setjmp.h
+### usr/include/setjmp.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/setjmp.h unix-v7-c99/include/setjmp.h || true
+diff unix-v7-c99/v7/usr/include/setjmp.h unix-v7-c99/usr/include/setjmp.h || true
 ```
 
 Expect:
@@ -14307,14 +16601,15 @@ Expect:
 > typedef int jmp_buf[10];
 > int	setjmp(jmp_buf);
 > void	longjmp(jmp_buf, int);
+
 ```
 
-### include/signal.h
+### usr/include/signal.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/signal.h unix-v7-c99/include/signal.h || true
+diff unix-v7-c99/v7/usr/include/signal.h unix-v7-c99/usr/include/signal.h || true
 ```
 
 Expect:
@@ -14331,14 +16626,15 @@ Expect:
 ---
 > #define	SIG_DFL	0
 > #define	SIG_IGN	1
+
 ```
 
-### include/sys/dir.h
+### usr/include/sys/dir.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/sys/dir.h unix-v7-c99/include/sys/dir.h || true
+diff unix-v7-c99/v7/usr/include/sys/dir.h unix-v7-c99/usr/include/sys/dir.h || true
 ```
 
 Expect:
@@ -14349,14 +16645,15 @@ Expect:
 > #define SYS_DIR_H
 8a11
 > #endif
+
 ```
 
-### include/sys/stat.h
+### usr/include/sys/stat.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/sys/stat.h unix-v7-c99/include/sys/stat.h || true
+diff unix-v7-c99/v7/usr/include/sys/stat.h unix-v7-c99/usr/include/sys/stat.h || true
 ```
 
 Expect:
@@ -14400,14 +16697,15 @@ Expect:
 > #define	S_ISGID	0002000
 > #define	S_ISVTX	0001000
 > #endif
+
 ```
 
-### include/sys/timeb.h
+### usr/include/sys/timeb.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/sys/timeb.h unix-v7-c99/include/sys/timeb.h || true
+diff unix-v7-c99/v7/usr/include/sys/timeb.h unix-v7-c99/usr/include/sys/timeb.h || true
 ```
 
 Expect:
@@ -14419,14 +16717,15 @@ Expect:
 > #include <sys/types.h>
 9a13
 > #endif
+
 ```
 
-### include/sys/times.h
+### usr/include/sys/times.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/sys/times.h unix-v7-c99/include/sys/times.h || true
+diff unix-v7-c99/v7/usr/include/sys/times.h unix-v7-c99/usr/include/sys/times.h || true
 ```
 
 Expect:
@@ -14437,14 +16736,15 @@ Expect:
 > #define SYS_TIMES_H
 9a12
 > #endif
+
 ```
 
-### include/sys/types.h
+### usr/include/sys/types.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/sys/types.h unix-v7-c99/include/sys/types.h || true
+diff unix-v7-c99/v7/usr/include/sys/types.h unix-v7-c99/usr/include/sys/types.h || true
 ```
 
 Expect:
@@ -14475,14 +16775,15 @@ Expect:
 > typedef	int		dev_t;
 > typedef	long		off_t;
 > #endif
+
 ```
 
-### include/time.h
+### usr/include/time.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/time.h unix-v7-c99/include/time.h || true
+diff unix-v7-c99/v7/usr/include/time.h unix-v7-c99/usr/include/time.h || true
 ```
 
 Expect:
@@ -14493,143 +16794,15 @@ Expect:
 > #define TIME_H
 11a14
 > #endif
+
 ```
 
-### lib/crt0.s
+### usr/src/libc/malloc.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/csu/crt0.s unix-v7-c99/lib/crt0.s || true
-```
-
-Expect:
-
-```
-1,36c1,6
-< / C runtime startoff
-< 
-< .globl	_exit, _environ
-< .globl	start
-< .globl	_main
-< exit = 1.
-< 
-< start:
-< 	setd
-< 	mov	2(sp),r0
-< 	clr	-2(r0)
-< 	mov	sp,r0
-< 	sub	$4,sp
-< 	mov	4(sp),(sp)
-< 	tst	(r0)+
-< 	mov	r0,2(sp)
-< 1:
-< 	tst	(r0)+
-< 	bne	1b
-< 	cmp	r0,*2(sp)
-< 	blo	1f
-< 	tst	-(r0)
-< 1:
-< 	mov	r0,4(sp)
-< 	mov	r0,_environ
-< 	jsr	pc,_main
-< 	cmp	(sp)+,(sp)+
-< 	mov	r0,(sp)
-< 	jsr	pc,*$_exit
-< 	sys	exit
-< 
-< .bss
-< _environ:
-< 	.=.+2
-< .data
-< 	.=.+2		/ loc 0 for I/D; null ptr points here.
----
-> .globl _start
-> _start:
-> 	bl _startc
-> 	mov r7, #1
-> 	svc #0
-> 	b .
-```
-
-### lib/syscall.s
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/v6/syscall.s unix-v7-c99/lib/syscall.s || true
-```
-
-Expect:
-
-```
-1c1,16
-< / syscall
----
-> .globl syscall3
-> syscall3:
-> 	mov ip, r7
-> 	mov r7, r0
-> 	mov r0, r1
-> 	mov r1, r2
-> 	mov r2, r3
-> 	svc #0
-> 	mov r7, ip
-> 	cmp r0, #0
-> 	bxge lr
-> 	rsb r1, r0, #0
-> 	ldr r2, =errno
-> 	str r1, [r2]
-> 	mvn r0, #0
-> 	bx lr
-3,24c18,22
-< .globl	_syscall,csv,cret,cerror
-< _syscall:
-< 	jsr	r5,csv
-< 	mov	r5,r2
-< 	add	$04,r2
-< 	mov	$9f,r3
-< 	mov	(r2)+,r0
-< 	bic	$!0377,r0
-< 	bis	$sys,r0
-< 	mov	r0,(r3)+
-< 	mov	(r2)+,r0
-< 	mov	(r2)+,r1
-< 	mov	(r2)+,(r3)+
-< 	mov	(r2)+,(r3)+
-< 	mov	(r2)+,(r3)+
-< 	mov	(r2)+,(r3)+
-< 	mov	(r2)+,(r3)+
-< 	sys	0; 9f
-< 	bec	1f
-< 	jmp	cerror
-< 1:
-< 	jmp	cret
----
-> .globl setjmp
-> setjmp:
-> 	stmia r0, {r4-r11, sp, lr}
-> 	mov r0, #0
-> 	bx lr
-26,27c24,30
-< 	.data
-< 9:	.=.+12.
----
-> .globl longjmp
-> longjmp:
-> 	ldmia r0, {r4-r11, sp, lr}
-> 	mov r0, r1
-> 	cmp r0, #0
-> 	moveq r0, #1
-> 	bx lr
-```
-
-### lib/malloc.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/malloc.c unix-v7-c99/lib/malloc.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/malloc.c unix-v7-c99/usr/src/libc/malloc.c || true
 ```
 
 Expect:
@@ -14863,14 +17036,15 @@ Expect:
 > 	return(q);
 189d46
 < #endif
+
 ```
 
-### lib/nlist.c
+### usr/src/libc/nlist.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/nlist.c unix-v7-c99/lib/nlist.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/nlist.c unix-v7-c99/usr/src/libc/nlist.c || true
 ```
 
 Expect:
@@ -15062,14 +17236,15 @@ Expect:
 > 				p->n_type = N_DATA | N_EXT;
 > 			else
 > 				p->n_type = N_BSS | N_EXT;
+
 ```
 
-### sys/main.c
+### usr/sys/sys/main.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/main.c unix-v7-c99/sys/main.c || true
+diff unix-v7-c99/v7/usr/sys/sys/main.c unix-v7-c99/usr/sys/sys/main.c || true
 ```
 
 Expect:
@@ -15084,9 +17259,57 @@ Expect:
 < #include "../h/proc.h"
 < #include "../h/inode.h"
 < #include "../h/seg.h"
-12a5
-> #include "../h/proto.h"
-15,28c8,12
+12a5,53
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
+15,28c56,60
 <  * Initialization code.
 <  * Called from cold start routine as
 <  * soon as a stack and segmentation
@@ -15107,14 +17330,14 @@ Expect:
 >  * boot.  The v7 PDP-11 main body (manually set up proc[0], call
 >  * cinit/binit/iinit, fork the init process, jump to sched()) is replaced
 >  * by armboot()'s scheduler + ELF loader, so main() is now just glue.
-30c14,15
+30c62,63
 < main()
 ---
 > void
 > main(void)
-32d16
+32d64
 < 
-34,108c18
+34,108c66
 < 	/*
 < 	 * set up system process
 < 	 */
@@ -15192,18 +17415,19 @@ Expect:
 < 	time = fp->s_time;
 ---
 > 	armboot();
-125c35
+125c83
 < binit()
 ---
 > void binit(void)
+
 ```
 
-### sys/malloc.c
+### usr/sys/sys/malloc.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/malloc.c unix-v7-c99/sys/malloc.c || true
+diff unix-v7-c99/v7/usr/sys/sys/malloc.c unix-v7-c99/usr/sys/sys/malloc.c || true
 ```
 
 Expect:
@@ -15211,133 +17435,230 @@ Expect:
 ```
 2d1
 < #include "../h/systm.h"
-3a3,6
-> #include "../h/proto.h"
+3a3,54
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
 > struct map coremap[CMAPSIZ];	/* space for core allocation */
 > struct map swapmap[SMAPSIZ];	/* space for swap allocation */
-15,16c18,19
+15,16c66,67
 < malloc(mp, size)
 < struct map *mp;
 ---
 > int
 > malloc(struct map *mp, int size)
-29c32
+29c80
 < 				} while ((bp-1)->m_size = bp->m_size);
 ---
 > 				} while (((bp-1)->m_size = bp->m_size));
-43,45c46,47
+43,45c94,95
 < mfree(mp, size, a)
 < struct map *mp;
 < register int a;
 ---
 > void
 > mfree(struct map *mp, int size, int a)
-50,53c52
+50,53c100
 < 	if ((bp = mp)==coremap && runin) {
 < 		runin = 0;
 < 		wakeup((caddr_t)&runin);	/* Wake scheduler when freeing core */
 < 	}
 ---
 > 	bp = mp;
-77c76
+77c124
 < 			} while (size = t);
 ---
 > 			} while ((size = t));
+
 ```
 
-### sys/prf.c
+### usr/sys/sys/prf.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/prf.c unix-v7-c99/sys/prf.c || true
+diff unix-v7-c99/v7/usr/sys/sys/prf.c unix-v7-c99/usr/sys/sys/prf.c || true
 ```
 
 Expect:
 
 ```
-2,5c2,3
+2,5c2,51
 < #include "../h/systm.h"
 < #include "../h/seg.h"
 < #include "../h/buf.h"
 < #include "../h/conf.h"
 ---
-> #include "../h/proto.h"
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > #include <stdarg.h>
-14a13
+14a61
 > void printn(long n, int b);
-26,28c25,26
+26,28c73,74
 < printf(fmt, x1)
 < register char *fmt;
 < unsigned x1;
 ---
 > void
 > printf(char *fmt, ...)
-30,31c28,29
+30,31c76,77
 < 	register c;
 < 	register unsigned int *adx;
 ---
 > 	register int c;
 > 	va_list adx;
-34c32
+34c80
 < 	adx = &x1;
 ---
 > 	va_start(adx, fmt);
-37c35,36
+37c83,84
 < 		if(c == '\0')
 ---
 > 		if(c == '\0') {
 > 			va_end(adx);
-38a38
+38a86
 > 		}
-43c43
+43c91
 < 		printn((long)*adx, c=='o'? 8: (c=='x'? 16:10));
 ---
 > 		printn((long)va_arg(adx, unsigned), c=='o'? 8: (c=='x'? 16:10));
-45,46c45,46
+45,46c93,94
 < 		s = (char *)*adx;
 < 		while(c = *s++)
 ---
 > 		s = va_arg(adx, char *);
 > 		while((c = *s++))
-49,50c49
+49,50c97
 < 		printn(*(long *)adx, 10);
 < 		adx += (sizeof(long) / sizeof(int)) - 1;
 ---
 > 		printn(va_arg(adx, long), 10);
-52d50
+52d98
 < 	adx++;
-59,60c57,58
+59,60c105,106
 < printn(n, b)
 < long n;
 ---
 > void
 > printn(long n, int b)
-68c66
+68c114
 < 	if(a = n/b)
 ---
 > 	if((a = n/b))
-79,80c77,78
+79,80c125,126
 < panic(s)
 < char *s;
 ---
 > void
 > panic(char *s)
-83d80
+83d128
 < 	update();
-86c83
+86c131
 < 		idle();
 ---
 > 		;
-95,97c92,93
+95,97c140,141
 < prdev(str, dev)
 < char *str;
 < dev_t dev;
 ---
 > void
 > prdev(char *str, dev_t dev)
-103,116d98
+103,116d146
 < /*
 <  * deverr prints a diagnostic from
 <  * a device driver.
@@ -15352,14 +17673,15 @@ Expect:
 < 	prdev("err", bp->b_dev);
 < 	printf("bn=%D er=%o,%o\n", bp->b_blkno, o1, o2);
 < }
+
 ```
 
-### cmd/mount.c
+### usr/src/cmd/mount.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/mount.c unix-v7-c99/cmd/mount.c || true
+diff unix-v7-c99/v7/usr/src/cmd/mount.c unix-v7-c99/usr/src/cmd/mount.c || true
 ```
 
 Expect:
@@ -15371,14 +17693,15 @@ Expect:
 ---
 > int
 > main(int argc, char **argv)
+
 ```
 
-### cmd/umount.c
+### usr/src/cmd/umount.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/umount.c unix-v7-c99/cmd/umount.c || true
+diff unix-v7-c99/v7/usr/src/cmd/umount.c unix-v7-c99/usr/src/cmd/umount.c || true
 ```
 
 Expect:
@@ -15393,14 +17716,15 @@ Expect:
 ---
 > int
 > main(int argc, char **argv)
+
 ```
 
-### lib/getpwent.c
+### usr/src/libc/getpwent.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getpwent.c unix-v7-c99/lib/getpwent.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/getpwent.c unix-v7-c99/usr/src/libc/getpwent.c || true
 ```
 
 Expect:
@@ -15425,14 +17749,15 @@ Expect:
 < getpwent()
 ---
 > getpwent(void)
+
 ```
 
-### lib/getpwnam.c
+### usr/src/libc/getpwnam.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getpwnam.c unix-v7-c99/lib/getpwnam.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/getpwnam.c unix-v7-c99/usr/src/libc/getpwnam.c || true
 ```
 
 Expect:
@@ -15447,14 +17772,15 @@ Expect:
 > getpwnam(char *name)
 8d7
 < 	struct passwd *getpwent();
+
 ```
 
-### lib/getpwuid.c
+### usr/src/libc/getpwuid.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getpwuid.c unix-v7-c99/lib/getpwuid.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/getpwuid.c unix-v7-c99/usr/src/libc/getpwuid.c || true
 ```
 
 Expect:
@@ -15467,14 +17793,15 @@ Expect:
 > getpwuid(register int uid)
 8d6
 < 	struct passwd *getpwent();
+
 ```
 
-### lib/strncat.c
+### usr/src/libc/strncat.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/strncat.c unix-v7-c99/lib/strncat.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/strncat.c unix-v7-c99/usr/src/libc/strncat.c || true
 ```
 
 Expect:
@@ -15490,14 +17817,15 @@ Expect:
 < 	while (*s1++ = *s2++)
 ---
 > 	while ((*s1++ = *s2++))
+
 ```
 
-### lib/ttyslot.c
+### usr/src/libc/ttyslot.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/ttyslot.c unix-v7-c99/lib/ttyslot.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/ttyslot.c unix-v7-c99/usr/src/libc/ttyslot.c || true
 ```
 
 Expect:
@@ -15530,14 +17858,15 @@ Expect:
 < getttys(f)
 ---
 > getttys(int f)
+
 ```
 
-### lib/execvp.c
+### usr/src/libc/execvp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/execvp.c unix-v7-c99/lib/execvp.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/execvp.c unix-v7-c99/usr/src/libc/execvp.c || true
 ```
 
 Expect:
@@ -15581,14 +17910,15 @@ Expect:
 < char *si;
 ---
 > execat(register char *s1, register char *s2, char *si)
+
 ```
 
-### lib/getenv.c
+### usr/src/libc/getenv.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/getenv.c unix-v7-c99/lib/getenv.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/getenv.c unix-v7-c99/usr/src/libc/getenv.c || true
 ```
 
 Expect:
@@ -15614,14 +17944,15 @@ Expect:
 < register char *s1, *s2;
 ---
 > nvmatch(register char *s1, register char *s2)
+
 ```
 
-### lib/atoi.c
+### usr/src/libc/atoi.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/atoi.c unix-v7-c99/lib/atoi.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/atoi.c unix-v7-c99/usr/src/libc/atoi.c || true
 ```
 
 Expect:
@@ -15635,14 +17966,15 @@ Expect:
 > atoi(register char *p)
 15a16
 > 			/* fallthrough */
+
 ```
 
-### lib/atol.c
+### usr/src/libc/atol.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/atol.c unix-v7-c99/lib/atol.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/atol.c unix-v7-c99/usr/src/libc/atol.c || true
 ```
 
 Expect:
@@ -15655,14 +17987,15 @@ Expect:
 > atol(register char *p)
 16a16
 > 			/* fallthrough */
+
 ```
 
-### lib/index.c
+### usr/src/libc/index.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/index.c unix-v7-c99/lib/index.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/index.c unix-v7-c99/usr/src/libc/index.c || true
 ```
 
 Expect:
@@ -15677,14 +18010,15 @@ Expect:
 < 		if (*sp == c)
 ---
 > 		if (*sp == (char)c)
+
 ```
 
-### lib/rindex.c
+### usr/src/libc/rindex.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/rindex.c unix-v7-c99/lib/rindex.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/rindex.c unix-v7-c99/usr/src/libc/rindex.c || true
 ```
 
 Expect:
@@ -15699,14 +18033,15 @@ Expect:
 < 		if (*sp == c)
 ---
 > 		if (*sp == (char)c)
+
 ```
 
-### lib/strcat.c
+### usr/src/libc/strcat.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/strcat.c unix-v7-c99/lib/strcat.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/strcat.c unix-v7-c99/usr/src/libc/strcat.c || true
 ```
 
 Expect:
@@ -15721,14 +18056,15 @@ Expect:
 < 	while (*s1++ = *s2++)
 ---
 > 	while ((*s1++ = *s2++))
+
 ```
 
-### lib/strcmp.c
+### usr/src/libc/strcmp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/strcmp.c unix-v7-c99/lib/strcmp.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/strcmp.c unix-v7-c99/usr/src/libc/strcmp.c || true
 ```
 
 Expect:
@@ -15740,14 +18076,15 @@ Expect:
 ---
 > int
 > strcmp(register char *s1, register char *s2)
+
 ```
 
-### lib/strcpy.c
+### usr/src/libc/strcpy.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/strcpy.c unix-v7-c99/lib/strcpy.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/strcpy.c unix-v7-c99/usr/src/libc/strcpy.c || true
 ```
 
 Expect:
@@ -15762,14 +18099,15 @@ Expect:
 < 	while (*s1++ = *s2++)
 ---
 > 	while ((*s1++ = *s2++))
+
 ```
 
-### lib/strlen.c
+### usr/src/libc/strlen.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/strlen.c unix-v7-c99/lib/strlen.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/strlen.c unix-v7-c99/usr/src/libc/strlen.c || true
 ```
 
 Expect:
@@ -15785,14 +18123,15 @@ Expect:
 < 	register n;
 ---
 > 	register int n;
+
 ```
 
-### lib/strncmp.c
+### usr/src/libc/strncmp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/strncmp.c unix-v7-c99/lib/strncmp.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/strncmp.c unix-v7-c99/usr/src/libc/strncmp.c || true
 ```
 
 Expect:
@@ -15805,14 +18144,15 @@ Expect:
 ---
 > int
 > strncmp(register char *s1, register char *s2, register int n)
+
 ```
 
-### lib/strncpy.c
+### usr/src/libc/strncpy.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/strncpy.c unix-v7-c99/lib/strncpy.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/strncpy.c unix-v7-c99/usr/src/libc/strncpy.c || true
 ```
 
 Expect:
@@ -15827,14 +18167,15 @@ Expect:
 < 	register i;
 ---
 > 	register int i;
+
 ```
 
-### lib/isatty.c
+### usr/src/libc/isatty.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/isatty.c unix-v7-c99/lib/isatty.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/isatty.c unix-v7-c99/usr/src/libc/isatty.c || true
 ```
 
 Expect:
@@ -15847,14 +18188,15 @@ Expect:
 ---
 > int
 > isatty(int f)
+
 ```
 
-### lib/perror.c
+### usr/src/libc/perror.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/perror.c unix-v7-c99/lib/perror.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/perror.c unix-v7-c99/usr/src/libc/perror.c || true
 ```
 
 Expect:
@@ -15878,14 +18220,15 @@ Expect:
 < 	register n;
 ---
 > 	register int n;
+
 ```
 
-### lib/swab.c
+### usr/src/libc/swab.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/swab.c unix-v7-c99/lib/swab.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/swab.c unix-v7-c99/usr/src/libc/swab.c || true
 ```
 
 Expect:
@@ -15898,14 +18241,15 @@ Expect:
 ---
 > void
 > swab(register short *pf, register short *pt, register int n)
+
 ```
 
-### lib/rand.c
+### usr/src/libc/rand.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/rand.c unix-v7-c99/lib/rand.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/rand.c unix-v7-c99/usr/src/libc/rand.c || true
 ```
 
 Expect:
@@ -15922,14 +18266,15 @@ Expect:
 ---
 > int
 > rand(void)
+
 ```
 
-### lib/mktemp.c
+### usr/src/libc/mktemp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/mktemp.c unix-v7-c99/lib/mktemp.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/mktemp.c unix-v7-c99/usr/src/libc/mktemp.c || true
 ```
 
 Expect:
@@ -15946,27 +18291,23 @@ Expect:
 < 	register i;
 ---
 > 	register int i;
+
 ```
 
-### lib/errlst.c
+### usr/src/libc/errlst.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/errlst.c unix-v7-c99/lib/errlst.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/errlst.c unix-v7-c99/usr/src/libc/errlst.c || true
 ```
 
 Expect:
 
 ```
-```
-
-### lib/ttyname.c
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/ttyname.c unix-v7-c99/lib/ttyname.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/ttyname.c unix-v7-c99/usr/src/libc/ttyname.c || true
 ```
 
 Expect:
@@ -15990,12 +18331,12 @@ Expect:
 > 	register int df;
 ```
 
-### lib/qsort.c
+### usr/src/libc/qsort.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/qsort.c unix-v7-c99/lib/qsort.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/qsort.c unix-v7-c99/usr/src/libc/qsort.c || true
 ```
 
 Expect:
@@ -16049,14 +18390,15 @@ Expect:
 ---
 > static void
 > qstexc(char *i, char *j, char *k)
+
 ```
 
-### lib/calloc.c
+### usr/src/libc/calloc.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/calloc.c unix-v7-c99/lib/calloc.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/calloc.c unix-v7-c99/usr/src/libc/calloc.c || true
 ```
 
 Expect:
@@ -16084,14 +18426,15 @@ Expect:
 < {
 < 	free(p);
 < }
+
 ```
 
-### lib/tell.c
+### usr/src/libc/tell.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/tell.c unix-v7-c99/lib/tell.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/tell.c unix-v7-c99/usr/src/libc/tell.c || true
 ```
 
 Expect:
@@ -16105,14 +18448,15 @@ Expect:
 < long tell(f)
 ---
 > long tell(int f)
+
 ```
 
-### lib/system.c
+### usr/src/libc/system.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/system.c unix-v7-c99/lib/system.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/system.c unix-v7-c99/usr/src/libc/system.c || true
 ```
 
 Expect:
@@ -16138,14 +18482,15 @@ Expect:
 ---
 > 	signal(SIGINT, (int)istat);
 > 	signal(SIGQUIT, (int)qstat);
+
 ```
 
-### lib/timezone.c
+### usr/src/libc/timezone.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/timezone.c unix-v7-c99/lib/timezone.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/timezone.c unix-v7-c99/usr/src/libc/timezone.c || true
 ```
 
 Expect:
@@ -16173,14 +18518,15 @@ Expect:
 < char *timezone(zone, dst)
 ---
 > char *timezone(int zone, int dst)
+
 ```
 
-### lib/getlogin.c
+### usr/src/libc/getlogin.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/getlogin.c unix-v7-c99/lib/getlogin.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/getlogin.c unix-v7-c99/usr/src/libc/getlogin.c || true
 ```
 
 Expect:
@@ -16215,14 +18561,15 @@ Expect:
 < 	return( ubuf.ut_name );
 ---
 > 	return(name);
+
 ```
 
-### lib/atof.c
+### usr/src/libc/atof.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/atof.c unix-v7-c99/lib/atof.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/atof.c unix-v7-c99/usr/src/libc/atof.c || true
 ```
 
 Expect:
@@ -16254,14 +18601,15 @@ Expect:
 < 	register eexp, exp, neg, negexp, bexp;
 ---
 > 	register int eexp, exp, neg, negexp, bexp;
+
 ```
 
-### lib/clrerr.c
+### usr/src/libc/clrerr.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/clrerr.c unix-v7-c99/lib/clrerr.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/clrerr.c unix-v7-c99/usr/src/libc/clrerr.c || true
 ```
 
 Expect:
@@ -16273,27 +18621,23 @@ Expect:
 ---
 > void
 > clearerr(register struct _iobuf *iop)
+
 ```
 
-### lib/data.c
+### usr/src/libc/data.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/data.c unix-v7-c99/lib/data.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/data.c unix-v7-c99/usr/src/libc/data.c || true
 ```
 
 Expect:
 
 ```
-```
-
-### lib/doscan.c
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/doscan.c unix-v7-c99/lib/doscan.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/doscan.c unix-v7-c99/usr/src/libc/doscan.c || true
 ```
 
 Expect:
@@ -16370,12 +18714,12 @@ Expect:
 > 	register int c, t;
 ```
 
-### lib/endopen.c
+### usr/src/libc/endopen.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/endopen.c unix-v7-c99/lib/endopen.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/endopen.c unix-v7-c99/usr/src/libc/endopen.c || true
 ```
 
 Expect:
@@ -16395,14 +18739,15 @@ Expect:
 < 	int rw;
 ---
 > create(register char *file, int rw)
+
 ```
 
-### lib/fgetc.c
+### usr/src/libc/fgetc.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/fgetc.c unix-v7-c99/lib/fgetc.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/fgetc.c unix-v7-c99/usr/src/libc/fgetc.c || true
 ```
 
 Expect:
@@ -16414,14 +18759,15 @@ Expect:
 ---
 > int
 > fgetc(FILE *fp)
+
 ```
 
-### lib/fgets.c
+### usr/src/libc/fgets.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/fgets.c unix-v7-c99/lib/fgets.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/fgets.c unix-v7-c99/usr/src/libc/fgets.c || true
 ```
 
 Expect:
@@ -16437,14 +18783,15 @@ Expect:
 < 	register c;
 ---
 > 	register int c;
+
 ```
 
-### lib/filbuf.c
+### usr/src/libc/filbuf.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/filbuf.c unix-v7-c99/lib/filbuf.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/filbuf.c unix-v7-c99/usr/src/libc/filbuf.c || true
 ```
 
 Expect:
@@ -16463,14 +18810,15 @@ Expect:
 < 			iop->_base = &smallbuf[fileno(iop)];
 ---
 > 			iop->_base = &smallbuf[(unsigned char)fileno(iop)];
+
 ```
 
-### lib/findiop.c
+### usr/src/libc/findiop.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/findiop.c unix-v7-c99/lib/findiop.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/findiop.c unix-v7-c99/usr/src/libc/findiop.c || true
 ```
 
 Expect:
@@ -16480,14 +18828,15 @@ Expect:
 < _findiop()
 ---
 > _findiop(void)
+
 ```
 
-### lib/flsbuf.c
+### usr/src/libc/flsbuf.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/flsbuf.c unix-v7-c99/lib/flsbuf.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/flsbuf.c unix-v7-c99/usr/src/libc/flsbuf.c || true
 ```
 
 Expect:
@@ -16536,14 +18885,15 @@ Expect:
 ---
 > 	iop->_flag = (char)(iop->_flag &
 > 		~(_IOREAD|_IOWRT|_IONBF|_IOMYBUF|_IOERR|_IOEOF|_IOSTRG|_IORW));
+
 ```
 
-### lib/fopen.c
+### usr/src/libc/fopen.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/fopen.c unix-v7-c99/lib/fopen.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/fopen.c unix-v7-c99/usr/src/libc/fopen.c || true
 ```
 
 Expect:
@@ -16559,14 +18909,15 @@ Expect:
 ---
 > 	FILE *_findiop(void);
 > 	FILE *_endopen(char *file, char *mode, register FILE *iop);
+
 ```
 
-### lib/fprintf.c
+### usr/src/libc/fprintf.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/fprintf.c unix-v7-c99/lib/fprintf.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/fprintf.c unix-v7-c99/usr/src/libc/fprintf.c || true
 ```
 
 Expect:
@@ -16589,14 +18940,15 @@ Expect:
 > 	va_start(ap, fmt);
 > 	_doprnt(fmt, &ap, iop);
 > 	va_end(ap);
+
 ```
 
-### lib/fputc.c
+### usr/src/libc/fputc.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/fputc.c unix-v7-c99/lib/fputc.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/fputc.c unix-v7-c99/usr/src/libc/fputc.c || true
 ```
 
 Expect:
@@ -16608,14 +18960,15 @@ Expect:
 ---
 > int
 > fputc(int c, FILE *fp)
+
 ```
 
-### lib/fputs.c
+### usr/src/libc/fputs.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/fputs.c unix-v7-c99/lib/fputs.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/fputs.c unix-v7-c99/usr/src/libc/fputs.c || true
 ```
 
 Expect:
@@ -16638,14 +18991,15 @@ Expect:
 < 	while (c = *s++)
 ---
 > 	while ((c = *s++))
+
 ```
 
-### lib/freopen.c
+### usr/src/libc/freopen.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/freopen.c unix-v7-c99/lib/freopen.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/freopen.c unix-v7-c99/usr/src/libc/freopen.c || true
 ```
 
 Expect:
@@ -16661,14 +19015,15 @@ Expect:
 < 	FILE *_endopen();
 ---
 > 	FILE *_endopen(char *file, char *mode, register FILE *iop);
+
 ```
 
-### lib/fseek.c
+### usr/src/libc/fseek.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/fseek.c unix-v7-c99/lib/fseek.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/fseek.c unix-v7-c99/usr/src/libc/fseek.c || true
 ```
 
 Expect:
@@ -16685,14 +19040,15 @@ Expect:
 ---
 > int
 > fseek(register FILE *iop, long offset, int ptrname)
+
 ```
 
-### lib/ftell.c
+### usr/src/libc/ftell.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/ftell.c unix-v7-c99/lib/ftell.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/ftell.c unix-v7-c99/usr/src/libc/ftell.c || true
 ```
 
 Expect:
@@ -16711,14 +19067,15 @@ Expect:
 < 	register adjust;
 ---
 > 	register int adjust;
+
 ```
 
-### lib/getchar.c
+### usr/src/libc/getchar.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getchar.c unix-v7-c99/lib/getchar.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/getchar.c unix-v7-c99/usr/src/libc/getchar.c || true
 ```
 
 Expect:
@@ -16729,14 +19086,15 @@ Expect:
 ---
 > int
 > getchar(void)
+
 ```
 
-### lib/getpass.c
+### usr/src/libc/getpass.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getpass.c unix-v7-c99/lib/getpass.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/getpass.c unix-v7-c99/usr/src/libc/getpass.c || true
 ```
 
 Expect:
@@ -16761,14 +19119,15 @@ Expect:
 < 	signal(SIGINT, sig);
 ---
 > 	signal(SIGINT, (int)sig);
+
 ```
 
-### lib/gets.c
+### usr/src/libc/gets.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/gets.c unix-v7-c99/lib/gets.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/gets.c unix-v7-c99/usr/src/libc/gets.c || true
 ```
 
 Expect:
@@ -16783,14 +19142,15 @@ Expect:
 < 	register c;
 ---
 > 	register int c;
+
 ```
 
-### lib/printf.c
+### usr/src/libc/printf.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/printf.c unix-v7-c99/lib/printf.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/printf.c unix-v7-c99/usr/src/libc/printf.c || true
 ```
 
 Expect:
@@ -16812,14 +19172,15 @@ Expect:
 > 	va_start(ap, fmt);
 > 	_doprnt(fmt, &ap, stdout);
 > 	va_end(ap);
+
 ```
 
-### lib/putchar.c
+### usr/src/libc/putchar.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/putchar.c unix-v7-c99/lib/putchar.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/putchar.c unix-v7-c99/usr/src/libc/putchar.c || true
 ```
 
 Expect:
@@ -16835,14 +19196,15 @@ Expect:
 < 	putc(c, stdout);
 ---
 > 	return(putc(c, stdout));
+
 ```
 
-### lib/puts.c
+### usr/src/libc/puts.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/puts.c unix-v7-c99/lib/puts.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/puts.c unix-v7-c99/usr/src/libc/puts.c || true
 ```
 
 Expect:
@@ -16862,14 +19224,15 @@ Expect:
 < 	while (c = *s++)
 ---
 > 	while ((c = *s++))
+
 ```
 
-### lib/rdwr.c
+### usr/src/libc/rdwr.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/rdwr.c unix-v7-c99/lib/rdwr.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/rdwr.c unix-v7-c99/usr/src/libc/rdwr.c || true
 ```
 
 Expect:
@@ -16895,14 +19258,15 @@ Expect:
 ---
 > int
 > fwrite(register char *ptr, unsigned size, unsigned count, register FILE *iop)
+
 ```
 
-### lib/rew.c
+### usr/src/libc/rew.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/rew.c unix-v7-c99/lib/rew.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/rew.c unix-v7-c99/usr/src/libc/rew.c || true
 ```
 
 Expect:
@@ -16914,14 +19278,15 @@ Expect:
 ---
 > void
 > rewind(register struct _iobuf *iop)
+
 ```
 
-### lib/scanf.c
+### usr/src/libc/scanf.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/scanf.c unix-v7-c99/lib/scanf.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/scanf.c unix-v7-c99/usr/src/libc/scanf.c || true
 ```
 
 Expect:
@@ -16978,14 +19343,15 @@ Expect:
 > 	r = _doscan(&_strbuf, fmt, &ap);
 > 	va_end(ap);
 > 	return(r);
+
 ```
 
-### lib/setbuf.c
+### usr/src/libc/setbuf.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/setbuf.c unix-v7-c99/lib/setbuf.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/setbuf.c unix-v7-c99/usr/src/libc/setbuf.c || true
 ```
 
 Expect:
@@ -16998,14 +19364,15 @@ Expect:
 ---
 > void
 > setbuf(register struct _iobuf *iop, char *buf)
+
 ```
 
-### lib/sprintf.c
+### usr/src/libc/sprintf.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/sprintf.c unix-v7-c99/lib/sprintf.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/sprintf.c unix-v7-c99/usr/src/libc/sprintf.c || true
 ```
 
 Expect:
@@ -17028,14 +19395,15 @@ Expect:
 > 	va_start(ap, fmt);
 > 	_doprnt(fmt, &ap, &_strbuf);
 > 	va_end(ap);
+
 ```
 
-### lib/strout.c
+### usr/src/libc/strout.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/strout.c unix-v7-c99/lib/strout.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/strout.c unix-v7-c99/usr/src/libc/strout.c || true
 ```
 
 Expect:
@@ -17050,14 +19418,15 @@ Expect:
 ---
 > void
 > _strout(register char *string, register int count, int adjust, register struct _iobuf *file, int fillch)
+
 ```
 
-### lib/ungetc.c
+### usr/src/libc/ungetc.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/ungetc.c unix-v7-c99/lib/ungetc.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/ungetc.c unix-v7-c99/usr/src/libc/ungetc.c || true
 ```
 
 Expect:
@@ -17079,14 +19448,15 @@ Expect:
 > 			iop->_ptr++;
 12a13
 > 	}
+
 ```
 
-### lib/ctime.c
+### usr/src/libc/ctime.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/ctime.c unix-v7-c99/lib/ctime.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/ctime.c unix-v7-c99/usr/src/libc/ctime.c || true
 ```
 
 Expect:
@@ -17165,14 +19535,15 @@ Expect:
 < register char *cp;
 ---
 > ct_numb(register char *cp, int n)
+
 ```
 
-### cmd/getty.c
+### usr/src/cmd/getty.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/getty.c unix-v7-c99/cmd/getty.c || true
+diff unix-v7-c99/v7/usr/src/cmd/getty.c unix-v7-c99/usr/src/cmd/getty.c || true
 ```
 
 Expect:
@@ -17345,14 +19716,15 @@ Expect:
 ---
 > void
 > putchr(int cc)
+
 ```
 
-### cmd/init.c
+### usr/src/cmd/init.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/init.c unix-v7-c99/cmd/init.c || true
+diff unix-v7-c99/v7/usr/src/cmd/init.c unix-v7-c99/usr/src/cmd/init.c || true
 ```
 
 Expect:
@@ -17518,14 +19890,15 @@ Expect:
 ---
 > void
 > reset(void)
+
 ```
 
-### cmd/accton.c
+### usr/src/cmd/accton.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/accton.c unix-v7-c99/cmd/accton.c || true
+diff unix-v7-c99/v7/usr/src/cmd/accton.c unix-v7-c99/usr/src/cmd/accton.c || true
 ```
 
 Expect:
@@ -17544,14 +19917,15 @@ Expect:
 ---
 > 	extern int errno;
 > 	int acct(char *file);
+
 ```
 
-### cmd/update.c
+### usr/src/cmd/update.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/update.c unix-v7-c99/cmd/update.c || true
+diff unix-v7-c99/v7/usr/src/cmd/update.c unix-v7-c99/usr/src/cmd/update.c || true
 ```
 
 Expect:
@@ -17578,14 +19952,15 @@ Expect:
 > 	signal(SIGALRM, (int)dosync);
 35a41
 > 	return(0);
+
 ```
 
-### cmd/atrun.c
+### usr/src/cmd/atrun.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/atrun.c unix-v7-c99/cmd/atrun.c || true
+diff unix-v7-c99/v7/usr/src/cmd/atrun.c unix-v7-c99/usr/src/cmd/atrun.c || true
 ```
 
 Expect:
@@ -17679,14 +20054,15 @@ Expect:
 > 	if (status)
 > 		return(-1);
 > 	return(0);
+
 ```
 
-### cmd/passwd.c
+### usr/src/cmd/passwd.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/passwd.c unix-v7-c99/cmd/passwd.c || true
+diff unix-v7-c99/v7/usr/src/cmd/passwd.c unix-v7-c99/usr/src/cmd/passwd.c || true
 ```
 
 Expect:
@@ -17722,14 +20098,15 @@ Expect:
 > 	signal(SIGHUP, (int)SIG_IGN);
 > 	signal(SIGINT, (int)SIG_IGN);
 > 	signal(SIGQUIT, (int)SIG_IGN);
+
 ```
 
-### cmd/diff3.c
+### usr/src/cmd/diff3.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/diff3.c unix-v7-c99/cmd/diff3.c || true
+diff unix-v7-c99/v7/usr/src/cmd/diff3.c unix-v7-c99/usr/src/cmd/diff3.c || true
 ```
 
 Expect:
@@ -17929,14 +20306,15 @@ Expect:
 > 	register int j,k;
 420a444
 > 	return(0);
+
 ```
 
-### cmd/fortune.c
+### usr/src/cmd/fortune.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/games/fortune.c unix-v7-c99/cmd/fortune.c || true
+diff unix-v7-c99/v7/usr/src/games/fortune.c unix-v7-c99/usr/src/cmd/fortune.c || true
 ```
 
 Expect:
@@ -17947,14 +20325,15 @@ Expect:
 ---
 > int
 > main(void)
+
 ```
 
-### cmd/arithmetic.c
+### usr/src/cmd/arithmetic.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/games/arithmetic.c unix-v7-c99/cmd/arithmetic.c || true
+diff unix-v7-c99/v7/usr/src/games/arithmetic.c unix-v7-c99/usr/src/cmd/arithmetic.c || true
 ```
 
 Expect:
@@ -18027,14 +20406,15 @@ Expect:
 > delete(void)
 192a204
 > 	return(0);
+
 ```
 
-### cmd/hangman.c
+### usr/src/cmd/hangman.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/games/hangman.c unix-v7-c99/cmd/hangman.c || true
+diff unix-v7-c99/v7/usr/src/games/hangman.c unix-v7-c99/usr/src/cmd/hangman.c || true
 ```
 
 Expect:
@@ -18136,14 +20516,15 @@ Expect:
 > pscore(void)
 145a166
 > 	return(0);
+
 ```
 
-### cmd/ac.c
+### usr/src/cmd/ac.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/ac.c unix-v7-c99/cmd/ac.c || true
+diff unix-v7-c99/v7/usr/src/cmd/ac.c unix-v7-c99/usr/src/cmd/ac.c || true
 ```
 
 Expect:
@@ -18254,14 +20635,15 @@ Expect:
 > 		return(0);
 248a263
 > 	return(0);
+
 ```
 
-### cmd/at.c
+### usr/src/cmd/at.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/at.c unix-v7-c99/cmd/at.c || true
+diff unix-v7-c99/v7/usr/src/cmd/at.c unix-v7-c99/usr/src/cmd/at.c || true
 ```
 
 Expect:
@@ -18421,14 +20803,15 @@ Expect:
 > 	(void)sig;
 304a358
 > 	return(0);
+
 ```
 
-### cmd/cron.c
+### usr/src/cmd/cron.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/cron.c unix-v7-c99/cmd/cron.c || true
+diff unix-v7-c99/v7/usr/src/cmd/cron.c unix-v7-c99/usr/src/cmd/cron.c || true
 ```
 
 Expect:
@@ -18557,14 +20940,15 @@ Expect:
 < 	register n = 0;
 ---
 > 	register int n = 0;
+
 ```
 
-### cmd/quot.c
+### usr/src/cmd/quot.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/quot.c unix-v7-c99/cmd/quot.c || true
+diff unix-v7-c99/v7/usr/src/cmd/quot.c unix-v7-c99/usr/src/cmd/quot.c || true
 ```
 
 Expect:
@@ -18703,14 +21087,15 @@ Expect:
 < 	for(n=0; p[n] = s[n]; n++)
 ---
 > 	for(n=0; (p[n] = s[n]); n++)
+
 ```
 
-### cmd/dump.c
+### usr/src/cmd/dump.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/dump.c unix-v7-c99/cmd/dump.c || true
+diff unix-v7-c99/v7/usr/src/cmd/dump.c unix-v7-c99/usr/src/cmd/dump.c || true
 ```
 
 Expect:
@@ -19051,14 +21436,15 @@ Expect:
 > 		return(0);
 638a667
 > 	return(0);
+
 ```
 
-### cmd/dumpdir.c
+### usr/src/cmd/dumpdir.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/dumpdir.c unix-v7-c99/cmd/dumpdir.c || true
+diff unix-v7-c99/v7/usr/src/cmd/dumpdir.c unix-v7-c99/usr/src/cmd/dumpdir.c || true
 ```
 
 Expect:
@@ -19363,14 +21749,15 @@ Expect:
 < null() { ; }
 ---
 > int null(void) { return(0); }
+
 ```
 
-### cmd/restor.c
+### usr/src/cmd/restor.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/restor.c unix-v7-c99/cmd/restor.c || true
+diff unix-v7-c99/v7/usr/src/cmd/restor.c unix-v7-c99/usr/src/cmd/restor.c || true
 ```
 
 Expect:
@@ -19913,14 +22300,15 @@ Expect:
 > done(void)
 1146a1202
 > 	return(0);
+
 ```
 
-### cmd/tk.c
+### usr/src/cmd/tk.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tk.c unix-v7-c99/cmd/tk.c || true
+diff unix-v7-c99/v7/usr/src/cmd/tk.c unix-v7-c99/usr/src/cmd/tk.c || true
 ```
 
 Expect:
@@ -20030,14 +22418,15 @@ Expect:
 > 	xb = (((xx & 03) + ((zz<<2) & 014)) & 017);
 247a260
 > 	return(0);
+
 ```
 
-### cmd/units.c
+### usr/src/cmd/units.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/units.c unix-v7-c99/cmd/units.c || true
+diff unix-v7-c99/v7/usr/src/cmd/units.c unix-v7-c99/usr/src/cmd/units.c || true
 ```
 
 Expect:
@@ -20224,14 +22613,15 @@ Expect:
 > 	signal(8, (int)fperr);
 463a473
 > 	return(0);
+
 ```
 
-### cmd/ptx.c
+### usr/src/cmd/ptx.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/ptx.c unix-v7-c99/cmd/ptx.c || true
+diff unix-v7-c99/v7/usr/src/cmd/ptx.c unix-v7-c99/usr/src/cmd/ptx.c || true
 ```
 
 Expect:
@@ -20412,14 +22802,15 @@ Expect:
 ---
 > int
 > storeh(int num, char *strtp)
+
 ```
 
-### cmd/spline.c
+### usr/src/cmd/spline.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/spline.c unix-v7-c99/cmd/spline.c || true
+diff unix-v7-c99/v7/usr/src/cmd/spline.c unix-v7-c99/usr/src/cmd/spline.c || true
 ```
 
 Expect:
@@ -20499,14 +22890,15 @@ Expect:
 < 	if(!('0'<=c&&c<='9' || c=='-' || c== '.' )) return(0);
 ---
 > 	if(!(('0'<=c&&c<='9') || c=='-' || c== '.' )) return(0);
+
 ```
 
-### cmd/vpr.c
+### usr/src/cmd/vpr.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/vpr.c unix-v7-c99/cmd/vpr.c || true
+diff unix-v7-c99/v7/usr/src/cmd/vpr.c unix-v7-c99/usr/src/cmd/vpr.c || true
 ```
 
 Expect:
@@ -20768,14 +23160,15 @@ Expect:
 > 	{0000,0030,0010,0010,0010,0010,0004,0010,0010,0010,0010,0030,0000,0000,0000,0000}, /*, }, */
 > 	{0020,0052,0004,0000,0000,0000,0000,0000,0000,0000,0000,0000,0000,0000,0000,0000}, /*, ~, */
 > 	{0000,0176,0176,0176,0176,0176,0176,0176,0176,0176,0176,0000,0000,0000,0000,0000}, /*, del, */
+
 ```
 
-### cmd/graph.c
+### usr/src/cmd/graph.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/graph.c unix-v7-c99/cmd/graph.c || true
+diff unix-v7-c99/v7/usr/src/cmd/graph.c unix-v7-c99/usr/src/cmd/graph.c || true
 ```
 
 Expect:
@@ -21273,14 +23666,15 @@ Expect:
 > {
 > 	fflush(stdout);
 > 	return(0);
+
 ```
 
-### cmd/backgammon.c
+### usr/src/cmd/backgammon.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/games/backgammon.c unix-v7-c99/cmd/backgammon.c || true
+diff unix-v7-c99/v7/usr/src/games/backgammon.c unix-v7-c99/usr/src/cmd/backgammon.c || true
 ```
 
 Expect:
@@ -21552,14 +23946,15 @@ Expect:
 > _store(int *p, int numb) {
 583a606
 > 	return(0);
+
 ```
 
-### cmd/fish.c
+### usr/src/cmd/fish.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/games/fish.c unix-v7-c99/cmd/fish.c || true
+diff unix-v7-c99/v7/usr/src/games/fish.c unix-v7-c99/usr/src/cmd/fish.c || true
 ```
 
 Expect:
@@ -21752,14 +24147,15 @@ Expect:
 < 		if( haveguessed[try[i]] == lg ) try[t++] = try[i];
 ---
 > 		if( haveguessed[(unsigned char)try[i]] == lg ) try[t++] = try[i];
+
 ```
 
-### cmd/quiz.c
+### usr/src/cmd/quiz.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/games/quiz.c unix-v7-c99/cmd/quiz.c || true
+diff unix-v7-c99/v7/usr/src/games/quiz.c unix-v7-c99/usr/src/cmd/quiz.c || true
 ```
 
 Expect:
@@ -21939,14 +24335,15 @@ Expect:
 > dunno(void)
 472a498
 > 	return(0);
+
 ```
 
-### cmd/wump.c
+### usr/src/cmd/wump.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/games/wump.c unix-v7-c99/cmd/wump.c || true
+diff unix-v7-c99/v7/usr/src/games/wump.c unix-v7-c99/usr/src/cmd/wump.c || true
 ```
 
 Expect:
@@ -22060,14 +24457,15 @@ Expect:
 < 	return(*p1 - *p2);
 ---
 > 	return(*(const int *)p1 - *(const int *)p2);
+
 ```
 
-### cmd/dc/dc.c
+### usr/src/cmd/dc/dc.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/dc/dc.c unix-v7-c99/cmd/dc/dc.c || true
+diff unix-v7-c99/v7/usr/src/cmd/dc/dc.c unix-v7-c99/usr/src/cmd/dc/dc.c || true
 ```
 
 Expect:
@@ -22530,14 +24928,15 @@ Expect:
 > nalloc(register char *p, unsigned nbytes)
 1933d1932
 < 	char *malloc();
+
 ```
 
-### cmd/dc/dc.h
+### usr/src/cmd/dc/dc.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/dc/dc.h unix-v7-c99/cmd/dc/dc.h || true
+diff unix-v7-c99/v7/usr/src/cmd/dc/dc.h unix-v7-c99/usr/src/cmd/dc/dc.h || true
 ```
 
 Expect:
@@ -22563,14 +24962,15 @@ Expect:
 < char	*malloc();
 116d114
 < char	*realloc();
+
 ```
 
-### cmd/spell/spell.c
+### usr/src/cmd/spell/spell.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/spell/spell.c unix-v7-c99/cmd/spell/spell.c || true
+diff unix-v7-c99/v7/usr/src/cmd/spell/spell.c unix-v7-c99/usr/src/cmd/spell/spell.c || true
 ```
 
 Expect:
@@ -22868,14 +25268,15 @@ Expect:
 < 	for(i=0; i<NP; i++) {
 ---
 > 	for(i=0; i<(int)NP; i++) {
+
 ```
 
-### cmd/spell/spell.h
+### usr/src/cmd/spell/spell.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/spell/spell.h unix-v7-c99/cmd/spell/spell.h || true
+diff unix-v7-c99/v7/usr/src/cmd/spell/spell.h unix-v7-c99/usr/src/cmd/spell/spell.h || true
 ```
 
 Expect:
@@ -22890,14 +25291,15 @@ Expect:
 < 	for (i=0; i<NP; i++) {
 ---
 > 	for (i=0; i<(int)NP; i++) {
+
 ```
 
-### cmd/spell/spellin.c
+### usr/src/cmd/spell/spellin.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/spell/spellin.c unix-v7-c99/cmd/spell/spellin.c || true
+diff unix-v7-c99/v7/usr/src/cmd/spell/spellin.c unix-v7-c99/usr/src/cmd/spell/spellin.c || true
 ```
 
 Expect:
@@ -22919,14 +25321,15 @@ Expect:
 < 		for (i=0; i<NP; i++) {
 ---
 > 		for (i=0; i<(int)NP; i++) {
+
 ```
 
-### cmd/spell/spellout.c
+### usr/src/cmd/spell/spellout.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/spell/spellout.c unix-v7-c99/cmd/spell/spellout.c || true
+diff unix-v7-c99/v7/usr/src/cmd/spell/spellout.c unix-v7-c99/usr/src/cmd/spell/spellout.c || true
 ```
 
 Expect:
@@ -22948,14 +25351,15 @@ Expect:
 < 		for (i=0; i<NP; i++) {
 ---
 > 		for (i=0; i<(int)NP; i++) {
+
 ```
 
-### cmd/tar/tar.c
+### usr/src/cmd/tar/tar.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tar/tar.c unix-v7-c99/cmd/tar/tar.c || true
+diff unix-v7-c99/v7/usr/src/cmd/tar/tar.c unix-v7-c99/usr/src/cmd/tar/tar.c || true
 ```
 
 Expect:
@@ -23335,14 +25739,15 @@ Expect:
 > 	register int i;
 932a974
 > 	return(0);
+
 ```
 
-### cmd/awk/awk.def
+### usr/src/cmd/awk/awk.def
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/awk/awk.def unix-v7-c99/cmd/awk/awk.def || true
+diff unix-v7-c99/v7/usr/src/cmd/awk/awk.def unix-v7-c99/usr/src/cmd/awk/awk.def || true
 ```
 
 Expect:
@@ -23352,14 +25757,15 @@ Expect:
 < #define yfree free
 ---
 > #define yfree(p) free((char *)(p))
+
 ```
 
-### cmd/awk/lib.c
+### usr/src/cmd/awk/lib.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/awk/lib.c unix-v7-c99/cmd/awk/lib.c || true
+diff unix-v7-c99/v7/usr/src/cmd/awk/lib.c unix-v7-c99/usr/src/cmd/awk/lib.c || true
 ```
 
 Expect:
@@ -23455,14 +25861,15 @@ Expect:
 < 	if (!(d1 || point && d2))
 ---
 > 	if (!(d1 || (point && d2)))
+
 ```
 
-### cmd/awk/parse.c
+### usr/src/cmd/awk/parse.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/awk/parse.c unix-v7-c99/cmd/awk/parse.c || true
+diff unix-v7-c99/v7/usr/src/cmd/awk/parse.c unix-v7-c99/usr/src/cmd/awk/parse.c || true
 ```
 
 Expect:
@@ -23549,14 +25956,15 @@ Expect:
 < node *genprint()
 ---
 > node *genprint(void)
+
 ```
 
-### cmd/awk/proc.c
+### usr/src/cmd/awk/proc.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/awk/proc.c unix-v7-c99/cmd/awk/proc.c || true
+diff unix-v7-c99/v7/usr/src/cmd/awk/proc.c unix-v7-c99/usr/src/cmd/awk/proc.c || true
 ```
 
 Expect:
@@ -23582,14 +25990,15 @@ Expect:
 > 	printf("char *printname[%d] = {\n", SIZE);
 81a85
 > 	return(0);
+
 ```
 
-### cmd/awk/run.c
+### usr/src/cmd/awk/run.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/awk/run.c unix-v7-c99/cmd/awk/run.c || true
+diff unix-v7-c99/v7/usr/src/cmd/awk/run.c unix-v7-c99/usr/src/cmd/awk/run.c || true
 ```
 
 Expect:
@@ -23738,14 +26147,15 @@ Expect:
 > redirprint(s, a, b) char *s; int a; node *b;
 831a889
 > 	return(0);
+
 ```
 
-### cmd/awk/token.c
+### usr/src/cmd/awk/token.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/awk/token.c unix-v7-c99/cmd/awk/token.c || true
+diff unix-v7-c99/v7/usr/src/cmd/awk/token.c unix-v7-c99/usr/src/cmd/awk/token.c || true
 ```
 
 Expect:
@@ -23928,14 +26338,15 @@ Expect:
 < 	return(tok[n-257].tnm);
 ---
 > 	return(tok[n-FIRSTTOKEN].tnm);
+
 ```
 
-### cmd/awk/tran.c
+### usr/src/cmd/awk/tran.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/awk/tran.c unix-v7-c99/cmd/awk/tran.c || true
+diff unix-v7-c99/v7/usr/src/cmd/awk/tran.c unix-v7-c99/usr/src/cmd/awk/tran.c || true
 ```
 
 Expect:
@@ -24049,27 +26460,23 @@ Expect:
 < char *ymalloc(u) unsigned u;
 ---
 > char *ymalloc(unsigned u)
+
 ```
 
-### include/dumprestor.h
+### usr/include/dumprestor.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/dumprestor.h unix-v7-c99/include/dumprestor.h || true
+diff unix-v7-c99/v7/usr/include/dumprestor.h unix-v7-c99/usr/include/dumprestor.h || true
 ```
 
 Expect:
 
 ```
-```
-
-### cmd/awk/b.c
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/awk/b.c unix-v7-c99/cmd/awk/b.c || true
+diff unix-v7-c99/v7/usr/src/cmd/awk/b.c unix-v7-c99/usr/src/cmd/awk/b.c || true
 ```
 
 Expect:
@@ -24230,12 +26637,12 @@ Expect:
 > 	register int count;
 ```
 
-### cmd/awk/main.c
+### usr/src/cmd/awk/main.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/awk/main.c unix-v7-c99/cmd/awk/main.c || true
+diff unix-v7-c99/v7/usr/src/cmd/awk/main.c unix-v7-c99/usr/src/cmd/awk/main.c || true
 ```
 
 Expect:
@@ -24408,14 +26815,23 @@ Expect:
 > 	xargv=s=svargv=(char **)malloc(n*sizeof(char *));
 139a255
 > 	return(0);
+
 ```
 
-### cmd/tp/tp.h
+### usr/src/cmd/tp/tp.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tp/tp.h unix-v7-c99/cmd/tp/tp.h || true
+diff unix-v7-c99/v7/usr/src/cmd/tp/tp.h unix-v7-c99/usr/src/cmd/tp/tp.h || true
+```
+
+Expect:
+
+```
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/tp/tp0.c unix-v7-c99/usr/src/cmd/tp/tp0.c || true
 ```
 
 Expect:
@@ -24423,25 +26839,12 @@ Expect:
 ```
 ```
 
-### cmd/tp/tp0.c
+### usr/src/cmd/tp/tp1.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tp/tp0.c unix-v7-c99/cmd/tp/tp0.c || true
-```
-
-Expect:
-
-```
-```
-
-### cmd/tp/tp1.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/tp/tp1.c unix-v7-c99/cmd/tp/tp1.c | perl -pe 's/\x0c/^L/g' || true
+diff unix-v7-c99/v7/usr/src/cmd/tp/tp1.c unix-v7-c99/usr/src/cmd/tp/tp1.c | perl -pe 's/\x0c/^L/g' || true
 ```
 
 Expect:
@@ -24565,14 +26968,15 @@ Expect:
 > int
 194a223
 > 	return(0);
+
 ```
 
-### cmd/tp/tp2.c
+### usr/src/cmd/tp/tp2.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tp/tp2.c unix-v7-c99/cmd/tp/tp2.c || true
+diff unix-v7-c99/v7/usr/src/cmd/tp/tp2.c unix-v7-c99/usr/src/cmd/tp/tp2.c || true
 ```
 
 Expect:
@@ -24748,27 +27152,23 @@ Expect:
 > swabdir(register struct tent *tp)
 346a376
 > 	return(0);
+
 ```
 
-### cmd/tp/tp_defs.h
+### usr/src/cmd/tp/tp_defs.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/tp_defs.h unix-v7-c99/cmd/tp/tp_defs.h || true
+diff unix-v7-c99/v7/usr/include/tp_defs.h unix-v7-c99/usr/src/cmd/tp/tp_defs.h || true
 ```
 
 Expect:
 
 ```
-```
-
-### cmd/tp/tp3.c
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tp/tp3.c unix-v7-c99/cmd/tp/tp3.c || true
+diff unix-v7-c99/v7/usr/src/cmd/tp/tp3.c unix-v7-c99/usr/src/cmd/tp/tp3.c || true
 ```
 
 Expect:
@@ -24923,23 +27323,71 @@ Expect:
 > 	return(0);
 ```
 
-### sys/slp.c
+### usr/sys/sys/slp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/slp.c unix-v7-c99/sys/slp.c || true
+diff unix-v7-c99/v7/usr/sys/sys/slp.c unix-v7-c99/usr/sys/sys/slp.c || true
 ```
 
 Expect:
 
 ```
-10c10,21
+10c10,69
 < #include "../h/buf.h"
 ---
-> #include "../h/proto.h"
+> struct map;
+> struct buf;
+> extern int malloc(struct map *mp, int size);
+> extern void mfree(struct map *mp, int size, int a);
+> extern void printf(char *fmt, ...);
+> extern void panic(char *s);
+> extern void prdev(char *str, dev_t dev);
+> extern void putchar(char c);
+> extern int getchar(void);
+> extern void trap(int *frame);
+> extern void panictrap(void);
+> extern void run_user(unsigned int pc, unsigned int sp);
+> extern void mmu_on(unsigned int ttb);
+> extern void dmbsy(void);
+> extern void mmuinit(void);
+> extern void startup(void);
+> extern void armboot(void);
+> extern void armboot_setrun(int pid);
+> extern void armboot_swtch(void);
+> extern int save(int *lp);
+> extern void resume(int addr, int *lp);
+> extern struct buf *bread(dev_t dev, daddr_t blkno);
+> extern struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
+> extern void bwrite(struct buf *bp);
+> extern void bdwrite(struct buf *bp);
+> extern void brelse(struct buf *bp);
+> extern int incore(dev_t dev, daddr_t blkno);
+> extern struct buf *getblk(dev_t dev, daddr_t blkno);
+> extern struct buf *geteblk(void);
+> extern void iowait(struct buf *bp);
+> extern void notavail(struct buf *bp);
+> extern void iodone(struct buf *bp);
+> extern void clrbuf(struct buf *bp);
+> extern void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> extern void bflush(dev_t dev);
+> extern void geterror(struct buf *bp);
+> extern void wakeup(caddr_t chan);
+> extern void sleep(caddr_t chan, int pri);
+> extern int spl0(void);
+> extern int spl1(void);
+> extern int spl6(void);
+> extern int spl7(void);
+> extern void splx(int s);
+> extern void binit(void);
+> extern void copyseg(int from, int to);
+> extern void clearseg(int a);
+> extern dev_t rootdev;
+> extern int virtio_strategy(struct buf *bp);
+> extern void virtio_init(void);
 > 
-> /* spl0/spl6/splx/panic/malloc/mfree/copyseg/save/resume come from h/proto.h.
+> /* spl0/spl6/splx/panic/malloc/mfree/copyseg/save/resume come from local declarations.
 >  * issig comes from h/systm.h. */
 > extern void sureg(void);
 > extern void xswap(struct proc *, int, int);
@@ -24949,27 +27397,27 @@ Expect:
 > void setrq(struct proc *p);
 > void swtch(void);
 > void qswtch(void);
-27,28c38,39
+27,28c86,87
 < sleep(chan, pri)
 < caddr_t chan;
 ---
 > void
 > sleep(caddr_t chan, int pri)
-31c42
+31c90
 < 	register s, h;
 ---
 > 	register int s, h;
-82,83c93,94
+82,83c141,142
 < wakeup(chan)
 < register caddr_t chan;
 ---
 > void
 > wakeup(register caddr_t chan)
-86c97
+86c145
 < 	register i;
 ---
 > 	register int i;
-112,119c123,127
+112,119c171,175
 < /*
 <  * when you are sure that it
 <  * is impossible to get the
@@ -24984,18 +27432,18 @@ Expect:
 >  * dedupe instead of printing; functionally a no-op. */
 > void
 > setrq(struct proc *p)
-122c130
+122c178
 < 	register s;
 ---
 > 	register int s;
-126,129c134
+126,129c182
 < 		if(q == p) {
 < 			printf("proc on q\n");
 < 			goto out;
 < 		}
 ---
 > 		if(q == p) goto out;
-138a144,150
+138a192,198
 >  *
 >  * PORT DIVERGENCE: armboot_setrun(p->p_pid) added so the port's
 >  * scheduler (which keeps its own armproc_state[] table) sees the
@@ -25003,31 +27451,31 @@ Expect:
 >  * but mt_pick_runnable() never picks the slot because its
 >  * armproc_state stays PSTATE_SLEEP.  No semantic change to v7's
 >  * state machine; just a cross-side notify.
-140,141c152,155
+140,141c200,203
 < setrun(p)
 < register struct proc *p;
 ---
-> /* armboot_setrun declared in h/proto.h. */
+> /* armboot_setrun declared in local declarations. */
 > 
 > void
 > setrun(register struct proc *p)
-151c165
+151c213
 < 	if (w = p->p_wchan) {
 ---
 > 	if ((w = p->p_wchan)) {
-156a171
+156a219
 > 	armboot_setrun((int)p->p_pid);
-171,172c186,187
+171,172c234,235
 < setpri(pp)
 < register struct proc *pp;
 ---
 > int
 > setpri(register struct proc *pp)
-174c189
+174c237
 < 	register p;
 ---
 > 	register int p;
-186,322c201,204
+186,322c249,252
 < /*
 <  * The main loop of the scheduling (swapping)
 <  * process.
@@ -25170,12 +27618,12 @@ Expect:
 >  * helper drove the per-process swap-in/swap-out cycle.  This port keeps
 >  * every proc resident, so neither runs -- the C scheduler is in
 >  * armboot_swtch() (see swtch() below). */
-329c211,212
+329c259,260
 < qswtch()
 ---
 > void
 > qswtch(void)
-338,345c221,233
+338,345c269,281
 <  * if the calling process is not in RUN state,
 <  * arrangements for it to restart must have
 <  * been made elsewhere, usually by calling via sleep.
@@ -25198,14 +27646,14 @@ Expect:
 >  * armboot_swtch().  Routing through it here means v7's
 >  * sleep()/wakeup()/setrun()/exit()/wait()/pause() in this TU and
 >  * sys/sys1.c / sys/sys4.c / sys/pipe.c work unchanged.
-347,350c235
+347,350c283
 < swtch()
 < {
 < 	register n;
 < 	register struct proc *p, *q, *pp, *pq;
 ---
-> /* armboot_swtch declared in h/proto.h. */
-352,418c237,240
+> /* armboot_swtch declared in local declarations. */
+352,418c285,288
 < 	/*
 < 	 * If not the idle process, resume the idle process.
 < 	 */
@@ -25278,7 +27726,7 @@ Expect:
 > swtch(void)
 > {
 > 	armboot_swtch();
-426,530c248,252
+426,530c296,300
 < newproc()
 < {
 < 	int a1, a2;
@@ -25390,29 +27838,30 @@ Expect:
 >  * maintains armproc[NSLOTS] in parallel with proc[NPROC]; the child's
 >  * register state is duplicated by the trap frame copy, not by save()/
 >  * resume() over the v7 u_ssav. */
-545c267,268
+545c315,316
 < expand(newsize)
 ---
 > void
 > expand(int newsize)
-547c270
+547c318
 < 	register i, n;
 ---
 > 	register int i, n;
-549c272
+549c320
 < 	register a1, a2;
 ---
 > 	register int a1, a2;
-566d288
+566d336
 < 		p->p_flag |= SSWAP;
+
 ```
 
-### tools/mkfs.c
+### usr/src/tools/mkfs.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/mkfs.c unix-v7-c99/tools/mkfs.c || true
+diff unix-v7-c99/v7/usr/src/cmd/mkfs.c unix-v7-c99/usr/src/tools/mkfs.c || true
 ```
 
 Expect:
@@ -25435,12 +27884,12 @@ Expect:
 < #include <sys/fblk.h>
 < #include <sys/dir.h>
 ---
-> #include "../include/sys/param.h"
-> #include "../include/sys/ino.h"
-> #include "../include/sys/inode.h"
-> #include "../include/sys/filsys.h"
-> #include "../include/sys/fblk.h"
-> #include "../include/sys/dir.h"
+> #include "../../include/sys/param.h"
+> #include "../../include/sys/ino.h"
+> #include "../../include/sys/inode.h"
+> #include "../../include/sys/filsys.h"
+> #include "../../include/sys/fblk.h"
+> #include "../../include/sys/dir.h"
 > /* Pack longs into pure LE 24-bit; matches arch/arm.c::addr(). */
 > int ltol3(cp, lp, n) char *cp; long *lp; int n; {
 > 	int i; long v;
@@ -25746,14 +28195,15 @@ Expect:
 < 
 ---
 > 	(void)bno;
+
 ```
 
-### cmd/arcv.c
+### usr/src/cmd/arcv.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/arcv.c unix-v7-c99/cmd/arcv.c || true
+diff unix-v7-c99/v7/usr/src/cmd/arcv.c unix-v7-c99/usr/src/cmd/arcv.c || true
 ```
 
 Expect:
@@ -25912,14 +28362,15 @@ Expect:
 > 		conv(argv[i]);
 > 	unlink(tmp);
 > 	return 0;
+
 ```
 
-### cmd/awk/awk.g.y
+### usr/src/cmd/awk/awk.g.y
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/awk/awk.g.y unix-v7-c99/cmd/awk/awk.g.y || true
+diff unix-v7-c99/v7/usr/src/cmd/awk/awk.g.y unix-v7-c99/usr/src/cmd/awk/awk.g.y || true
 ```
 
 Expect:
@@ -25931,14 +28382,15 @@ Expect:
 > 		}
 175d177
 < 	|		{ PUTS("null print_list"); $$ = valtonode(lookup("$record", symtab), CFLD); }
+
 ```
 
-### cmd/deroff.c
+### usr/src/cmd/deroff.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/deroff.c unix-v7-c99/cmd/deroff.c || true
+diff unix-v7-c99/v7/usr/src/cmd/deroff.c unix-v7-c99/usr/src/cmd/deroff.c || true
 ```
 
 Expect:
@@ -26110,14 +28562,15 @@ Expect:
 < while( *t++ = *s++ )
 ---
 > while( (*t++ = *s++) )
+
 ```
 
-### cmd/egrep.c
+### usr/src/cmd/egrep.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/egrep.y unix-v7-c99/cmd/egrep.c || true
+diff unix-v7-c99/v7/usr/src/cmd/egrep.y unix-v7-c99/usr/src/cmd/egrep.c || true
 ```
 
 Expect:
@@ -27086,14 +29539,15 @@ Expect:
 ---
 > done:
 > 	close(f);
+
 ```
 
-### cmd/expr.c
+### usr/src/cmd/expr.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/expr.y unix-v7-c99/cmd/expr.c || true
+diff unix-v7-c99/v7/usr/src/cmd/expr.y unix-v7-c99/usr/src/cmd/expr.c || true
 ```
 
 Expect:
@@ -28284,531 +30738,15 @@ Expect:
 ---
 > 	(void)c;
 > 	fprintf(stderr, "RE error\n");
+
 ```
 
-### cmd/factor.c
+### usr/src/cmd/osh.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/factor.s unix-v7-c99/cmd/factor.c || true
-```
-
-Expect:
-
-```
-1,351c1,151
-< .globl	sqrt
-< exit = 1.
-< read = 3.
-< write = 4.
-< ldfps = 170100^tst
-< /
-< 	ldfps	$240
-< 
-< 	clr	argflg
-< 	cmp	(sp)+,$2
-< 	blt	begin
-< 	tst	(sp)+
-< 	mov	(sp),r2
-< 	jsr	r5,atof; getch1
-< 	inc	argflg
-< 	br	begin1
-< begin:
-< 	tst	argflg
-< 	beq 9f; sys exit; 9:
-< 	jsr	r5,atof; getch
-< begin1:
-< 	tstf	fr0
-< 	cfcc
-< 	bpl 9f; jmp ouch; 9:
-< 	bne 9f; sys exit; 9:
-< 	cmpf	big,fr0
-< 	cfcc
-< 	bgt 9f; jmp ouch; 9:
-< /
-< 	movf	fr0,n
-< 	jsr	pc,sqrt
-< 	movf	fr0,v
-< 	mov	$1,r0
-< 	sys	write; nl; 1
-< /
-< 	movf	$one,fr0
-< 	movf	fr0,fr4
-< /
-< 	movf	n,fr0
-< 	movf	$two,fr1
-< 	jsr	r5,xt
-< /
-< 	movf	n,fr0
-< 	movif	$3,fr1
-< 	jsr	r5,xt
-< /
-< 	movf	n,fr0
-< 	movif	$5,fr1
-< 	jsr	r5,xt
-< /
-< 	movf	n,fr0
-< 	movif	$7,fr1
-< 	jsr	r5,xt
-< /
-< 	movf	n,fr0
-< 	movif	$11.,fr1
-< 	jsr	r5,xt
-< /
-< 	movf	n,fr0
-< 	movif	$13.,fr1
-< 	jsr	r5,xt
-< /
-< 	movf	n,fr0
-< 	movif	$17.,fr1
-< 	mov	$tab+6,r4
-< 	jsr	pc,xx
-< 	jmp	begin
-< /
-< xt:
-< 	movf	fr0,fr2
-< 	divf	fr1,fr2
-< 	modf	$one,fr2
-< 	movf	fr3,fr2
-< 	mulf	fr1,fr2
-< 	cmpf	fr2,fr0
-< 	cfcc
-< 	beq	hit2
-< 	rts	r5
-< /
-< /
-< out1:
-< 	mov	$tab,r4
-< 	br	in1
-< 
-< out2:
-< 	modf	fr4,fr2
-< 	cfcc
-< 	bne 9f; mov $xx0,-(sp); jmp hit; 9:
-< 	br	in2
-< xx:
-< 	mov	(r4)+,kazoo
-< xx0:
-< 	mov	$kazoo,r0
-< 	mov	$100.,r1
-< 	clr	r2
-< 	mov	$gorp,r3
-< 	mov	$gorp+6,r5
-< xx1:
-< 	movf	fr0,fr2
-< 	divf	fr1,fr2
-< 	cmp	r4,$tabend
-< 	bhis	out1
-< in1:
-< 	movf	fr2,(r3)
-< 	bit	r2,(r5)
-< 	beq	out2
-< in2:
-< kazoo	=.+2
-< 	addf	$kazoo,fr1
-< 	mov	(r4)+,(r0)
-< 	sob	r1,xx1
-< 	mov	$100.,r1
-< 	mov	$127.,r2
-< 	cmpf	v,fr1
-< 	cfcc
-< 	bge	xx1
-< 	cmpf	$one,fr0
-< 	cfcc
-< 	beq	1f
-< 	mov	$1,r0
-< 	sys	write; sp5; 5
-< 	movf	n,fr0
-< 	jsr	r5,ftoa; wrchar
-< 	mov	$1,r0
-< 	sys	write; nl; 1
-< 1:
-< 	rts	pc
-< /
-< /
-< /
-< hit2:
-< 	movf	fr1,t
-< 	movf	fr3,n
-< 	movf	fr3,fr0
-< 	jsr	pc,sqrt
-< 	movf	fr0,v
-< 	mov	$1,r0
-< 	sys	write; sp5; 5
-< 	movf	t,fr0
-< 	jsr	r5,ftoa; wrchar
-< 	mov	$1,r0
-< 	sys	write; nl; 1
-< 	movf	n,fr0
-< 	movf	t,fr1
-< 	cmp	r4,$tab
-< 	bne	1f
-< 	mov	$tabend,r4
-< 1:
-< 	mov	-(r4),kazoo
-< 	jmp	xt
-< /
-< hit:
-< 	movf	fr1,t
-< 	movf	fr3,n
-< 	movf	fr3,fr0
-< 	jsr	pc,sqrt
-< 	movf	fr0,v
-< 	mov	$1,r0
-< 	sys	write; sp5; 5
-< 	movf	t,fr0
-< 	jsr	r5,ftoa; wrchar
-< 	mov	$1,r0
-< 	sys	write; nl; 1
-< 	movf	n,fr0
-< 	movf	t,fr1
-< 	mov	$kazoo,r0
-< 	rts	pc
-< /
-< /
-< /	get one character from the console.
-< /	called from atof.
-< /
-< getch:
-< 	clr	r0
-< 	sys	read; ch; 1
-< 	bec 9f; sys exit; 9:
-< 	tst r0; bne 9f; sys exit; 9:
-< 	mov	ch,r0
-< 	rts	r5
-< /
-< /
-< /	get one character form the argument string.
-< getch1:
-< 	movb	(r2)+,r0
-< 	rts	r5
-< /
-< /	write one character on the console
-< /	called from ftoa.
-< /
-< wrchar:
-< 	mov	r0,ch
-< 	mov	$1,r0
-< 	sys	write; ch; 1
-< 	rts	r5
-< /
-< /
-< /	read and convert a line from the console into fr0.
-< /
-< atof:
-< 	mov	r1,-(sp)
-< 	movif	$10.,r3
-< 	clrf	r0
-< 1:
-< 	jsr	r5,*(r5)
-< 	sub	$'0,r0
-< 	cmp	r0,$9.
-< 	bhi	2f
-< 	mulf	r3,r0
-< 	movif	r0,r1
-< 	addf	r1,r0
-< 	br	1b
-< 2:
-< 	cmp	r0,$' -'0
-< 	beq	1b
-< /
-< 	mov	(sp)+,r1
-< 	tst	(r5)+
-< 	rts	r5
-< 
-< /
-< /
-< /
-< /
-< ftoa:
-< 	mov	$ebuf,r2
-< 1:
-< 	modf	tenth,fr0
-< 	movf	fr0,fr2
-< 	movf	fr1,fr0
-< 	addf	$epsilon,fr2
-< 	modf	$ten,fr2
-< 	movfi	fr3,r0
-< 	movb	r0,-(r2)
-< 	tstf	fr0
-< 	cfcc
-< 	bne	1b
-< 1:
-< 	movb	(r2)+,r0
-< 	add	$60,r0
-< 	jsr	r5,*(r5)
-< 	cmp	r2,$ebuf
-< 	blo	1b
-< 	tst	(r5)+
-< 	rts	r5
-< /
-< epsilon = 037114
-< tenth:	037314; 146314; 146314; 146315
-< 	.bss
-< buf:	.=.+18.
-< ebuf:
-< 	.text
-< /
-< /
-< /
-< /	complain about a number which the program
-< /	is unable to digest
-< ouch:
-< 	mov	$2,r0
-< 	sys	write; 1f; 2f-1f
-< 	jmp	begin
-< /
-< 1:	<Ouch.\n>
-< 2:	.even
-< /
-< /
-< one	= 40200
-< two	= 40400
-< four	= 40600
-< ten	= 41040
-< /
-< 	.data
-< big:	056177; 177777; 177777; 177777
-< nl:	<\n>
-< sp5:	<     >
-< 	.even
-< /
-< tab:
-< 	41040; 40400; 40600; 40400; 40600; 40700; 40400; 40700
-< 	40600; 40400; 40600; 40700; 40700; 40400; 40700; 40600
-< 	40400; 40700; 40600; 40700; 41000; 40600; 40400; 40600
-< 	40400; 40600; 41000; 40700; 40600; 40700; 40400; 40600
-< 	40700; 40400; 40700; 40700; 40600; 40400; 40600; 40700
-< 	40400; 40700; 40600; 40400; 40600; 40400; 41040; 40400
-< tabend:
-< /
-< 	.bss
-< ch:	.=.+2
-< t:	.=.+8
-< n:	.=.+8
-< v:	.=.+8
-< gorp:	.=.+8
-< argflg:	.=.+2
-< 	.text
-< ldfps = 170100^tst
-< stfps = 170200^tst
-< /
-< /	sqrt replaces the f.p. number in fr0 by its
-< /	square root.  newton's method
-< /
-< .globl	sqrt, _sqrt
-< /
-< /
-< _sqrt:
-< 	mov	r5,-(sp)
-< 	mov	sp,r5
-< 	movf	4(r5),fr0
-< 	jsr	pc,sqrt
-< 	mov	(sp)+,r5
-< 	rts	pc
-< 
-< sqrt:
-< 	tstf	fr0
-< 	cfcc
-< 	bne	1f
-< 	clc
-< 	rts	pc		/sqrt(0)
-< 1:
-< 	bgt	1f
-< 	clrf	fr0
-< 	sec
-< 	rts	pc		/ sqrt(-a)
-< 1:
-< 	mov	r0,-(sp)
-< 	stfps	-(sp)
-< 	mov	(sp),r0
-< 	bic	$!200,r0		/ retain mode
-< 	ldfps	r0
-< 	movf	fr1,-(sp)
-< 	movf	fr2,-(sp)
-< /
-< 	movf	fr0,fr1
-< 	movf	fr0,-(sp)
-< 	asr	(sp)
-< 	add	$20100,(sp)
-< 	movf	(sp)+,fr0	/initial guess
-< 	mov	$4,r0
-< 1:
-< 	movf	fr1,fr2
-< 	divf	fr0,fr2
-< 	addf	fr2,fr0
-< 	mulf	$half,fr0	/ x = (x+a/x)/2
-< 	sob	r0,1b
-< 2:
-< 	movf	(sp)+,fr2
-< 	movf	(sp)+,fr1
-< 	ldfps	(sp)+
-< 	mov	(sp)+,r0
-< 	clc
-< 	rts	pc
-< /
-< half	= 40000
----
-> #include <stdio.h>
-> 
-> #define MAXNUM 72057594037927936ULL
-> 
-> static int
-> parse_number(char *s, unsigned long long *out)
-> {
-> 	unsigned long long n;
-> 	int any;
-> 
-> 	while (*s == ' ' || *s == '\t' || *s == '\n')
-> 		s++;
-> 	n = 0;
-> 	any = 0;
-> 	while (*s >= '0' && *s <= '9') {
-> 		any = 1;
-> 		if (n > (MAXNUM - (unsigned long long)(*s - '0')) / 10ULL)
-> 			return(-1);
-> 		n = n * 10ULL + (unsigned long long)(*s - '0');
-> 		s++;
-> 	}
-> 	while (*s == ' ' || *s == '\t' || *s == '\n')
-> 		s++;
-> 	if (!any || *s != '\0' || n >= MAXNUM)
-> 		return(-1);
-> 	*out = n;
-> 	return(0);
-> }
-> 
-> static int
-> read_number(unsigned long long *out)
-> {
-> 	char buf[80];
-> 	int c, i, any;
-> 
-> 	i = 0;
-> 	any = 0;
-> 	while ((c = getchar()) != EOF) {
-> 		if (c != ' ' && c != '\t' && c != '\n')
-> 			break;
-> 	}
-> 	if (c == EOF)
-> 		return(0);
-> 	do {
-> 		any = 1;
-> 		if (i < (int)sizeof(buf) - 1)
-> 			buf[i++] = (char)c;
-> 		c = getchar();
-> 	} while (c != EOF && c != ' ' && c != '\t' && c != '\n');
-> 	buf[i] = '\0';
-> 	if (!any)
-> 		return(0);
-> 	if (parse_number(buf, out) < 0)
-> 		return(-1);
-> 	return(1);
-> }
-> 
-> static void
-> putnum(unsigned long long n)
-> {
-> 	char buf[24];
-> 	int i;
-> 
-> 	i = 0;
-> 	if (n == 0)
-> 		buf[i++] = '0';
-> 	else while (n != 0) {
-> 		buf[i++] = (char)('0' + (int)(n % 10ULL));
-> 		n /= 10ULL;
-> 	}
-> 	while (i > 0)
-> 		putchar(buf[--i]);
-> }
-> 
-> static void
-> factor(unsigned long long n)
-> {
-> 	unsigned long long p;
-> 
-> 	putchar('\n');
-> 	while ((n % 2ULL) == 0) {
-> 		printf("     ");
-> 		putnum(2ULL);
-> 		putchar('\n');
-> 		n /= 2ULL;
-> 	}
-> 	while ((n % 3ULL) == 0) {
-> 		printf("     ");
-> 		putnum(3ULL);
-> 		putchar('\n');
-> 		n /= 3ULL;
-> 	}
-> 	p = 5ULL;
-> 	while (p <= n / p) {
-> 		while ((n % p) == 0) {
-> 			printf("     ");
-> 			putnum(p);
-> 			putchar('\n');
-> 			n /= p;
-> 		}
-> 		p += 2ULL;
-> 		if (p > n / p)
-> 			break;
-> 		while ((n % p) == 0) {
-> 			printf("     ");
-> 			putnum(p);
-> 			putchar('\n');
-> 			n /= p;
-> 		}
-> 		p += 4ULL;
-> 	}
-> 	if (n > 1ULL) {
-> 		printf("     ");
-> 		putnum(n);
-> 		putchar('\n');
-> 	}
-> }
-> 
-> static void
-> ouch(void)
-> {
-> 	fprintf(stderr, "Ouch.\n");
-> }
-> 
-> int
-> main(int argc, char **argv)
-> {
-> 	unsigned long long n;
-> 	int r;
-> 
-> 	if (argc > 1) {
-> 		if (parse_number(argv[1], &n) < 0) {
-> 			ouch();
-> 			return(1);
-> 		}
-> 		if (n == 0ULL)
-> 			return(0);
-> 		factor(n);
-> 		return(0);
-> 	}
-> 	for (;;) {
-> 		r = read_number(&n);
-> 		if (r == 0 || (r > 0 && n == 0ULL))
-> 			return(0);
-> 		if (r < 0) {
-> 			ouch();
-> 			return(1);
-> 		}
-> 		factor(n);
-> 	}
-> }
-```
-
-### cmd/osh.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/osh.c unix-v7-c99/cmd/osh.c || true
+diff unix-v7-c99/v7/usr/src/cmd/osh.c unix-v7-c99/usr/src/cmd/osh.c || true
 ```
 
 Expect:
@@ -29332,533 +31270,15 @@ Expect:
 > 		errval |= (s>>8);
 843a893
 > 	return(0);
+
 ```
 
-### cmd/primes.c
+### usr/src/cmd/prof.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/primes.s unix-v7-c99/cmd/primes.c | sed 's/^\([<>]\) $/\1/' || true
-```
-
-Expect:
-
-```
-1,355c1,149
-< ldfps = 170100^tst
-< /
-< 	ldfps	$240
-<
-< 	clr	argflg
-< 	cmp	(sp)+,$2
-< 	blt	begin
-< 	tst	(sp)+
-< 	mov	(sp),r2
-< 	jsr	r5,atof; getch1
-< 	inc	argflg
-< 	br	begin1
-< begin:
-< 	tst	argflg
-< 	beq 9f; sys exit; 9:
-< 	jsr	r5,atof; getch
-< begin1:
-< 	tstf	fr0
-< 	cfcc
-< 	bpl 9f; jmp ouch; 9:
-< 	bne 9f; sys exit; 9:
-< 	cmpf	big,fr0
-< 	cfcc
-< 	bgt 9f; jmp ouch; 9:
-< /
-< 	movf	$f100,fr1
-< 	cmpf	fr0,fr1
-< 	cfcc
-< 	bge	1f
-< 	mov	$pt,r3
-< 3:
-< 	cmp	r3,$ptend
-< 	bhis	1f
-< 	movif	(r3)+,fr1
-< 	cmpf	fr1,fr0
-< 	cfcc
-< 	blt	3b
-< 	tst	-(r3)
-< 3:
-< 	movif	(r3),fr0
-< 	jsr	r5,ftoa; wrchar
-< 	mov	$'\n,r0
-< 	jsr	r5,wrchar
-< 	tst	(r3)+
-< 	cmp	r3,$ptend
-< 	blo	3b
-< 	movf	$f100,fr0
-< /
-< 1:
-< 	divf	$two,fr0
-< 	modf	$one,fr0
-< 	movf	fr1,fr0
-< 	mulf	$two,fr0
-< 	addf	$one,fr0
-< 	movif	$tsiz8,fr1
-< 	movf	fr1,fr5
-< 	movf	fr0,nn
-< /
-< /
-< /
-< /	clear the sieve table
-< /
-< 2:
-< 	mov	$table,r3
-< 3:
-< 	cmp	r3,$table+tabsiz
-< 	bhis	3f
-< 	clrb	(r3)+
-< 	br	3b
-< /
-< /	run the sieve
-< /
-< 3:
-< 	movf	nn,fr0
-< 	addf	fr5,fr0
-< 	jsr	r5,sqrt
-< 	movf	fr0,v
-< /
-< 	movf	nn,fr0
-< 	movif	$3.,fr1
-< 	jsr	pc,5f
-< 	movif	$5.,fr1
-< 	jsr	pc,5f
-< 	movif	$7.,fr1
-< 	jsr	pc,5f
-< 	movif	$11.,fr1
-< 	mov	$factab+2,r4
-< 4:
-< 	jsr	pc,5f
-< 	mov	(r4)+,kazoo
-< kazoo	=.+2
-< 	addf	$kazoo,fr1
-< 	cmp	r4,$ftabend
-< 	blo	3f
-< 	mov	$factab,r4
-< 3:
-< 	cmpf	v,fr1
-< 	cfcc
-< 	bge	4b
-< 	br	1f
-< /
-< /
-< 5:
-< 	movf	fr0,fr2
-< 	divf	fr1,fr2
-< 	modf	$one,fr2
-< 	mulf	fr1,fr3
-< 	subf	fr0,fr3
-< 	cfcc
-< 	bpl	3f
-< 	addf	fr1,fr3
-< 3:
-< 	cmpf	fr5,fr3
-< 	cfcc
-< 	ble	3f
-< 	movfi	fr3,r0
-< 	ashc	$-3.,r0
-< 	ash	$-13.,r1
-< 	bic	$177770,r1
-< 	bisb	bittab(r1),table(r0)
-< 	addf	fr1,fr3
-< 	br	3b
-< 3:
-< 	rts	pc
-< /
-< /
-< /	get one character form the argument string.
-< getch1:
-< 	movb	(r2)+,r0
-< 	rts	r5
-< /
-< /	now get the primes from the table
-< /	and print them.
-< /
-< 1:
-< /
-< 	movf	nn,fr0
-< 	clr	r3
-< 	br	4f
-< /
-< 1:
-< 	inc	r3
-< 	inc	r3
-< 	cmp	r3,$tsiz8
-< 	bge	2b
-< /
-< 4:
-< /
-< 	jsr	pc,prime
-< 	bec	3f
-< 	movf	nn,fr0
-< 	jsr	r5,ftoa; wrchar
-< 	mov	$'\n,r0
-< 	jsr	r5,wrchar
-< 3:
-< 	movf	nn,fr0
-< 	addf	$two,fr0
-< 	movf	fr0,nn
-< 	br	1b
-< /
-< /
-< /
-< /
-< prime:
-< 	mov	r3,r4
-< 	ashc	$-3.,r4
-< 	ash	$-13.,r5
-< 	bic	$177770,r5
-< 	bitb	bittab(r5),table(r4)
-< 	bne	1f
-< 	sec
-< 1:
-< 	rts	pc
-< /
-< /
-< /
-< /
-< one	= 40200
-< half	= 40000
-< opower	= 34400
-< power	= 44000
-< f100	= 41710
-< /
-< /	get one character from the console.
-< /	called from atof.
-< /
-< getch:
-< 	clr	r0
-< 	sys	read; ch; 1
-< 	bec 9f; sys exit; 9:
-< 	tst r0; bne 9f; sys exit; 9:
-< 	mov	ch,r0
-< 	rts	r5
-< /
-< /
-< /	write one character on the console
-< /	called from ftoa.
-< /
-< wrchar:
-< 	tst	iobuf
-< 	bne	1f
-< 	mov	$iobuf+2,iobuf
-< 1:
-< 	movb	r0,*iobuf
-< 	inc	iobuf
-< 	cmp	iobuf,$iobuf+514.
-< 	blo	1f
-< 	mov	$1,r0
-< 	sys	write; iobuf+2; 512.
-< 	mov	$iobuf+2,iobuf
-< 1:
-< 	rts	r5
-< /
-< 	.bss
-< iobuf:	.=.+518.
-< 	.text
-< /
-< /
-< /	read and convert a line from the console into fr0.
-< /
-< atof:
-< 	mov	r1,-(sp)
-< 	movif	$10.,r3
-< 	clrf	r0
-< 1:
-< 	jsr	r5,*(r5)
-< 	sub	$'0,r0
-< 	cmp	r0,$9.
-< 	bhi	2f
-< 	mulf	r3,r0
-< 	movif	r0,r1
-< 	addf	r1,r0
-< 	br	1b
-< 2:
-< 	cmp	r0,$' -'0
-< 	beq	1b
-< /
-< 	mov	(sp)+,r1
-< 	tst	(r5)+
-< 	rts	r5
-< /
-< /
-< ftoa:
-< 	mov	$ebuf,r2
-< 1:
-< 	movf	fr0,fr1
-< 	divf	$ten,fr1
-< 	movf	fr1,fr2
-< 	modf	$one,fr2
-< 	movf	fr3,-(sp)
-< 	mulf	$ten,fr3
-< 	negf	fr3
-< 	addf	fr0,fr3
-< 	movfi	fr3,-(r2)
-< 	movf	(sp)+,fr0
-< 	tstf	fr0
-< 	cfcc
-< 	bne	1b
-< 1:
-< 	mov	(r2)+,r0
-< 	add	$60,r0
-< 	jsr	r5,*(r5)
-< 	cmp	r2,$ebuf
-< 	blo	1b
-< 	tst	(r5)+
-< 	rts	r5
-< /
-< /
-< /
-< /	replace the f.p. number in fr0 by its square root
-< /
-< sqrt:
-< 	movf	r0,r1		/ a
-< 	tstf	fr0
-< 	cfcc
-< 	beq	2f
-< 	bgt	1f
-< 	sec
-< 	rts	r5		/ sqrt(-a)
-< 1:
-< 	seti
-< 	movf	fr0,-(sp)
-< 	asr	(sp)
-< 	add	$20100,(sp)
-< 	movf	(sp)+,fr0
-< 	movif	$2,r3		/ constant 2
-< 	mov	$4,r0
-< 1:
-< 	movf	r1,r2
-< 	divf	r0,r2
-< 	addf	r2,r0
-< 	divf	r3,r0		/ x = (x+a/x)/2
-< 	dec	r0
-< 	bgt	1b
-< 2:
-< 	clc
-< 	rts	r5
-< /
-< /
-< buf:	.=.+38.
-< ebuf:
-< /
-< /
-< /
-< /	complain about a number which the program
-< /	is unable to digest
-< ouch:
-< 	mov	$2,r0
-< 	sys	write; 1f; 2f-1f
-< 	jmp	begin
-< /
-< 1:	<Ouch.\n>
-< 2:	.even
-< /
-< /
-< one	= 40200
-< two	= 40400
-< four	= 40600
-< six	= 40700
-< ten	= 41040
-< /
-< 	.data
-< bittab:	.byte	1, 2, 4, 10, 20, 40, 100, 200
-< big:	056177; 177777; 177777; 177777
-< /
-< pt:	2.; 3.; 5.; 7.; 11.; 13.; 17.; 19.; 23.; 29.; 31.; 37.; 41.; 43.
-< 	47.; 53.; 59.; 61.; 67.; 71.; 73.; 79.; 83.; 89.; 97.
-< ptend:
-< nl:	<\n>
-< sp5:	<     >
-< 	.even
-< /
-< /
-< factab:
-< 	41040; 40400; 40600; 40400; 40600; 40700; 40400; 40700
-< 	40600; 40400; 40600; 40700; 40700; 40400; 40700; 40600
-< 	40400; 40700; 40600; 40700; 41000; 40600; 40400; 40600
-< 	40400; 40600; 41000; 40700; 40600; 40700; 40400; 40600
-< 	40700; 40400; 40700; 40700; 40600; 40400; 40600; 40700
-< 	40400; 40700; 40600; 40400; 40600; 40400; 41040; 40400
-< ftabend:
-< /
-< 	.bss
-< ch:	.=.+2
-< t:	.=.+8
-< n:	.=.+8
-< v:	.=.+8
-< nn:	.=.+8
-< place:	.=.+8
-< /
-< tabsiz	= 1000.
-< tsiz8	= 8000.
-< table:	.=.+tabsiz
-< argflg:	.=.+2
-< 	.text
----
-> #include <stdio.h>
->
-> #define MAXNUM 72057594037927936ULL
->
-> static int
-> parse_number(char *s, unsigned long long *out)
-> {
-> 	unsigned long long n;
-> 	int any;
->
-> 	while (*s == ' ' || *s == '\t' || *s == '\n')
-> 		s++;
-> 	n = 0;
-> 	any = 0;
-> 	while (*s >= '0' && *s <= '9') {
-> 		any = 1;
-> 		if (n > (MAXNUM - (unsigned long long)(*s - '0')) / 10ULL)
-> 			return(-1);
-> 		n = n * 10ULL + (unsigned long long)(*s - '0');
-> 		s++;
-> 	}
-> 	while (*s == ' ' || *s == '\t' || *s == '\n')
-> 		s++;
-> 	if (!any || *s != '\0' || n >= MAXNUM)
-> 		return(-1);
-> 	*out = n;
-> 	return(0);
-> }
->
-> static int
-> read_number(unsigned long long *out)
-> {
-> 	char buf[80];
-> 	int c, i;
->
-> 	i = 0;
-> 	while ((c = getchar()) != EOF) {
-> 		if (c != ' ' && c != '\t' && c != '\n')
-> 			break;
-> 	}
-> 	if (c == EOF)
-> 		return(0);
-> 	do {
-> 		if (i < (int)sizeof(buf) - 1)
-> 			buf[i++] = (char)c;
-> 		c = getchar();
-> 	} while (c != EOF && c != ' ' && c != '\t' && c != '\n');
-> 	buf[i] = '\0';
-> 	if (parse_number(buf, out) < 0)
-> 		return(-1);
-> 	return(1);
-> }
->
-> static void
-> putnum(unsigned long long n)
-> {
-> 	char buf[24];
-> 	int i;
->
-> 	i = 0;
-> 	if (n == 0)
-> 		buf[i++] = '0';
-> 	else while (n != 0) {
-> 		buf[i++] = (char)('0' + (int)(n % 10ULL));
-> 		n /= 10ULL;
-> 	}
-> 	while (i > 0)
-> 		putchar(buf[--i]);
-> }
->
-> static int
-> prime(unsigned long long n)
-> {
-> 	unsigned long long p;
->
-> 	if (n < 2ULL)
-> 		return(0);
-> 	if (n == 2ULL || n == 3ULL)
-> 		return(1);
-> 	if ((n % 2ULL) == 0 || (n % 3ULL) == 0)
-> 		return(0);
-> 	p = 5ULL;
-> 	while (p <= n / p) {
-> 		if ((n % p) == 0)
-> 			return(0);
-> 		p += 2ULL;
-> 		if (p > n / p)
-> 			break;
-> 		if ((n % p) == 0)
-> 			return(0);
-> 		p += 4ULL;
-> 	}
-> 	return(1);
-> }
->
-> static int
-> print_prime(unsigned long long n)
-> {
-> 	putnum(n);
-> 	if (putchar('\n') == EOF)
-> 		return(-1);
-> 	if (fflush(stdout) == EOF)
-> 		return(-1);
-> 	return(0);
-> }
->
-> static void
-> ouch(void)
-> {
-> 	fprintf(stderr, "Ouch.\n");
-> }
->
-> int
-> main(int argc, char **argv)
-> {
-> 	unsigned long long n;
-> 	int r;
->
-> 	if (argc > 1) {
-> 		if (parse_number(argv[1], &n) < 0) {
-> 			ouch();
-> 			return(1);
-> 		}
-> 		if (n == 0ULL)
-> 			return(0);
-> 	} else {
-> 		r = read_number(&n);
-> 		if (r <= 0 || n == 0ULL) {
-> 			if (r < 0)
-> 				ouch();
-> 			return(r < 0 ? 1 : 0);
-> 		}
-> 	}
-> 	if (n >= MAXNUM) {
-> 		ouch();
-> 		return(1);
-> 	}
-> 	if (n <= 2ULL) {
-> 		if (print_prime(2ULL) < 0)
-> 			return(0);
-> 		n = 3ULL;
-> 	} else if ((n % 2ULL) == 0)
-> 		n++;
-> 	for (;;) {
-> 		if (prime(n) && print_prime(n) < 0)
-> 			return(0);
-> 		n += 2ULL;
-> 	}
-> }
-```
-
-### cmd/prof.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/prof.c unix-v7-c99/cmd/prof.c || true
+diff unix-v7-c99/v7/usr/src/cmd/prof.c unix-v7-c99/usr/src/cmd/prof.c || true
 ```
 
 Expect:
@@ -29972,14 +31392,15 @@ Expect:
 > int done(void)
 308a315
 > 	return(0);
+
 ```
 
-### cmd/ps.c
+### usr/src/cmd/ps.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/ps.c unix-v7-c99/cmd/ps.c || true
+diff unix-v7-c99/v7/usr/src/cmd/ps.c unix-v7-c99/usr/src/cmd/ps.c || true
 ```
 
 Expect:
@@ -30000,7 +31421,7 @@ Expect:
 < #include <sys/tty.h>
 ---
 > /* v7 kernel-internal headers live under h/ in this port. */
-> #include "../h/proc.h"
+> #include "../../sys/h/proc.h"
 > /* sys/tty.h is not needed by this source (no struct tty fields are
 >  * touched here); a forward declaration is enough for the struct tty *
 >  * member referenced through u.u_ttyp. */
@@ -30008,7 +31429,7 @@ Expect:
 13c23
 < #include <sys/user.h>
 ---
-> #include "../h/user.h"
+> #include "../../sys/h/user.h"
 16,19c26,30
 < 	{ "_proc" },
 < 	{ "_swapdev" },
@@ -30107,7 +31528,7 @@ Expect:
 > 	 * This port has no swap and only one live user image at a time
 > 	 * (USERBASE..USERBASE+USERSIZE), with argv kept as a single
 > 	 * NUL-terminated, space-separated buffer at the fixed user VA
-> 	 * UARGV (see arch/arm.c::kexec2 / kspawn).  sys/v7_bridge.c::
+> 	 * UARGV (see arch/arm.c::kexec2 / kspawn).  arch/arm.c::
 > 	 * v7_proc_set_current() steers p_addr/p_size for the currently
 > 	 * running proc at UARGV/UARGLEN respectively, so the lseek+read
 > 	 * below lands directly on that buffer; every other proc gets
@@ -30233,14 +31654,15 @@ Expect:
 < 	return((unsigned)adr>=lbd && (unsigned)adr<ubd);
 ---
 > 	return((unsigned long)adr>=(unsigned long)lbd && (unsigned long)adr<(unsigned long)ubd);
+
 ```
 
-### cmd/pstat.c
+### usr/src/cmd/pstat.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/pstat.c unix-v7-c99/cmd/pstat.c || true
+diff unix-v7-c99/v7/usr/src/cmd/pstat.c unix-v7-c99/usr/src/cmd/pstat.c || true
 ```
 
 Expect:
@@ -30264,13 +31686,13 @@ Expect:
 >  * defs); C99 chokes on the file-scope `inode[]` / `mpxip` decls
 >  * showing up as unused function-local variables, so they are hoisted
 >  * to file scope here. */
-> #include "../h/tty.h"
-> #include "../h/inode.h"
-> #include "../h/text.h"
-> #include "../h/proc.h"
+> #include "../../sys/h/tty.h"
+> #include "../../sys/h/inode.h"
+> #include "../../sys/h/text.h"
+> #include "../../sys/h/proc.h"
 > #include <sys/dir.h>
-> #include "../h/user.h"
-> #include "../h/file.h"
+> #include "../../sys/h/user.h"
+> #include "../../sys/h/file.h"
 > #include <sys/stat.h>
 > 
 > #include <a.out.h>		/* nlist() prototype */
@@ -30426,14 +31848,15 @@ Expect:
 > 	register int nf;
 392a435
 > 	return(0);
+
 ```
 
-### cmd/sa.c
+### usr/src/cmd/sa.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sa.c unix-v7-c99/cmd/sa.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sa.c unix-v7-c99/usr/src/cmd/sa.c || true
 ```
 
 Expect:
@@ -30481,7 +31904,7 @@ Expect:
 >  * v7's h/acct.h declares comp_t (16-bit pseudo-float) fields for ac_utime,
 >  * ac_stime, ac_etime, ac_io.  The kernel writei()s `&acctbuf` for
 >  * `sizeof(acctbuf)` bytes; in this port `acctbuf` is the global declared
->  * in sys/v7stubs.c -- which uses *long* for utime/stime/etime and *short*
+>  * in conf.c -- which uses *long* for utime/stime/etime and *short*
 >  * for ac_io.  The on-disk record we read back here therefore mirrors that
 >  * 44-byte struct, not h/acct.h's 36-byte one.
 >  *
@@ -30500,7 +31923,7 @@ Expect:
 > struct	acct {
 > 	char	ac_comm[10];
 > 	char	ac_pad[2];	/* alignment pad between ac_comm and ac_utime
-> 				 * in sys/v7stubs.c's struct -- the kernel
+> 				 * in conf.c's struct -- the kernel
 > 				 * writes this byte-for-byte even though
 > 				 * h/acct.h's matching field is comp_t. */
 > 	long	ac_utime;
@@ -30736,14 +32159,15 @@ Expect:
 < 	register time_t nt;
 ---
 > 	time_t nt;
+
 ```
 
-### cmd/sed/sed.h
+### usr/src/cmd/sed/sed.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sed/sed.h unix-v7-c99/cmd/sed/sed.h || true
+diff unix-v7-c99/v7/usr/src/cmd/sed/sed.h unix-v7-c99/usr/src/cmd/sed/sed.h || true
 ```
 
 Expect:
@@ -30820,14 +32244,15 @@ Expect:
 < union reptr	*pending;
 ---
 > struct reptr	*pending;
+
 ```
 
-### cmd/sed/sed0.c
+### usr/src/cmd/sed/sed0.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sed/sed0.c unix-v7-c99/cmd/sed/sed0.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sed/sed0.c unix-v7-c99/usr/src/cmd/sed/sed0.c || true
 ```
 
 Expect:
@@ -31063,14 +32488,15 @@ Expect:
 ---
 > 		if(ep[(unsigned char)c] == 0)
 > 			ep[(unsigned char)c] = c;
+
 ```
 
-### cmd/sed/sed1.c
+### usr/src/cmd/sed/sed1.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sed/sed1.c unix-v7-c99/cmd/sed/sed1.c || true
+diff unix-v7-c99/v7/usr/src/cmd/sed/sed1.c unix-v7-c99/usr/src/cmd/sed/sed1.c || true
 ```
 
 Expect:
@@ -31284,14 +32710,15 @@ Expect:
 > 			if((fi = fopen((*aptr)->u.re1, "r")) == NULL)
 717d724
 < 
+
 ```
 
-### cmd/tc.c
+### usr/src/cmd/tc.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/tc.c unix-v7-c99/cmd/tc.c || true
+diff unix-v7-c99/v7/usr/src/cmd/tc.c unix-v7-c99/usr/src/cmd/tc.c || true
 ```
 
 Expect:
@@ -31452,14 +32879,15 @@ Expect:
 < char *asctab[128] {
 ---
 > char *asctab[128] = {
+
 ```
 
-### include/a.out.h
+### usr/include/a.out.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/a.out.h unix-v7-c99/include/a.out.h || true
+diff unix-v7-c99/v7/usr/include/a.out.h unix-v7-c99/usr/include/a.out.h || true
 ```
 
 Expect:
@@ -31468,27 +32896,23 @@ Expect:
 33a34,35
 > 
 > int	nlist(char *, struct nlist *);
+
 ```
 
-### include/ar.h
+### usr/include/ar.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/ar.h unix-v7-c99/include/ar.h || true
+diff unix-v7-c99/v7/usr/include/ar.h unix-v7-c99/usr/include/ar.h || true
 ```
 
 Expect:
 
 ```
-```
-
-### include/math.h
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/math.h unix-v7-c99/include/math.h || true
+diff unix-v7-c99/v7/usr/include/math.h unix-v7-c99/usr/include/math.h || true
 ```
 
 Expect:
@@ -31534,12 +32958,12 @@ Expect:
 > extern double yn(int n, double x);
 ```
 
-### include/stdio.h
+### usr/include/stdio.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/stdio.h unix-v7-c99/include/stdio.h || true
+diff unix-v7-c99/v7/usr/include/stdio.h unix-v7-c99/usr/include/stdio.h || true
 ```
 
 Expect:
@@ -31568,7 +32992,7 @@ Expect:
 > #ifndef NULL
 22a42
 > #endif
-37,41c57,198
+37,41c57,197
 < FILE	*fopen();
 < FILE	*freopen();
 < FILE	*fdopen();
@@ -31638,7 +33062,6 @@ Expect:
 > int ioctl(int fd, int cmd, char *arg);
 > int mount(char *special, char *dir, int ro);
 > int umount(char *special);
-> int sigreturn(int *frame);
 > 
 > /* time */
 > struct tm;
@@ -31717,27 +33140,23 @@ Expect:
 > char *timezone(int zone, int dst);
 > 
 > #endif
+
 ```
 
-### include/tp_defs.h
+### usr/include/tp_defs.h
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/include/tp_defs.h unix-v7-c99/include/tp_defs.h || true
+diff unix-v7-c99/v7/usr/include/tp_defs.h unix-v7-c99/usr/include/tp_defs.h || true
 ```
 
 Expect:
 
 ```
-```
-
-### lib/ecvt.c
-
-Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/ecvt.c unix-v7-c99/lib/ecvt.c || true
+diff unix-v7-c99/v7/usr/src/libc/gen/ecvt.c unix-v7-c99/usr/src/libc/ecvt.c || true
 ```
 
 Expect:
@@ -31771,12 +33190,12 @@ Expect:
 > 	double modf(double value, double *iptr);
 ```
 
-### lib/fdopen.c
+### usr/src/libc/fdopen.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/fdopen.c unix-v7-c99/lib/fdopen.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/fdopen.c unix-v7-c99/usr/src/libc/fdopen.c || true
 ```
 
 Expect:
@@ -31795,14 +33214,15 @@ Expect:
 < 		/* No break */
 ---
 > 		/* fallthrough */
+
 ```
 
-### lib/gcvt.c
+### usr/src/libc/gcvt.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/gcvt.c unix-v7-c99/lib/gcvt.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/gcvt.c unix-v7-c99/usr/src/libc/gcvt.c || true
 ```
 
 Expect:
@@ -31828,14 +33248,15 @@ Expect:
 ---
 > 	if ((decpt >= 0 && decpt-ndigit > 4)
 > 	 || (decpt < 0 && decpt < -3)) { /* use E-style */
+
 ```
 
-### lib/getgrent.c
+### usr/src/libc/getgrent.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getgrent.c unix-v7-c99/lib/getgrent.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/getgrent.c unix-v7-c99/usr/src/libc/getgrent.c || true
 ```
 
 Expect:
@@ -31861,14 +33282,15 @@ Expect:
 < getgrent()
 ---
 > getgrent(void)
+
 ```
 
-### lib/getgrgid.c
+### usr/src/libc/getgrgid.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getgrgid.c unix-v7-c99/lib/getgrgid.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/getgrgid.c unix-v7-c99/usr/src/libc/getgrgid.c || true
 ```
 
 Expect:
@@ -31881,14 +33303,15 @@ Expect:
 > getgrgid(register int gid)
 8d6
 < 	struct group *getgrent();
+
 ```
 
-### lib/getgrnam.c
+### usr/src/libc/getgrnam.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getgrnam.c unix-v7-c99/lib/getgrnam.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/getgrnam.c unix-v7-c99/usr/src/libc/getgrnam.c || true
 ```
 
 Expect:
@@ -31903,14 +33326,15 @@ Expect:
 > getgrnam(register char *name)
 8d7
 < 	struct group *getgrent();
+
 ```
 
-### lib/getw.c
+### usr/src/libc/getw.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/getw.c unix-v7-c99/lib/getw.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/getw.c unix-v7-c99/usr/src/libc/getw.c || true
 ```
 
 Expect:
@@ -31926,14 +33350,15 @@ Expect:
 < 	register i;
 ---
 > 	register int i;
+
 ```
 
-### lib/putw.c
+### usr/src/libc/putw.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/stdio/putw.c unix-v7-c99/lib/putw.c || true
+diff unix-v7-c99/v7/usr/src/libc/stdio/putw.c unix-v7-c99/usr/src/libc/putw.c || true
 ```
 
 Expect:
@@ -31948,14 +33373,15 @@ Expect:
 > putw(register int i, register struct _iobuf *iop)
 8a8
 > 	return(i);
+
 ```
 
-### libm/asin.c
+### usr/src/libm/asin.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/asin.c unix-v7-c99/libm/asin.c || true
+diff unix-v7-c99/v7/usr/src/libm/asin.c unix-v7-c99/usr/src/libm/asin.c || true
 ```
 
 Expect:
@@ -31975,14 +33401,15 @@ Expect:
 < acos(arg) double arg; {
 ---
 > acos(double arg) {
+
 ```
 
-### libm/atan.c
+### usr/src/libm/atan.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/atan.c unix-v7-c99/libm/atan.c || true
+diff unix-v7-c99/v7/usr/src/libm/atan.c unix-v7-c99/usr/src/libm/atan.c || true
 ```
 
 Expect:
@@ -32025,14 +33452,15 @@ Expect:
 < double arg;
 ---
 > xatan(double arg)
+
 ```
 
-### libm/exp.c
+### usr/src/libm/exp.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/exp.c unix-v7-c99/libm/exp.c || true
+diff unix-v7-c99/v7/usr/src/libm/exp.c unix-v7-c99/usr/src/libm/exp.c || true
 ```
 
 Expect:
@@ -32047,14 +33475,15 @@ Expect:
 < double arg;
 ---
 > exp(double arg)
+
 ```
 
-### libm/fabs.c
+### usr/src/libm/fabs.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/fabs.c unix-v7-c99/libm/fabs.c || true
+diff unix-v7-c99/v7/usr/src/libm/fabs.c unix-v7-c99/usr/src/libm/fabs.c || true
 ```
 
 Expect:
@@ -32065,14 +33494,15 @@ Expect:
 < double arg;
 ---
 > fabs(double arg)
+
 ```
 
-### libm/floor.c
+### usr/src/libm/floor.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/floor.c unix-v7-c99/libm/floor.c || true
+diff unix-v7-c99/v7/usr/src/libm/floor.c unix-v7-c99/usr/src/libm/floor.c || true
 ```
 
 Expect:
@@ -32092,14 +33522,15 @@ Expect:
 < double d;
 ---
 > ceil(double d)
+
 ```
 
-### libm/hypot.c
+### usr/src/libm/hypot.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/hypot.c unix-v7-c99/libm/hypot.c || true
+diff unix-v7-c99/v7/usr/src/libm/hypot.c unix-v7-c99/usr/src/libm/hypot.c || true
 ```
 
 Expect:
@@ -32123,14 +33554,15 @@ Expect:
 < 	double hypot();
 ---
 > 	double hypot(double, double);
+
 ```
 
-### libm/j0.c
+### usr/src/libm/j0.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/j0.c unix-v7-c99/libm/j0.c || true
+diff unix-v7-c99/v7/usr/src/libm/j0.c unix-v7-c99/usr/src/libm/j0.c || true
 ```
 
 Expect:
@@ -32160,14 +33592,15 @@ Expect:
 < asympt(arg) double arg;{
 ---
 > static void asympt(double arg){
+
 ```
 
-### libm/j1.c
+### usr/src/libm/j1.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/j1.c unix-v7-c99/libm/j1.c || true
+diff unix-v7-c99/v7/usr/src/libm/j1.c unix-v7-c99/usr/src/libm/j1.c || true
 ```
 
 Expect:
@@ -32198,14 +33631,15 @@ Expect:
 ---
 > static void
 > asympt(double arg){
+
 ```
 
-### libm/jn.c
+### usr/src/libm/jn.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/jn.c unix-v7-c99/libm/jn.c || true
+diff unix-v7-c99/v7/usr/src/libm/jn.c unix-v7-c99/usr/src/libm/jn.c || true
 ```
 
 Expect:
@@ -32227,14 +33661,15 @@ Expect:
 < 	double y0(), y1();
 ---
 > 	double y0(double), y1(double);
+
 ```
 
-### libm/log.c
+### usr/src/libm/log.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/log.c unix-v7-c99/libm/log.c || true
+diff unix-v7-c99/v7/usr/src/libm/log.c unix-v7-c99/usr/src/libm/log.c || true
 ```
 
 Expect:
@@ -32254,14 +33689,15 @@ Expect:
 < double arg;
 ---
 > log10(double arg)
+
 ```
 
-### libm/pow.c
+### usr/src/libm/pow.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/pow.c unix-v7-c99/libm/pow.c || true
+diff unix-v7-c99/v7/usr/src/libm/pow.c unix-v7-c99/usr/src/libm/pow.c || true
 ```
 
 Expect:
@@ -32276,14 +33712,15 @@ Expect:
 < double arg1, arg2;
 ---
 > pow(double arg1, double arg2)
+
 ```
 
-### libm/sin.c
+### usr/src/libm/sin.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/sin.c unix-v7-c99/libm/sin.c || true
+diff unix-v7-c99/v7/usr/src/libm/sin.c unix-v7-c99/usr/src/libm/sin.c || true
 ```
 
 Expect:
@@ -32316,14 +33753,15 @@ Expect:
 < 	double modf();
 ---
 > 	double modf(double, double *);
+
 ```
 
-### libm/sinh.c
+### usr/src/libm/sinh.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/sinh.c unix-v7-c99/libm/sinh.c || true
+diff unix-v7-c99/v7/usr/src/libm/sinh.c unix-v7-c99/usr/src/libm/sinh.c || true
 ```
 
 Expect:
@@ -32347,14 +33785,15 @@ Expect:
 < double arg;
 ---
 > cosh(double arg)
+
 ```
 
-### libm/sqrt.c
+### usr/src/libm/sqrt.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/sqrt.c unix-v7-c99/libm/sqrt.c || true
+diff unix-v7-c99/v7/usr/src/libm/sqrt.c unix-v7-c99/usr/src/libm/sqrt.c || true
 ```
 
 Expect:
@@ -32369,14 +33808,15 @@ Expect:
 < double arg;
 ---
 > sqrt(double arg)
+
 ```
 
-### libm/tan.c
+### usr/src/libm/tan.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/tan.c unix-v7-c99/libm/tan.c || true
+diff unix-v7-c99/v7/usr/src/libm/tan.c unix-v7-c99/usr/src/libm/tan.c || true
 ```
 
 Expect:
@@ -32391,14 +33831,15 @@ Expect:
 < 	double modf();
 ---
 > 	double modf(double, double *);
+
 ```
 
-### libm/tanh.c
+### usr/src/libm/tanh.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libm/tanh.c unix-v7-c99/libm/tanh.c || true
+diff unix-v7-c99/v7/usr/src/libm/tanh.c unix-v7-c99/usr/src/libm/tanh.c || true
 ```
 
 Expect:
@@ -32413,14 +33854,15 @@ Expect:
 < double arg;
 ---
 > tanh(double arg)
+
 ```
 
-### root/etc/group
+### etc/group
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/etc/group unix-v7-c99/root/etc/group || true
+diff unix-v7-c99/v7/etc/group unix-v7-c99/etc/group || true
 ```
 
 Expect:
@@ -32440,14 +33882,15 @@ Expect:
 > news::6:
 > uucp::7:
 > daemon::12:
+
 ```
 
-### root/etc/passwd
+### etc/passwd
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/etc/passwd unix-v7-c99/root/etc/passwd || true
+diff unix-v7-c99/v7/etc/passwd unix-v7-c99/etc/passwd || true
 ```
 
 Expect:
@@ -32463,14 +33906,15 @@ Expect:
 ---
 > root::0:0:root:/:/bin/sh
 > dmr::1:1:dennis:/:/bin/sh
+
 ```
 
-### root/etc/rc
+### etc/rc
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/etc/rc unix-v7-c99/root/etc/rc || true
+diff unix-v7-c99/v7/etc/rc unix-v7-c99/etc/rc || true
 ```
 
 Expect:
@@ -32485,14 +33929,15 @@ Expect:
 < rm -f /usr/spool/lpd/lock
 < : /etc/accton /usr/adm/acct
 < rm -f /usr/tmp/*
+
 ```
 
-### root/etc/ttys
+### etc/ttys
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/etc/ttys unix-v7-c99/root/etc/ttys || true
+diff unix-v7-c99/v7/etc/ttys unix-v7-c99/etc/ttys || true
 ```
 
 Expect:
@@ -32531,4 +33976,5 @@ Expect:
 < 00tty29
 < 00tty30
 < 00tty31
+
 ```

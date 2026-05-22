@@ -1,11 +1,72 @@
 # Unix v7 on Qemu (Armv7-A)
 
+### qemu-shell.py
+
+Local test:
+
+```
+bash -c 'mkdir -p tmp && cat >tmp/qemu-shell.py && chmod 755 tmp/qemu-shell.py'
+```
+
+Inputs:
+
+```
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+import os
+import sys
+import pexpect
+
+SENTINEL = '__TEST_DONE__'
+
+
+def main():
+    root = os.path.abspath('unix-v7-c99')
+    kernel = os.path.join(root, 'unix')
+    rootimg = os.path.join(root, 'root.img')
+    qemu = pexpect.spawn(
+        'qemu-system-arm',
+        ['-machine', 'virt', '-cpu', 'cortex-a7', '-nographic',
+         '-no-reboot', '-snapshot', '-kernel', kernel,
+         '-drive', f'if=none,file={rootimg},format=raw,id=hd0',
+         '-device', 'virtio-blk-device,drive=hd0'],
+        timeout=10, encoding=None)
+    if os.environ.get('QEMU_LOG'):
+        qemu.logfile_read = open(os.environ['QEMU_LOG'], 'wb')
+
+    qemu.expect(b'login:')
+    qemu.send(b'root\r')
+    qemu.expect_exact(b'# ')
+
+    for line in sys.stdin.read().splitlines():
+        qemu.send((line + '\r').encode())
+
+    sent_b = SENTINEL.encode()
+    captured = b''
+    for _ in range(2):
+        qemu.expect_exact(sent_b)
+        captured += qemu.before + qemu.after
+    qemu.expect_exact(b'# ')
+    captured += qemu.before + qemu.after
+
+    qemu.terminate(force=True)
+    sys.stdout.buffer.write(captured.replace(b'\r', b'').replace(b'\x08', b''))
+
+
+if __name__ == '__main__':
+    main()
+```
+
+Expect:
+
+```
+```
+
 ### Build unix
 
 Build:
 
 ```
-mkdir -p tmp
 TMPDIR=$PWD/tmp make -C unix-v7-c99 CONF=arm_qemu
 ```
 
@@ -14,7 +75,7 @@ TMPDIR=$PWD/tmp make -C unix-v7-c99 CONF=arm_qemu
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -87,7 +148,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -124,7 +185,7 @@ that a due job was executed.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -164,7 +225,7 @@ to the shell with success.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -206,7 +267,7 @@ printed because the salt is intentionally variable.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -255,7 +316,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -293,7 +354,7 @@ hard-link de-duplication.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -357,7 +418,7 @@ the console.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -394,7 +455,7 @@ replacement text, custom separators, and stdin input.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -482,7 +543,7 @@ signals, and accepts signal 0 for a live process.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -538,7 +599,7 @@ missing-source and directory-source diagnostics.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -598,7 +659,7 @@ directory, and the created directories can be removed.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -662,7 +723,7 @@ headers, and supports edit-script mode.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -735,7 +796,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -774,7 +835,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -816,7 +877,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -849,7 +910,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -880,7 +941,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -911,7 +972,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -982,13 +1043,11 @@ ln
 login
 look
 ls
-mathtest
 mesg
 mkdir
 mknod
 mktemp
 mount
-mttest
 mv
 ncheck
 newgrp
@@ -1014,7 +1073,6 @@ rmdir
 sa
 sed
 sh
-sigtest
 sleep
 sort
 sp
@@ -1059,7 +1117,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1103,7 +1161,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1140,7 +1198,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1240,7 +1298,7 @@ b
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1280,7 +1338,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1314,7 +1372,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1359,7 +1417,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1391,7 +1449,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1405,7 +1463,7 @@ Expect:
 
 ```
 df
-/dev/root 9495
+/dev/root 10112
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -1416,7 +1474,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1454,7 +1512,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1486,7 +1544,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1535,7 +1593,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1574,7 +1632,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1614,7 +1672,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1654,7 +1712,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1684,7 +1742,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1723,7 +1781,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1754,7 +1812,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1779,7 +1837,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1805,7 +1863,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1830,7 +1888,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1854,7 +1912,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1885,7 +1943,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1949,7 +2007,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1975,7 +2033,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2000,7 +2058,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2025,7 +2083,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2049,7 +2107,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2073,7 +2131,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2098,7 +2156,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2123,7 +2181,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2152,7 +2210,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2178,7 +2236,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2203,7 +2261,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2230,7 +2288,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2255,7 +2313,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2280,7 +2338,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2294,34 +2352,6 @@ Expect:
 
 ```
 wall </dev/null
-# echo __TEST_DONE__
-__TEST_DONE__
-#
-```
-
-### SIGNAL
-
-Local test:
-
-```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
-```
-
-Inputs:
-
-```
-sigtest
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-sigtest
-exit42: exit code=42
-sigkill: killed sig=9 core=0
-sigterm: killed sig=15 core=0
-sigpipe(kill): killed sig=13 core=0
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -2332,7 +2362,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2360,7 +2390,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2409,7 +2439,7 @@ the shell cannot ignore.)
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2443,7 +2473,7 @@ qemu-shell pexpect times out without ever capturing sed's output.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2482,7 +2512,7 @@ first ~7800 lines that fit in the buffer.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2502,38 +2532,6 @@ __TEST_DONE__
 #
 ```
 
-### MT_PARENT_KILL
-
-`mttest` forks a child that sleeps 10s, then the parent sends SIGTERM
-and waits.  Multitasking: the parent runs concurrently with the
-child's sleep, kill() lands on the live child, wait returns
-``status & 0x7f == 15``.  Single-threaded: the parent is frozen
-until the child's sleep completes, kill() finds a dead pid, wait
-returns the child's normal exit code (0).
-
-Local test:
-
-```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
-```
-
-Inputs:
-
-```
-mttest
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-mttest
-PASS killed sig=15
-# echo __TEST_DONE__
-__TEST_DONE__
-#
-```
-
 ### MT_WAIT_ALL_BG
 
 `wait` (no arg) must block until *all* backgrounded children exit,
@@ -2543,7 +2541,7 @@ sleep durations, both should print before `wait` returns.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed -E 's/[[:blank:]]*$//; s/^[0-9]+$/<pid>/'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[[:blank:]]*$//; s/^[0-9]+$/<pid>/'"
 ```
 
 Inputs:
@@ -2583,7 +2581,7 @@ is present after one wait; in a busy-spin pause they run sequentially.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2627,7 +2625,7 @@ future iteration.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2688,7 +2686,7 @@ installed and is covered by the later functional tests.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2742,7 +2740,7 @@ programs take over the terminal.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2770,7 +2768,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2796,7 +2794,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2827,7 +2825,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2852,7 +2850,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2883,7 +2881,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -2922,7 +2920,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3046,7 +3044,7 @@ the binaries still start.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3088,7 +3086,7 @@ The shell exposes its process id through `$$`.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3115,7 +3113,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3146,7 +3144,7 @@ __TEST_DONE__
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3182,7 +3180,7 @@ modes, link counts, and sizes from the current root image.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/^(total) [0-9]+$/\1 N/; s/^(-rwxr-xr-x 1 root) +[0-9]+ (DATE .*)$/\1 SIZE \2/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3199,19 +3197,19 @@ Expect:
 ls -l /etc/passwd
 -rw-r--r-- 1 root       51 DATE /etc/passwd
 # ls -l /etc
-total 209
--rwxr-xr-x 1 root     7240 DATE accton
--rwxr-xr-x 1 root    26920 DATE atrun
+total N
+-rwxr-xr-x 1 root SIZE DATE accton
+-rwxr-xr-x 1 root SIZE DATE atrun
 -rw-r--r-- 1 root    32768 DATE auxfs
--rwxr-xr-x 1 root    13060 DATE cron
+-rwxr-xr-x 1 root SIZE DATE cron
 -rw-r--r-- 1 root        0 DATE ddate
--rwxr-xr-x 1 root     7844 DATE getty
+-rwxr-xr-x 1 root SIZE DATE getty
 -rw-r--r-- 1 root       86 DATE group
--rwxr-xr-x 1 root     8680 DATE init
+-rwxr-xr-x 1 root SIZE DATE init
 -rw-r--r-- 1 root       51 DATE passwd
--rwxr-xr-x 1 root      273 DATE rc
+-rwxr-xr-x 1 root SIZE DATE rc
 -rw-r--r-- 1 root       10 DATE ttys
--rwxr-xr-x 1 root     6292 DATE update
+-rwxr-xr-x 1 root SIZE DATE update
 -rw-r--r-- 1 root       40 DATE utmp
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -3226,7 +3224,7 @@ mode bits straight from the inode.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3263,7 +3261,7 @@ as the following `ls -l` output confirms.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3301,7 +3299,7 @@ removes the final directory entry.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3342,7 +3340,7 @@ same `namei`/`iget` stack.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3378,7 +3376,7 @@ reads back `crw-rw-r--` with major 1 and minor 2.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3414,7 +3412,7 @@ though the `-e` operator itself is unsupported in this image.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3449,7 +3447,7 @@ state survived `a` -> `.` and the file write went through to disk.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3480,7 +3478,7 @@ stdin.  `bc` is still absent from the current rootfs.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3522,7 +3520,7 @@ and `vpr` are installed in `/bin`.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3577,7 +3575,7 @@ upstream behaviour for empty/special devices.  `tar`, `tp`, and
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 ```
 
 Inputs:
