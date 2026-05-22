@@ -5,8 +5,8 @@ for i in 1 2 3 4 5 6 7 8 9; do
    sudo usermod -G "" "agent$i"
    sudo usermod -g "agent$i" "agent$i"
 
-   # for logs and temporary files
-   sudo mkdir -p "/home/agent$i/fast_data/logs"
+   # for temporary files
+   sudo mkdir -p "/home/agent$i/fast_data/tmp"
 
    # agent should be able to modify all code
    sudo chown agent$i:agent$i -R "/home/agent$i/fast_data"

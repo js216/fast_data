@@ -3,10 +3,10 @@
 *.swo
 *.pdf
 
+doc
+tmp
+
 .claude
 .codex
-doc
-logs
 __pycache__
-
 .runpy_lease
