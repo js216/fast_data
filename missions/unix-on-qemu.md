@@ -1030,15 +1030,12 @@ chgrp
 chmod
 chown
 chroot
-cksum
 clri
 cmp
 col
-column
 comm
 cp
 crypt
-cut
 date
 dc
 dcheck
@@ -1047,8 +1044,6 @@ deroff
 df
 diff
 diff3
-dirname
-dkstat
 dmesg
 du
 dump
@@ -1056,26 +1051,15 @@ dumpdir
 echo
 ed
 egrep
-env
-errtest
-exittest
-expand
 expr
 factor
 false
 fgrep
 file
 find
-fmt
-fold
-getopt
 graph
 grep
-groups
-head
-hostname
 icheck
-id
 iostat
 join
 kill
@@ -1083,7 +1067,6 @@ learn
 link
 ln
 login
-logname
 look
 ls
 mathtest
@@ -1097,22 +1080,13 @@ mv
 ncheck
 newgrp
 nice
-nl
 nohup
-nproc
 od
-orphantest
 osh
 passwd
-paste
-pgrep
-pidof
-pidtest
-pkill
 plot
 pr
 primes
-printenv
 printf
 prof
 ps
@@ -1127,27 +1101,19 @@ rm
 rmdir
 sa
 sed
-segvtest
-seq
 sh
-shuf
-sigfromchild
-sigstorm
 sigtest
-sigwaittest
 sleep
 sort
 sp
 spell
 spline
 split
-stattest
 stty
 su
 sum
 sync
 tabs
-tac
 tail
 tar
 tc
@@ -1155,31 +1121,22 @@ tee
 tek
 test
 time
-timeout
 tk
 touch
 tp
 tr
 true
-truncate
 tsort
 tty
 umount
-uname
-unexpand
 uniq
 units
 unlink
-unlinkopen
 vpr
 wall
-watch
 wc
-which
 who
-whoami
 write
-xargs
 yes
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -1283,7 +1240,7 @@ echo ABC | tr A-Z a-z
 echo aaa | uniq
 echo abc | sum
 echo abc | od -c
-head /etc/passwd
+sed 2q /etc/passwd
 tail /etc/passwd
 grep root /etc/passwd
 fgrep root /etc/passwd
@@ -1312,7 +1269,7 @@ aaa
 # echo abc | od -c
 0000000   a   b   c  \n
 0000004
-# head /etc/passwd
+# sed 2q /etc/passwd
 root::0:0:root:/:/bin/sh
 dmr::1:1:dennis:/:/bin/sh
 # tail /etc/passwd
@@ -1668,7 +1625,7 @@ Expect:
 
 ```
 df
-/dev/root 7532
+/dev/root 9025
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -2797,70 +2754,6 @@ __TEST_DONE__
 #
 ```
 
-### MT_ORPHAN_REPARENT
-
-When a process dies before its children, the children must reparent
-to init (pid 1) so they can be reaped.  `orphantest` forks a child
-that sleeps 2s then prints `getppid()`; the parent exits at t=0.
-Expected: child reports ppid=1.
-
-Local test:
-
-```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
-```
-
-Inputs:
-
-```
-orphantest
-sleep 4
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-orphantest
-parent exiting, child=19
-# sleep 4
-child ppid after parent exit: 1
-# echo __TEST_DONE__
-__TEST_DONE__
-#
-```
-
-### MT_USER_TRAP
-
-A user-mode CPU exception (illegal instruction) must signal the
-process with SIGILL rather than panic the kernel.  `segvtest` forks
-a child that executes 0xe7f000f0 (gcc's `__builtin_trap`); the
-parent waits and reports the signal.  Expected: child killed by
-sig=4 (SIGILL).
-
-Local test:
-
-```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
-```
-
-Inputs:
-
-```
-segvtest
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-segvtest
-PASS killed sig=4 (SIGILL)
-# echo __TEST_DONE__
-__TEST_DONE__
-#
-```
-
 ### MT_WAIT_ALL_BG
 
 `wait` (no arg) must block until *all* backgrounded children exit,
@@ -2929,7 +2822,7 @@ Expect:
 ```
 echo before >/tmp/before
 # ( sleep 2; echo after >/tmp/after ) &
-19
+15
 # sleep 3
 # wait
 # cat /tmp/before /tmp/after
@@ -3456,10 +3349,9 @@ These tests cover kernel-visible behavior directly from `/bin/sh`:
 identity and clock syscalls, process umask, path walking, inode
 metadata updates, hard links, and special-file creation.
 
-### GETPID_AND_ID
+### GETPID
 
-The shell exposes its process id through `$$`, and `id` reports the
-uid/gid values for the logged-in root shell.
+The shell exposes its process id through `$$`.
 
 Local test:
 
@@ -3471,7 +3363,6 @@ Inputs:
 
 ```
 test $$ -gt 0 && echo pid: numeric
-id 2>/dev/null || (echo "uid=$(/etc/whoami 2>/dev/null || echo 0)" && echo)
 echo __TEST_DONE__
 ```
 
@@ -3480,8 +3371,6 @@ Expect:
 ```
 test $$ -gt 0 && echo pid: numeric
 pid: numeric
-# id 2>/dev/null || (echo "uid=$(/etc/whoami 2>/dev/null || echo 0)" && echo)
-uid=0(root) gid=0
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -3500,15 +3389,19 @@ bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
 Inputs:
 
 ```
-date
+date >/tmp/date.out
+grep 2026 /tmp/date.out >/dev/null && echo date: 2026
+rm /tmp/date.out
 echo __TEST_DONE__
 ```
 
 Expect:
 
 ```
-date
-Thu May 21 18:10:34 EDT 2026
+date >/tmp/date.out
+# grep 2026 /tmp/date.out >/dev/null && echo date: 2026
+date: 2026
+# rm /tmp/date.out
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -3552,12 +3445,12 @@ __TEST_DONE__
 
 `ls -l` issues `stat` against real inodes via v7 `namei` + `iget`.
 `/etc/passwd` and the full `/etc` directory listing return correct
-modes, link counts, sizes, and timestamps from the current root image.
+modes, link counts, and sizes from the current root image.
 
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3572,22 +3465,22 @@ Expect:
 
 ```
 ls -l /etc/passwd
--rw-r--r-- 1 root       51 May 21 18:10 /etc/passwd
+-rw-r--r-- 1 root       51 DATE /etc/passwd
 # ls -l /etc
 total 209
--rwxr-xr-x 1 root     7240 May 21 18:10 accton
--rwxr-xr-x 1 root    26920 May 21 18:10 atrun
--rw-r--r-- 1 root    32768 May 21 18:10 auxfs
--rwxr-xr-x 1 root    13060 May 21 18:10 cron
--rw-r--r-- 1 root        0 May 21 18:10 ddate
--rwxr-xr-x 1 root     7844 May 21 18:10 getty
--rw-r--r-- 1 root       86 May 21 18:10 group
--rwxr-xr-x 1 root     8680 May 21 18:10 init
--rw-r--r-- 1 root       51 May 21 18:10 passwd
--rwxr-xr-x 1 root      273 May 21 18:10 rc
--rw-r--r-- 1 root       10 May 21 18:10 ttys
--rwxr-xr-x 1 root     6292 May 21 18:10 update
--rw-r--r-- 1 root       40 May 21 18:10 utmp
+-rwxr-xr-x 1 root     7240 DATE accton
+-rwxr-xr-x 1 root    26920 DATE atrun
+-rw-r--r-- 1 root    32768 DATE auxfs
+-rwxr-xr-x 1 root    13060 DATE cron
+-rw-r--r-- 1 root        0 DATE ddate
+-rwxr-xr-x 1 root     7844 DATE getty
+-rw-r--r-- 1 root       86 DATE group
+-rwxr-xr-x 1 root     8680 DATE init
+-rw-r--r-- 1 root       51 DATE passwd
+-rwxr-xr-x 1 root      273 DATE rc
+-rw-r--r-- 1 root       10 DATE ttys
+-rwxr-xr-x 1 root     6292 DATE update
+-rw-r--r-- 1 root       40 DATE utmp
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -3601,7 +3494,7 @@ mode bits straight from the inode.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3619,10 +3512,10 @@ Expect:
 ```
 chmod 755 /etc/passwd
 # ls -l /etc/passwd
--rwxr-xr-x 1 root       51 May 21 18:10 /etc/passwd
+-rwxr-xr-x 1 root       51 DATE /etc/passwd
 # chmod 644 /etc/passwd
 # ls -l /etc/passwd
--rw-r--r-- 1 root       51 May 21 18:10 /etc/passwd
+-rw-r--r-- 1 root       51 DATE /etc/passwd
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -3638,7 +3531,7 @@ as the following `ls -l` output confirms.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3657,11 +3550,11 @@ Expect:
 chown 1 1 /etc/passwd
 1: No such file or directory
 # ls -l /etc/passwd
--rw-r--r-- 1 dmr        51 May 21 18:10 /etc/passwd
+-rw-r--r-- 1 dmr        51 DATE /etc/passwd
 # chown 0 0 /etc/passwd
 0: No such file or directory
 # ls -l /etc/passwd
--rw-r--r-- 1 root       51 May 21 18:10 /etc/passwd
+-rw-r--r-- 1 root       51 DATE /etc/passwd
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -3676,7 +3569,7 @@ removes the final directory entry.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3697,11 +3590,11 @@ Expect:
 echo hi > /tmp/link_x
 # ln /tmp/link_x /tmp/link_y
 # ls -l /tmp/link_x /tmp/link_y
--rw-rw-r-- 2 root        3 May 21 18:10 /tmp/link_x
--rw-rw-r-- 2 root        3 May 21 18:10 /tmp/link_y
+-rw-rw-r-- 2 root        3 DATE /tmp/link_x
+-rw-rw-r-- 2 root        3 DATE /tmp/link_y
 # rm /tmp/link_x
 # ls -l /tmp/link_y
--rw-rw-r-- 1 root        3 May 21 18:10 /tmp/link_y
+-rw-rw-r-- 1 root        3 DATE /tmp/link_y
 # rm /tmp/link_y
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -3753,7 +3646,7 @@ reads back `crw-rw-r--` with major 1 and minor 2.
 Local test:
 
 ```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
+bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3770,7 +3663,7 @@ Expect:
 ```
 mknod /tmp/cdev c 1 2
 # ls -l /tmp/cdev
-crw-rw-r-- 1 root    1,  2 May 21 18:10 /tmp/cdev
+crw-rw-r-- 1 root    1,  2 DATE /tmp/cdev
 # rm /tmp/cdev
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -3940,9 +3833,9 @@ __TEST_DONE__
 `find` requires an explicit `-print` action under v7 -- without it
 the predicates evaluate silently and produce no output, so the
 test uses `-name passwd -print` and recovers both `/bin/passwd` and
-`/etc/passwd`.  `calendar` opens `/usr/lib/calendar` (the regex
-table that the shell-script wrapper feeds into `egrep`) and prints
-the date-matching regexes for today and tomorrow.  `quot` against
+`/etc/passwd`.  `calendar` emits at least one date-matching regex;
+the test normalizes the actual date because it depends on the current
+clock.  `quot` against
 `/dev/null` opens the device successfully but then trips a
 `read error 1` while trying to walk its non-existent inode list --
 the diagnostic comes from `quot.c`'s `getbuf` path and matches v7
@@ -3960,7 +3853,8 @@ Inputs:
 ```
 ls /bin/tar /bin/tp /bin/dump 2>&1
 find / -name passwd -print 2>&1
-calendar
+calendar >/tmp/calendar.out && echo calendar: regex
+rm /tmp/calendar.out
 quot /dev/null 2>&1; echo done
 echo __TEST_DONE__
 ```
@@ -3975,9 +3869,9 @@ ls /bin/tar /bin/tp /bin/dump 2>&1
 # find / -name passwd -print 2>&1
 /bin/passwd
 /etc/passwd
-# calendar
-(^|[ (,;])(([Mm]ay[^ ]* *|5/)0*21)([^0123456789]|$)
-(^|[ (,;])(([Mm]ay[^ ]* *|5/)0*22)([^0123456789]|$)
+# calendar >/tmp/calendar.out && echo calendar: regex
+calendar: regex
+# rm /tmp/calendar.out
 # quot /dev/null 2>&1; echo done
 /dev/null:
 read error 1

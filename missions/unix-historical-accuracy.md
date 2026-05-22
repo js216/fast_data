@@ -1,523 +1,18 @@
 # Unix v7 -> C99 historical accuracy
 
-### File inventory
-
-Local test:
-
-```
-bash -c "\
-  find unix-v7-c99 -type f \
-    -not -path 'unix-v7-c99/v7/*' \
-    -not -name '*.o' -not -name '*.a' -not -name '*.out' \
-    -not -name '*.swp' -not -name '*.elf' \
-    -not -path 'unix-v7-c99/build/*' \
-    -not -path 'unix-v7-c99/root/bin/*' \
-    -not -path 'unix-v7-c99/root/usr/*' \
-    -not -path 'unix-v7-c99/root/etc/init' \
-    -not -path 'unix-v7-c99/root/etc/getty' \
-    -not -path 'unix-v7-c99/root/etc/accton' \
-    -not -path 'unix-v7-c99/root/etc/atrun' \
-    -not -path 'unix-v7-c99/root/etc/update' \
-    -not -path 'unix-v7-c99/root/etc/ac' \
-    -not -path 'unix-v7-c99/root/etc/cron' \
-    -not -path 'unix-v7-c99/root/etc/utmp.empty' \
-    -not -path 'unix-v7-c99/root/unix' \
-    -not -path 'unix-v7-c99/root.img' \
-    -not -path 'unix-v7-c99/unix' \
-    -not -path 'unix-v7-c99/conf/test_malloc' \
-    -not -path 'unix-v7-c99/sys/unix' \
-    | LC_ALL=C sort"
-```
-
-Expect:
-
-```
-unix-v7-c99/.git
-unix-v7-c99/.gitignore
-unix-v7-c99/LICENSE
-unix-v7-c99/Makefile
-unix-v7-c99/README
-unix-v7-c99/arch/a7.ld
-unix-v7-c99/arch/a7.s
-unix-v7-c99/arch/arm.h
-unix-v7-c99/arch/armboot.c
-unix-v7-c99/arch/evb.ld
-unix-v7-c99/arch/machdep.c
-unix-v7-c99/arch/swtch.s
-unix-v7-c99/arch/u_bridge.c
-unix-v7-c99/arch/u_stub.c
-unix-v7-c99/arch/v7stubs.c
-unix-v7-c99/cmd/ac.c
-unix-v7-c99/cmd/accton.c
-unix-v7-c99/cmd/arcv.c
-unix-v7-c99/cmd/arithmetic.c
-unix-v7-c99/cmd/at.c
-unix-v7-c99/cmd/atrun.c
-unix-v7-c99/cmd/awk/awk.def
-unix-v7-c99/cmd/awk/awk.g.c
-unix-v7-c99/cmd/awk/awk.g.y
-unix-v7-c99/cmd/awk/awk.h
-unix-v7-c99/cmd/awk/awk.lx.c
-unix-v7-c99/cmd/awk/awk_math.c
-unix-v7-c99/cmd/awk/b.c
-unix-v7-c99/cmd/awk/lib.c
-unix-v7-c99/cmd/awk/main.c
-unix-v7-c99/cmd/awk/parse.c
-unix-v7-c99/cmd/awk/proc.c
-unix-v7-c99/cmd/awk/proctab.c
-unix-v7-c99/cmd/awk/run.c
-unix-v7-c99/cmd/awk/token.c
-unix-v7-c99/cmd/awk/tran.c
-unix-v7-c99/cmd/backgammon.c
-unix-v7-c99/cmd/basename.c
-unix-v7-c99/cmd/cal.c
-unix-v7-c99/cmd/calendar.c
-unix-v7-c99/cmd/cat.c
-unix-v7-c99/cmd/cb.c
-unix-v7-c99/cmd/checkeq.c
-unix-v7-c99/cmd/chgrp.c
-unix-v7-c99/cmd/chmod.c
-unix-v7-c99/cmd/chown.c
-unix-v7-c99/cmd/chroot.c
-unix-v7-c99/cmd/cksum.c
-unix-v7-c99/cmd/clri.c
-unix-v7-c99/cmd/cmp.c
-unix-v7-c99/cmd/col.c
-unix-v7-c99/cmd/column.c
-unix-v7-c99/cmd/comm.c
-unix-v7-c99/cmd/cp.c
-unix-v7-c99/cmd/cron.c
-unix-v7-c99/cmd/crypt.c
-unix-v7-c99/cmd/cut.c
-unix-v7-c99/cmd/date.c
-unix-v7-c99/cmd/dc/dc.c
-unix-v7-c99/cmd/dc/dc.h
-unix-v7-c99/cmd/dcheck.c
-unix-v7-c99/cmd/dd.c
-unix-v7-c99/cmd/deroff.c
-unix-v7-c99/cmd/df.c
-unix-v7-c99/cmd/diff.c
-unix-v7-c99/cmd/diff3.c
-unix-v7-c99/cmd/diffh.c
-unix-v7-c99/cmd/dirname.c
-unix-v7-c99/cmd/dkstat.c
-unix-v7-c99/cmd/dmesg.c
-unix-v7-c99/cmd/du.c
-unix-v7-c99/cmd/dump.c
-unix-v7-c99/cmd/dumpdir.c
-unix-v7-c99/cmd/echo.c
-unix-v7-c99/cmd/ed.c
-unix-v7-c99/cmd/egrep.c
-unix-v7-c99/cmd/env.c
-unix-v7-c99/cmd/errtest.c
-unix-v7-c99/cmd/exittest.c
-unix-v7-c99/cmd/expand.c
-unix-v7-c99/cmd/expr.c
-unix-v7-c99/cmd/factor.c
-unix-v7-c99/cmd/fgrep.c
-unix-v7-c99/cmd/file.c
-unix-v7-c99/cmd/find.c
-unix-v7-c99/cmd/fish.c
-unix-v7-c99/cmd/fmt.c
-unix-v7-c99/cmd/fold.c
-unix-v7-c99/cmd/fortune.c
-unix-v7-c99/cmd/getopt.c
-unix-v7-c99/cmd/getty.c
-unix-v7-c99/cmd/graph.c
-unix-v7-c99/cmd/grep.c
-unix-v7-c99/cmd/groups.c
-unix-v7-c99/cmd/hangman.c
-unix-v7-c99/cmd/head.c
-unix-v7-c99/cmd/hostname.c
-unix-v7-c99/cmd/icheck.c
-unix-v7-c99/cmd/id.c
-unix-v7-c99/cmd/init.c
-unix-v7-c99/cmd/iostat.c
-unix-v7-c99/cmd/join.c
-unix-v7-c99/cmd/kill.c
-unix-v7-c99/cmd/learn/copy.c
-unix-v7-c99/cmd/learn/dounit.c
-unix-v7-c99/cmd/learn/lcount.c
-unix-v7-c99/cmd/learn/learn.c
-unix-v7-c99/cmd/learn/list.c
-unix-v7-c99/cmd/learn/lrndef
-unix-v7-c99/cmd/learn/lrnref
-unix-v7-c99/cmd/learn/makpipe.c
-unix-v7-c99/cmd/learn/maktee.c
-unix-v7-c99/cmd/learn/mem.c
-unix-v7-c99/cmd/learn/mysys.c
-unix-v7-c99/cmd/learn/selsub.c
-unix-v7-c99/cmd/learn/selunit.c
-unix-v7-c99/cmd/learn/start.c
-unix-v7-c99/cmd/learn/tee.c
-unix-v7-c99/cmd/learn/whatnow.c
-unix-v7-c99/cmd/learn/wrapup.c
-unix-v7-c99/cmd/link.c
-unix-v7-c99/cmd/ln.c
-unix-v7-c99/cmd/login.c
-unix-v7-c99/cmd/logname.c
-unix-v7-c99/cmd/look.c
-unix-v7-c99/cmd/ls.c
-unix-v7-c99/cmd/makekey.c
-unix-v7-c99/cmd/mesg.c
-unix-v7-c99/cmd/mkdir.c
-unix-v7-c99/cmd/mknod.c
-unix-v7-c99/cmd/mktemp.c
-unix-v7-c99/cmd/mount.c
-unix-v7-c99/cmd/mv.c
-unix-v7-c99/cmd/ncheck.c
-unix-v7-c99/cmd/newgrp.c
-unix-v7-c99/cmd/nice.c
-unix-v7-c99/cmd/nl.c
-unix-v7-c99/cmd/nproc.c
-unix-v7-c99/cmd/od.c
-unix-v7-c99/cmd/orphantest.c
-unix-v7-c99/cmd/osh.c
-unix-v7-c99/cmd/passwd.c
-unix-v7-c99/cmd/paste.c
-unix-v7-c99/cmd/pgrep.c
-unix-v7-c99/cmd/pidof.c
-unix-v7-c99/cmd/pidtest.c
-unix-v7-c99/cmd/pkill.c
-unix-v7-c99/cmd/pr.c
-unix-v7-c99/cmd/primes.c
-unix-v7-c99/cmd/printenv.c
-unix-v7-c99/cmd/printf.c
-unix-v7-c99/cmd/prof.c
-unix-v7-c99/cmd/ps.c
-unix-v7-c99/cmd/pstat.c
-unix-v7-c99/cmd/ptx.c
-unix-v7-c99/cmd/pwd.c
-unix-v7-c99/cmd/quiz.c
-unix-v7-c99/cmd/quot.c
-unix-v7-c99/cmd/random.c
-unix-v7-c99/cmd/restor.c
-unix-v7-c99/cmd/rev.c
-unix-v7-c99/cmd/rm.c
-unix-v7-c99/cmd/rmdir.c
-unix-v7-c99/cmd/sa.c
-unix-v7-c99/cmd/sed/sed.h
-unix-v7-c99/cmd/sed/sed0.c
-unix-v7-c99/cmd/sed/sed1.c
-unix-v7-c99/cmd/segvtest.c
-unix-v7-c99/cmd/seq.c
-unix-v7-c99/cmd/sh/args.c
-unix-v7-c99/cmd/sh/blok.c
-unix-v7-c99/cmd/sh/brkincr.h
-unix-v7-c99/cmd/sh/builtin.c
-unix-v7-c99/cmd/sh/cmd.c
-unix-v7-c99/cmd/sh/ctype.c
-unix-v7-c99/cmd/sh/ctype.h
-unix-v7-c99/cmd/sh/defs.h
-unix-v7-c99/cmd/sh/dup.h
-unix-v7-c99/cmd/sh/error.c
-unix-v7-c99/cmd/sh/expand.c
-unix-v7-c99/cmd/sh/fault.c
-unix-v7-c99/cmd/sh/io.c
-unix-v7-c99/cmd/sh/mac.h
-unix-v7-c99/cmd/sh/macro.c
-unix-v7-c99/cmd/sh/main.c
-unix-v7-c99/cmd/sh/makefile
-unix-v7-c99/cmd/sh/mode.h
-unix-v7-c99/cmd/sh/msg.c
-unix-v7-c99/cmd/sh/name.c
-unix-v7-c99/cmd/sh/name.h
-unix-v7-c99/cmd/sh/print.c
-unix-v7-c99/cmd/sh/service.c
-unix-v7-c99/cmd/sh/setbrk.c
-unix-v7-c99/cmd/sh/stak.c
-unix-v7-c99/cmd/sh/stak.h
-unix-v7-c99/cmd/sh/string.c
-unix-v7-c99/cmd/sh/sym.h
-unix-v7-c99/cmd/sh/timeout.h
-unix-v7-c99/cmd/sh/word.c
-unix-v7-c99/cmd/sh/xec.c
-unix-v7-c99/cmd/shuf.c
-unix-v7-c99/cmd/sigfromchild.c
-unix-v7-c99/cmd/sigstorm.c
-unix-v7-c99/cmd/sigwaittest.c
-unix-v7-c99/cmd/sleep.c
-unix-v7-c99/cmd/sort.c
-unix-v7-c99/cmd/sp.c
-unix-v7-c99/cmd/spell/spell.c
-unix-v7-c99/cmd/spell/spell.h
-unix-v7-c99/cmd/spell/spell.sh
-unix-v7-c99/cmd/spell/spellin.c
-unix-v7-c99/cmd/spell/spellout.c
-unix-v7-c99/cmd/spline.c
-unix-v7-c99/cmd/split.c
-unix-v7-c99/cmd/stattest.c
-unix-v7-c99/cmd/stty.c
-unix-v7-c99/cmd/su.c
-unix-v7-c99/cmd/sum.c
-unix-v7-c99/cmd/sync.c
-unix-v7-c99/cmd/tabs.c
-unix-v7-c99/cmd/tac.c
-unix-v7-c99/cmd/tail.c
-unix-v7-c99/cmd/tar/tar.c
-unix-v7-c99/cmd/tc.c
-unix-v7-c99/cmd/tee.c
-unix-v7-c99/cmd/tek.c
-unix-v7-c99/cmd/test.c
-unix-v7-c99/cmd/time.c
-unix-v7-c99/cmd/timeout.c
-unix-v7-c99/cmd/tk.c
-unix-v7-c99/cmd/touch.c
-unix-v7-c99/cmd/tp/tp.h
-unix-v7-c99/cmd/tp/tp0.c
-unix-v7-c99/cmd/tp/tp1.c
-unix-v7-c99/cmd/tp/tp2.c
-unix-v7-c99/cmd/tp/tp3.c
-unix-v7-c99/cmd/tp/tp_defs.h
-unix-v7-c99/cmd/tr.c
-unix-v7-c99/cmd/truncate.c
-unix-v7-c99/cmd/tsort.c
-unix-v7-c99/cmd/tty.c
-unix-v7-c99/cmd/umount.c
-unix-v7-c99/cmd/uname.c
-unix-v7-c99/cmd/unexpand.c
-unix-v7-c99/cmd/uniq.c
-unix-v7-c99/cmd/units.c
-unix-v7-c99/cmd/unlink.c
-unix-v7-c99/cmd/unlinkopen.c
-unix-v7-c99/cmd/update.c
-unix-v7-c99/cmd/vpr.c
-unix-v7-c99/cmd/wall.c
-unix-v7-c99/cmd/watch.c
-unix-v7-c99/cmd/wc.c
-unix-v7-c99/cmd/which.c
-unix-v7-c99/cmd/who.c
-unix-v7-c99/cmd/whoami.c
-unix-v7-c99/cmd/write.c
-unix-v7-c99/cmd/wump.c
-unix-v7-c99/cmd/xargs.c
-unix-v7-c99/cmd/yes.c
-unix-v7-c99/conf/qemu_arm/auxfs.proto
-unix-v7-c99/conf/qemu_arm/root.proto
-unix-v7-c99/dev/bio.c
-unix-v7-c99/dev/mp135_blk.c
-unix-v7-c99/dev/msgbuf.c
-unix-v7-c99/dev/pl011.c
-unix-v7-c99/dev/stm32_usart.c
-unix-v7-c99/dev/virtio_blk.c
-unix-v7-c99/h/acct.h
-unix-v7-c99/h/buf.h
-unix-v7-c99/h/conf.h
-unix-v7-c99/h/dir.h
-unix-v7-c99/h/fblk.h
-unix-v7-c99/h/file.h
-unix-v7-c99/h/filsys.h
-unix-v7-c99/h/ino.h
-unix-v7-c99/h/inode.h
-unix-v7-c99/h/map.h
-unix-v7-c99/h/mount.h
-unix-v7-c99/h/param.h
-unix-v7-c99/h/proc.h
-unix-v7-c99/h/proto.h
-unix-v7-c99/h/seg.h
-unix-v7-c99/h/stat.h
-unix-v7-c99/h/systm.h
-unix-v7-c99/h/text.h
-unix-v7-c99/h/timeb.h
-unix-v7-c99/h/tty.h
-unix-v7-c99/h/user.h
-unix-v7-c99/h/v7_bridge.h
-unix-v7-c99/include/a.out.h
-unix-v7-c99/include/ar.h
-unix-v7-c99/include/ctype.h
-unix-v7-c99/include/dumprestor.h
-unix-v7-c99/include/errno.h
-unix-v7-c99/include/execargs.h
-unix-v7-c99/include/grp.h
-unix-v7-c99/include/math.h
-unix-v7-c99/include/pwd.h
-unix-v7-c99/include/setjmp.h
-unix-v7-c99/include/sgtty.h
-unix-v7-c99/include/signal.h
-unix-v7-c99/include/stdio.h
-unix-v7-c99/include/sys/dir.h
-unix-v7-c99/include/sys/fblk.h
-unix-v7-c99/include/sys/filsys.h
-unix-v7-c99/include/sys/ino.h
-unix-v7-c99/include/sys/inode.h
-unix-v7-c99/include/sys/param.h
-unix-v7-c99/include/sys/stat.h
-unix-v7-c99/include/sys/timeb.h
-unix-v7-c99/include/sys/times.h
-unix-v7-c99/include/sys/types.h
-unix-v7-c99/include/time.h
-unix-v7-c99/include/tp_defs.h
-unix-v7-c99/include/utmp.h
-unix-v7-c99/lib/Makefile
-unix-v7-c99/lib/atof.c
-unix-v7-c99/lib/atoi.c
-unix-v7-c99/lib/atol.c
-unix-v7-c99/lib/calloc.c
-unix-v7-c99/lib/clrerr.c
-unix-v7-c99/lib/compat.c
-unix-v7-c99/lib/crt0.c
-unix-v7-c99/lib/crt0.s
-unix-v7-c99/lib/crypt.c
-unix-v7-c99/lib/ctime.c
-unix-v7-c99/lib/data.c
-unix-v7-c99/lib/doprnt.c
-unix-v7-c99/lib/doscan.c
-unix-v7-c99/lib/ecvt.c
-unix-v7-c99/lib/endopen.c
-unix-v7-c99/lib/errlst.c
-unix-v7-c99/lib/execvp.c
-unix-v7-c99/lib/fdopen.c
-unix-v7-c99/lib/fgetc.c
-unix-v7-c99/lib/fgets.c
-unix-v7-c99/lib/filbuf.c
-unix-v7-c99/lib/findiop.c
-unix-v7-c99/lib/flsbuf.c
-unix-v7-c99/lib/fopen.c
-unix-v7-c99/lib/fprintf.c
-unix-v7-c99/lib/fputc.c
-unix-v7-c99/lib/fputs.c
-unix-v7-c99/lib/freopen.c
-unix-v7-c99/lib/fseek.c
-unix-v7-c99/lib/ftell.c
-unix-v7-c99/lib/gcvt.c
-unix-v7-c99/lib/getchar.c
-unix-v7-c99/lib/getenv.c
-unix-v7-c99/lib/getgrent.c
-unix-v7-c99/lib/getgrgid.c
-unix-v7-c99/lib/getgrnam.c
-unix-v7-c99/lib/getlogin.c
-unix-v7-c99/lib/getpass.c
-unix-v7-c99/lib/getpwent.c
-unix-v7-c99/lib/getpwnam.c
-unix-v7-c99/lib/getpwuid.c
-unix-v7-c99/lib/gets.c
-unix-v7-c99/lib/getw.c
-unix-v7-c99/lib/index.c
-unix-v7-c99/lib/isatty.c
-unix-v7-c99/lib/l3.c
-unix-v7-c99/lib/malloc.c
-unix-v7-c99/lib/math_helpers.c
-unix-v7-c99/lib/memcpy.c
-unix-v7-c99/lib/mkdir.c
-unix-v7-c99/lib/mktemp.c
-unix-v7-c99/lib/nlist.c
-unix-v7-c99/lib/perror.c
-unix-v7-c99/lib/printf.c
-unix-v7-c99/lib/putchar.c
-unix-v7-c99/lib/puts.c
-unix-v7-c99/lib/putw.c
-unix-v7-c99/lib/qsort.c
-unix-v7-c99/lib/rand.c
-unix-v7-c99/lib/rdwr.c
-unix-v7-c99/lib/rew.c
-unix-v7-c99/lib/rindex.c
-unix-v7-c99/lib/scanf.c
-unix-v7-c99/lib/setbuf.c
-unix-v7-c99/lib/sprintf.c
-unix-v7-c99/lib/strcat.c
-unix-v7-c99/lib/strcmp.c
-unix-v7-c99/lib/strcpy.c
-unix-v7-c99/lib/strlen.c
-unix-v7-c99/lib/strncat.c
-unix-v7-c99/lib/strncmp.c
-unix-v7-c99/lib/strncpy.c
-unix-v7-c99/lib/strout.c
-unix-v7-c99/lib/swab.c
-unix-v7-c99/lib/sys.s
-unix-v7-c99/lib/syscall.s
-unix-v7-c99/lib/system.c
-unix-v7-c99/lib/tell.c
-unix-v7-c99/lib/timezone.c
-unix-v7-c99/lib/ttyname.c
-unix-v7-c99/lib/ttyslot.c
-unix-v7-c99/lib/u.ld
-unix-v7-c99/lib/ungetc.c
-unix-v7-c99/libm/asin.c
-unix-v7-c99/libm/atan.c
-unix-v7-c99/libm/exp.c
-unix-v7-c99/libm/fabs.c
-unix-v7-c99/libm/floor.c
-unix-v7-c99/libm/hypot.c
-unix-v7-c99/libm/j0.c
-unix-v7-c99/libm/j1.c
-unix-v7-c99/libm/jn.c
-unix-v7-c99/libm/log.c
-unix-v7-c99/libm/pow.c
-unix-v7-c99/libm/sin.c
-unix-v7-c99/libm/sinh.c
-unix-v7-c99/libm/sqrt.c
-unix-v7-c99/libm/tan.c
-unix-v7-c99/libm/tanh.c
-unix-v7-c99/root/etc/group
-unix-v7-c99/root/etc/passwd
-unix-v7-c99/root/etc/rc
-unix-v7-c99/root/etc/ttys
-unix-v7-c99/sys/Makefile
-unix-v7-c99/sys/acct.c
-unix-v7-c99/sys/alloc.c
-unix-v7-c99/sys/clock.c
-unix-v7-c99/sys/fio.c
-unix-v7-c99/sys/iget.c
-unix-v7-c99/sys/main.c
-unix-v7-c99/sys/malloc.c
-unix-v7-c99/sys/nami.c
-unix-v7-c99/sys/pipe.c
-unix-v7-c99/sys/prf.c
-unix-v7-c99/sys/rdwri.c
-unix-v7-c99/sys/sig.c
-unix-v7-c99/sys/slp.c
-unix-v7-c99/sys/subr.c
-unix-v7-c99/sys/sys1.c
-unix-v7-c99/sys/sys2.c
-unix-v7-c99/sys/sys3.c
-unix-v7-c99/sys/sys4.c
-unix-v7-c99/sys/text.c
-unix-v7-c99/sys/ureg.c
-unix-v7-c99/tools/extract-old-ar.py
-unix-v7-c99/tools/mkfs
-unix-v7-c99/tools/mkfs.c
-unix-v7-c99/tools/qemu-shell.py
-```
-
 ### Files NOT diffed
 
 Local test:
 
 ```
-bash -c "\
-  export LC_ALL=C; \
-  comm -23 \
-    <(find unix-v7-c99 -type f \
-        -not -path 'unix-v7-c99/v7/*' \
-        -not -name '*.o' -not -name '*.a' -not -name '*.out' \
-        -not -name '*.swp' -not -name '*.elf' \
-        -not -path 'unix-v7-c99/build/*' \
-        -not -path 'unix-v7-c99/root/bin/*' \
-        -not -path 'unix-v7-c99/root/usr/*' \
-        -not -path 'unix-v7-c99/root/etc/init' \
-        -not -path 'unix-v7-c99/root/etc/getty' \
-        -not -path 'unix-v7-c99/root/etc/accton' \
-        -not -path 'unix-v7-c99/root/etc/atrun' \
-        -not -path 'unix-v7-c99/root/etc/update' \
-        -not -path 'unix-v7-c99/root/etc/ac' \
-        -not -path 'unix-v7-c99/root/etc/cron' \
-        -not -path 'unix-v7-c99/root/etc/utmp.empty' \
-        -not -path 'unix-v7-c99/root/unix' \
-        -not -path 'unix-v7-c99/root.img' \
-        -not -path 'unix-v7-c99/unix' \
-        -not -path 'unix-v7-c99/conf/test_malloc' \
-        -not -path 'unix-v7-c99/sys/unix' \
-        | sed 's|^unix-v7-c99/||' | LC_ALL=C sort) \
-    <(grep '^diff unix-v7-c99/v7/' \
-        /home/agent9/fast_data/missions/unix-historical-accuracy.md \
-        | awk '{print \$3}' \
-        | sed 's|^unix-v7-c99/||' | LC_ALL=C sort)"
+LC_ALL=C bash -c 'm=missions/unix-historical-accuracy.md; \
+comm -23 <(git -C unix-v7-c99 grep -Il ""|sort) \
+<(grep ^diff "$m"|cut -d" " -f3|cut -d/ -f2-|sort)'
 ```
 
 Expect:
 
 ```
-.git
 .gitignore
 LICENSE
 Makefile
@@ -536,63 +31,10 @@ cmd/awk/awk.h
 cmd/awk/awk.lx.c
 cmd/awk/awk_math.c
 cmd/awk/proctab.c
-cmd/chroot.c
-cmd/cksum.c
-cmd/column.c
-cmd/cut.c
-cmd/dirname.c
-cmd/dkstat.c
-cmd/env.c
-cmd/errtest.c
-cmd/exittest.c
-cmd/expand.c
-cmd/fmt.c
-cmd/fold.c
-cmd/getopt.c
-cmd/groups.c
-cmd/head.c
-cmd/hostname.c
-cmd/id.c
-cmd/link.c
-cmd/logname.c
-cmd/mktemp.c
-cmd/nl.c
-cmd/nproc.c
-cmd/orphantest.c
-cmd/paste.c
-cmd/pgrep.c
-cmd/pidof.c
-cmd/pidtest.c
-cmd/pkill.c
-cmd/primes.c
-cmd/printenv.c
-cmd/printf.c
-cmd/segvtest.c
-cmd/seq.c
-cmd/shuf.c
-cmd/sigfromchild.c
-cmd/sigstorm.c
-cmd/sigwaittest.c
-cmd/spell/spell.sh
-cmd/stattest.c
-cmd/tac.c
-cmd/tek.c
-cmd/timeout.c
-cmd/truncate.c
-cmd/uname.c
-cmd/unexpand.c
-cmd/unlink.c
-cmd/unlinkopen.c
-cmd/watch.c
-cmd/which.c
-cmd/whoami.c
-cmd/xargs.c
 conf/qemu_arm/auxfs.proto
 conf/qemu_arm/root.proto
-dev/mp135_blk.c
 dev/msgbuf.c
 dev/pl011.c
-dev/stm32_usart.c
 dev/virtio_blk.c
 h/proto.h
 h/v7_bridge.h
@@ -607,106 +49,1042 @@ lib/sys.s
 lib/u.ld
 sys/Makefile
 tools/extract-old-ar.py
-tools/mkfs
 tools/qemu-shell.py
 ```
 
-Residual rationale:
+### cmd/chroot.c
 
-| Path | Why no V7 source diff is meaningful |
-| --- | --- |
-| .git | Repository metadata pointer for this imported tree, not Unix V7 source content. |
-| .gitignore | Host repository ignore rules for generated C99/Arm build artifacts; V7 had no git metadata. |
-| LICENSE | Port licensing file, not derived from a V7 source path. |
-| Makefile | Top-level cross-build driver for the Arm port; V7 built subtrees with per-directory makefiles and shell scripts instead. |
-| README | Port documentation and usage notes, not a source translation. |
-| arch/a7.ld | Arm linker script defining the port's memory layout; V7 used PDP-11 kernel link conventions, not ELF/Arm linker scripts. |
-| arch/a7.s | Arm reset/vector/startup assembly for the target board; V7 has PDP-11 bootstrap/low-core code with different CPU state and trap entry rules. |
-| arch/arm.h | Arm register/MMU/platform definitions used by the port; V7 headers describe PDP-11 hardware and do not provide a semantic header counterpart. |
-| arch/armboot.c | Arm boot, trap, and exec-argument staging code that replaces PDP-11 low-level entry paths; diffing it against a single V7 file would mix unrelated machine contracts. |
-| arch/evb.ld | Board-specific Arm linker layout for the EVB target; V7 has no ELF linker script or EVB memory map. |
-| arch/swtch.s | Arm context-switch assembly; V7's scheduler save/restore path is PDP-11 register and stack-layout code, so a textual diff would only show CPU rewrite noise. |
-| arch/u_bridge.c | Port bridge code for accessing the emulated user area from Arm C; V7 relied on PDP-11 kernel address mapping instead of this shim. |
-| arch/u_stub.c | Host/port support for user-area symbols required by the C99 build; it is glue for the port's compilation model, not a V7 source file. |
-| arch/v7stubs.c | Compatibility stubs for unimplemented or host-provided V7 interfaces; no single V7 source file corresponds to this aggregation. |
-| cmd/awk/awk.g.c | Generated parser output from the awk grammar; the diffable historical source is cmd/awk/awk.g.y. |
-| cmd/awk/awk.h | Port-local declarations shared by the split C99 awk files; V7 awk used implicit K&R declarations and did not have this header. |
-| cmd/awk/awk.lx.c | Generated lexer output from the awk lexer; V7 source counterpart is the lexer specification, not the generated C file. |
-| cmd/awk/awk_math.c | Port-local math helper layer for awk on the Arm/C99 runtime; V7 awk delegated through its original libc/libm assumptions. |
-| cmd/awk/proctab.c | Generated awk parse/action table; the meaningful historical diff is against the grammar/procedure sources that generate it. |
-| cmd/chroot.c | Port-added user command for the chroot syscall; V7 has the syscall but no standalone chroot command source in usr/src/cmd. |
-| cmd/cksum.c | POSIX-style checksum utility added for the port environment; V7 provides sum, not cksum. |
-| cmd/column.c | Modern formatting utility added locally; V7 has no column command source. |
-| cmd/cut.c | Later Unix utility added to the port; V7 usr/src/cmd has no cut source counterpart. |
-| cmd/dirname.c | Later utility added locally; V7 ships basename but not a dirname command source. |
-| cmd/dkstat.c | Port-local disk statistics helper for the Arm block-device model; V7's disk accounting lived in kernel/device-specific code, not this command. |
-| cmd/env.c | Later environment utility added locally; V7 did not ship an env command source. |
-| cmd/errtest.c | Port regression test program for errno/syscall behavior; it is not a historical utility. |
-| cmd/exittest.c | Port regression test for process exit behavior; V7 has no command source intended to match it. |
-| cmd/expand.c | Later tab-expansion utility added locally; V7 has tabs/col-related tools but no expand source counterpart. |
-| cmd/fmt.c | Later text formatter added locally; V7 usr/src/cmd has no fmt command source. |
-| cmd/fold.c | Later line-folding utility added locally; V7 has no fold source counterpart. |
-| cmd/getopt.c | Later getopt command added locally; V7 had no standalone getopt utility source. |
-| cmd/groups.c | Later account-reporting utility added locally; V7 has group data files but no groups command source. |
-| cmd/head.c | Later utility added locally; V7 users used sed/tail patterns and no head command source is present. |
-| cmd/hostname.c | Port-local hostname helper; V7 has no hostname command source or network hostname model to diff against. |
-| cmd/id.c | Later identity-reporting utility added locally; V7 has uid/gid syscalls but no id command source. |
-| cmd/link.c | Port-added direct link syscall wrapper; V7 exposed ln rather than a separate link command source. |
-| cmd/logname.c | Later login-name utility added locally; V7 has who/getlogin library code but no logname command source. |
-| cmd/mktemp.c | Later temporary-name utility added locally; the V7 counterpart in this tree is the libc mktemp routine, already diffed as lib/mktemp.c. |
-| cmd/nl.c | Later line-numbering utility added locally; V7 has no nl command source. |
-| cmd/nproc.c | Modern processor-count utility added locally; V7 ran on single-processor PDP-11 systems and has no equivalent command. |
-| cmd/orphantest.c | Port regression test for orphan/reparenting behavior; it is not a V7 utility. |
-| cmd/paste.c | Later text utility added locally; V7 usr/src/cmd has no paste source counterpart. |
-| cmd/pgrep.c | Modern process-search utility added locally; V7 provides ps but no pgrep command source. |
-| cmd/pidof.c | Modern process lookup helper added locally; V7 has no pidof command source. |
-| cmd/pidtest.c | Port regression test for pid/ppid behavior; it is not historical source. |
-| cmd/pkill.c | Modern process-kill-by-pattern utility added locally; V7 provides kill but no pkill command source. |
-| cmd/primes.c | C99 rewrite of V7's primes.s assembly utility; the algorithm is small and architecture-specific enough that a C-vs-PDP-11-assembly diff is mostly syntax noise rather than a useful port audit. |
-| cmd/printenv.c | Later environment-printing utility added locally; V7 has no printenv command source. |
-| cmd/printf.c | Later printf command added locally; V7 has libc printf but no standalone printf utility source. |
-| cmd/segvtest.c | Port regression test for fault/signal handling; it is not a V7 utility. |
-| cmd/seq.c | Later sequence generator added locally; V7 has no seq command source. |
-| cmd/shuf.c | Modern randomization utility added locally; V7 has no shuf command source. |
-| cmd/sigfromchild.c | Port regression test for signal delivery across fork/child exit paths; it is not historical source. |
-| cmd/sigstorm.c | Port stress test for signal handling; V7 has no matching command source. |
-| cmd/sigwaittest.c | Port regression test for wait interrupted by signals; it is not a V7 utility. |
-| cmd/spell/spell.sh | Port shell wrapper for invoking the split spell tools in this build layout; the diffable V7 spell sources are the C/header files already covered. |
-| cmd/stattest.c | Port regression test for stat layout and syscall results; it is not a historical command. |
-| cmd/tac.c | Later reverse-cat utility added locally; V7 has cat but no tac command source. |
-| cmd/tek.c | Port/display helper for Tektronix-style output, not present as a V7 usr/src/cmd source in this tree. |
-| cmd/timeout.c | Modern timeout wrapper added locally; V7 has no timeout command source. |
-| cmd/truncate.c | Modern file-size utility added locally; V7 has no truncate command source or syscall. |
-| cmd/uname.c | Later system-name utility added locally; V7 has no uname command source or uname syscall model. |
-| cmd/unexpand.c | Later inverse tab-expansion utility added locally; V7 has no unexpand source counterpart. |
-| cmd/unlink.c | Port-added direct unlink syscall wrapper; V7 exposed rm rather than a separate unlink command source. |
-| cmd/unlinkopen.c | Port regression test for unlinking open files; it is not a historical utility. |
-| cmd/watch.c | Modern repeated-command utility added locally; V7 has no watch command source. |
-| cmd/which.c | Later path-search shell helper added locally; V7 has no which command source. |
-| cmd/whoami.c | Later identity utility added locally; V7 has who but no whoami command source. |
-| cmd/xargs.c | Later argument-building utility added locally; V7 has no xargs command source. |
-| conf/qemu_arm/auxfs.proto | Port filesystem prototype for generated QEMU aux image; V7 distribution images are data/layout artifacts, not source files for this Arm target. |
-| conf/qemu_arm/root.proto | Port filesystem prototype for generated QEMU root image; it combines local binaries and device nodes for the Arm boot path, so no single V7 source diff applies. |
-| dev/mp135_blk.c | Arm/STM32MP135 block-device driver; V7 device drivers target PDP-11 controllers and cannot serve as a meaningful textual counterpart. |
-| dev/msgbuf.c | Port console/message-buffer support code for the Arm device model; V7's console buffering is tied into different kernel and device paths. |
-| dev/pl011.c | Arm PL011 UART driver; V7 has no PL011 hardware driver. |
-| dev/stm32_usart.c | STM32 USART driver for the port target; V7's terminal drivers are for PDP-11-era devices. |
-| dev/virtio_blk.c | Virtio block driver for QEMU Arm; V7 predates virtio and has no source counterpart. |
-| h/proto.h | Port-local prototypes added to make K&R-era code compile under C99; V7 relied on implicit declarations instead of this header. |
-| h/v7_bridge.h | Port-local bridge declarations between Arm low-level code and V7 kernel structures; V7 has no such ABI bridge. |
-| lib/Makefile | Port libc build recipe for the cross compiler and selected C/assembly replacements; V7 libc was built by its own per-directory rules. |
-| lib/compat.c | Aggregated compatibility shims for missing or changed libc/syscall behavior; V7 implements those interfaces across many separate sources or not at all. |
-| lib/crt0.c | C half of the Arm process entry path that parses the port's staged argv/env page; V7 crt0 is PDP-11 assembly using the initial stack layout, so a line diff would not test the same ABI. |
-| lib/doprnt.c | C99 varargs formatter replacing V7's PDP-11 doprnt.s; argument passing, floating helpers, and register use are architecture-specific, making assembly-vs-C diff output ineffective. |
-| lib/math_helpers.c | Arm/C99 helper routines for math/runtime support; V7's math routines are diffed individually under libm where historical counterparts exist. |
-| lib/memcpy.c | Runtime support routine required by the C99/Arm compiler; V7 libc did not provide a standalone memcpy source in this tree. |
-| lib/mkdir.c | Port libc wrapper for directory creation semantics used by added utilities; V7 had mknod/link-based directory creation paths rather than this library routine. |
-| lib/sys.s | Arm syscall stub table and special return-value wrappers; V7 usr/include/sys.s only lists PDP-11 syscall numbers, while individual V7 stubs use a different trap ABI. |
-| lib/u.ld | User-program linker script for the Arm flat image layout; V7 used PDP-11 a.out linking, not an ELF/Arm script. |
-| sys/Makefile | Port kernel build recipe for cross-compiling the selected V7 sources with Arm support code; V7 kernel build files use PDP-11 toolchain assumptions. |
-| tools/extract-old-ar.py | Host-side archive extraction helper for importing historical ar files; it is not part of V7 runtime source. |
-| tools/mkfs | Built Arm ELF executable generated from tools/mkfs.c; binaries are intentionally not diffed against V7 source. |
-| tools/qemu-shell.py | Host-side QEMU automation helper for testing the port; V7 has no QEMU control script source. |
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/sys/chroot.s unix-v7-c99/cmd/chroot.c | sed 's/[[:blank:]]*$//' || true
+```
+
+Expect:
+
+```
+1c1,3
+< / C library -- chroot
+---
+> /* chroot -- run command with NEWROOT as the root directory.  Calls the
+>  * v7 chroot(2) syscall (which requires root) then execs argv[2..]; with
+>  * no command, falls back to /bin/sh. */
+3c5,8
+< / error = chroot(string);
+---
+> #include <stdio.h>
+> extern int chroot(char *path);
+> extern int execvp(char *file, char **argv);
+> extern int chdir(char *path);
+5,22c10,31
+< .globl	_chroot
+< .globl	cerror
+< .chroot = 61.
+<
+< _chroot:
+< 	mov	r5,-(sp)
+< 	mov	sp,r5
+< 	mov	4(r5),0f
+< 	sys	0; 9f
+< 	bec	1f
+< 	jmp	cerror
+< 1:
+< 	clr	r0
+< 	mov	(sp)+,r5
+< 	rts	pc
+< .data
+< 9:
+< 	sys	.chroot; 0:..
+---
+> int
+> main(int argc, char *argv[])
+> {
+> 	static char *shargv[] = { "sh", 0 };
+> 	if (argc < 2) {
+> 		fprintf(stderr, "usage: chroot newroot [cmd [args...]]\n");
+> 		exit(2);
+> 	}
+> 	if (chroot(argv[1]) < 0) {
+> 		fprintf(stderr, "chroot: %s: cannot chroot\n", argv[1]);
+> 		exit(1);
+> 	}
+> 	(void)chdir("/");
+> 	if (argc >= 3) {
+> 		execvp(argv[2], &argv[2]);
+> 		fprintf(stderr, "chroot: %s: exec failed\n", argv[2]);
+> 		exit(127);
+> 	}
+> 	execvp("/bin/sh", shargv);
+> 	fprintf(stderr, "chroot: /bin/sh: exec failed\n");
+> 	exit(127);
+> }
+```
+
+### cmd/link.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/sys/link.s unix-v7-c99/cmd/link.c | sed 's/[[:blank:]]*$//' || true
+```
+
+Expect:
+
+```
+1c1,4
+< / C library -- link
+---
+> /* link FILE1 FILE2  -- create a hard link FILE2 pointing at FILE1.
+>  * POSIX-mandated thin wrapper over the link(2) syscall.  Differs from
+>  * ln(1) in that it takes exactly two args and never resolves the
+>  * target as a directory. */
+3c6,7
+< / error = link(old-file, new-file);
+---
+> #include <stdio.h>
+> extern int link(char *, char *);
+5,23c9,21
+< .globl	_link
+< .globl	cerror
+< .link = 9.
+<
+< _link:
+< 	mov	r5,-(sp)
+< 	mov	sp,r5
+< 	mov	4(r5),0f
+< 	mov	6(r5),0f+2
+< 	sys	0; 9f
+< 	bec	1f
+< 	jmp	cerror
+< 1:
+< 	clr	r0
+< 	mov	(sp)+,r5
+< 	rts	pc
+< .data
+< 9:
+< 	sys	.link; 0:..; ..
+---
+> int
+> main(int argc, char *argv[])
+> {
+> 	if (argc != 3) {
+> 		fprintf(stderr, "usage: link FILE1 FILE2\n");
+> 		exit(1);
+> 	}
+> 	if (link(argv[1], argv[2]) < 0) {
+> 		fprintf(stderr, "link: %s -> %s: failed\n", argv[1], argv[2]);
+> 		exit(1);
+> 	}
+> 	exit(0);
+> }
+```
+
+### cmd/mktemp.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/mktemp.c unix-v7-c99/cmd/mktemp.c | sed 's/[[:blank:]]*$//' || true
+```
+
+Expect:
+
+```
+1,3c1,16
+< char *
+< mktemp(as)
+< char *as;
+---
+> /* mktemp -- create a unique temporary file or directory.
+>  *   mktemp                  -> /tmp/tmp.XXXXXX
+>  *   mktemp TEMPLATE         -> TEMPLATE has trailing XXXXXX replaced
+>  *   mktemp -d [TEMPLATE]    -> create directory instead of file
+>  * Prints the resulting name.  libc's mktemp() picks the suffix; mkdir()
+>  * is a libc helper (v7 lacks the syscall) that runs the mknod+link
+>  * dance from cmd/mkdir.c. */
+>
+> #include <stdio.h>
+> extern char *mktemp(char *);
+> extern int mkdir(char *path, int mode);
+> extern int creat(char *path, int mode);
+> extern int close(int fd);
+>
+> int
+> main(int argc, char *argv[])
+5,7c18,30
+< 	register char *s;
+< 	register unsigned pid;
+< 	register i;
+---
+> 	static char buf[256];
+> 	char *src;
+> 	int i, dflag = 0, start = 1;
+> 	int fd;
+>
+> 	if (start < argc && argv[start][0] == '-' && argv[start][1] == 'd' &&
+> 	    argv[start][2] == '\0') {
+> 		dflag = 1;
+> 		start++;
+> 	}
+> 	src = (start < argc) ? argv[start] : "/tmp/tmp.XXXXXX";
+> 	for (i = 0; src[i] && i < (int)sizeof(buf) - 1; i++) buf[i] = src[i];
+> 	buf[i] = '\0';
+9,16c32,34
+< 	pid = getpid();
+< 	s = as;
+< 	while (*s++)
+< 		;
+< 	s--;
+< 	while (*--s == 'X') {
+< 		*s = (pid%10) + '0';
+< 		pid /= 10;
+---
+> 	if (mktemp(buf) == 0 || buf[0] == '\0') {
+> 		fprintf(stderr, "mktemp: cannot generate unique name\n");
+> 		exit(1);
+18,23c36,46
+< 	s++;
+< 	i = 'a';
+< 	while (access(as, 0) != -1) {
+< 		if (i=='z')
+< 			return("/");
+< 		*s = i++;
+---
+> 	if (dflag) {
+> 		if (mkdir(buf, 0700) < 0) {
+> 			fprintf(stderr, "mktemp: %s: cannot mkdir\n", buf);
+> 			exit(1);
+> 		}
+> 	} else {
+> 		if ((fd = creat(buf, 0600)) < 0) {
+> 			fprintf(stderr, "mktemp: %s: cannot create\n", buf);
+> 			exit(1);
+> 		}
+> 		close(fd);
+25c48,49
+< 	return(as);
+---
+> 	puts(buf);
+> 	exit(0);
+```
+
+### cmd/printf.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/stdio/printf.c unix-v7-c99/cmd/printf.c | sed 's/[[:blank:]]*$//' || true
+```
+
+Expect:
+
+```
+1c1,5
+< #include	<stdio.h>
+---
+> /* printf -- minimal printf(1).  V7 didn't ship one; scripts that
+>  * port from later Unixes expect it.  Supports %s %d %i %x %o %c %%
+>  * and \n \t \\ \r \0 in both format and string args.  Format string
+>  * is reused if more args remain.
+>  */
+3,4c7,116
+< printf(fmt, args)
+< char *fmt;
+---
+> #include <stdio.h>
+>
+> static int
+> hexval(char c)
+> {
+> 	if (c >= '0' && c <= '9') return c - '0';
+> 	if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+> 	if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+> 	return -1;
+> }
+>
+> static int
+> expand(char *out, char *in)
+> {
+> 	char *p = in, *q = out;
+> 	int v, h;
+> 	while (*p) {
+> 		if (*p == '\\' && p[1]) {
+> 			p++;
+> 			switch (*p) {
+> 			case 'n':  *q++ = '\n'; p++; break;
+> 			case 't':  *q++ = '\t'; p++; break;
+> 			case 'r':  *q++ = '\r'; p++; break;
+> 			case '\\': *q++ = '\\'; p++; break;
+> 			case 'a':  *q++ = '\a'; p++; break;
+> 			case 'b':  *q++ = '\b'; p++; break;
+> 			case 'f':  *q++ = '\f'; p++; break;
+> 			case 'v':  *q++ = '\v'; p++; break;
+> 			case 'x':
+> 				p++;
+> 				v = 0;
+> 				if ((h = hexval(*p)) >= 0) {
+> 					v = h;
+> 					p++;
+> 					if ((h = hexval(*p)) >= 0) {
+> 						v = (v << 4) | h;
+> 						p++;
+> 					}
+> 				} else {
+> 					/* bare \x with no hex digit: keep literal */
+> 					*q++ = '\\';
+> 					*q++ = 'x';
+> 					break;
+> 				}
+> 				*q++ = (char)v;
+> 				break;
+> 			case '0': case '1': case '2': case '3':
+> 			case '4': case '5': case '6': case '7':
+> 				v = 0;
+> 				/* up to 3 octal digits */
+> 				for (int i = 0; i < 3 && *p >= '0' && *p <= '7'; i++)
+> 					v = (v << 3) | (*p++ - '0');
+> 				*q++ = (char)v;
+> 				break;
+> 			default:   *q++ = '\\'; *q++ = *p; p++; break;
+> 			}
+> 		} else {
+> 			*q++ = *p++;
+> 		}
+> 	}
+> 	*q = '\0';
+> 	return q - out;
+> }
+>
+> static char *
+> emit(char *spec, char *arg)
+> {
+> 	char buf[64];
+> 	char *p = spec;
+> 	int n;
+> 	long iv;
+> 	while (*p && *p != '%')
+> 		putchar(*p++);
+> 	if (!*p)
+> 		return p;
+> 	/* p points at '%' */
+> 	buf[0] = *p++;
+> 	n = 1;
+> 	while (*p && n < (int)sizeof(buf) - 2 &&
+> 	    (*p == '-' || *p == '+' || *p == ' ' || *p == '#' || *p == '0' ||
+> 	     (*p >= '0' && *p <= '9') || *p == '.'))
+> 		buf[n++] = *p++;
+> 	if (!*p)
+> 		return p;
+> 	buf[n++] = *p;
+> 	buf[n] = '\0';
+> 	switch (*p++) {
+> 	case 's':
+> 		printf(buf, arg ? arg : "");
+> 		break;
+> 	case 'c':
+> 		printf(buf, arg ? arg[0] : '\0');
+> 		break;
+> 	case 'd': case 'i':
+> 	case 'o': case 'u': case 'x': case 'X':
+> 		iv = arg ? atol(arg) : 0;
+> 		printf(buf, (int)iv);
+> 		break;
+> 	case '%':
+> 		putchar('%');
+> 		break;
+> 	default:
+> 		printf("%s", buf);
+> 		break;
+> 	}
+> 	return p;
+> }
+>
+> int
+> main(int argc, char *argv[])
+6,7c118,154
+< 	_doprnt(fmt, &args, stdout);
+< 	return(ferror(stdout)? EOF: 0);
+---
+> 	char fmt[512], arg[256];
+> 	char *p;
+> 	int ai = 2;
+>
+> 	if (argc < 2)
+> 		exit(1);
+> 	if (argc == 2 && argv[1][0] == '\0') {
+> 		exit(0);
+> 	}
+> 	{
+> 		int n = expand(fmt, argv[1]);
+> 		if (argc == 2) {
+> 			if (n > 0) write(1, fmt, n);
+> 			exit(0);
+> 		}
+> 	}
+> 	while (ai < argc || (ai == argc && !*fmt /* skip */)) {
+> 		p = fmt;
+> 		while (*p) {
+> 			if (*p == '%' && p[1] == '%') {
+> 				putchar('%');
+> 				p += 2;
+> 			} else if (*p == '%') {
+> 				if (ai < argc) {
+> 					expand(arg, argv[ai++]);
+> 					p = emit(p, arg);
+> 				} else {
+> 					p = emit(p, "");
+> 				}
+> 			} else {
+> 				putchar(*p++);
+> 			}
+> 		}
+> 		if (ai >= argc)
+> 			break;
+> 	}
+> 	exit(0);
+```
+
+### cmd/unlink.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/sys/unlink.s unix-v7-c99/cmd/unlink.c | sed 's/[[:blank:]]*$//' || true
+```
+
+Expect:
+
+```
+1c1,4
+< / C library -- unlink
+---
+> /* unlink FILE -- remove FILE via the unlink(2) syscall.  POSIX-
+>  * mandated thin wrapper.  Unlike rm, doesn't prompt or check perms;
+>  * unlink(2) returns failure if FILE doesn't exist or isn't writable
+>  * (for the parent directory). */
+3c6,7
+< / error = unlink(string);
+---
+> #include <stdio.h>
+> extern int unlink(char *);
+5,22c9,21
+< .globl	_unlink,
+< .globl	cerror
+< .unlink = 10.
+<
+< _unlink:
+< 	mov	r5,-(sp)
+< 	mov	sp,r5
+< 	mov	4(r5),0f
+< 	sys	0; 9f
+< 	bec	1f
+< 	jmp	cerror
+< 1:
+< 	clr	r0
+< 	mov	(sp)+,r5
+< 	rts	pc
+< .data
+< 9:
+< 	sys	.unlink; 0:..
+---
+> int
+> main(int argc, char *argv[])
+> {
+> 	if (argc != 2) {
+> 		fprintf(stderr, "usage: unlink FILE\n");
+> 		exit(1);
+> 	}
+> 	if (unlink(argv[1]) < 0) {
+> 		fprintf(stderr, "unlink: %s: failed\n", argv[1]);
+> 		exit(1);
+> 	}
+> 	exit(0);
+> }
+```
+
+### cmd/tek.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/plot/driver.c unix-v7-c99/cmd/tek.c | sed 's/[[:blank:]]*$//' || true
+```
+
+Expect:
+
+```
+3,4c3,4
+< float deltx;
+< float delty;
+---
+> static float deltx;
+> static float delty;
+6,8c6,12
+< main(argc,argv)  char **argv; {
+< 	int std=1;
+< 	FILE *fin;
+---
+> static float obotx = 0.0f;
+> static float oboty = 0.0f;
+> static float botx = 0.0f;
+> static float boty = 0.0f;
+> static float scalex = 1.0f;
+> static float scaley = 1.0f;
+> static int scaleflag = 0;
+10,19c14,41
+< 	while(argc-- > 1) {
+< 		if(*argv[1] == '-')
+< 			switch(argv[1][1]) {
+< 				case 'l':
+< 					deltx = atoi(&argv[1][2]) - 1;
+< 					break;
+< 				case 'w':
+< 					delty = atoi(&argv[1][2]) - 1;
+< 					break;
+< 				}
+---
+> static int oloy = -1;
+> static int ohiy = -1;
+> static int ohix = -1;
+> static int oextra = -1;
+>
+> static int fplt(FILE *fin);
+> static int getsi(FILE *fin);
+> static int getstr(char *s, int n, FILE *fin);
+> static int openpl(void);
+> static int closepl(void);
+> static int erase(void);
+> static int label(char *s);
+> static int linemod(char *s);
+> static int line(int x0, int y0, int x1, int y1);
+> static int move(int xi, int yi);
+> static int cont(int x, int y);
+> static int point(int xi, int yi);
+> static int space(int x0, int y0, int x1, int y1);
+> static int arc(int x, int y, int x0, int y0, int x1, int y1);
+> static int circle(int x, int y, int r);
+> static int dot(int xi, int yi, int dx, int n, int *pat);
+> static int putch(int c);
+> static int iabs(int a);
+> static int quad(int x, int y, int xp, int yp);
+> static int step(int d);
+> static double dsqrt(double v);
+>
+> static int del = 20;
+21c43,59
+< 		else {
+---
+> int
+> main(int argc, char **argv)
+> {
+> 	int std = 1;
+> 	FILE *fin;
+>
+> 	while (argc-- > 1) {
+> 		if (argv[1][0] == '-') {
+> 			switch (argv[1][1]) {
+> 			case 'l':
+> 				deltx = atoi(&argv[1][2]) - 1;
+> 				break;
+> 			case 'w':
+> 				delty = atoi(&argv[1][2]) - 1;
+> 				break;
+> 			}
+> 		} else {
+23c61,62
+< 			if ((fin = fopen(argv[1], "r")) == NULL) {
+---
+> 			fin = fopen(argv[1], "r");
+> 			if (fin == NULL) {
+26,27d64
+< 				}
+< 			fplt(fin);
+29c66
+< 		argv++;
+---
+> 			fplt(fin);
+31,33c68
+< 	if (std)
+< 		fplt( stdin );
+< 	exit(0);
+---
+> 		argv++;
+34a70,73
+> 	if (std)
+> 		fplt(stdin);
+> 	return(0);
+> }
+36,37c75,77
+<
+< fplt(fin)  FILE *fin; {
+---
+> static int
+> fplt(FILE *fin)
+> {
+40c80
+< 	int xi,yi,x0,y0,x1,y1,r,dx,n,i;
+---
+> 	int xi, yi, x0, y0, x1, y1, r, dx, n, i;
+44,45c84,85
+< 	while((c=getc(fin)) != EOF){
+< 		switch(c){
+---
+> 	while ((c = getc(fin)) != EOF) {
+> 		switch (c) {
+49c89
+< 			move(xi,yi);
+---
+> 			move(xi, yi);
+56c96
+< 			line(x0,y0,x1,y1);
+---
+> 			line(x0, y0, x1, y1);
+59c99
+< 			gets(s,fin);
+---
+> 			getstr(s, sizeof(s), fin);
+68c108
+< 			point(xi,yi);
+---
+> 			point(xi, yi);
+73c113
+< 			cont(xi,yi);
+---
+> 			cont(xi, yi);
+80c120
+< 			space(x0,y0,x1,y1);
+---
+> 			space(x0, y0, x1, y1);
+89c129
+< 			arc(xi,yi,x0,y0,x1,y1);
+---
+> 			arc(xi, yi, x0, y0, x1, y1);
+95c135
+< 			circle(xi,yi,r);
+---
+> 			circle(xi, yi, r);
+98c138
+< 			gets(s,fin);
+---
+> 			getstr(s, sizeof(s), fin);
+106,108c146,150
+< 			for(i=0; i<n; i++)pat[i] = getsi(fin);
+< 			dot(xi,yi,dx,n,pat);
+< 			break;
+---
+> 			for (i = 0; i < n; i++) {
+> 				if (i < 256)
+> 					pat[i] = getsi(fin);
+> 				else
+> 					(void)getsi(fin);
+109a152,155
+> 			if (n > 256)
+> 				n = 256;
+> 			dot(xi, yi, dx, n, pat);
+> 			break;
+111d156
+< 	closepl();
+113,115c158,168
+< getsi(fin)  FILE *fin; {	/* get an integer stored in 2 ascii bytes. */
+< 	short a, b;
+< 	if((b = getc(fin)) == EOF)
+---
+> 	closepl();
+> 	return(0);
+> }
+>
+> static int
+> getsi(FILE *fin)
+> {
+> 	int a, b;
+>
+> 	b = getc(fin);
+> 	if (b == EOF)
+117c170,171
+< 	if((a = getc(fin)) == EOF)
+---
+> 	a = getc(fin);
+> 	if (a == EOF)
+119,120c173
+< 	a = a<<8;
+< 	return(a|b);
+---
+> 	return(((a & 0377) << 8) | (b & 0377));
+122,124c175,185
+< gets(s,fin)  char *s;  FILE *fin; {
+< 	for( ; *s = getc(fin); s++)
+< 		if(*s == '\n')
+---
+>
+> static int
+> getstr(char *s, int n, FILE *fin)
+> {
+> 	int c;
+>
+> 	while (--n > 0) {
+> 		c = getc(fin);
+> 		if (c == EOF || c == '\0')
+> 			break;
+> 		if (c == '\n')
+125a187,188
+> 		*s++ = c;
+> 	}
+127c190,541
+< 	return;
+---
+> 	return(0);
+> }
+>
+> static int
+> openpl(void)
+> {
+> 	return(0);
+> }
+>
+> static int
+> closepl(void)
+> {
+> 	putch(037);
+> 	fflush(stdout);
+> 	return(0);
+> }
+>
+> static int
+> erase(void)
+> {
+> 	putch(033);
+> 	putch(014);
+> 	ohiy = -1;
+> 	ohix = -1;
+> 	oextra = -1;
+> 	oloy = -1;
+> 	sleep(2);
+> 	return(0);
+> }
+>
+> static int
+> label(char *s)
+> {
+> 	static char lbl_mv[] = {
+> 		036, 040, 0110, 0110, 0110, 0110, 0110, 0110,
+> 		0112, 0112, 0112, 0112, 0112, 0112, 0112, 0112,
+> 		0112, 0112, 037, 0
+> 	};
+> 	static char lbl_umv[] = {
+> 		036, 040, 0104, 0104, 0104, 0104, 0104, 0104,
+> 		0105, 0105, 0105, 0105, 0105, 0105, 0105, 0105,
+> 		0105, 0105, 037, 0
+> 	};
+> 	int i, c;
+>
+> 	for (i = 0; (c = lbl_mv[i]) != 0; i++)
+> 		putch(c);
+> 	for (i = 0; (c = s[i]) != 0; i++)
+> 		putch(c);
+> 	for (i = 0; (c = lbl_umv[i]) != 0; i++)
+> 		putch(c);
+> 	return(0);
+> }
+>
+> static int
+> linemod(char *s)
+> {
+> 	char c = 'd';
+>
+> 	putch(033);
+> 	switch (s[0]) {
+> 	case 'l':
+> 		c = 'd';
+> 		break;
+> 	case 'd':
+> 		if (s[3] != 'd')
+> 			c = 'a';
+> 		else
+> 			c = 'b';
+> 		break;
+> 	case 's':
+> 		if (s[5] != '\0')
+> 			c = 'c';
+> 		else
+> 			c = '`';
+> 		break;
+> 	}
+> 	putch(c);
+> 	return(0);
+> }
+>
+> static int
+> line(int x0, int y0, int x1, int y1)
+> {
+> 	move(x0, y0);
+> 	cont(x1, y1);
+> 	return(0);
+> }
+>
+> static int
+> move(int xi, int yi)
+> {
+> 	putch(035);
+> 	cont(xi, yi);
+> 	return(0);
+> }
+>
+> static int
+> cont(int x, int y)
+> {
+> 	int hix, hiy, lox, loy, extra;
+> 	int n;
+>
+> 	x = (int)((x - obotx) * scalex + botx);
+> 	y = (int)((y - oboty) * scaley + boty);
+> 	hix = (x >> 7) & 037;
+> 	hiy = (y >> 7) & 037;
+> 	lox = (x >> 2) & 037;
+> 	loy = (y >> 2) & 037;
+> 	extra = (x & 03) + ((y << 2) & 014);
+> 	n = (iabs(hix - ohix) + iabs(hiy - ohiy) + 6) / 12;
+> 	if (hiy != ohiy) {
+> 		putch(hiy | 040);
+> 		ohiy = hiy;
+> 	}
+> 	if (hix != ohix) {
+> 		if (extra != oextra) {
+> 			putch(extra | 0140);
+> 			oextra = extra;
+> 		}
+> 		putch(loy | 0140);
+> 		putch(hix | 040);
+> 		ohix = hix;
+> 		oloy = loy;
+> 	} else {
+> 		if (extra != oextra) {
+> 			putch(extra | 0140);
+> 			putch(loy | 0140);
+> 			oextra = extra;
+> 			oloy = loy;
+> 		} else if (loy != oloy) {
+> 			putch(loy | 0140);
+> 			oloy = loy;
+> 		}
+> 	}
+> 	putch(lox | 0100);
+> 	while (n-- != 0)
+> 		putch(0);
+> 	return(0);
+> }
+>
+> static int
+> point(int xi, int yi)
+> {
+> 	move(xi, yi);
+> 	cont(xi, yi);
+> 	return(0);
+> }
+>
+> static int
+> space(int x0, int y0, int x1, int y1)
+> {
+> 	botx = 0.0f;
+> 	boty = 0.0f;
+> 	obotx = x0;
+> 	oboty = y0;
+> 	if (scaleflag)
+> 		return(0);
+> 	scalex = 3120.0f / (x1 - x0);
+> 	scaley = 3120.0f / (y1 - y0);
+> 	return(0);
+> }
+>
+> static int
+> arc(int x, int y, int x0, int y0, int x1, int y1)
+> {
+> 	double pc;
+> 	int flg, m, xc, yc, xs, ys, qs, qf;
+> 	float dx, dy, r;
+> 	char use;
+>
+> 	dx = x - x0;
+> 	dy = y - y0;
+> 	r = dx * dx + dy * dy;
+> 	pc = dsqrt((double)r);
+> 	flg = (int)(pc / 4.0);
+> 	if (flg == 0)
+> 		step(1);
+> 	else if (flg < del)
+> 		step(flg);
+> 	xc = xs = x0;
+> 	yc = ys = y0;
+> 	move(xs, ys);
+> 	if (x0 == x1 && y0 == y1)
+> 		flg = 0;
+> 	else
+> 		flg = 1;
+> 	qs = quad(x, y, x0, y0);
+> 	qf = quad(x, y, x1, y1);
+> 	if (iabs(x - x1) < iabs(y - y1)) {
+> 		use = 'x';
+> 		if (qs == 2 || qs == 3)
+> 			m = -1;
+> 		else
+> 			m = 1;
+> 	} else {
+> 		use = 'y';
+> 		if (qs > 2)
+> 			m = -1;
+> 		else
+> 			m = 1;
+> 	}
+> 	for (;;) {
+> 		switch (use) {
+> 		case 'x':
+> 			if (qs == 2 || qs == 3)
+> 				yc -= del;
+> 			else
+> 				yc += del;
+> 			dy = yc - y;
+> 			pc = r - dy * dy;
+> 			xc = (int)(m * dsqrt(pc) + x);
+> 			if ((x < xs && x >= xc) || (x > xs && x <= xc) ||
+> 			    (y < ys && y >= yc) || (y > ys && y <= yc)) {
+> 				if (++qs > 4)
+> 					qs = 1;
+> 				if (qs == 2 || qs == 3)
+> 					m = -1;
+> 				else
+> 					m = 1;
+> 				flg = 1;
+> 			}
+> 			cont(xc, yc);
+> 			xs = xc;
+> 			ys = yc;
+> 			if (qs == qf && flg == 1) {
+> 				switch (qf) {
+> 				case 3:
+> 				case 4:
+> 					if (xs >= x1)
+> 						return(0);
+> 					break;
+> 				case 1:
+> 				case 2:
+> 					if (xs <= x1)
+> 						return(0);
+> 					break;
+> 				}
+> 			}
+> 			break;
+> 		case 'y':
+> 			if (qs > 2)
+> 				xc += del;
+> 			else
+> 				xc -= del;
+> 			dx = xc - x;
+> 			pc = r - dx * dx;
+> 			yc = (int)(m * dsqrt(pc) + y);
+> 			if ((x < xs && x >= xc) || (x > xs && x <= xc) ||
+> 			    (y < ys && y >= yc) || (y > ys && y <= yc)) {
+> 				if (++qs > 4)
+> 					qs = 1;
+> 				if (qs > 2)
+> 					m = -1;
+> 				else
+> 					m = 1;
+> 				flg = 1;
+> 			}
+> 			cont(xc, yc);
+> 			xs = xc;
+> 			ys = yc;
+> 			if (qs == qf && flg == 1) {
+> 				switch (qs) {
+> 				case 1:
+> 				case 4:
+> 					if (ys >= y1)
+> 						return(0);
+> 					break;
+> 				case 2:
+> 				case 3:
+> 					if (ys <= y1)
+> 						return(0);
+> 					break;
+> 				}
+> 			}
+> 			break;
+> 		}
+> 	}
+> }
+>
+> static int
+> circle(int x, int y, int r)
+> {
+> 	arc(x, y, x + r, y, x + r, y);
+> 	return(0);
+> }
+>
+> static int
+> dot(int xi, int yi, int dx, int n, int *pat)
+> {
+> 	(void)xi;
+> 	(void)yi;
+> 	(void)dx;
+> 	(void)n;
+> 	(void)pat;
+> 	return(0);
+> }
+>
+> static int
+> putch(int c)
+> {
+> 	putc(c, stdout);
+> 	return(0);
+> }
+>
+> static int
+> iabs(int a)
+> {
+> 	if (a < 0)
+> 		return(-a);
+> 	return(a);
+> }
+>
+> static int
+> quad(int x, int y, int xp, int yp)
+> {
+> 	if (x < xp) {
+> 		if (y <= yp)
+> 			return(1);
+> 		return(4);
+> 	}
+> 	if (x > xp) {
+> 		if (y < yp)
+> 			return(2);
+> 		return(3);
+> 	}
+> 	if (y < yp)
+> 		return(2);
+> 	return(4);
+> }
+>
+> static int
+> step(int d)
+> {
+> 	del = d;
+> 	return(0);
+> }
+>
+> static double
+> dsqrt(double v)
+> {
+> 	double x;
+> 	int i;
+>
+> 	if (v <= 0.0)
+> 		return(0.0);
+> 	x = v;
+> 	if (x < 1.0)
+> 		x = 1.0;
+> 	for (i = 0; i < 20; i++)
+> 		x = 0.5 * (x + v / x);
+> 	return(x);
+```
 
 ### cmd/sh/makefile
 
@@ -30164,6 +30542,525 @@ Expect:
 > 		errval |= (s>>8);
 843a893
 > 	return(0);
+```
+
+### cmd/primes.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/primes.s unix-v7-c99/cmd/primes.c | sed 's/^\([<>]\) $/\1/' || true
+```
+
+Expect:
+
+```
+1,355c1,149
+< ldfps = 170100^tst
+< /
+< 	ldfps	$240
+<
+< 	clr	argflg
+< 	cmp	(sp)+,$2
+< 	blt	begin
+< 	tst	(sp)+
+< 	mov	(sp),r2
+< 	jsr	r5,atof; getch1
+< 	inc	argflg
+< 	br	begin1
+< begin:
+< 	tst	argflg
+< 	beq 9f; sys exit; 9:
+< 	jsr	r5,atof; getch
+< begin1:
+< 	tstf	fr0
+< 	cfcc
+< 	bpl 9f; jmp ouch; 9:
+< 	bne 9f; sys exit; 9:
+< 	cmpf	big,fr0
+< 	cfcc
+< 	bgt 9f; jmp ouch; 9:
+< /
+< 	movf	$f100,fr1
+< 	cmpf	fr0,fr1
+< 	cfcc
+< 	bge	1f
+< 	mov	$pt,r3
+< 3:
+< 	cmp	r3,$ptend
+< 	bhis	1f
+< 	movif	(r3)+,fr1
+< 	cmpf	fr1,fr0
+< 	cfcc
+< 	blt	3b
+< 	tst	-(r3)
+< 3:
+< 	movif	(r3),fr0
+< 	jsr	r5,ftoa; wrchar
+< 	mov	$'\n,r0
+< 	jsr	r5,wrchar
+< 	tst	(r3)+
+< 	cmp	r3,$ptend
+< 	blo	3b
+< 	movf	$f100,fr0
+< /
+< 1:
+< 	divf	$two,fr0
+< 	modf	$one,fr0
+< 	movf	fr1,fr0
+< 	mulf	$two,fr0
+< 	addf	$one,fr0
+< 	movif	$tsiz8,fr1
+< 	movf	fr1,fr5
+< 	movf	fr0,nn
+< /
+< /
+< /
+< /	clear the sieve table
+< /
+< 2:
+< 	mov	$table,r3
+< 3:
+< 	cmp	r3,$table+tabsiz
+< 	bhis	3f
+< 	clrb	(r3)+
+< 	br	3b
+< /
+< /	run the sieve
+< /
+< 3:
+< 	movf	nn,fr0
+< 	addf	fr5,fr0
+< 	jsr	r5,sqrt
+< 	movf	fr0,v
+< /
+< 	movf	nn,fr0
+< 	movif	$3.,fr1
+< 	jsr	pc,5f
+< 	movif	$5.,fr1
+< 	jsr	pc,5f
+< 	movif	$7.,fr1
+< 	jsr	pc,5f
+< 	movif	$11.,fr1
+< 	mov	$factab+2,r4
+< 4:
+< 	jsr	pc,5f
+< 	mov	(r4)+,kazoo
+< kazoo	=.+2
+< 	addf	$kazoo,fr1
+< 	cmp	r4,$ftabend
+< 	blo	3f
+< 	mov	$factab,r4
+< 3:
+< 	cmpf	v,fr1
+< 	cfcc
+< 	bge	4b
+< 	br	1f
+< /
+< /
+< 5:
+< 	movf	fr0,fr2
+< 	divf	fr1,fr2
+< 	modf	$one,fr2
+< 	mulf	fr1,fr3
+< 	subf	fr0,fr3
+< 	cfcc
+< 	bpl	3f
+< 	addf	fr1,fr3
+< 3:
+< 	cmpf	fr5,fr3
+< 	cfcc
+< 	ble	3f
+< 	movfi	fr3,r0
+< 	ashc	$-3.,r0
+< 	ash	$-13.,r1
+< 	bic	$177770,r1
+< 	bisb	bittab(r1),table(r0)
+< 	addf	fr1,fr3
+< 	br	3b
+< 3:
+< 	rts	pc
+< /
+< /
+< /	get one character form the argument string.
+< getch1:
+< 	movb	(r2)+,r0
+< 	rts	r5
+< /
+< /	now get the primes from the table
+< /	and print them.
+< /
+< 1:
+< /
+< 	movf	nn,fr0
+< 	clr	r3
+< 	br	4f
+< /
+< 1:
+< 	inc	r3
+< 	inc	r3
+< 	cmp	r3,$tsiz8
+< 	bge	2b
+< /
+< 4:
+< /
+< 	jsr	pc,prime
+< 	bec	3f
+< 	movf	nn,fr0
+< 	jsr	r5,ftoa; wrchar
+< 	mov	$'\n,r0
+< 	jsr	r5,wrchar
+< 3:
+< 	movf	nn,fr0
+< 	addf	$two,fr0
+< 	movf	fr0,nn
+< 	br	1b
+< /
+< /
+< /
+< /
+< prime:
+< 	mov	r3,r4
+< 	ashc	$-3.,r4
+< 	ash	$-13.,r5
+< 	bic	$177770,r5
+< 	bitb	bittab(r5),table(r4)
+< 	bne	1f
+< 	sec
+< 1:
+< 	rts	pc
+< /
+< /
+< /
+< /
+< one	= 40200
+< half	= 40000
+< opower	= 34400
+< power	= 44000
+< f100	= 41710
+< /
+< /	get one character from the console.
+< /	called from atof.
+< /
+< getch:
+< 	clr	r0
+< 	sys	read; ch; 1
+< 	bec 9f; sys exit; 9:
+< 	tst r0; bne 9f; sys exit; 9:
+< 	mov	ch,r0
+< 	rts	r5
+< /
+< /
+< /	write one character on the console
+< /	called from ftoa.
+< /
+< wrchar:
+< 	tst	iobuf
+< 	bne	1f
+< 	mov	$iobuf+2,iobuf
+< 1:
+< 	movb	r0,*iobuf
+< 	inc	iobuf
+< 	cmp	iobuf,$iobuf+514.
+< 	blo	1f
+< 	mov	$1,r0
+< 	sys	write; iobuf+2; 512.
+< 	mov	$iobuf+2,iobuf
+< 1:
+< 	rts	r5
+< /
+< 	.bss
+< iobuf:	.=.+518.
+< 	.text
+< /
+< /
+< /	read and convert a line from the console into fr0.
+< /
+< atof:
+< 	mov	r1,-(sp)
+< 	movif	$10.,r3
+< 	clrf	r0
+< 1:
+< 	jsr	r5,*(r5)
+< 	sub	$'0,r0
+< 	cmp	r0,$9.
+< 	bhi	2f
+< 	mulf	r3,r0
+< 	movif	r0,r1
+< 	addf	r1,r0
+< 	br	1b
+< 2:
+< 	cmp	r0,$' -'0
+< 	beq	1b
+< /
+< 	mov	(sp)+,r1
+< 	tst	(r5)+
+< 	rts	r5
+< /
+< /
+< ftoa:
+< 	mov	$ebuf,r2
+< 1:
+< 	movf	fr0,fr1
+< 	divf	$ten,fr1
+< 	movf	fr1,fr2
+< 	modf	$one,fr2
+< 	movf	fr3,-(sp)
+< 	mulf	$ten,fr3
+< 	negf	fr3
+< 	addf	fr0,fr3
+< 	movfi	fr3,-(r2)
+< 	movf	(sp)+,fr0
+< 	tstf	fr0
+< 	cfcc
+< 	bne	1b
+< 1:
+< 	mov	(r2)+,r0
+< 	add	$60,r0
+< 	jsr	r5,*(r5)
+< 	cmp	r2,$ebuf
+< 	blo	1b
+< 	tst	(r5)+
+< 	rts	r5
+< /
+< /
+< /
+< /	replace the f.p. number in fr0 by its square root
+< /
+< sqrt:
+< 	movf	r0,r1		/ a
+< 	tstf	fr0
+< 	cfcc
+< 	beq	2f
+< 	bgt	1f
+< 	sec
+< 	rts	r5		/ sqrt(-a)
+< 1:
+< 	seti
+< 	movf	fr0,-(sp)
+< 	asr	(sp)
+< 	add	$20100,(sp)
+< 	movf	(sp)+,fr0
+< 	movif	$2,r3		/ constant 2
+< 	mov	$4,r0
+< 1:
+< 	movf	r1,r2
+< 	divf	r0,r2
+< 	addf	r2,r0
+< 	divf	r3,r0		/ x = (x+a/x)/2
+< 	dec	r0
+< 	bgt	1b
+< 2:
+< 	clc
+< 	rts	r5
+< /
+< /
+< buf:	.=.+38.
+< ebuf:
+< /
+< /
+< /
+< /	complain about a number which the program
+< /	is unable to digest
+< ouch:
+< 	mov	$2,r0
+< 	sys	write; 1f; 2f-1f
+< 	jmp	begin
+< /
+< 1:	<Ouch.\n>
+< 2:	.even
+< /
+< /
+< one	= 40200
+< two	= 40400
+< four	= 40600
+< six	= 40700
+< ten	= 41040
+< /
+< 	.data
+< bittab:	.byte	1, 2, 4, 10, 20, 40, 100, 200
+< big:	056177; 177777; 177777; 177777
+< /
+< pt:	2.; 3.; 5.; 7.; 11.; 13.; 17.; 19.; 23.; 29.; 31.; 37.; 41.; 43.
+< 	47.; 53.; 59.; 61.; 67.; 71.; 73.; 79.; 83.; 89.; 97.
+< ptend:
+< nl:	<\n>
+< sp5:	<     >
+< 	.even
+< /
+< /
+< factab:
+< 	41040; 40400; 40600; 40400; 40600; 40700; 40400; 40700
+< 	40600; 40400; 40600; 40700; 40700; 40400; 40700; 40600
+< 	40400; 40700; 40600; 40700; 41000; 40600; 40400; 40600
+< 	40400; 40600; 41000; 40700; 40600; 40700; 40400; 40600
+< 	40700; 40400; 40700; 40700; 40600; 40400; 40600; 40700
+< 	40400; 40700; 40600; 40400; 40600; 40400; 41040; 40400
+< ftabend:
+< /
+< 	.bss
+< ch:	.=.+2
+< t:	.=.+8
+< n:	.=.+8
+< v:	.=.+8
+< nn:	.=.+8
+< place:	.=.+8
+< /
+< tabsiz	= 1000.
+< tsiz8	= 8000.
+< table:	.=.+tabsiz
+< argflg:	.=.+2
+< 	.text
+---
+> #include <stdio.h>
+>
+> #define MAXNUM 72057594037927936ULL
+>
+> static int
+> parse_number(char *s, unsigned long long *out)
+> {
+> 	unsigned long long n;
+> 	int any;
+>
+> 	while (*s == ' ' || *s == '\t' || *s == '\n')
+> 		s++;
+> 	n = 0;
+> 	any = 0;
+> 	while (*s >= '0' && *s <= '9') {
+> 		any = 1;
+> 		if (n > (MAXNUM - (unsigned long long)(*s - '0')) / 10ULL)
+> 			return(-1);
+> 		n = n * 10ULL + (unsigned long long)(*s - '0');
+> 		s++;
+> 	}
+> 	while (*s == ' ' || *s == '\t' || *s == '\n')
+> 		s++;
+> 	if (!any || *s != '\0' || n >= MAXNUM)
+> 		return(-1);
+> 	*out = n;
+> 	return(0);
+> }
+>
+> static int
+> read_number(unsigned long long *out)
+> {
+> 	char buf[80];
+> 	int c, i;
+>
+> 	i = 0;
+> 	while ((c = getchar()) != EOF) {
+> 		if (c != ' ' && c != '\t' && c != '\n')
+> 			break;
+> 	}
+> 	if (c == EOF)
+> 		return(0);
+> 	do {
+> 		if (i < (int)sizeof(buf) - 1)
+> 			buf[i++] = (char)c;
+> 		c = getchar();
+> 	} while (c != EOF && c != ' ' && c != '\t' && c != '\n');
+> 	buf[i] = '\0';
+> 	if (parse_number(buf, out) < 0)
+> 		return(-1);
+> 	return(1);
+> }
+>
+> static void
+> putnum(unsigned long long n)
+> {
+> 	char buf[24];
+> 	int i;
+>
+> 	i = 0;
+> 	if (n == 0)
+> 		buf[i++] = '0';
+> 	else while (n != 0) {
+> 		buf[i++] = (char)('0' + (int)(n % 10ULL));
+> 		n /= 10ULL;
+> 	}
+> 	while (i > 0)
+> 		putchar(buf[--i]);
+> }
+>
+> static int
+> prime(unsigned long long n)
+> {
+> 	unsigned long long p;
+>
+> 	if (n < 2ULL)
+> 		return(0);
+> 	if (n == 2ULL || n == 3ULL)
+> 		return(1);
+> 	if ((n % 2ULL) == 0 || (n % 3ULL) == 0)
+> 		return(0);
+> 	p = 5ULL;
+> 	while (p <= n / p) {
+> 		if ((n % p) == 0)
+> 			return(0);
+> 		p += 2ULL;
+> 		if (p > n / p)
+> 			break;
+> 		if ((n % p) == 0)
+> 			return(0);
+> 		p += 4ULL;
+> 	}
+> 	return(1);
+> }
+>
+> static int
+> print_prime(unsigned long long n)
+> {
+> 	putnum(n);
+> 	if (putchar('\n') == EOF)
+> 		return(-1);
+> 	if (fflush(stdout) == EOF)
+> 		return(-1);
+> 	return(0);
+> }
+>
+> static void
+> ouch(void)
+> {
+> 	fprintf(stderr, "Ouch.\n");
+> }
+>
+> int
+> main(int argc, char **argv)
+> {
+> 	unsigned long long n;
+> 	int r;
+>
+> 	if (argc > 1) {
+> 		if (parse_number(argv[1], &n) < 0) {
+> 			ouch();
+> 			return(1);
+> 		}
+> 		if (n == 0ULL)
+> 			return(0);
+> 	} else {
+> 		r = read_number(&n);
+> 		if (r <= 0 || n == 0ULL) {
+> 			if (r < 0)
+> 				ouch();
+> 			return(r < 0 ? 1 : 0);
+> 		}
+> 	}
+> 	if (n >= MAXNUM) {
+> 		ouch();
+> 		return(1);
+> 	}
+> 	if (n <= 2ULL) {
+> 		if (print_prime(2ULL) < 0)
+> 			return(0);
+> 		n = 3ULL;
+> 	} else if ((n % 2ULL) == 0)
+> 		n++;
+> 	for (;;) {
+> 		if (prime(n) && print_prime(n) < 0)
+> 			return(0);
+> 		n += 2ULL;
+> 	}
+> }
 ```
 
 ### cmd/prof.c
