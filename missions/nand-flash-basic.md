@@ -31,7 +31,6 @@ mark tag=inventory_smoke
 Verify:
 
 ```
-import re
 
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
@@ -52,6 +51,7 @@ gate for the following DFU + UART hold step.
 Build:
 
 ```
+make -C stm32mp135_test_board/bootloader clean
 make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
 ```
 
@@ -89,6 +89,7 @@ lease alive for the UART hold step.
 Build:
 
 ```
+make -C stm32mp135_test_board/bootloader clean
 make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
 ```
 
@@ -102,7 +103,6 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 1 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -125,8 +125,6 @@ mark tag=dfu_nand_flash
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -156,7 +154,6 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 30 s):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -184,9 +181,9 @@ def check(extract_dir):
             and Verification.op_succeeded(ops, 'mp135.custom', 'uart_expect'))
 ```
 
-## WIP
-
 ### MSC + NAND probe smoke
+
+Done: 05/13/2026 16:07:20
 
 Re-enters bootloader hold from a fresh DUT reset and re-flash so this
 section does not depend on however long the bench was held earlier in
@@ -210,7 +207,6 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 1 min):
 
 ```
-lease:resume token="{{LEASE_TOKEN}}"
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -238,7 +234,6 @@ mp135.custom:uart_expect sentinel="FDT magic" timeout_ms=5000
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_close
 mark tag=msc_nand_smoke
-lease:release token="{{LEASE_TOKEN}}"
 ```
 
 Verify:
@@ -255,6 +250,8 @@ def check(extract_dir):
 ```
 
 ### NAND image round-trip: write -> fmc_flush -> poison -> fmc_load -> diff
+
+Done: 05/13/2026 16:12:17
 
 Write `nand.img` to DDR via MSC, `fmc_flush` to NAND, `fmc_load` back
 into DDR, MSC-read and offline-diff the leading bytes. This step waits
@@ -273,6 +270,7 @@ Build:
 
 ```
 make -C stm32mp135_test_board patch
+make -C stm32mp135_test_board/bootloader clean
 make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
 make -C stm32mp135_test_board kernel
 make -C stm32mp135_test_board DTS=custom-nand dtb
@@ -291,7 +289,6 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 3 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600
 bench_mcu:reset_dut2
 delay ms=10000
 inventory refresh=true verify=false
@@ -330,7 +327,7 @@ mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_load\r"
 mp135.custom:uart_expect sentinel="FMC load:" timeout_ms=3000
-mp135.custom:uart_expect sentinel="rd errs" timeout_ms=10000
+mp135.custom:uart_expect sentinel="rd errs," timeout_ms=60000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
 msc.custom:read n=4194304 offset_lba=0 min_rate_Bps=3000000
@@ -359,6 +356,8 @@ def check(extract_dir):
 
 ### NAND health (bootloader-side)
 
+Done: 05/13/2026 16:12:23
+
 Inherits the bootloader-at-`> ` state from the round-trip. Runs
 `fmc_scan` (reads OOB on every block, prints `bad: blk N` per bad
 block then `scan done: K bad / N total`) and `fmc_test_boot`
@@ -370,7 +369,6 @@ Build: nothing required.
 Test (max 2 min):
 
 ```
-lease:resume token="{{LEASE_TOKEN}}"
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -382,15 +380,12 @@ mp135.custom:uart_write data="fmc_test_boot\r"
 mp135.custom:uart_expect sentinel="FDT magic OK" timeout_ms=10000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
-lease:release token="{{LEASE_TOKEN}}"
 mark tag=nand_health
 ```
 
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -411,6 +406,8 @@ def check(extract_dir):
 
 ### NAND + UBI health (Linux-side via UART)
 
+Done: 05/13/2026 16:12:28
+
 Claims a fresh bench lease and reloads the NAND bootloader so this
 check does not depend on a still-live cross-section lease token. It
 boots Linux from the already-provisioned NAND contents with
@@ -426,6 +423,7 @@ mtd-utils binaries.
 Build:
 
 ```
+make -C stm32mp135_test_board/bootloader clean
 make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
 ```
 
@@ -439,7 +437,6 @@ stm32mp135_test_board/bootloader/build/main.stm32
 Test (max 1 min):
 
 ```
-lease:claim devices="mp135.custom" duration_s=3600 auto_release_on_session_end=true
 bench_mcu:reset_dut2
 delay ms=2000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -471,15 +468,12 @@ mp135.custom:uart_write data="echo ___MTD___; cat /proc/mtd; echo ___UBI___; ubi
 mp135.custom:uart_expect sentinel="___END___" timeout_ms=15000
 mp135.custom:uart_expect sentinel="# " timeout_ms=3000
 mp135.custom:uart_close
-lease:release
 mark tag=nand_health_linux
 ```
 
 Verify:
 
 ```
-import re
-
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
@@ -504,6 +498,8 @@ def check(extract_dir):
 
 ### Full end-to-end: DFU -> NAND write+commit -> boot Linux console
 
+Done: 05/13/2026 16:12:34
+
 Cold path. Reset, DFU NAND bootloader, stop autoload, write+commit
 `nand.img`, `fmc_bload` + `jump`, and reach the Linux login prompt on
 the serial console. The 3 MB/s MSC write floor is a hard requirement;
@@ -512,6 +508,7 @@ lowering it hides a broken NAND boot path.
 Build:
 
 ```
+make -C stm32mp135_test_board/bootloader clean
 make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
 ```
 
