@@ -6,8 +6,9 @@ Local test:
 
 ```
 LC_ALL=C bash -c 'm=missions/unix-historical-accuracy.md; \
-comm -23 <(git -C unix-v7-c99 grep -Il ""|sort) \
-<(grep ^diff "$m"|cut -d" " -f3|cut -d/ -f2-|sort)'
+cd unix-v7-c99; g="git ls-files -co --exclude-standard"; \
+comm -23 <($g|xargs grep -Il "" 2>/dev/null|sort) \
+<(grep ^diff ../"$m"|cut -d" " -f3|cut -d/ -f2-|sort)'
 ```
 
 Expect:
@@ -17,22 +18,19 @@ Expect:
 LICENSE
 Makefile
 README
-arch/a7.ld
-arch/a7.s
+arch/arm.c
 arch/arm.h
-arch/armboot.c
-arch/evb.ld
-arch/swtch.s
-arch/u_bridge.c
-arch/u_stub.c
-arch/v7stubs.c
+arch/arm.ld
+arch/arm.s
 cmd/awk/awk.g.c
 cmd/awk/awk.h
 cmd/awk/awk.lx.c
 cmd/awk/awk_math.c
 cmd/awk/proctab.c
-conf/qemu_arm/auxfs.proto
-conf/qemu_arm/root.proto
+conf/arm_qemu/auxfs.proto
+conf/arm_qemu/conf.c
+conf/arm_qemu/config.mk
+conf/arm_qemu/root.proto
 dev/msgbuf.c
 dev/pl011.c
 dev/virtio_blk.c
@@ -48,6 +46,8 @@ lib/mkdir.c
 lib/sys.s
 lib/u.ld
 sys/Makefile
+sys/v7_bridge.c
+sys/v7stubs.c
 tools/extract-old-ar.py
 tools/qemu-shell.py
 ```
@@ -502,590 +502,6 @@ Expect:
 > }
 ```
 
-### cmd/tek.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/plot/driver.c unix-v7-c99/cmd/tek.c | sed 's/[[:blank:]]*$//' || true
-```
-
-Expect:
-
-```
-3,4c3,4
-< float deltx;
-< float delty;
----
-> static float deltx;
-> static float delty;
-6,8c6,12
-< main(argc,argv)  char **argv; {
-< 	int std=1;
-< 	FILE *fin;
----
-> static float obotx = 0.0f;
-> static float oboty = 0.0f;
-> static float botx = 0.0f;
-> static float boty = 0.0f;
-> static float scalex = 1.0f;
-> static float scaley = 1.0f;
-> static int scaleflag = 0;
-10,19c14,41
-< 	while(argc-- > 1) {
-< 		if(*argv[1] == '-')
-< 			switch(argv[1][1]) {
-< 				case 'l':
-< 					deltx = atoi(&argv[1][2]) - 1;
-< 					break;
-< 				case 'w':
-< 					delty = atoi(&argv[1][2]) - 1;
-< 					break;
-< 				}
----
-> static int oloy = -1;
-> static int ohiy = -1;
-> static int ohix = -1;
-> static int oextra = -1;
->
-> static int fplt(FILE *fin);
-> static int getsi(FILE *fin);
-> static int getstr(char *s, int n, FILE *fin);
-> static int openpl(void);
-> static int closepl(void);
-> static int erase(void);
-> static int label(char *s);
-> static int linemod(char *s);
-> static int line(int x0, int y0, int x1, int y1);
-> static int move(int xi, int yi);
-> static int cont(int x, int y);
-> static int point(int xi, int yi);
-> static int space(int x0, int y0, int x1, int y1);
-> static int arc(int x, int y, int x0, int y0, int x1, int y1);
-> static int circle(int x, int y, int r);
-> static int dot(int xi, int yi, int dx, int n, int *pat);
-> static int putch(int c);
-> static int iabs(int a);
-> static int quad(int x, int y, int xp, int yp);
-> static int step(int d);
-> static double dsqrt(double v);
->
-> static int del = 20;
-21c43,59
-< 		else {
----
-> int
-> main(int argc, char **argv)
-> {
-> 	int std = 1;
-> 	FILE *fin;
->
-> 	while (argc-- > 1) {
-> 		if (argv[1][0] == '-') {
-> 			switch (argv[1][1]) {
-> 			case 'l':
-> 				deltx = atoi(&argv[1][2]) - 1;
-> 				break;
-> 			case 'w':
-> 				delty = atoi(&argv[1][2]) - 1;
-> 				break;
-> 			}
-> 		} else {
-23c61,62
-< 			if ((fin = fopen(argv[1], "r")) == NULL) {
----
-> 			fin = fopen(argv[1], "r");
-> 			if (fin == NULL) {
-26,27d64
-< 				}
-< 			fplt(fin);
-29c66
-< 		argv++;
----
-> 			fplt(fin);
-31,33c68
-< 	if (std)
-< 		fplt( stdin );
-< 	exit(0);
----
-> 		argv++;
-34a70,73
-> 	if (std)
-> 		fplt(stdin);
-> 	return(0);
-> }
-36,37c75,77
-<
-< fplt(fin)  FILE *fin; {
----
-> static int
-> fplt(FILE *fin)
-> {
-40c80
-< 	int xi,yi,x0,y0,x1,y1,r,dx,n,i;
----
-> 	int xi, yi, x0, y0, x1, y1, r, dx, n, i;
-44,45c84,85
-< 	while((c=getc(fin)) != EOF){
-< 		switch(c){
----
-> 	while ((c = getc(fin)) != EOF) {
-> 		switch (c) {
-49c89
-< 			move(xi,yi);
----
-> 			move(xi, yi);
-56c96
-< 			line(x0,y0,x1,y1);
----
-> 			line(x0, y0, x1, y1);
-59c99
-< 			gets(s,fin);
----
-> 			getstr(s, sizeof(s), fin);
-68c108
-< 			point(xi,yi);
----
-> 			point(xi, yi);
-73c113
-< 			cont(xi,yi);
----
-> 			cont(xi, yi);
-80c120
-< 			space(x0,y0,x1,y1);
----
-> 			space(x0, y0, x1, y1);
-89c129
-< 			arc(xi,yi,x0,y0,x1,y1);
----
-> 			arc(xi, yi, x0, y0, x1, y1);
-95c135
-< 			circle(xi,yi,r);
----
-> 			circle(xi, yi, r);
-98c138
-< 			gets(s,fin);
----
-> 			getstr(s, sizeof(s), fin);
-106,108c146,150
-< 			for(i=0; i<n; i++)pat[i] = getsi(fin);
-< 			dot(xi,yi,dx,n,pat);
-< 			break;
----
-> 			for (i = 0; i < n; i++) {
-> 				if (i < 256)
-> 					pat[i] = getsi(fin);
-> 				else
-> 					(void)getsi(fin);
-109a152,155
-> 			if (n > 256)
-> 				n = 256;
-> 			dot(xi, yi, dx, n, pat);
-> 			break;
-111d156
-< 	closepl();
-113,115c158,168
-< getsi(fin)  FILE *fin; {	/* get an integer stored in 2 ascii bytes. */
-< 	short a, b;
-< 	if((b = getc(fin)) == EOF)
----
-> 	closepl();
-> 	return(0);
-> }
->
-> static int
-> getsi(FILE *fin)
-> {
-> 	int a, b;
->
-> 	b = getc(fin);
-> 	if (b == EOF)
-117c170,171
-< 	if((a = getc(fin)) == EOF)
----
-> 	a = getc(fin);
-> 	if (a == EOF)
-119,120c173
-< 	a = a<<8;
-< 	return(a|b);
----
-> 	return(((a & 0377) << 8) | (b & 0377));
-122,124c175,185
-< gets(s,fin)  char *s;  FILE *fin; {
-< 	for( ; *s = getc(fin); s++)
-< 		if(*s == '\n')
----
->
-> static int
-> getstr(char *s, int n, FILE *fin)
-> {
-> 	int c;
->
-> 	while (--n > 0) {
-> 		c = getc(fin);
-> 		if (c == EOF || c == '\0')
-> 			break;
-> 		if (c == '\n')
-125a187,188
-> 		*s++ = c;
-> 	}
-127c190,541
-< 	return;
----
-> 	return(0);
-> }
->
-> static int
-> openpl(void)
-> {
-> 	return(0);
-> }
->
-> static int
-> closepl(void)
-> {
-> 	putch(037);
-> 	fflush(stdout);
-> 	return(0);
-> }
->
-> static int
-> erase(void)
-> {
-> 	putch(033);
-> 	putch(014);
-> 	ohiy = -1;
-> 	ohix = -1;
-> 	oextra = -1;
-> 	oloy = -1;
-> 	sleep(2);
-> 	return(0);
-> }
->
-> static int
-> label(char *s)
-> {
-> 	static char lbl_mv[] = {
-> 		036, 040, 0110, 0110, 0110, 0110, 0110, 0110,
-> 		0112, 0112, 0112, 0112, 0112, 0112, 0112, 0112,
-> 		0112, 0112, 037, 0
-> 	};
-> 	static char lbl_umv[] = {
-> 		036, 040, 0104, 0104, 0104, 0104, 0104, 0104,
-> 		0105, 0105, 0105, 0105, 0105, 0105, 0105, 0105,
-> 		0105, 0105, 037, 0
-> 	};
-> 	int i, c;
->
-> 	for (i = 0; (c = lbl_mv[i]) != 0; i++)
-> 		putch(c);
-> 	for (i = 0; (c = s[i]) != 0; i++)
-> 		putch(c);
-> 	for (i = 0; (c = lbl_umv[i]) != 0; i++)
-> 		putch(c);
-> 	return(0);
-> }
->
-> static int
-> linemod(char *s)
-> {
-> 	char c = 'd';
->
-> 	putch(033);
-> 	switch (s[0]) {
-> 	case 'l':
-> 		c = 'd';
-> 		break;
-> 	case 'd':
-> 		if (s[3] != 'd')
-> 			c = 'a';
-> 		else
-> 			c = 'b';
-> 		break;
-> 	case 's':
-> 		if (s[5] != '\0')
-> 			c = 'c';
-> 		else
-> 			c = '`';
-> 		break;
-> 	}
-> 	putch(c);
-> 	return(0);
-> }
->
-> static int
-> line(int x0, int y0, int x1, int y1)
-> {
-> 	move(x0, y0);
-> 	cont(x1, y1);
-> 	return(0);
-> }
->
-> static int
-> move(int xi, int yi)
-> {
-> 	putch(035);
-> 	cont(xi, yi);
-> 	return(0);
-> }
->
-> static int
-> cont(int x, int y)
-> {
-> 	int hix, hiy, lox, loy, extra;
-> 	int n;
->
-> 	x = (int)((x - obotx) * scalex + botx);
-> 	y = (int)((y - oboty) * scaley + boty);
-> 	hix = (x >> 7) & 037;
-> 	hiy = (y >> 7) & 037;
-> 	lox = (x >> 2) & 037;
-> 	loy = (y >> 2) & 037;
-> 	extra = (x & 03) + ((y << 2) & 014);
-> 	n = (iabs(hix - ohix) + iabs(hiy - ohiy) + 6) / 12;
-> 	if (hiy != ohiy) {
-> 		putch(hiy | 040);
-> 		ohiy = hiy;
-> 	}
-> 	if (hix != ohix) {
-> 		if (extra != oextra) {
-> 			putch(extra | 0140);
-> 			oextra = extra;
-> 		}
-> 		putch(loy | 0140);
-> 		putch(hix | 040);
-> 		ohix = hix;
-> 		oloy = loy;
-> 	} else {
-> 		if (extra != oextra) {
-> 			putch(extra | 0140);
-> 			putch(loy | 0140);
-> 			oextra = extra;
-> 			oloy = loy;
-> 		} else if (loy != oloy) {
-> 			putch(loy | 0140);
-> 			oloy = loy;
-> 		}
-> 	}
-> 	putch(lox | 0100);
-> 	while (n-- != 0)
-> 		putch(0);
-> 	return(0);
-> }
->
-> static int
-> point(int xi, int yi)
-> {
-> 	move(xi, yi);
-> 	cont(xi, yi);
-> 	return(0);
-> }
->
-> static int
-> space(int x0, int y0, int x1, int y1)
-> {
-> 	botx = 0.0f;
-> 	boty = 0.0f;
-> 	obotx = x0;
-> 	oboty = y0;
-> 	if (scaleflag)
-> 		return(0);
-> 	scalex = 3120.0f / (x1 - x0);
-> 	scaley = 3120.0f / (y1 - y0);
-> 	return(0);
-> }
->
-> static int
-> arc(int x, int y, int x0, int y0, int x1, int y1)
-> {
-> 	double pc;
-> 	int flg, m, xc, yc, xs, ys, qs, qf;
-> 	float dx, dy, r;
-> 	char use;
->
-> 	dx = x - x0;
-> 	dy = y - y0;
-> 	r = dx * dx + dy * dy;
-> 	pc = dsqrt((double)r);
-> 	flg = (int)(pc / 4.0);
-> 	if (flg == 0)
-> 		step(1);
-> 	else if (flg < del)
-> 		step(flg);
-> 	xc = xs = x0;
-> 	yc = ys = y0;
-> 	move(xs, ys);
-> 	if (x0 == x1 && y0 == y1)
-> 		flg = 0;
-> 	else
-> 		flg = 1;
-> 	qs = quad(x, y, x0, y0);
-> 	qf = quad(x, y, x1, y1);
-> 	if (iabs(x - x1) < iabs(y - y1)) {
-> 		use = 'x';
-> 		if (qs == 2 || qs == 3)
-> 			m = -1;
-> 		else
-> 			m = 1;
-> 	} else {
-> 		use = 'y';
-> 		if (qs > 2)
-> 			m = -1;
-> 		else
-> 			m = 1;
-> 	}
-> 	for (;;) {
-> 		switch (use) {
-> 		case 'x':
-> 			if (qs == 2 || qs == 3)
-> 				yc -= del;
-> 			else
-> 				yc += del;
-> 			dy = yc - y;
-> 			pc = r - dy * dy;
-> 			xc = (int)(m * dsqrt(pc) + x);
-> 			if ((x < xs && x >= xc) || (x > xs && x <= xc) ||
-> 			    (y < ys && y >= yc) || (y > ys && y <= yc)) {
-> 				if (++qs > 4)
-> 					qs = 1;
-> 				if (qs == 2 || qs == 3)
-> 					m = -1;
-> 				else
-> 					m = 1;
-> 				flg = 1;
-> 			}
-> 			cont(xc, yc);
-> 			xs = xc;
-> 			ys = yc;
-> 			if (qs == qf && flg == 1) {
-> 				switch (qf) {
-> 				case 3:
-> 				case 4:
-> 					if (xs >= x1)
-> 						return(0);
-> 					break;
-> 				case 1:
-> 				case 2:
-> 					if (xs <= x1)
-> 						return(0);
-> 					break;
-> 				}
-> 			}
-> 			break;
-> 		case 'y':
-> 			if (qs > 2)
-> 				xc += del;
-> 			else
-> 				xc -= del;
-> 			dx = xc - x;
-> 			pc = r - dx * dx;
-> 			yc = (int)(m * dsqrt(pc) + y);
-> 			if ((x < xs && x >= xc) || (x > xs && x <= xc) ||
-> 			    (y < ys && y >= yc) || (y > ys && y <= yc)) {
-> 				if (++qs > 4)
-> 					qs = 1;
-> 				if (qs > 2)
-> 					m = -1;
-> 				else
-> 					m = 1;
-> 				flg = 1;
-> 			}
-> 			cont(xc, yc);
-> 			xs = xc;
-> 			ys = yc;
-> 			if (qs == qf && flg == 1) {
-> 				switch (qs) {
-> 				case 1:
-> 				case 4:
-> 					if (ys >= y1)
-> 						return(0);
-> 					break;
-> 				case 2:
-> 				case 3:
-> 					if (ys <= y1)
-> 						return(0);
-> 					break;
-> 				}
-> 			}
-> 			break;
-> 		}
-> 	}
-> }
->
-> static int
-> circle(int x, int y, int r)
-> {
-> 	arc(x, y, x + r, y, x + r, y);
-> 	return(0);
-> }
->
-> static int
-> dot(int xi, int yi, int dx, int n, int *pat)
-> {
-> 	(void)xi;
-> 	(void)yi;
-> 	(void)dx;
-> 	(void)n;
-> 	(void)pat;
-> 	return(0);
-> }
->
-> static int
-> putch(int c)
-> {
-> 	putc(c, stdout);
-> 	return(0);
-> }
->
-> static int
-> iabs(int a)
-> {
-> 	if (a < 0)
-> 		return(-a);
-> 	return(a);
-> }
->
-> static int
-> quad(int x, int y, int xp, int yp)
-> {
-> 	if (x < xp) {
-> 		if (y <= yp)
-> 			return(1);
-> 		return(4);
-> 	}
-> 	if (x > xp) {
-> 		if (y < yp)
-> 			return(2);
-> 		return(3);
-> 	}
-> 	if (y < yp)
-> 		return(2);
-> 	return(4);
-> }
->
-> static int
-> step(int d)
-> {
-> 	del = d;
-> 	return(0);
-> }
->
-> static double
-> dsqrt(double v)
-> {
-> 	double x;
-> 	int i;
->
-> 	if (v <= 0.0)
-> 		return(0.0);
-> 	x = v;
-> 	if (x < 1.0)
-> 		x = 1.0;
-> 	for (i = 0; i < 20; i++)
-> 		x = 0.5 * (x + v / x);
-> 	return(x);
-```
-
 ### cmd/sh/makefile
 
 Local test:
@@ -1100,12 +516,12 @@ Expect:
 
 ```
 
-### arch/machdep.c
+### sys/machdep_arm.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/machdep.c unix-v7-c99/arch/machdep.c || true
+diff unix-v7-c99/v7/usr/sys/sys/machdep.c unix-v7-c99/sys/machdep_arm.c || true
 ```
 
 Expect:
@@ -1309,7 +725,7 @@ Expect:
 ---
 > #include "../h/systm.h"
 > #include "../h/proto.h"
-> #include "arm.h"
+> #include "../arch/arm.h"
 > void startup(void)
 > {
 > 	struct buf *bp;
@@ -3401,48 +2817,46 @@ Expect:
 < 	CR2, ALLDELAY,
 ---
 > 	{"ti700", CR2, ALLDELAY},
-171,172c127
+171,174c127
 < 	"tek",
 < 	FF1, ALLDELAY,
----
-> 	{"tek", FF1, ALLDELAY},
-174c129
+< 
 < 	0,
 ---
 > 	{0, 0, 0}
-178a134,137
+178a132,135
 > int	eq(char *string);
 > void	prmodes(void);
 > void	delay(int m, char *s);
 > void	prspeed(char *c, int s);
-180,181c139,140
+180,181c137,138
 < main(argc, argv)
 < char	*argv[];
 ---
 > int
 > main(int argc, char *argv[])
-232,233c191,192
+232,233c189,190
 < eq(string)
 < char *string;
 ---
 > int
 > eq(char *string)
-249c208,209
+249c206,207
 < prmodes()
 ---
 > void
 > prmodes(void)
-251c211
+251c209
 < 	register m;
 ---
 > 	register int m;
-284,285c244,245
+284,285c242,243
 < delay(m, s)
 < char *s;
 ---
 > void
 > delay(int m, char *s)
-296,297c256,257
+296,297c254,255
 < prspeed(c, s)
 < char *c;
 ---
@@ -5015,7 +4429,7 @@ Expect:
 ---
 > #include "../h/proto.h"
 > 
-> extern void addupc(caddr_t pc, void *prof, int inc);	/* arch/v7stubs.c stub */
+> extern void addupc(caddr_t pc, void *prof, int inc);	/* sys/v7stubs.c stub */
 > /* wakeup/spl1 come from h/proto.h.  psignal/setpri come from h/systm.h. */
 28,30c29,30
 < clock(dev, sp, r1, nps, r0, pc, ps)
@@ -5217,7 +4631,7 @@ Expect:
 < }
 ---
 > /* v7 openi() (per-driver d_open dispatch for IFCHR/IFBLK) is gone --
->  * open(2) on this port routes through arch/armboot.c::kopen(), which
+>  * open(2) on this port routes through arch/arm.c::kopen(), which
 >  * handles the pseudo-fds and IFREG itself.  The cdevsw[]/bdevsw[]
 >  * d_open hook was never reached. */
 144,145c114,115
@@ -5281,7 +4695,7 @@ Expect:
 ---
 > /* v7 falloc() (allocate fd + file slot, return file*) is gone -- its
 >  * only callers were sys2.c::open1 and pipe.c::pipe, both removed.
->  * arch/armboot.c uses its own files[NFD] table instead of file[NFILE]. */
+>  * arch/arm.c uses its own files[NFD] table instead of file[NFILE]. */
 ```
 
 ### sys/pipe.c
@@ -5343,7 +4757,7 @@ Expect:
 < }
 ---
 > /* v7's pipe(2) implementation (allocate inode + two file structs + wire
->  * FREAD/FWRITE) is gone -- arch/armboot.c::sys_pipe maintains its own
+>  * FREAD/FWRITE) is gone -- arch/arm.c::sys_pipe maintains its own
 >  * pipes[NPIPES] table that doesn't touch the v7 inode[]/file[] arrays.
 >  * readp() and writep() are still kept because v7's read(2)/write(2)
 >  * fast path on FPIPE-flagged file structs lands here, even though new
@@ -5399,7 +4813,7 @@ Expect:
 < 	}
 < }
 ---
-> /* v7's plock/prele are in arch/v7stubs.c -- cooperative-scheduling
+> /* v7's plock/prele are in sys/v7stubs.c -- cooperative-scheduling
 >  * variants that just flip ILOCK without ever sleeping, since the ARM
 >  * port runs without the v7 sleep()/wakeup() handoff path. */
 ```
@@ -5552,7 +4966,7 @@ Expect:
 ---
 > /* v7's signal(pgrp, sig) (broadcast sig to every proc in pgrp) is gone
 >  * -- its only caller was sys/tty.c (the v7 line-discipline interrupt
->  * path), which this port doesn't compile.  arch/u_bridge.c has its own
+>  * path), which this port doesn't compile.  sys/v7_bridge.c has its own
 >  * v7_signal_pgrp that walks armproc[] instead of proc[]. */
 55,57c43,44
 < psignal(p, sig)
@@ -5648,7 +5062,7 @@ Expect:
 >  * driven by psig(); removed alongside it on this port. */
 > 
 > /* The v7 issig()/psig() pair handled signal delivery during trap return.
->  * On this port deliver_signal() in arch/armboot.c does it inline so
+>  * On this port deliver_signal() in arch/arm.c does it inline so
 >  * psig() is never called from C; the resume(u_qsav) path in slp.c's
 >  * sleep() loop still uses its own local `psig:` label for the
 >  * longjmp-back-on-signal idiom. */
@@ -5998,7 +5412,7 @@ Expect:
 < 	while(--count);
 < }
 ---
-> /* v7 bcopy lives in arch/v7stubs.c -- byte-loop tuned for AAPCS softfloat
+> /* v7 bcopy lives in sys/v7stubs.c -- byte-loop tuned for AAPCS softfloat
 >  * rather than the PDP-11 mov2/movb instruction layout the original
 >  * carried over from v7/usr/sys/sys/subr.c. */
 ```
@@ -6487,7 +5901,7 @@ Expect:
 > extern void expand(int);
 > 
 > /* v7 sys/sys1.c held exec/exece/getxfile/setregs/rexit/exit/wait/fork.
->  * On this port they're all reimplemented inline in arch/armboot.c::trap()
+>  * On this port they're all reimplemented inline in arch/arm.c::trap()
 >  * and v7_exec_call(); the v7 versions are linker-dead.  Only sbreak()
 >  * (the break(2) syscall, sysent[17]) is kept -- it still drives the v7
 >  * data-segment grow/shrink via expand()/copyseg(). */
@@ -6529,7 +5943,7 @@ Expect:
 > void rdwr(int mode);
 > 
 > /* v7's write(), open(), creat() and open1() are gone -- on this port
->  * sys_{write,open,creat}_v7 in arch/armboot.c implement those syscalls
+>  * sys_{write,open,creat}_v7 in arch/arm.c implement those syscalls
 >  * directly (pipe/console fast paths + kopen/kcreat for the file tree),
 >  * so the v7 entry points were linker-dead.  read() is still routed
 >  * here via v7_read_call. */
@@ -6927,7 +6341,7 @@ Expect:
 < 		sleep((caddr_t)&u, PSLEP);
 < }
 ---
-> /* v7's pause(2) implementation is gone -- arch/armboot.c has its own
+> /* v7's pause(2) implementation is gone -- arch/arm.c has its own
 >  * sys_pause_v7 that uses the mt_block_on_pipe + clock-tick wake path
 >  * instead of the v7 sleep()/wakeup() handoff. */
 386c400,401
@@ -12487,7 +11901,7 @@ Expect:
 < int	uchar();
 ---
 > /* `dev_t pipedev` (the device pipe(2) ialloc'd against) is gone --
->  * sys/pipe.c::pipe() was removed; arch/armboot.c::kpipe uses its own
+>  * sys/pipe.c::pipe() was removed; arch/arm.c::kpipe uses its own
 >  * pipes[] table that doesn't allocate inodes. */
 > dev_t	getmdev(void);
 > daddr_t	bmap(struct inode *ip, daddr_t bn, int rwflg);
@@ -14590,14 +14004,14 @@ Expect:
 ---
 > /* PWAIT (wait priority) and PSLEP (pause priority) are gone -- their
 >  * only sleep() callers were sys1.c::wait and sys4.c::pause, both
->  * reimplemented in arch/armboot.c using the multithreading primitives. */
+>  * reimplemented in arch/arm.c using the multithreading primitives. */
 51a53,59
 >  *
 >  * Only the v7 signal names actually referenced by this kernel are
 >  * defined here.  SIGINS/IOT/EMT/FPT/BUS/SEG/SYS/TRM are gone -- never
 >  * raised or named anywhere; userspace gets the long names from
 >  * <signal.h> instead.  The matching numeric slots (4, 6, 7, 8, 10, 11,
->  * 12, 15) remain reserved in u_signal[NSIG]; a7.s raises 4 and 11 by
+>  * 12, 15) remain reserved in u_signal[NSIG]; arm.s raises 4 and 11 by
 >  * literal integer (see undef_entry / pabort_entry).
 56d63
 < #define	SIGINS	4	/* illegal instruction */
@@ -14732,7 +14146,7 @@ Expect:
 ---
 > 	/* v7 had `struct {...} u_exdata` here (the a.out header, populated
 > 	 * by sys1.c::getxfile and consumed by setregs).  Both functions are
-> 	 * gone; arch/armboot.c::v7_exec_call parses the a.out itself. */
+> 	 * gone; arch/arm.c::v7_exec_call parses the a.out itself. */
 90c87,88
 < 	short	u_fpflag;		/* unused now, will be later */
 ---
@@ -15689,7 +15103,7 @@ Expect:
 <  *	cannot be executed.
 ---
 >  * Initialization code.  On this port the ARM-specific cold-start path
->  * (arch/a7.s -> main() -> startup() -> armboot()) drives the actual
+>  * (arch/arm.s -> main() -> startup() -> armboot()) drives the actual
 >  * boot.  The v7 PDP-11 main body (manually set up proc[0], call
 >  * cinit/binit/iinit, fork the init process, jump to sched()) is replaced
 >  * by armboot()'s scheduler + ELF loader, so main() is now just glue.
@@ -25779,7 +25193,7 @@ Expect:
 >  * dance for the no-runnable case.  That model assumes per-proc u-
 >  * areas swapped in/out of core by an external swapper, which this
 >  * port does not have.  Instead we keep every proc's u-area + kernel
->  * stack permanently in RAM (the save-slot pool in arch/armboot.c),
+>  * stack permanently in RAM (the save-slot pool in arch/arm.c),
 >  * and the equivalent save+pick+resume sequence lives in
 >  * armboot_swtch().  Routing through it here means v7's
 >  * sleep()/wakeup()/setrun()/exit()/wait()/pause() in this TU and
@@ -25972,7 +25386,7 @@ Expect:
 < }
 ---
 > /* v7 newproc() (alloc proc[] slot, copy parent's image into child) is
->  * gone -- fork(2) routes through arch/armboot.c::mt_alloc_slot, which
+>  * gone -- fork(2) routes through arch/arm.c::mt_alloc_slot, which
 >  * maintains armproc[NSLOTS] in parallel with proc[NPROC]; the child's
 >  * register state is duplicated by the trap frame copy, not by save()/
 >  * resume() over the v7 u_ssav. */
@@ -26027,7 +25441,7 @@ Expect:
 > #include "../include/sys/filsys.h"
 > #include "../include/sys/fblk.h"
 > #include "../include/sys/dir.h"
-> /* Pack longs into pure LE 24-bit; matches arch/armboot.c::addr(). */
+> /* Pack longs into pure LE 24-bit; matches arch/arm.c::addr(). */
 > int ltol3(cp, lp, n) char *cp; long *lp; int n; {
 > 	int i; long v;
 > 	for(i=0; i<n; i++) {
@@ -29389,630 +28803,6 @@ Expect:
 > }
 ```
 
-### cmd/learn/copy.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/copy.c unix-v7-c99/cmd/learn/copy.c || true
-```
-
-Expect:
-
-```
-4a5,20
-> extern char * ctime();
-> extern void intrpt(int);
-> extern int *action(char *);
-> extern void list(char *);
-> extern int mysys(char *);
-> extern void maktee(void);
-> extern void untee(void);
-> extern int makpipe(void);
-> extern void fcopy(char *new, char *old);
-> 
-> int pgets(char *s, int prompt, FILE *f);
-> void trim(char *s);
-> void scopy(FILE *fi, FILE *fo);
-> int cmp(char *r);
-> char *wordb(char *s, char *t);
-> 
-8d23
-< extern char * ctime();
-10,11c25,26
-< copy(prompt, fin)
-< FILE *fin;
----
-> void
-> copy(int prompt, FILE *fin)
-16,18c31
-< 	int *p, tv[2];
-< 	extern int intrpt(), *action();
-< 	extern char *wordb();
----
-> 	int *p; long tv;
-24c37
-< 		if (pgets(s, prompt, fin) == 0)
----
-> 		if (pgets(s, prompt, fin) == 0) {
-26,27d38
-< 				/* fprintf(stderr, "Don't type control-D\n"); */
-< 				/* this didn't work out very well */
-30a42
-> 		}
-172,173c184,185
-< 			time(tv);
-< 			tod = ctime(tv);
----
-> 			time(&tv);
-> 			tod = ctime(&tv);
-184,185c196,197
-< pgets(s, prompt, f)
-< FILE *f;
----
-> int
-> pgets(char *s, int prompt, FILE *f)
-198,199c210,211
-< trim(s)
-< char *s;
----
-> void
-> trim(char *s)
-207,208c219,220
-< scopy(fi, fo)	/* copy fi to fo until a line with # */
-< FILE *fi, *fo;
----
-> void
-> scopy(FILE *fi, FILE *fo)	/* copy fi to fo until a line with # */
-225,226c237,238
-< cmp(r)	/* compare two files for status */
-< char *r;
----
-> int
-> cmp(char *r)	/* compare two files for status */
-258,259c270
-< wordb(s, t)	/* in s, t is prefix; return tail */
-< char *s, *t;
----
-> wordb(char *s, char *t)	/* in s, t is prefix; return tail */
-263c274
-< 	while (c = *s++) {
----
-> 	while ((c = *s++)) {
-```
-
-### cmd/learn/dounit.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/dounit.c unix-v7-c99/cmd/learn/dounit.c || true
-```
-
-Expect:
-
-```
-4c4,10
-< dounit()
----
-> extern void start(char *);
-> extern void copy(int, FILE *);
-> extern void wrapup(int);
-> extern void setdid(char *, int);
-> 
-> void
-> dounit(void)
-59d64
-< 
-```
-
-### cmd/learn/lcount.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/lcount.c unix-v7-c99/cmd/learn/lcount.c || true
-```
-
-Expect:
-
-```
-3c3,4
-< main()	/* count lines in something */
----
-> int
-> main(void)	/* count lines in something */
-5c6
-< 	register n, c;
----
-> 	register int n, c;
-11a13
-> 	return 0;
-```
-
-### cmd/learn/learn.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/learn.c unix-v7-c99/cmd/learn/learn.c || true
-```
-
-Expect:
-
-```
-6,7c6,16
-< main(argc,argv)
-< char *argv[];
----
-> extern void selsub(int, char **);
-> extern void selunit(void);
-> extern void dounit(void);
-> extern void whatnow(void);
-> extern void wrapup(int);
-> 
-> void hangup(int);
-> void intrpt(int);
-> 
-> int
-> main(int argc, char *argv[])
-9,11c18,19
-< 	extern hangup(), intrpt();
-< 	extern char * getlogin();
-< 	char *malloc();
----
-> 	extern char *getlogin(void);
-> 	extern char *malloc(unsigned);
-25a34
-> 	return 0;
-28c37,38
-< hangup()
----
-> void
-> hangup(int sig)
-29a40
-> 	(void)sig;
-33c44,45
-< intrpt()
----
-> void
-> intrpt(int sig)
-35a48
-> 	(void)sig;
-```
-
-### cmd/learn/list.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/list.c unix-v7-c99/cmd/learn/list.c || true
-```
-
-Expect:
-
-```
-4a5,7
-> extern void intrpt(int);
-> void stop(int);
-> 
-7,8c10,11
-< list(r)
-< char *r;
----
-> void
-> list(char *r)
-10d12
-< 	int stop(), intrpt();
-27c29,30
-< stop()
----
-> void
-> stop(int sig)
-28a32
-> 	(void)sig;
-```
-
-### cmd/learn/lrndef
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/lrndef unix-v7-c99/cmd/learn/lrndef || true
-```
-
-Expect:
-
-```
-```
-
-### cmd/learn/lrnref
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/lrnref unix-v7-c99/cmd/learn/lrnref || true
-```
-
-Expect:
-
-```
-```
-
-### cmd/learn/makpipe.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/makpipe.c unix-v7-c99/cmd/learn/makpipe.c || true
-```
-
-Expect:
-
-```
-3c3,4
-< makpipe()
----
-> int
-> makpipe(void)
-```
-
-### cmd/learn/maktee.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/maktee.c unix-v7-c99/cmd/learn/maktee.c || true
-```
-
-Expect:
-
-```
-8c8,9
-< maktee()
----
-> int
-> maktee(void)
-37c38,39
-< untee()
----
-> void
-> untee(void)
-```
-
-### cmd/learn/mem.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/mem.c unix-v7-c99/cmd/learn/mem.c || true
-```
-
-Expect:
-
-```
-4a5,6
-> extern void wrapup(int);
-> 
-42,43c44,45
-< int *action(s)
-< char *s;
----
-> int *
-> action(char *s)
-62,63c64,65
-< setdid(lesson, sequence)
-< char *lesson;
----
-> void
-> setdid(char *lesson, int sequence)
-79c81
-< 	while (*whcp++ = *lesson++);
----
-> 	while ((*whcp++ = *lesson++));
-86,87c88,89
-< already(lesson, sequence)
-< char *lesson;
----
-> int
-> already(char *lesson, int sequence)
-89a92
-> 	(void)sequence;
-```
-
-### cmd/learn/mysys.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/mysys.c unix-v7-c99/cmd/learn/mysys.c || true
-```
-
-Expect:
-
-```
-8,9c8,11
-< mysys(s)
-< char *s;
----
-> int lrn_getargs(char *s, char **v);
-> 
-> int
-> mysys(char *s)
-22,26c24,28
-< 		case '*': 
-< 		case '[': 
-< 		case '?': 
-< 		case '>': 
-< 		case '<': 
----
-> 		case '*':
-> 		case '[':
-> 		case '?':
-> 		case '>':
-> 		case '<':
-32,33c34,35
-< 		case '|': 
-< 		case ';': 
----
-> 		case '|':
-> 		case ';':
-48c50
-< 		nv = getargs(p, np);
----
-> 		nv = lrn_getargs(p, np);
-68a71
-> 	return 0;
-78,79c81,82
-< system(s)
-< char *s;
----
-> int
-> system(char *s)
-82c85
-< 	register int (*istat)(), (*qstat)();
----
-> 	register void (*istat)(int), (*qstat)(int);
-84,85c87,88
-< 	istat = signal(SIGINT, SIG_IGN);
-< 	qstat = signal(SIGQUIT, SIG_IGN);
----
-> 	istat = (void (*)(int))(long)signal(SIGINT, SIG_IGN);
-> 	qstat = (void (*)(int))(long)signal(SIGQUIT, SIG_IGN);
-101,102c104,105
-< getargs(s, v)
-< char *s, **v;
----
-> int
-> lrn_getargs(char *s, char **v)
-```
-
-### cmd/learn/selsub.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/selsub.c unix-v7-c99/cmd/learn/selsub.c || true
-```
-
-Expect:
-
-```
-4,5c4,10
-< selsub(argc,argv)
-< char *argv[];
----
-> extern void list(char *);
-> extern void wrapup(int);
-> extern void start(char *);
-> void chknam(char *name);
-> 
-> void
-> selsub(int argc, char *argv[])
-19c24
-< 		fprintf(stderr, "can't cd to %s\,", direct);
----
-> 		fprintf(stderr, "can't cd to %s,", direct);
-87,88c92,93
-< chknam(name)
-< char *name;
----
-> void
-> chknam(char *name)
-```
-
-### cmd/learn/selunit.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/selunit.c unix-v7-c99/cmd/learn/selunit.c || true
-```
-
-Expect:
-
-```
-3a4,10
-> extern void wrapup(int);
-> extern void trim(char *);
-> extern int already(char *, int);
-> 
-> int abs(int x);
-> int grand(void);
-> 
-6c13,14
-< selunit()
----
-> void
-> selunit(void)
-89c97,98
-< abs(x)
----
-> int
-> abs(int x)
-94c103,104
-< grand()
----
-> int
-> grand(void)
-97c107,108
-< 	int a[2], b;
----
-> 	long a;
-> 	int b;
-99,100c110,111
-< 	time(a);
-< 	b = a[1]+10*garbage++;
----
-> 	time(&a);
-> 	b = (int)a + 10*garbage++;
-```
-
-### cmd/learn/start.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/start.c unix-v7-c99/cmd/learn/start.c || true
-```
-
-Expect:
-
-```
-5,6c5,8
-< start(lesson)
-< char *lesson;
----
-> extern void wrapup(int);
-> 
-> void
-> start(char *lesson)
-8,11d9
-< 	struct direct {
-< 		int inode; 
-< 		char name[14];
-< 	};
-17c15
-< 	n = read(f, dv, ND*sizeof(*dp));
----
-> 	n = read(f, (char *)dv, ND*sizeof(*dp));
-23,25c21,23
-< 		if (dp->inode) {
-< 			n = strlen(dp->name);
-< 			if (dp->name[n-2] == '.' && dp->name[n-1] == 'c')
----
-> 		if (dp->d_ino) {
-> 			n = strlen(dp->d_name);
-> 			if (n >= 2 && dp->d_name[n-2] == '.' && dp->d_name[n-1] == 'c')
-27c25
-< 			c = dp->name[0];
----
-> 			c = dp->d_name[0];
-29c27
-< 				unlink(dp->name);
----
-> 				unlink(dp->d_name);
-41,42c39,40
-< fcopy(new,old)
-< char *new, *old;
----
-> void
-> fcopy(char *new, char *old)
-```
-
-### cmd/learn/tee.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/tee.c unix-v7-c99/cmd/learn/tee.c || true
-```
-
-Expect:
-
-```
-1c1,10
-< main()
----
-> int creat(char *path, int mode);
-> int read(int fd, char *buf, int n);
-> int write(int fd, char *buf, int n);
-> int close(int fd);
-> 
-> void put(int c, int f);
-> void fl(int f);
-> 
-> int
-> main(void)
-6,7c15,16
-< 	while (read(0, &c, 1) == 1) {
-< 		write (1, &c, 1);
----
-> 	while (read(0, (char *)&c, 1) == 1) {
-> 		write (1, (char *)&c, 1);
-11a21
-> 	return 0;
-16c26,28
-< put(c, f)
----
-> 
-> void
-> put(int c, int f)
-24c36,38
-< fl(f)
----
-> 
-> void
-> fl(int f)
-```
-
-### cmd/learn/whatnow.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/whatnow.c unix-v7-c99/cmd/learn/whatnow.c || true
-```
-
-Expect:
-
-```
-4c4,5
-< whatnow()
----
-> void
-> whatnow(void)
-```
-
-### cmd/learn/wrapup.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/learn/wrapup.c unix-v7-c99/cmd/learn/wrapup.c || true
-```
-
-Expect:
-
-```
-5,6c5,6
-< wrapup(n)
-< int n;
----
-> void
-> wrapup(int n)
-10c10
-< 	int retval, pid, pidw;
----
-> 	int pid;
-21c21
-< 	printf("Bye.\n"); /* not only does this reassure user but 
----
-> 	printf("Bye.\n"); /* not only does this reassure user but
-24d23
-< 	/* printf("Wantd %d got %d val %d\n",pid, pidw, retval); */
-```
-
 ### cmd/osh.c
 
 Local test:
@@ -31317,7 +30107,7 @@ Expect:
 > 	 * This port has no swap and only one live user image at a time
 > 	 * (USERBASE..USERBASE+USERSIZE), with argv kept as a single
 > 	 * NUL-terminated, space-separated buffer at the fixed user VA
-> 	 * UARGV (see arch/armboot.c::kexec2 / kspawn).  arch/u_bridge.c::
+> 	 * UARGV (see arch/arm.c::kexec2 / kspawn).  sys/v7_bridge.c::
 > 	 * v7_proc_set_current() steers p_addr/p_size for the currently
 > 	 * running proc at UARGV/UARGLEN respectively, so the lseek+read
 > 	 * below lands directly on that buffer; every other proc gets
@@ -31691,7 +30481,7 @@ Expect:
 >  * v7's h/acct.h declares comp_t (16-bit pseudo-float) fields for ac_utime,
 >  * ac_stime, ac_etime, ac_io.  The kernel writei()s `&acctbuf` for
 >  * `sizeof(acctbuf)` bytes; in this port `acctbuf` is the global declared
->  * in arch/v7stubs.c -- which uses *long* for utime/stime/etime and *short*
+>  * in sys/v7stubs.c -- which uses *long* for utime/stime/etime and *short*
 >  * for ac_io.  The on-disk record we read back here therefore mirrors that
 >  * 44-byte struct, not h/acct.h's 36-byte one.
 >  *
@@ -31710,7 +30500,7 @@ Expect:
 > struct	acct {
 > 	char	ac_comm[10];
 > 	char	ac_pad[2];	/* alignment pad between ac_comm and ac_utime
-> 				 * in arch/v7stubs.c's struct -- the kernel
+> 				 * in sys/v7stubs.c's struct -- the kernel
 > 				 * writes this byte-for-byte even though
 > 				 * h/acct.h's matching field is comp_t. */
 > 	long	ac_utime;

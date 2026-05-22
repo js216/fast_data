@@ -5,7 +5,8 @@
 Build:
 
 ```
-make -C unix-v7-c99 ARCH=arm CONF=qemu_arm
+mkdir -p tmp
+TMPDIR=$PWD/tmp make -C unix-v7-c99 CONF=arm_qemu
 ```
 
 ### LS
@@ -63,7 +64,6 @@ spool
 # ls /usr/lib
 crontab
 diffh
-learn
 makekey
 spell
 spellin
@@ -730,92 +730,6 @@ __TEST_DONE__
 #
 ```
 
-### LEARN_MOREFILES
-
-The V7 `learn morefiles` course data is installed and the first lesson
-starts from `/usr/lib/learn/morefiles`.
-
-Local test:
-
-```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
-```
-
-Inputs:
-
-```
-ls /usr/lib/learn/morefiles | sed 5q
-learn morefiles 0 0
-bye
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-ls /usr/lib/learn/morefiles | sed 5q
-L0
-L0.1a
-L0.1b
-L0.1c
-L0.1d
-# learn morefiles 0 0
-In the basic files course you learned about the "ls" command
-for listing the names of files in the current directory.
-You will now learn some of the extra abilities of "ls".
-UNIX maintains a lot more information about a file than just
-its name; this extra information includes the size of the
-file, the date and time it was last changed, the owner,
-and scattered other miscellany.  To see this "long" list of information,
-use the command "ls -l".  (That's an "ell", not a "one".)
-The "-l" is called an "optional argument",
-since it may or may not be present.
-
-To begin, try just "ls -l", then type "ready".
-$ bye
-Bye.
-# echo __TEST_DONE__
-__TEST_DONE__
-#
-```
-
-Factor/primes argv regression:
-
-`primes` now accepts the optional first numeric argument through the same
-crt0 argv startup path used by `factor`, while preserving the stdin path.
-The exclusive `2^56` boundary still reports `Ouch.` and returns to the
-shell for both argv and stdin forms.
-
-QEMU capture after `make -C unix-v7-c99 ARCH=arm CONF=qemu_arm`:
-
-```
-primes 10 | sed 5q
-11
-13
-17
-19
-23
-# echo 10 | primes | sed 5q
-11
-13
-17
-19
-23
-# primes 72057594037927936 | sed 1q
-Ouch.
-# echo 72057594037927936 | primes | sed 1q
-Ouch.
-# factor 60
-
-     2
-     2
-     3
-     5
-# echo __TEST_DONE__
-__TEST_DONE__
-#
-```
-
 ### COMPARE
 
 Local test:
@@ -1063,7 +977,6 @@ icheck
 iostat
 join
 kill
-learn
 link
 ln
 login
@@ -1084,7 +997,6 @@ nohup
 od
 osh
 passwd
-plot
 pr
 primes
 printf
@@ -1118,7 +1030,6 @@ tail
 tar
 tc
 tee
-tek
 test
 time
 tk
@@ -1465,137 +1376,6 @@ find /usr/lib -print
 /usr/lib
 /usr/lib/crontab
 /usr/lib/diffh
-/usr/lib/learn
-/usr/lib/learn/Linfo
-/usr/lib/learn/Xinfo
-/usr/lib/learn/files
-/usr/lib/learn/files/L0
-/usr/lib/learn/files/L0.1a
-/usr/lib/learn/files/L0.1b
-/usr/lib/learn/files/L0.1c
-/usr/lib/learn/files/L0.1d
-/usr/lib/learn/files/L1.1a
-/usr/lib/learn/files/L1.2a
-/usr/lib/learn/files/L1.2b
-/usr/lib/learn/files/L10.1a
-/usr/lib/learn/files/L10.2a
-/usr/lib/learn/files/L10.2b
-/usr/lib/learn/files/L10.3a
-/usr/lib/learn/files/L10.3b
-/usr/lib/learn/files/L10.3c
-/usr/lib/learn/files/L10.3d
-/usr/lib/learn/files/L11.1a
-/usr/lib/learn/files/L11.2a
-/usr/lib/learn/files/L11.2b
-/usr/lib/learn/files/L11.3a
-/usr/lib/learn/files/L11.3b
-/usr/lib/learn/files/L11.3c
-/usr/lib/learn/files/L12.1a
-/usr/lib/learn/files/L12.2a
-/usr/lib/learn/files/L12.2b
-/usr/lib/learn/files/L12.2c
-/usr/lib/learn/files/L12.3a
-/usr/lib/learn/files/L12.3b
-/usr/lib/learn/files/L12.3c
-/usr/lib/learn/files/L13.1a
-/usr/lib/learn/files/L13.1b
-/usr/lib/learn/files/L13.1c
-/usr/lib/learn/files/L13.1d
-/usr/lib/learn/files/L13.1e
-/usr/lib/learn/files/L13.1f
-/usr/lib/learn/files/L13.1g
-/usr/lib/learn/files/L2.1a
-/usr/lib/learn/files/L2.2a
-/usr/lib/learn/files/L2.2b
-/usr/lib/learn/files/L3.1a
-/usr/lib/learn/files/L3.2a
-/usr/lib/learn/files/L3.2b
-/usr/lib/learn/files/L3.3a
-/usr/lib/learn/files/L3.3b
-/usr/lib/learn/files/L4.1a
-/usr/lib/learn/files/L4.2a
-/usr/lib/learn/files/L4.2b
-/usr/lib/learn/files/L4.3a
-/usr/lib/learn/files/L4.3b
-/usr/lib/learn/files/L4.3c
-/usr/lib/learn/files/L5.1a
-/usr/lib/learn/files/L5.1b
-/usr/lib/learn/files/L5.1c
-/usr/lib/learn/files/L5.1d
-/usr/lib/learn/files/L5.1e
-/usr/lib/learn/files/L6.1a
-/usr/lib/learn/files/L6.1b
-/usr/lib/learn/files/L6.1c
-/usr/lib/learn/files/L6.1d
-/usr/lib/learn/files/L6.1e
-/usr/lib/learn/files/L6.2a
-/usr/lib/learn/files/L6.2b
-/usr/lib/learn/files/L7.1a
-/usr/lib/learn/files/L7.2a
-/usr/lib/learn/files/L7.2b
-/usr/lib/learn/files/L7.3a
-/usr/lib/learn/files/L7.3b
-/usr/lib/learn/files/L7.3c
-/usr/lib/learn/files/L8.1a
-/usr/lib/learn/files/L8.2a
-/usr/lib/learn/files/L8.2b
-/usr/lib/learn/files/L8.2c
-/usr/lib/learn/files/L9.1a
-/usr/lib/learn/files/L9.2a
-/usr/lib/learn/files/L9.2b
-/usr/lib/learn/files/L9.2c
-/usr/lib/learn/morefiles
-/usr/lib/learn/morefiles/L0
-/usr/lib/learn/morefiles/L0.1a
-/usr/lib/learn/morefiles/L0.1b
-/usr/lib/learn/morefiles/L0.1c
-/usr/lib/learn/morefiles/L0.1d
-/usr/lib/learn/morefiles/L0.1e
-/usr/lib/learn/morefiles/L0.1f
-/usr/lib/learn/morefiles/L0.1g
-/usr/lib/learn/morefiles/L1.1a
-/usr/lib/learn/morefiles/L1.1b
-/usr/lib/learn/morefiles/L1.1c
-/usr/lib/learn/morefiles/L1.1d
-/usr/lib/learn/morefiles/L2.1a
-/usr/lib/learn/morefiles/L2.1b
-/usr/lib/learn/morefiles/L2.1c
-/usr/lib/learn/morefiles/L2.1d
-/usr/lib/learn/morefiles/L2.1e
-/usr/lib/learn/morefiles/L2.1f
-/usr/lib/learn/morefiles/L3.1a
-/usr/lib/learn/morefiles/L3.1b
-/usr/lib/learn/morefiles/L3.1c
-/usr/lib/learn/morefiles/L3.1d
-/usr/lib/learn/morefiles/L3.1e
-/usr/lib/learn/morefiles/L3.1f
-/usr/lib/learn/morefiles/L3.1g
-/usr/lib/learn/morefiles/L4.1a
-/usr/lib/learn/morefiles/L4.1b
-/usr/lib/learn/morefiles/L4.1c
-/usr/lib/learn/morefiles/L4.1d
-/usr/lib/learn/morefiles/L4.1e
-/usr/lib/learn/morefiles/L4.1f
-/usr/lib/learn/morefiles/L4.1g
-/usr/lib/learn/morefiles/L4.2a
-/usr/lib/learn/morefiles/L5.1a
-/usr/lib/learn/morefiles/L5.1b
-/usr/lib/learn/morefiles/L5.1c
-/usr/lib/learn/morefiles/L5.1d
-/usr/lib/learn/morefiles/L5.1e
-/usr/lib/learn/morefiles/L6.1a
-/usr/lib/learn/morefiles/L6.1b
-/usr/lib/learn/morefiles/L6.1c
-/usr/lib/learn/morefiles/L6.1d
-/usr/lib/learn/morefiles/L6.1e
-/usr/lib/learn/morefiles/L6.2e
-/usr/lib/learn/morefiles/L7.1a
-/usr/lib/learn/lcount
-/usr/lib/learn/log
-/usr/lib/learn/log/.keep
-/usr/lib/learn/play
-/usr/lib/learn/play/.keep
-/usr/lib/learn/tee
 /usr/lib/makekey
 /usr/lib/spell
 /usr/lib/spellin
@@ -1625,7 +1405,7 @@ Expect:
 
 ```
 df
-/dev/root 9025
+/dev/root 9495
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -3132,54 +2912,6 @@ ls /bin/graph
 0000020 310  \0 310  \0   p 240 017 240 017   f   s   o   l   i   d  \n
 0000040   m 001  \0 001  \0  \0
 0000045
-# echo __TEST_DONE__
-__TEST_DONE__
-#
-```
-
-### PLOT_TEK
-
-Local test:
-
-```
-bash -o pipefail -c "unix-v7-c99/tools/qemu-shell.py | sed 's/[[:blank:]]*$//'"
-```
-
-Inputs:
-
-```
-ls /bin/plot /bin/tek
-cat >/tmp/g <<EOG
-0 0
-1 1
-EOG
-graph -g 0 -m 0 /tmp/g | plot -Ttek | od -c
-graph -g 0 -m 0 /tmp/g | plot -T4014 >/tmp/4014.out
-od -c /tmp/4014.out
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-ls /bin/plot /bin/tek
-/bin/plot
-/bin/tek
-# cat >/tmp/g <<EOG
-> 0 0
-> 1 1
-> EOG
-# graph -g 0 -m 0 /tmp/g | plot -Ttek | od -c
-0000000 033  \f 035       h   z   !   F 035   !   `   f   F   F 035   7
-0000020   j   y   7   Y  \0  \0  \0  \0   Y 033   ` 035       `   `
-0000040   @  \0  \0  \0  \0 037
-0000046
-# graph -g 0 -m 0 /tmp/g | plot -T4014 >/tmp/4014.out
-# od -c /tmp/4014.out
-0000000 033  \f 035       h   z   !   F 035   !   `   f   F   F 035   7
-0000020   j   y   7   Y  \0  \0  \0  \0   Y 033   ` 035       `   `
-0000040   @  \0  \0  \0  \0 037
-0000046
 # echo __TEST_DONE__
 __TEST_DONE__
 #

@@ -6,7 +6,7 @@
 .claude
 .codex
 doc
-logs
+tmp
 __pycache__
 
 .runpy_lease
