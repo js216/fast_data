@@ -213,10 +213,24 @@ mp135.evb:uart_open
 delay ms=300
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="two\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=15000
-mp135.evb:uart_write data="jump"
-delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=100
+mp135.evb:uart_write data="w"
+delay ms=100
+mp135.evb:uart_write data="o"
+delay ms=100
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Copying 1 blocks" timeout_ms=15000
+mp135.evb:uart_expect sentinel="DDR addr 0xC4000000" timeout_ms=15000
+mp135.evb:uart_expect sentinel="> " timeout_ms=5000
+mp135.evb:uart_write data="j"
+delay ms=100
+mp135.evb:uart_write data="u"
+delay ms=100
+mp135.evb:uart_write data="m"
+delay ms=100
+mp135.evb:uart_write data="p"
+delay ms=100
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
@@ -329,10 +343,24 @@ mp135.evb:uart_open
 delay ms=300
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="two\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=15000
-mp135.evb:uart_write data="jump"
-delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=100
+mp135.evb:uart_write data="w"
+delay ms=100
+mp135.evb:uart_write data="o"
+delay ms=100
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Copying 1 blocks" timeout_ms=15000
+mp135.evb:uart_expect sentinel="DDR addr 0xC4000000" timeout_ms=15000
+mp135.evb:uart_expect sentinel="> " timeout_ms=5000
+mp135.evb:uart_write data="j"
+delay ms=100
+mp135.evb:uart_write data="u"
+delay ms=100
+mp135.evb:uart_write data="m"
+delay ms=100
+mp135.evb:uart_write data="p"
+delay ms=100
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000

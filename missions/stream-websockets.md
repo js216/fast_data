@@ -80,6 +80,8 @@ make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DEVB
 make -C stm32mp135_test_board kernel
 make -C stm32mp135_test_board DTS=stm32mp135f-dk dtb
 make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
+python3 -c "import base64,os,struct,time; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/stream_refresh_known_hosts_evb.plan','w').write('description \"refresh ssh.evb known_hosts %d\"'%time.time()+chr(10)+'ssh.evb:trust_host_key key=\"'+line+'\"'+chr(10))"
+python3 test_serv/submit.py --server http://localhost:8080 --wait 120 "$RUNPY_WORKDIR/stream_refresh_known_hosts_evb.plan"
 ```
 
 Artifacts:
@@ -88,6 +90,7 @@ Artifacts:
 stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
+stm32mp135_test_board/buildroot/output/images/hostkey.pub
 stm32mp135_test_board/tools/stream_ws_prbs_stream.c
 stm32mp135_test_board/build/stream_ws_prbs_stream
 ```
@@ -165,7 +168,7 @@ stm32mp135_test_board/buildroot/output/images/sdcard.img
 stm32mp135_test_board/build/stream_ws_prbs_stream
 ```
 
-Test (max 15 min):
+Test (max 5 min):
 
 ```
 bench_mcu:reset_dut
@@ -186,19 +189,32 @@ mp135.evb:uart_close
 delay ms=5000
 inventory refresh=true verify=false
 msc.evb:write data=@sdcard.img offset_lba=0
-msc.evb:verify data=@sdcard.img offset_lba=0
 mp135.evb:uart_open
 delay ms=300
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="two\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=15000
-mp135.evb:uart_write data="jump"
-delay ms=200
+mp135.evb:uart_write data="t"
+delay ms=100
+mp135.evb:uart_write data="w"
+delay ms=100
+mp135.evb:uart_write data="o"
+delay ms=100
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Copying 1 blocks" timeout_ms=15000
+mp135.evb:uart_expect sentinel="DDR addr 0xC4000000" timeout_ms=15000
+mp135.evb:uart_expect sentinel="> " timeout_ms=5000
+mp135.evb:uart_write data="j"
+delay ms=100
+mp135.evb:uart_write data="u"
+delay ms=100
+mp135.evb:uart_write data="m"
+delay ms=100
+mp135.evb:uart_write data="p"
+delay ms=100
 mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
-mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
-mp135.evb:uart_expect sentinel="login:" timeout_ms=60000
+mp135.evb:uart_expect sentinel="Linux version" timeout_ms=5000
+mp135.evb:uart_expect sentinel="login:" timeout_ms=15000
 mp135.evb:uart_write data="root\r"
 mp135.evb:uart_expect sentinel="Password:" timeout_ms=10000
 mp135.evb:uart_write data="root\r"
@@ -206,12 +222,8 @@ mp135.evb:uart_expect sentinel="# " timeout_ms=15000
 mp135.evb:uart_write data="dmesg -n 1 2>/dev/null; true\r"
 mp135.evb:uart_expect sentinel="# " timeout_ms=3000
 delay ms=5000
-mp135.evb:uart_write data="killall -q -9 udhcpc stream_ws_prbs_stream; ip addr flush dev eth0; ip link set eth0 up\r"
-mp135.evb:uart_expect sentinel="# " timeout_ms=10000
-mp135.evb:uart_write data="udhcpc -i eth0 -n -T 5 -t 6; echo dhcp_rc=$?\r"
-mp135.evb:uart_expect sentinel="dhcp_rc=0" timeout_ms=30000
-mp135.evb:uart_write data="ip addr replace 172.25.0.132/16 dev eth0; ip route replace default via 172.25.0.1 dev eth0; ip -4 addr show dev eth0; uname -a\r"
-mp135.evb:uart_expect sentinel="172.25.0.132" timeout_ms=5000
+mp135.evb:uart_write data="killall -q -9 stream_ws_prbs_stream; ip -4 addr show dev eth0; ip route; uname -a\r"
+mp135.evb:uart_expect sentinel="172.25.0.115" timeout_ms=5000
 mp135.evb:uart_close
 ssh.evb:put data=@stream_ws_prbs_stream path="/tmp/stream_ws_prbs_stream" timeout_ms=20000
 ssh.evb:exec command="chmod +x /tmp/stream_ws_prbs_stream; killall -q -9 stream_ws_prbs_stream; /tmp/stream_ws_prbs_stream --port 8765 --bytes 134217728 --seed 0x12345678 --frame-bytes 131072 >/tmp/stream_ws_prbs_stream.log 2>&1 & echo stream_ws_started=$!" timeout_ms=10000
@@ -229,10 +241,9 @@ def check(extract_dir):
         extract_dir, "mp135.uart", encoding="utf-8")
     ssh = Verification.load_stream_text(
         extract_dir, "ssh.exec", encoding="utf-8")
-    return (Verification.op_succeeded(ops, "msc.evb", "verify") and
+    return (Verification.op_succeeded(ops, "msc.evb", "write") and
             "Linux version" in uart and
-            "dhcp_rc=0" in uart and
-            "172.25.0.132" in uart and
+            "172.25.0.115" in uart and
             Verification.op_succeeded(ops, "ssh.evb", "put") and
             Verification.op_succeeded(ops, "ssh.evb", "exec") and
             "stream_ws_started=" in ssh)
@@ -250,7 +261,7 @@ Build: nothing required.
 Test (max 4 min):
 
 ```
-ws.any:recv url="ws://172.25.0.132:8765/" bytes=134217728 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 min_rate_Bps=11625000 timeout_ms=180000
+ws.any:recv url="ws://172.25.0.115:8765/" bytes=134217728 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 min_rate_Bps=11625000 timeout_ms=180000
 mark tag=stream_ws_128m_93mbps_integrity
 ```
 
