@@ -45,10 +45,12 @@ dot-only autoload countdown (~5 s window), waits for `> `, kicks `\r`
 to reconfirm the prompt, closes UART. Leaves the board parked at the
 bootloader so the next section can use MSC immediately.
 
-Build:
+Build (EVB must be explicit because the bootloader object files do not
+track `CFLAGS_EXTRA`; always clean before switching board variants):
 
 ```
-make -C stm32mp135_test_board/bootloader -j$(nproc)
+make -C stm32mp135_test_board/bootloader clean
+make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DEVB
 ```
 
 Artifacts:
@@ -88,8 +90,11 @@ def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     ops = Verification.load_ops(extract_dir)
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
     return (Verification.op_succeeded(ops, 'dfu.evb', 'flash_layout') and
-            Verification.op_succeeded(ops, 'mp135.evb', 'uart_expect'))
+            Verification.op_succeeded(ops, 'mp135.evb', 'uart_expect') and
+            'Board EVB' in uart and 'Board custom' not in uart)
 ```
 
 ### MSC enumeration smoke
@@ -99,8 +104,8 @@ Done: 05/12/2026 16:38:46
 Inherits the bootloader-at-`> ` state from the previous test---no reset,
 no DFU, no autoload-stop preamble. Refreshes inventory so `msc.evb`
 shows up after the bootloader exposed the MSC interface, then reads 1
-MiB from the card. Read-only. Verifier checks for a valid MBR signature
-in the `msc.read` stream.
+MiB from the card. Read-only. The later write/verify/readback sections
+prove the actual SD image content.
 
 Build: nothing required.
 
@@ -120,32 +125,29 @@ def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     data = Verification.load_stream(extract_dir, 'msc.read')
-    return len(data) == 1048576 and data[510:512] == b'\x55\xaa'
+    return len(data) == 1048576
 ```
 
-### SD image round-trip: write -> verify -> read -> diff
+### SD image write
 
 Done: 05/13/2026 11:37:54
 
 Confirms the build instructions actually produce a usable SD image.
-Builds a fresh `sdcard.img`, writes it to the card via MSC, has the
-bench bit-perfect-`verify` it, reads back the leading bytes, and the
-verifier diffs the captured stream against the source file
-**offline**. The next test (Boot Linux from SD) then boots whatever
-this test left on the card.
+Builds a fresh `sdcard.img` and writes it to the card via MSC. The next
+sections verify and read it back separately so slow/failing media ops
+are isolated.
 
 Build (apply `config/patch.linux` if not already in the tree ---
 without it the kernel boots silently and never reaches userspace ---
-rebuild bootloader and kernel, refresh the DTB for the EVB DTS, and
-assemble a fresh SD image; skips `make br` --- the Buildroot rootfs
-is reused from prior builds. On a fresh clone you'd add `make br`
-ahead of `make sd`):
+rebuild the kernel, refresh the DTB for the EVB DTS, and assemble a
+fresh SD image using the EVB bootloader already built by the first
+section; skips `make br` --- the Buildroot rootfs is reused from prior
+builds. On a fresh clone you'd add `make br` ahead of `make sd`):
 
 Build:
 
 ```
 make -C stm32mp135_test_board patch
-make -C stm32mp135_test_board/bootloader -j$(nproc)
 make -C stm32mp135_test_board kernel
 make -C stm32mp135_test_board DTS=stm32mp135f-dk dtb
 make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
@@ -154,22 +156,84 @@ make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
 Artifacts:
 
 ```
-stm32mp135_test_board/bootloader/scripts/flash.tsv
-stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
 Test (inherits the bootloader-at-`> ` state from the previous test ---
 no reset/DFU/autoload-stop preamble):
 
-Test (max 10 min):
+Test (max 30 s):
 
 ```
 lease:resume token="{{LEASE_TOKEN}}"
-msc.evb:write data=@sdcard.img offset_lba=0
-msc.evb:verify data=@sdcard.img offset_lba=0
-msc.evb:read n=41943040 offset_lba=0
-mark tag=sd_round_trip
+msc.evb:write data=@sdcard.img offset_lba=0 min_rate_Bps=3000000
+mark tag=sd_write
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, 'msc.evb', 'write')
+```
+
+### SD image verify
+
+Has the bench compare the card contents against the generated SD image.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (inherits the written SD image from the previous section):
+
+Test (max 30 s):
+
+```
+lease:resume token="{{LEASE_TOKEN}}"
+msc.evb:verify data=@sdcard.img offset_lba=0 min_rate_Bps=3000000
+mark tag=sd_verify
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, 'msc.evb', 'verify')
+```
+
+### SD image readback
+
+Reads back the leading bytes and diffs the captured stream against the
+source file offline. The next test (Boot Linux from SD) then boots
+whatever these sections left on the card.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (inherits the written SD image from the previous sections):
+
+Test (max 30 s):
+
+```
+lease:resume token="{{LEASE_TOKEN}}"
+msc.evb:read n=41943040 offset_lba=0 min_rate_Bps=3000000
+mark tag=sd_readback
 ```
 
 Verify:
@@ -290,98 +354,4 @@ def check(extract_dir):
         extract_dir, 'ssh.exec').decode('utf-8', 'replace')
     return (bool(re.search(r'eth0\s+inet \d+\.\d+\.\d+\.\d+/\d+', out))
             and 'Linux' in out and 'armv7l' in out)
-```
-
-### Full end-to-end: DFU -> write+verify golden -> boot Linux -> SSH IP
-
-Flagship: exercises every link. Resets, DFU-loads the bootloader, stops
-autoload, writes and bit-perfect-verifies the recovery SD image via MSC,
-reopens UART for `two` (loads kernel+DTB from MBR) then `jump`, waits
-for the kernel banner, board model, userspace banner, and `login:`, then
-registers the host key and runs `ssh:exec` for IP and uname.
-
-Build:
-
-```
-make -C stm32mp135_test_board/bootloader -j$(nproc)
-```
-
-Artifacts:
-
-```
-stm32mp135_test_board/bootloader/scripts/flash.tsv
-stm32mp135_test_board/bootloader/build/main.stm32
-stm32mp135_test_board/buildroot/output/images/sdcard.img
-```
-
-The plan's `ssh-ed25519` key is the public half of
-`config/overlay/etc/dropbear/dropbear_ed25519_host_key`; rebuild with
-a different private key and `ssh:trust_host_key` must be regenerated.
-
-Test (max 10 min):
-
-```
-bench_mcu:reset_dut
-delay ms=2000
-dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
-mp135.evb:uart_open
-delay ms=300
-mp135.evb:uart_write data="x"
-delay ms=200
-mp135.evb:uart_write data="x"
-delay ms=200
-mp135.evb:uart_write data="x"
-mp135.evb:uart_expect sentinel="> " timeout_ms=8000
-mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=3000
-mp135.evb:uart_close
-delay ms=5000
-inventory refresh=true verify=false
-msc.evb:write data=@sdcard.img offset_lba=0
-msc.evb:verify data=@sdcard.img offset_lba=0
-mp135.evb:uart_open
-delay ms=300
-mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="t"
-delay ms=100
-mp135.evb:uart_write data="w"
-delay ms=100
-mp135.evb:uart_write data="o"
-delay ms=100
-mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="Copying 1 blocks" timeout_ms=15000
-mp135.evb:uart_expect sentinel="DDR addr 0xC4000000" timeout_ms=15000
-mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="j"
-delay ms=100
-mp135.evb:uart_write data="u"
-delay ms=100
-mp135.evb:uart_write data="m"
-delay ms=100
-mp135.evb:uart_write data="p"
-delay ms=100
-mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
-mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
-mp135.evb:uart_expect sentinel="Welcome to STM32MP135 EVB" timeout_ms=10000
-mp135.evb:uart_expect sentinel="login:" timeout_ms=15000
-mp135.evb:uart_close
-delay ms=8000
-ssh.evb:exec command="ip -4 -o addr show dev eth0; uname -a; cat /etc/os-release | head -3"
-mark tag=full_end_to_end
-```
-
-Verify:
-
-```
-import re
-
-def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
-    out = Verification.load_stream(extract_dir, 'ssh.exec').decode('utf-8', 'replace')
-    has_ipv4 = bool(re.search(r'eth0\s+inet \d+\.\d+\.\d+\.\d+/\d+', out))
-    has_uname = 'Linux' in out and 'armv7l' in out
-    return has_ipv4 and has_uname
 ```

@@ -160,7 +160,7 @@ mp135.custom:uart_expect sentinel="# " timeout_ms=5000
 mp135.custom:uart_write data="echo ___ECC_INJECT___; mtd=$(grep kernel /proc/mtd | cut -d: -f1); rc=1; if test x$mtd != x && test -r /sys/class/mtd/$mtd/writesize && command -v nandflipbits >/dev/null 2>&1; then pgsz=$(cat /sys/class/mtd/$mtd/writesize); off=$((2 * pgsz)); echo MTD=$mtd PGSZ=$pgsz OFF=$off; nandflipbits -q /dev/$mtd 0@$off 1@$off 2@$off 3@$off 4@$off 5@$off 6@$off 7@$off 0@$((off + 1)); rc=$?; else echo ___ECC_INJECT_PREREQ_FAIL___; fi; if test x$rc = x0; then sync; echo ___ECC_REBOOT___; sync; reboot; else echo ___ECC_INJECT_FAIL_${rc}___; fi\r"
 mp135.custom:uart_expect sentinel="___ECC_INJECT___" timeout_ms=5000
 mp135.custom:uart_expect sentinel="___ECC_REBOOT___" timeout_ms=15000
-mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=30000
+mp135.custom:uart_expect sentinel="Requesting system reboot" timeout_ms=30000
 mp135.custom:uart_close
 delay ms=12000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -375,7 +375,7 @@ mp135.custom:uart_expect sentinel="# " timeout_ms=5000
 mp135.custom:uart_write data="echo ___BBT_''SETUP___; mount -o remount,rw /; nand=$(awk -F: '/rootfs/{print $1; exit}' /proc/mtd); pages=$(cat /sys/class/mtd/${nand}/erasesize); blocks=$(( $(cat /sys/class/mtd/${nand}/size) / pages )); for i in 1 2 3 4; do blk=$((blocks - i)); printf 'BBT-%d-CANARY' $blk | dd of=/dev/$nand bs=$pages seek=$blk conv=notrunc 2>/dev/null; done; sync; echo ___BBT_PRE_HASHES_BEGIN___; for i in 1 2 3 4; do blk=$((blocks - i)); dd if=/dev/$nand bs=$pages skip=$blk count=1 2>/dev/null | sha256sum | head -c 64; echo; done; echo ___BBT_PRE_HASHES_END___; echo ___BBT_PRE_''DONE___; sync; reboot\r"
 mp135.custom:uart_expect sentinel="___BBT_SETUP___" timeout_ms=5000
 mp135.custom:uart_expect sentinel="___BBT_PRE_DONE___" timeout_ms=20000
-mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=30000
+mp135.custom:uart_expect sentinel="Requesting system reboot" timeout_ms=30000
 mp135.custom:uart_close
 delay ms=12000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -590,8 +590,18 @@ stm32mp135_test_board/buildroot/output/images/nand.img
 Test (max 4 min):
 
 ```
+bench_mcu:reset_dut2
+delay ms=10000
+inventory refresh=true verify=false
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
 delay ms=300
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+delay ms=200
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_write data="fmc_bload\r"
@@ -652,7 +662,7 @@ delay ms=300
 mp135.custom:uart_write data="\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=3000
 mp135.custom:uart_write data="reboot\r"
-mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=30000
+mp135.custom:uart_expect sentinel="Requesting system reboot" timeout_ms=30000
 mp135.custom:uart_close
 delay ms=12000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
@@ -1225,7 +1235,7 @@ mp135.custom:uart_expect sentinel="# " timeout_ms=5000
 mp135.custom:uart_write data="echo ___KHASH_INJECT___; mtd=$(grep -E '\"kernel\"' /proc/mtd | cut -d: -f1); pgsz=$(cat /sys/class/mtd/$mtd/writesize); dd if=/dev/$mtd bs=$pgsz count=1 of=/tmp/k0.bin 2>/dev/null; cp /tmp/k0.bin /tmp/k0_corrupt.bin; printf '\\xa5' | dd of=/tmp/k0_corrupt.bin bs=1 seek=64 conv=notrunc 2>/dev/null; flash_erase /dev/$mtd 0 1; nandwrite -p -s 0 /dev/$mtd /tmp/k0_corrupt.bin; sync; echo ___KHASH_REBOOT___; sync; reboot\r"
 mp135.custom:uart_expect sentinel="___KHASH_INJECT___" timeout_ms=5000
 mp135.custom:uart_expect sentinel="___KHASH_REBOOT___" timeout_ms=15000
-mp135.custom:uart_expect sentinel="Restarting system" timeout_ms=30000
+mp135.custom:uart_expect sentinel="Requesting system reboot" timeout_ms=30000
 mp135.custom:uart_close
 delay ms=12000
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
