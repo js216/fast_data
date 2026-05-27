@@ -30,7 +30,7 @@ Verify:
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    needed = {'mp135.evb', 'bench_mcu.0', 'ssh.target', 'lease._default'}
+    needed = {'mp135.evb', 'bench_mcu.0', 'ssh.evb', 'lease._default'}
     devs = Verification.load_devices(extract_dir)
     return needed.issubset({d['id'] for d in devs})
 ```
@@ -65,7 +65,7 @@ lease:claim devices="bench_mcu.0" duration_s=10
 bench_mcu:reset_dut
 lease:release
 delay ms=2000
-lease:claim devices="mp135.evb,ssh.target" duration_s=3600
+lease:claim devices="mp135.evb,ssh.evb" duration_s=3600
 dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.evb:uart_open
 delay ms=300
@@ -250,7 +250,7 @@ editing this mission.
 Build:
 
 ```
-python3 -c "import base64,os,struct; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); tok=os.environ['RUNPY_LEASE_TOKEN']; open(os.environ['RUNPY_WORKDIR']+'/refresh_known_hosts.plan','w').write('description \"refresh ssh.target known_hosts\"'+chr(10)+'lease:resume token=\"'+tok+'\"'+chr(10)+'ssh.target:trust_host_key key=\"'+line+'\"'+chr(10))"
+python3 -c "import base64,os,struct; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); tok=os.environ['RUNPY_LEASE_TOKEN']; open(os.environ['RUNPY_WORKDIR']+'/refresh_known_hosts.plan','w').write('description \"refresh ssh.evb known_hosts\"'+chr(10)+'lease:resume token=\"'+tok+'\"'+chr(10)+'ssh.evb:trust_host_key key=\"'+line+'\"'+chr(10))"
 python3 test_serv/submit.py --server http://localhost:8080 --wait 20 "$RUNPY_WORKDIR/refresh_known_hosts.plan"
 ```
 
@@ -259,7 +259,7 @@ Test (max 1 min):
 ```
 lease:resume token="{{LEASE_TOKEN}}"
 delay ms=8000
-ssh.target:exec command="ip -4 -o addr show dev eth0; uname -a"
+ssh.evb:exec command="ip -4 -o addr show dev eth0; uname -a"
 lease:release token="{{LEASE_TOKEN}}"
 mark tag=ssh_smoke
 ```
@@ -340,7 +340,7 @@ mp135.evb:uart_expect sentinel="Welcome to STM32MP135 EVB" timeout_ms=10000
 mp135.evb:uart_expect sentinel="login:" timeout_ms=15000
 mp135.evb:uart_close
 delay ms=8000
-ssh.target:exec command="ip -4 -o addr show dev eth0; uname -a; cat /etc/os-release | head -3"
+ssh.evb:exec command="ip -4 -o addr show dev eth0; uname -a; cat /etc/os-release | head -3"
 mark tag=full_end_to_end
 ```
 
