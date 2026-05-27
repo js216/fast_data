@@ -35,7 +35,7 @@ Verify:
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    needed = {'mp135.custom', 'bench_mcu.0', 'lease._default'}
+    needed = {'mp135.custom', 'bench_mcu.0'}
     devs = Verification.load_devices(extract_dir)
     return needed.issubset({d['id'] for d in devs})
 ```
@@ -83,8 +83,7 @@ def check(_extract_dir):
 Done: 05/13/2026 15:09:52
 
 Reset (D12 via `reset_dut2`), DFU-load the NAND bootloader, and stop
-autoboot before the bootloader can fall through to Linux. Keep the
-lease alive for the UART hold step.
+autoboot before the bootloader can fall through to Linux.
 
 Build:
 
@@ -137,10 +136,10 @@ def check(extract_dir):
 
 Done: 05/13/2026 15:09:57
 
-Claims a fresh lease, physically resets the board, reloads the NAND
-bootloader over DFU, and confirms UART can stop autoboot at `> `. This
-proves the test can reliably re-enter a known bootloader state instead
-of depending on stale UART state from the previous job.
+Physically resets the board, reloads the NAND bootloader over DFU, and
+confirms UART can stop autoboot at `> `. This proves the test can
+reliably re-enter a known bootloader state instead of depending on stale
+UART state from the previous job.
 
 Build: nothing required.
 
@@ -260,11 +259,9 @@ count because stale-tail coverage lives in the dedicated provisioning
 regression above. Before `fmc_load`, overwrite the leading DDR staging
 window with deterministic zeroes and verify the poison landed, so a
 no-op `fmc_load` cannot pass by reading back the original MSC write.
-The image build can outlive an in-memory bench lease if the poller
-restarts, so this step claims a fresh lease after the build and
-re-enters the bootloader state it needs. The 3 MB/s MSC write and read
-floors are hard requirements for NAND provisioning; sub-3 MB/s results
-are code failures.
+   This step re-enters the bootloader state it needs after the image
+   build. The 3 MB/s MSC write and read floors are hard requirements for
+   NAND provisioning; sub-3 MB/s results are code failures.
 
 Build:
 
@@ -408,9 +405,8 @@ def check(extract_dir):
 
 Done: 05/13/2026 16:12:28
 
-Claims a fresh bench lease and reloads the NAND bootloader so this
-check does not depend on a still-live cross-section lease token. It
-boots Linux from the already-provisioned NAND contents with
+Reloads the NAND bootloader so this check does not depend on stale
+cross-section state. It boots Linux from the already-provisioned NAND contents with
 `fmc_bload` + `jump`, then talks to Linux over the serial console. Logs
 in as `root`/`root`, prints
 `/proc/mtd`, `ubinfo -a`, `mtdinfo -a`, and a filtered `dmesg`.

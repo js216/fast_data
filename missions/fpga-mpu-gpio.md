@@ -13,20 +13,17 @@ JSON description of the wiring. It drives every command the FPGA and
 MPU firmwares accept, captures both UARTs, and prints the connections
 that were actually observed at run time.
 
-### Bench inventory + lease probe
+### Bench inventory probe
 
 Inventory the bench, confirm `fpga`, `mp135`, and `bench_mcu` plugins
-advertise the program/UART/reset/DFU ops the replay will need, then
-claim a no-toggle lease on the FPGA and MP135 to prove they can be
-held together without driving any DUT line.
+advertise the program/UART/reset/DFU ops the replay will need without
+driving any DUT line.
 
 Test (max 1 min):
 
 ```
-lease:claim devices="fpga.hx1k,mp135.evb" duration_s=30
 inventory
-mark tag=gpio_replay_bench_lease_probe
-lease:release
+mark tag=gpio_replay_bench_inventory_probe
 ```
 
 Verify:
@@ -52,9 +49,6 @@ def _advertised(ops, plugin):
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    manifest = Verification.load_manifest(extract_dir)
-    if not isinstance(manifest.get('lease_token'), str):
-        return False
     devices = json.loads(Path(extract_dir, 'bench.devices.json').read_text())
     ops_map = json.loads(Path(extract_dir, 'bench.ops.json').read_text())
     plugins = {d.get('plugin') for d in devices if isinstance(d, dict)}
@@ -68,10 +62,10 @@ def check(extract_dir):
 
 ### Program FPGA, open UART, query liveness
 
-Build `gpio.bin`, program the iCEstick under an FPGA-only lease, open
-the FT2232H UART, send `?` and check the `OK\r\n` reply, then close.
-This proves the FPGA-side replay consumer is reachable over the debug
-path before any MPU GPIO line is driven.
+Build `gpio.bin`, program the iCEstick, open the FT2232H UART, send
+`?` and check the `OK\r\n` reply, then close. This proves the
+FPGA-side replay consumer is reachable over the debug path before any
+MPU GPIO line is driven.
 
 Build:
 
@@ -88,7 +82,6 @@ fpga/build/gpio/gpio.bin
 Test (max 1 min):
 
 ```
-lease:claim devices="fpga.hx1k" duration_s=60
 fpga.hx1k:program bin=@gpio.bin
 fpga.hx1k:uart_open
 delay ms=400
@@ -96,7 +89,6 @@ fpga.hx1k:uart_write data="?"
 delay ms=200
 fpga.hx1k:uart_close
 mark tag=gpio_replay_fpga_uart_query
-lease:release
 ```
 
 Verify:
@@ -111,9 +103,9 @@ def check(extract_dir):
 
 ### Build + flash MP135 gpio_test, capture banner
 
-Build the `gpio_test` ELF, flash it over DFU, then under an MP135 lease
-open the UART and wait for the `gpio_test ready` banner emitted by
-`src/main.c`. This proves the MP135-side replay binary is alive.
+Build the `gpio_test` ELF, flash it over DFU, open the UART, and wait
+for the `gpio_test ready` banner emitted by `src/main.c`. This proves
+the MP135-side replay binary is alive.
 
 Build:
 
@@ -131,7 +123,6 @@ stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 Test (max 1 min):
 
 ```
-lease:claim devices="mp135.evb,bench_mcu.0" duration_s=120
 bench_mcu.0:reset_dut
 delay ms=2000
 dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
@@ -139,7 +130,6 @@ mp135.evb:uart_open
 mp135.evb:uart_expect sentinel="gpio_test ready" timeout_ms=8000
 mp135.evb:uart_close
 mark tag=gpio_replay_mp135_uart_banner
-lease:release
 ```
 
 Verify:
@@ -161,12 +151,10 @@ driven yet.
 Test (max 1 min):
 
 ```
-lease:claim devices="fpga.hx1k,mp135.evb,bench_mcu.0" duration_s=30
 bench_mcu.0:reset_dut
 inventory
 mark tag=gpio_physical_replay_setup_reset
 mark tag=gpio_physical_replay_setup_precondition
-lease:release
 ```
 
 Verify:
@@ -211,7 +199,6 @@ stm32mp135_test_board/baremetal/gpio_test/flash.tsv
 Test (max 1 min):
 
 ```
-lease:claim devices="fpga.hx1k,mp135.evb,bench_mcu.0" duration_s=600
 fpga.hx1k:program bin=@gpio.bin
 bench_mcu.0:reset_dut
 delay ms=2000
@@ -263,7 +250,6 @@ fpga.hx1k:uart_write data="E0000"
 mp135.evb:uart_close
 fpga.hx1k:uart_close
 mark tag=gpio_physical_connectivity_audit
-lease:release
 ```
 
 Verify:

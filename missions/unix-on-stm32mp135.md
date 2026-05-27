@@ -15,10 +15,8 @@ captured over UART4.
 
 Every EVB section is self-contained: reset -> DFU-flash bootloader ->
 hold at `> ` -> MSC-write a unix-flavoured SD image -> `two` ->
-`jump` -> capture UART. No test_serv leases, no inherited device
-state, no `{{LEASE_TOKEN}}` plumbing. Each section pays the full
-cold-boot cost, which keeps the sections independently runnable and
-reproducible.
+`jump` -> capture UART. Each section pays the full cold-boot cost,
+which keeps the sections independently runnable and reproducible.
 
 The EVB delivery path reuses the bootloader's existing `two` + `jump`
 flow that `ssh.md` already drives for Linux: `two` copies kernel and

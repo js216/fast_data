@@ -6,18 +6,6 @@ write+verify an SD image via MSC, boot Linux via UART, reach it over
 SSH. Plans escalate from a poller-alive probe to a full reset -> flash
 -> boot -> SSH round trip.
 
-Sections that need device state to survive across submissions claim
-a test_serv lease and pass the issued token to the next plan. The
-mission file spells the lifecycle out: the first lease-using section
-runs `lease:claim devices="..." duration_s=N`, every subsequent
-section starts with `lease:resume token="{{LEASE_TOKEN}}"`, and the
-last section before the flagship ends with `lease:release token=...`.
-The runner (`run.py`) substitutes `{{LEASE_TOKEN}}` from the prior
-section's `streams/lease.token.bin` and does no other lease plumbing.
-The flagship runs lease-less on purpose -- it proves the cold path
-(reset -> DFU -> write -> boot -> SSH) still works end-to-end without
-inheriting any state.
-
 ### Inventory smoke
 
 Confirms the poller is up and every configured device probes and
@@ -40,7 +28,7 @@ Verify:
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    needed = {'mp135.custom', 'bench_mcu.0', 'ssh.custom', 'lease._default'}
+    needed = {'mp135.custom', 'bench_mcu.0', 'ssh.custom'}
     devs = Verification.load_devices(extract_dir)
     return needed.issubset({d['id'] for d in devs})
 ```
@@ -53,17 +41,12 @@ dot-only autoload countdown (~5 s window), waits for `> `, kicks `\r`
 to reconfirm the prompt, closes UART. Leaves the board parked at the
 bootloader so the next section can use MSC immediately.
 
-Build (rebuild bootloader, then submit a side plan that briefly
-claims `bench_mcu.0` just to reset the DUT and immediately
-releases. Doing the reset in its own session keeps the main Test
-plan to a single `lease:claim`, so `manifest.json:lease_token`
-unambiguously records the long lease's token for `{{LEASE_TOKEN}}`
-substitution in later sections):
+Build (rebuild bootloader, then submit a side plan to reset the DUT):
 
 ```
 make -C stm32mp135_test_board/bootloader clean
 make -C stm32mp135_test_board/bootloader -j$(nproc)
-printf '%s\n' 'description "reset custom DUT"' 'lease:claim devices="bench_mcu.0" duration_s=10' 'bench_mcu:reset_dut2' 'lease:release' > "$RUNPY_WORKDIR/reset_dut.plan"
+printf '%s\n' 'description "reset custom DUT"' 'bench_mcu:reset_dut2' > "$RUNPY_WORKDIR/reset_dut.plan"
 python3 test_serv/submit.py --server http://localhost:8080 --wait 20 "$RUNPY_WORKDIR/reset_dut.plan"
 ```
 
@@ -78,7 +61,6 @@ Test (max 30 s):
 
 ```
 delay ms=2000
-lease:claim devices="mp135.custom,ssh.custom" duration_s=3600
 dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
 mp135.custom:uart_open
 delay ms=300
@@ -278,7 +260,6 @@ needs to be (re)built here):
 Test (max 1 min):
 
 ```
-lease:resume token="{{LEASE_TOKEN}}"
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -306,7 +287,6 @@ mp135.custom:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=15000
 mp135.custom:uart_close
-lease:release token="{{LEASE_TOKEN}}"
 mark tag=boot_linux
 ```
 
@@ -330,9 +310,7 @@ side plan, and runs `ssh:exec` for IP + uname. Quick check that the
 bench SSH path reaches the live system. Key rotations don't require
 editing this mission.
 
-Build (this section is lease-less, so the refresh plan does its own
-`ssh:trust_host_key` without resuming or claiming a lease --- mirrors
-the lease-less Test below):
+Build (the refresh plan registers the SSH host key directly):
 
 ```
 python3 -c "import base64,os,struct; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/refresh_known_hosts_custom.plan','w').write('description \"refresh ssh.custom known_hosts\"'+chr(10)+'ssh.custom:trust_host_key key=\"'+line+'\"'+chr(10))"
