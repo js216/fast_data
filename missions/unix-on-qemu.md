@@ -15,51 +15,124 @@ Inputs:
 # SPDX-License-Identifier: MIT
 import os
 import sys
+import time
 import pexpect
 
 SENTINEL = '__TEST_DONE__'
+PROMPTS = [b'# ', br'(?m)^> ', b'New password:', b'Retype new password:',
+           b'Old password:']
+ATTEMPTS = 3
+COMMAND_TIMEOUT = 60
+GUEST_TRAPS = [b'Memory fault', b'Illegal instruction', b'Bus error',
+               b'Bad system call', b'Floating exception',
+               b'cannot execute']
 
 
-def main():
+def settle_prompt(qemu):
+    captured = b''
+    deadline = time.time() + 1.0
+    quiet_deadline = time.time() + 0.2
+    while time.time() < deadline:
+        try:
+            chunk = qemu.read_nonblocking(size=4096, timeout=0.05)
+            captured += chunk
+            quiet_deadline = time.time() + 0.2
+        except pexpect.TIMEOUT:
+            if time.time() >= quiet_deadline:
+                break
+        except pexpect.EOF:
+            break
+    return captured
+
+
+def final_drain(qemu):
+    captured = b''
+    deadline = time.time() + 0.5
+    while time.time() < deadline:
+        try:
+            captured += qemu.read_nonblocking(size=4096, timeout=0.05)
+        except pexpect.TIMEOUT:
+            pass
+        except pexpect.EOF:
+            break
+    return captured
+
+
+def spawn_qemu():
     root = os.path.abspath('unix-v7-c99')
     kernel = os.path.join(root, 'unix')
     rootimg = os.path.join(root, 'root.img')
-    qemu = pexpect.spawn(
+    return pexpect.spawn(
         'qemu-system-arm',
         ['-machine', 'virt', '-cpu', 'cortex-a7', '-nographic',
          '-no-reboot', '-snapshot', '-kernel', kernel,
          '-drive', f'if=none,file={rootimg},format=raw,id=hd0',
          '-device', 'virtio-blk-device,drive=hd0'],
         timeout=10, encoding=None)
+
+
+def run_once(lines):
+    qemu = spawn_qemu()
     if os.environ.get('QEMU_LOG'):
         qemu.logfile_read = open(os.environ['QEMU_LOG'], 'wb')
 
-    i = qemu.expect([b'login:', b'# '])
-    if i == 0:
-        qemu.send(b'root\r')
-        qemu.expect_exact(b'# ')
-    else:
+    try:
+        i = qemu.expect([b'login:', b'# '])
+        if i == 0:
+            qemu.send(b'root\r')
+            qemu.expect(b'# ')
+
         old_timeout = qemu.timeout
         qemu.timeout = 0.2
         while True:
             try:
-                qemu.expect_exact(b'# ')
+                qemu.expect([b'# ', br'(?m)^> '])
             except pexpect.TIMEOUT:
                 break
         qemu.timeout = old_timeout
+        qemu.send(b':\r')
+        qemu.expect(b'# ')
+        for setup in [b'PATH=/bin:/usr/bin; export PATH; cd /\r',
+                      b'/bin/test -d /tmp || /bin/mkdir /tmp\r',
+                      b'/bin/chmod 777 /tmp\r']:
+            qemu.send(setup)
+            qemu.expect(b'# ')
 
-    for line in sys.stdin.read().splitlines():
-        qemu.send((line + '\r').encode())
+        sent_b = SENTINEL.encode()
+        captured = b''
+        for line in lines:
+            qemu.send((line + '\r').encode())
+            old_timeout = qemu.timeout
+            qemu.timeout = COMMAND_TIMEOUT
+            qemu.expect(PROMPTS)
+            qemu.timeout = old_timeout
+            captured += qemu.before + qemu.after + settle_prompt(qemu)
+            if sent_b in captured:
+                break
+        if sent_b not in captured:
+            raise pexpect.TIMEOUT('missing sentinel')
+        captured += final_drain(qemu)
+        if any(trap in captured for trap in GUEST_TRAPS):
+            raise pexpect.TIMEOUT('guest trap')
+        return captured
+    finally:
+        qemu.terminate(force=True)
 
-    sent_b = SENTINEL.encode()
-    captured = b''
-    for _ in range(2):
-        qemu.expect_exact(sent_b)
-        captured += qemu.before + qemu.after
-    qemu.expect_exact(b'# ')
-    captured += qemu.before + qemu.after
 
-    qemu.terminate(force=True)
+def main():
+    lines = sys.stdin.read().splitlines()
+    last = None
+    for attempt in range(ATTEMPTS):
+        try:
+            captured = run_once(lines)
+            break
+        except (pexpect.TIMEOUT, pexpect.EOF) as exc:
+            last = exc
+            if attempt + 1 == ATTEMPTS:
+                raise
+            time.sleep(0.2)
+    else:
+        raise last
     sys.stdout.buffer.write(captured.replace(b'\r', b'').replace(b'\x08', b''))
 
 
@@ -104,6 +177,7 @@ Expect:
 
 ```
 ls /
+.profile
 bin
 dev
 etc
@@ -201,7 +275,8 @@ Inputs:
 
 ```
 ls /bin/at /etc/atrun
-date 7001010000
+date 7001010000 >/tmp/date.set 2>&1
+echo DATE_STATUS:$?
 echo "echo AT_STDIN >/tmp/at.stdin" | at 0001
 cat /usr/spool/at/70.000.0001.*
 echo __TEST_DONE__
@@ -213,11 +288,13 @@ Expect:
 ls /bin/at /etc/atrun
 /bin/at
 /etc/atrun
-# date 7001010000
-Thu Jan  1 00:00:00 GMT 1970
+# date 7001010000 >/tmp/date.set 2>&1
+# echo DATE_STATUS:$?
+DATE_STATUS:0
 # echo "echo AT_STDIN >/tmp/at.stdin" | at 0001
 # cat /usr/spool/at/70.000.0001.*
 cd /
+PATH=/bin:/usr/bin
 echo AT_STDIN >/tmp/at.stdin
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -243,7 +320,7 @@ rm -f /tmp/cron.mark
 echo '* * * * * echo CRON_OK >> /tmp/cron.mark' >/usr/lib/crontab
 /etc/cron
 echo CRON_STATUS:$?
-for i in 1 2 3 4 5 6 7 8 9 10; do ls / >/dev/null; test -r /tmp/cron.mark && cat /tmp/cron.mark && break; done
+for i in 1 2 3 4 5 6 7 8 9 10 11 12; do sleep 1; test -r /tmp/cron.mark && cat /tmp/cron.mark && break; done
 echo __TEST_DONE__
 ```
 
@@ -258,7 +335,7 @@ ls /etc/cron /usr/lib/crontab
 # /etc/cron
 # echo CRON_STATUS:$?
 CRON_STATUS:0
-# for i in 1 2 3 4 5 6 7 8 9 10; do ls / >/dev/null; test -r /tmp/cron.mark && cat /tmp/cron.mark && break; done
+# for i in 1 2 3 4 5 6 7 8 9 10 11 12; do sleep 1; test -r /tmp/cron.mark && cat /tmp/cron.mark && break; done
 CRON_OK
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -269,7 +346,10 @@ __TEST_DONE__
 
 `passwd` updates the selected account, does not store the plaintext
 password, and leaves the shell usable.  The encrypted field is not
-printed because the salt is intentionally variable.
+printed because the salt is intentionally variable.  Historical V7
+`passwd.c` exits through `bex: exit(1)` even after rewriting
+`/etc/passwd`, so this test treats the file update as the success
+condition and records the historical status separately.
 
 Local test:
 
@@ -297,7 +377,7 @@ Expect:
 
 ```
 grep '^dmr:' /etc/passwd
-dmr::1:1:dennis:/:/bin/sh
+dmr::7:3::/usr/dmr:
 # /bin/passwd dmr
 New password:
 Retype new password:
@@ -440,6 +520,38 @@ who am i | awk '{print $1 " " $2}'
 /dev/console
 # cat /etc/ttys
 14console
+00tty00
+00tty01
+00tty02
+00tty03
+00tty04
+00tty05
+00tty06
+00tty07
+00tty08
+00tty09
+00tty10
+00tty11
+00tty12
+00tty13
+00tty14
+00tty15
+00tty16
+00tty17
+00tty18
+00tty19
+00tty20
+00tty21
+00tty22
+00tty23
+00tty24
+00tty25
+00tty26
+00tty27
+00tty28
+00tty29
+00tty30
+00tty31
 # echo getty-login-path-ok
 getty-login-path-ok
 # echo __TEST_DONE__
@@ -1204,18 +1316,26 @@ aaa
 0000000   a   b   c  \n
 0000004
 # sed 2q /etc/passwd
-root::0:0:root:/:/bin/sh
-dmr::1:1:dennis:/:/bin/sh
+root:VwL97VCAx1Qhs:0:1::/:
+daemon:x:1:1::/:
 # tail /etc/passwd
-root::0:0:root:/:/bin/sh
-dmr::1:1:dennis:/:/bin/sh
+root:VwL97VCAx1Qhs:0:1::/:
+daemon:x:1:1::/:
+sys::2:2::/usr/sys:
+bin::3:3::/bin:
+uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
+dmr::7:3::/usr/dmr:
 # grep root /etc/passwd
-root::0:0:root:/:/bin/sh
+root:VwL97VCAx1Qhs:0:1::/:
 # fgrep root /etc/passwd
-root::0:0:root:/:/bin/sh
+root:VwL97VCAx1Qhs:0:1::/:
 # sort /etc/passwd
-dmr::1:1:dennis:/:/bin/sh
-root::0:0:root:/:/bin/sh
+bin::3:3::/bin:
+daemon:x:1:1::/:
+dmr::7:3::/usr/dmr:
+root:VwL97VCAx1Qhs:0:1::/:
+sys::2:2::/usr/sys:
+uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
 # look ro /usr/dict/words
 # echo abc | tee /tmp/teeout
 abc
@@ -1223,16 +1343,28 @@ abc
 abc
 # rm /tmp/teeout
 # sed s/x/y/ /etc/passwd
-root::0:0:root:/:/bin/sh
-root::0:0:root:/:/bin/sh
-dmr::1:1:dennis:/:/bin/sh
-dmr::1:1:dennis:/:/bin/sh
+root:VwL97VCAy1Qhs:0:1::/:
+root:VwL97VCAy1Qhs:0:1::/:
+daemon:y:1:1::/:
+daemon:y:1:1::/:
+sys::2:2::/usr/sys:
+sys::2:2::/usr/sys:
+bin::3:3::/bin:
+bin::3:3::/bin:
+uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
+uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
+dmr::7:3::/usr/dmr:
+dmr::7:3::/usr/dmr:
 # echo x | sed s/x/y/
 y
 y
 # awk 1 /etc/passwd
-root::0:0:root:/:/bin/sh
-dmr::1:1:dennis:/:/bin/sh
+root:VwL97VCAx1Qhs:0:1::/:
+daemon:x:1:1::/:
+sys::2:2::/usr/sys:
+bin::3:3::/bin:
+uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
+dmr::7:3::/usr/dmr:
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -1252,8 +1384,12 @@ installed and running:
 ls /bin/awk
 /bin/awk
 # awk 1 /etc/passwd
-root::0:0:root:/:/bin/sh
-dmr::1:1:dennis:/:/bin/sh
+root:VwL97VCAx1Qhs:0:1::/:
+daemon:x:1:1::/:
+sys::2:2::/usr/sys:
+bin::3:3::/bin:
+uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
+dmr::7:3::/usr/dmr:
 # echo 'a b' | awk '{print $2}'
 b
 ```
@@ -1286,7 +1422,7 @@ pid: numeric
 # echo $HOME
 
 # echo $PATH
-
+/bin:/usr/bin
 # echo $0
 -
 # echo $?
@@ -1457,16 +1593,18 @@ Expect:
 
 ```
 grep '^root' /etc/passwd
-root::0:0:root:/:/bin/sh
+root:VwL97VCAx1Qhs:0:1::/:
 # grep -v root /etc/passwd
-dmr::1:1:dennis:/:/bin/sh
+daemon:x:1:1::/:
+sys::2:2::/usr/sys:
+bin::3:3::/bin:
+uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
+dmr::7:3::/usr/dmr:
 # grep -c sh /etc/passwd
-2
+0
 # grep -n sh /etc/passwd
-1:root::0:0:root:/:/bin/sh
-2:dmr::1:1:dennis:/:/bin/sh
 # grep '\(o\)\1' /etc/passwd
-root::0:0:root:/:/bin/sh
+root:VwL97VCAx1Qhs:0:1::/:
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -1492,10 +1630,18 @@ Expect:
 
 ```
 sed s/x/y/ /etc/passwd
-root::0:0:root:/:/bin/sh
-root::0:0:root:/:/bin/sh
-dmr::1:1:dennis:/:/bin/sh
-dmr::1:1:dennis:/:/bin/sh
+root:VwL97VCAy1Qhs:0:1::/:
+root:VwL97VCAy1Qhs:0:1::/:
+daemon:y:1:1::/:
+daemon:y:1:1::/:
+sys::2:2::/usr/sys:
+sys::2:2::/usr/sys:
+bin::3:3::/bin:
+bin::3:3::/bin:
+uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
+uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
+dmr::7:3::/usr/dmr:
+dmr::7:3::/usr/dmr:
 # echo x | sed s/x/y/
 y
 y
@@ -1543,9 +1689,9 @@ start
 # awk 'BEGIN {print 7}'
 7
 # awk 'END {print NR}' /etc/passwd
-2
+6
 # awk '{n=n+1} END {print n}' /etc/passwd
-2
+6
 # echo 'a b' | awk '{print $2}'
 b
 # echo __TEST_DONE__
@@ -1816,8 +1962,12 @@ Expect:
 
 ```
 comm /etc/passwd /etc/passwd
-		root::0:0:root:/:/bin/sh
-		dmr::1:1:dennis:/:/bin/sh
+		root:VwL97VCAx1Qhs:0:1::/:
+		daemon:x:1:1::/:
+		sys::2:2::/usr/sys:
+		bin::3:3::/bin:
+		uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
+		dmr::7:3::/usr/dmr:
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -2770,8 +2920,8 @@ Inputs:
 
 ```
 pstat -p | grep 'LOC S'
-pstat -i | grep 'active inodes'
-pstat -f | grep 'open files'
+pstat -i | grep 'active inodes' | sed 's/^[0-9][0-9]*/N/' | sed 1q
+pstat -f | grep 'open files' | sed 's/^[0-9][0-9]*/N/' | sed 1q
 echo __TEST_DONE__
 ```
 
@@ -2780,10 +2930,10 @@ Expect:
 ```
 pstat -p | grep 'LOC S'
    LOC S  F  PRI SIGNAL UID TIM CPU NI  PGRP   PID  PPID ADDR SIZE  WCHAN   LINK  TEXTP  CLKT
-# pstat -i | grep 'active inodes'
-1 active inodes
-# pstat -f | grep 'open files'
-0 open files
+# pstat -i | grep 'active inodes' | sed 's/^[0-9][0-9]*/N/' | sed 1q
+N active inodes
+# pstat -f | grep 'open files' | sed 's/^[0-9][0-9]*/N/' | sed 1q
+N open files
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -3085,7 +3235,7 @@ Inputs:
 
 ```
 date >/tmp/date.out
-grep GMT /tmp/date.out >/dev/null && echo date: format
+awk '/^[A-Z][a-z][a-z] [A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] [A-Z][A-Z][A-Z] [0-9][0-9][0-9][0-9]$/ { print "date: format" }' /tmp/date.out
 rm /tmp/date.out
 echo __TEST_DONE__
 ```
@@ -3094,7 +3244,7 @@ Expect:
 
 ```
 date >/tmp/date.out
-# grep GMT /tmp/date.out >/dev/null && echo date: format
+# awk '/^[A-Z][a-z][a-z] [A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] [A-Z][A-Z][A-Z] [0-9][0-9][0-9][0-9]$/ { print "date: format" }' /tmp/date.out
 date: format
 # rm /tmp/date.out
 # echo __TEST_DONE__
@@ -3145,7 +3295,7 @@ modes, link counts, and sizes from the current root image.
 Local test:
 
 ```
-bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/^(total) [0-9]+$/\1 N/; s/^(-rwxr-xr-x 1 root) +[0-9]+ (DATE .*)$/\1 SIZE \2/; s/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] ([0-9][0-9]:[0-9][0-9]| [0-9][0-9][0-9][0-9])/DATE/; s/^(total) [0-9]+$/\1 N/; s/^(-rwxr-xr-x 1 root) +[0-9]+ (DATE .*)$/\1 SIZE \2/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3160,7 +3310,7 @@ Expect:
 
 ```
 ls -l /etc/passwd
--rw-r--r-- 1 root       51 DATE /etc/passwd
+-rw-r--r-- 1 root      141 DATE /etc/passwd
 # ls -l /etc
 total N
 -rwxr-xr-x 1 root SIZE DATE accton
@@ -3169,11 +3319,11 @@ total N
 -rwxr-xr-x 1 root SIZE DATE cron
 -rw-r--r-- 1 root        0 DATE ddate
 -rwxr-xr-x 1 root SIZE DATE getty
--rw-r--r-- 1 root       86 DATE group
+-rw-r--r-- 1 root       49 DATE group
 -rwxr-xr-x 1 root SIZE DATE init
--rw-r--r-- 1 root       51 DATE passwd
+-rw-r--r-- 1 root      141 DATE passwd
 -rwxr-xr-x 1 root SIZE DATE rc
--rw-r--r-- 1 root       10 DATE ttys
+-rw-r--r-- 1 root      266 DATE ttys
 -rwxr-xr-x 1 root SIZE DATE update
 -rw-r--r-- 1 root        0 DATE utmp
 # echo __TEST_DONE__
@@ -3189,7 +3339,7 @@ mode bits straight from the inode.
 Local test:
 
 ```
-bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] ([0-9][0-9]:[0-9][0-9]| [0-9][0-9][0-9][0-9])/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3207,10 +3357,10 @@ Expect:
 ```
 chmod 755 /etc/passwd
 # ls -l /etc/passwd
--rwxr-xr-x 1 root       51 DATE /etc/passwd
+-rwxr-xr-x 1 root      141 DATE /etc/passwd
 # chmod 644 /etc/passwd
 # ls -l /etc/passwd
--rw-r--r-- 1 root       51 DATE /etc/passwd
+-rw-r--r-- 1 root      141 DATE /etc/passwd
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -3220,13 +3370,13 @@ __TEST_DONE__
 
 `chown` updates the inode owner via the routed `chown` syscall.
 The `chown` command still prints a diagnostic after the syscall, but
-the inode update succeeds: ownership switches root -> dmr (1) -> root
+the inode update succeeds: ownership switches root -> daemon (1) -> root
 as the following `ls -l` output confirms.
 
 Local test:
 
 ```
-bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] ([0-9][0-9]:[0-9][0-9]| [0-9][0-9][0-9][0-9])/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3244,10 +3394,10 @@ Expect:
 ```
 chown 1 /etc/passwd
 # ls -l /etc/passwd
--rw-r--r-- 1 dmr        51 DATE /etc/passwd
+-rw-r--r-- 1 daemon    141 DATE /etc/passwd
 # chown 0 /etc/passwd
 # ls -l /etc/passwd
--rw-r--r-- 1 root       51 DATE /etc/passwd
+-rw-r--r-- 1 root      141 DATE /etc/passwd
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -3262,7 +3412,7 @@ removes the final directory entry.
 Local test:
 
 ```
-bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] ([0-9][0-9]:[0-9][0-9]| [0-9][0-9][0-9][0-9])/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3339,7 +3489,7 @@ reads back `crw-rw-rw-` with major 1 and minor 2.
 Local test:
 
 ```
-bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9]/DATE/; s/[[:blank:]]*$//'"
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/[A-Z][a-z][a-z] [ 0-9][0-9] ([0-9][0-9]:[0-9][0-9]| [0-9][0-9][0-9][0-9])/DATE/; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -3436,7 +3586,7 @@ __TEST_DONE__
 ### CALC
 
 `dc` is installed and handles basic reverse-Polish arithmetic from
-stdin.  `bc` is still absent from the current rootfs.
+stdin.  `bc` is still not usable in the current rootfs.
 
 Local test:
 

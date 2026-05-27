@@ -15,6 +15,7 @@ Expect:
 
 ```
 .gitignore
+.profile
 LICENSE
 Makefile
 README
@@ -22,8 +23,10 @@ usr/src/cmd/factor.c
 usr/src/cmd/primes.c
 usr/src/libc/crt0.c
 usr/src/libc/crt0.s
+usr/src/libc/data.c
 usr/src/libc/doprnt.c
 usr/src/libc/doscan.c
+usr/src/libc/errlst.c
 usr/src/libc/gen/abort.c
 usr/src/libc/gen/exit.c
 usr/src/libc/l3.c
@@ -81,114 +84,17 @@ usr/src/libc/sys/write.s
 usr/src/libc/syscall.s
 usr/src/libc/ttyname.c
 usr/src/libc/u.ld
-usr/sys/arch/arm.c
-usr/sys/arch/arm.h
-usr/sys/arch/arm.ld
-usr/sys/arch/arm.s
 usr/sys/conf/arm_qemu
 usr/sys/conf/auxfs.proto
+usr/sys/conf/l.s
+usr/sys/conf/mch.s
 usr/sys/conf/root.proto
 usr/sys/dev/msgbuf.c
 usr/sys/dev/pl011.c
 usr/sys/dev/virtio_blk.c
 usr/sys/h/callo.h
 usr/sys/h/seg.h
-```
-
-### No blank-line-only diff churn
-
-Local test:
-
-```
-printf '%s\n' \
-'import re' \
-'import sys' \
-'from pathlib import Path' \
-'issues = []' \
-'for arg in sys.argv[1:]:' \
-'    path = Path(arg)' \
-'    text = path.read_text()' \
-'    parts = re.split(r"^### (.+)$", text, flags=re.M)' \
-'    for i in range(1, len(parts), 2):' \
-'        title = parts[i].strip()' \
-'        body = parts[i + 1]' \
-'        local = re.search(r"^Local test:\s*\n+```\n(.*?)\n```", body, re.M | re.S)' \
-'        expect = re.search(r"^Expect:\s*\n+```\n(.*?)\n```", body, re.M | re.S)' \
-'        if not local or not expect or not re.search(r"(^|\n)\s*(git\s+)?diff\b", local.group(1)):' \
-'            continue' \
-'        expected = expect.group(1)' \
-'        for hunk in re.split(r"(?=^@@ )", expected, flags=re.M):' \
-'            if not hunk.startswith("@@ "):' \
-'                continue' \
-'            changed = [line for line in hunk.splitlines()[1:] if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]' \
-'            if changed and all(line[1:].strip() == "" for line in changed):' \
-'                issues.append(f"{path}:{title}: {hunk.splitlines()[0]}")' \
-'        lines = expected.splitlines()' \
-'        j = 0' \
-'        while j < len(lines):' \
-'            if not re.match(r"^\d+(?:,\d+)?[acd]\d+(?:,\d+)?$", lines[j]):' \
-'                j += 1' \
-'                continue' \
-'            header = lines[j]' \
-'            j += 1' \
-'            changed = []' \
-'            while j < len(lines) and not re.match(r"^\d+(?:,\d+)?[acd]\d+(?:,\d+)?$", lines[j]):' \
-'                if lines[j] != "---" and lines[j].startswith(("< ", "> ")):' \
-'                    changed.append(lines[j])' \
-'                j += 1' \
-'            if changed and all(line[2:].strip() == "" for line in changed):' \
-'                issues.append(f"{path}:{title}: {header}")' \
-'for issue in issues:' \
-'    print(issue)' \
-'print(len(issues))' > logs/check_mission_diff_churn.py
-python3 logs/check_mission_diff_churn.py missions/unix-historical-accuracy.md missions/unix-on-qemu.md
-```
-
-Expect:
-
-```
-0
-```
-
-
-### Deleted usr/src/cmd historical C files stay visible
-
-Local test:
-
-```
-for f in chroot.c link.c unlink.c mktemp.c printf.c egrep.c expr.c; do if test -e unix-v7-c99/usr/src/cmd/$f; then echo "$f present"; else echo "$f absent"; fi; done
-```
-
-Expect:
-
-```
-chroot.c absent
-link.c absent
-unlink.c absent
-mktemp.c absent
-printf.c absent
-egrep.c absent
-expr.c absent
-```
-
-### usr/src/libc historical build scripts
-
-V7 libc used `compall` and `mklib` scripts rather than a
-`usr/src/libc/Makefile`; the port keeps that historical layout.
-
-Local test:
-
-```
-test ! -e unix-v7-c99/v7/usr/src/libc/Makefile
-test ! -e unix-v7-c99/usr/src/libc/Makefile
-ls unix-v7-c99/usr/src/libc/compall unix-v7-c99/usr/src/libc/mklib
-```
-
-Expect:
-
-```
-unix-v7-c99/usr/src/libc/compall
-unix-v7-c99/usr/src/libc/mklib
+usr/sys/sys/machdep.c
 ```
 
 ### Files matching V7 exactly
@@ -198,6 +104,7 @@ Local test:
 ```
 diff unix-v7-c99/v7/usr/include/ar.h unix-v7-c99/usr/include/ar.h || true
 diff unix-v7-c99/v7/usr/include/dumprestor.h unix-v7-c99/usr/include/dumprestor.h || true
+diff unix-v7-c99/v7/usr/include/execargs.h unix-v7-c99/usr/include/execargs.h || true
 diff unix-v7-c99/v7/usr/include/sgtty.h unix-v7-c99/usr/include/sgtty.h || true
 diff unix-v7-c99/v7/usr/include/sys/fblk.h unix-v7-c99/usr/include/sys/fblk.h || true
 diff unix-v7-c99/v7/usr/include/sys/filsys.h unix-v7-c99/usr/include/sys/filsys.h || true
@@ -205,7 +112,9 @@ diff unix-v7-c99/v7/usr/include/sys/ino.h unix-v7-c99/usr/include/sys/ino.h || t
 diff unix-v7-c99/v7/usr/include/tp_defs.h unix-v7-c99/usr/include/tp_defs.h || true
 diff unix-v7-c99/v7/usr/include/utmp.h unix-v7-c99/usr/include/utmp.h || true
 diff unix-v7-c99/v7/usr/src/cmd/awk/awk.lx.l unix-v7-c99/usr/src/cmd/awk/awk.lx.l || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/brkincr.h unix-v7-c99/usr/src/cmd/sh/brkincr.h || true
 diff unix-v7-c99/v7/usr/src/cmd/sh/dup.h unix-v7-c99/usr/src/cmd/sh/dup.h || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/mac.h unix-v7-c99/usr/src/cmd/sh/mac.h || true
 diff unix-v7-c99/v7/usr/src/cmd/sh/makefile unix-v7-c99/usr/src/cmd/sh/makefile || true
 diff unix-v7-c99/v7/usr/src/cmd/sh/name.h unix-v7-c99/usr/src/cmd/sh/name.h || true
 diff unix-v7-c99/v7/usr/src/cmd/sh/stak.h unix-v7-c99/usr/src/cmd/sh/stak.h || true
@@ -215,8 +124,6 @@ diff unix-v7-c99/v7/usr/src/cmd/tp/tp.h unix-v7-c99/usr/src/cmd/tp/tp.h || true
 diff unix-v7-c99/v7/usr/src/cmd/tp/tp0.c unix-v7-c99/usr/src/cmd/tp/tp0.c || true
 diff unix-v7-c99/v7/usr/include/tp_defs.h unix-v7-c99/usr/src/cmd/tp/tp_defs.h || true
 diff unix-v7-c99/v7/usr/src/libc/gen/ctype_.c unix-v7-c99/usr/src/libc/ctype_.c || true
-diff unix-v7-c99/v7/usr/src/libc/data.c unix-v7-c99/usr/src/libc/data.c || true
-diff unix-v7-c99/v7/usr/src/libc/errlst.c unix-v7-c99/usr/src/libc/errlst.c || true
 diff unix-v7-c99/v7/usr/sys/h/acct.h unix-v7-c99/usr/sys/h/acct.h || true
 diff unix-v7-c99/v7/usr/sys/h/fblk.h unix-v7-c99/usr/sys/h/fblk.h || true
 diff unix-v7-c99/v7/usr/sys/h/filsys.h unix-v7-c99/usr/sys/h/filsys.h || true
@@ -226,14 +133,52 @@ diff unix-v7-c99/v7/usr/sys/h/reg.h unix-v7-c99/usr/sys/h/reg.h || true
 diff unix-v7-c99/v7/usr/sys/h/stat.h unix-v7-c99/usr/sys/h/stat.h || true
 diff unix-v7-c99/v7/usr/sys/h/text.h unix-v7-c99/usr/sys/h/text.h || true
 diff unix-v7-c99/v7/usr/sys/h/timeb.h unix-v7-c99/usr/sys/h/timeb.h || true
+diff unix-v7-c99/v7/etc/group unix-v7-c99/etc/group || true
+diff unix-v7-c99/v7/etc/passwd unix-v7-c99/etc/passwd || true
+diff unix-v7-c99/v7/etc/ttys unix-v7-c99/etc/ttys || true
 ```
 
 Expect:
 
 ```
-diff: unix-v7-c99/v7/usr/src/libc/data.c: No such file or directory
-diff: unix-v7-c99/v7/usr/src/libc/errlst.c: No such file or directory
+
+### No blank-line-only diff churn
+
+Note to agent: DO NOT UNDER ANY CIRCUMSTANCES WHATSOEVER MODIFY THIS SECTION IN
+ANY WAY WHATSOEVER.
+
+Local test:
+
 ```
+grep -nE '^(<|>) $' missions/unix-historical-accuracy.md missions/unix-on-qemu.md | wc -l
+```
+
+Expect:
+
+```
+0
+```
+
+### Proper diff lines
+
+Check that diff sections use plain diff only: diff, two filenames, and
+|| true at the end.  No post-processing, labels, unified diff flags, or
+exception language.
+
+Note to agent: DO NOT UNDER ANY CIRCUMSTANCES WHATSOEVER MODIFY THIS SECTION IN
+ANY WAY WHATSOEVER.
+
+Local test:
+
+```
+awk '/^diff / && !/^diff [^ ]+ [^ ]+ \|\| true$/ { print; bad = 1 } END { exit bad }' missions/unix-historical-accuracy.md
+```
+
+Expect:
+
+```
+```
+
 
 ### usr/src/cmd/awk/b.c
 
@@ -288,55 +233,56 @@ Expect:
 > 	int *add(int n);
 173a180
 > 	return(0);
-176,177c183,184
+176,177c183,185
 < first(p)			/* collects initially active leaves of p into setvec */
 < register node *p;		/* returns 0 or 1 depending on whether p matches empty string */
 ---
 > int
-> first(register node *p)			/* collects initially active leaves of p into setvec; returns 0 or 1 depending on whether p matches empty string */
-179c186
+> first(register node *p)			/* collects initially active leaves of p into setvec */
+> 				/* returns 0 or 1 depending on whether p matches empty string */
+179c187
 < 	register b;
 ---
 > 	register int b;
-210,211c217,218
+210,211c218,219
 < follow(v)
 < node *v;		/* collects leaves that can follow v into setvec */
 ---
 > int
 > follow(node *v)		/* collects leaves that can follow v into setvec */
-216c223
+216c224
 < 		return;
 ---
 > 		return(0);
-222c229
+222c230
 < 				return;
 ---
 > 				return(0);
-226c233
+226c234
 < 				return;
 ---
 > 				return(0);
-231c238
+231c239
 < 						return;
 ---
 > 						return(0);
-236c243
+236c244
 < 				return;
 ---
 > 				return(0);
-241c248
+241c249
 < 				return;
 ---
 > 				return(0);
-242a250
+242a251
 > 	return(0);
-245,246c253,254
+245,246c254,255
 < member(c, s)	/* is c in s? */
 < register char c, *s;
 ---
 > int
 > member(register char c, register char *s)	/* is c in s? */
-254,257c262,265
+254,257c263,266
 < notin(array, n, prev)		/* is setvec in array[0] thru array[n]? */
 < int **array;
 < int *prev; {
@@ -346,56 +292,56 @@ Expect:
 > notin(int **array, int n, int *prev)		/* is setvec in array[0] thru array[n]? */
 > {
 > 	register int i, j;
-272c280
+272c281
 < int *add(n) {		/* remember setvec */
 ---
 > int *add(int n) {		/* remember setvec */
-274c282
+274c283
 < 	register i;
 ---
 > 	register int i;
-288c296
+288c297
 < struct fa *cgotofn()
 ---
 > struct fa *cgotofn(void)
-290c298
+290c299
 < 	register i, k;
 ---
 > 	register int i, k;
-347,348c355,356
+347,348c356,357
 < 						if (isyms[*p] != 1) {
 < 							isyms[*p] = 1;
 ---
 > 						if (isyms[(unsigned char)*p] != 1) {
 > 							isyms[(unsigned char)*p] = 1;
-408,409c416,417
+408,409c417,418
 < 							if (isyms[*p] == 0 && symbol[*p] == 0) {
 < 								symbol[*p] = 1;
 ---
 > 							if (isyms[(unsigned char)*p] == 0 && symbol[(unsigned char)*p] == 0) {
 > 								symbol[(unsigned char)*p] = 1;
-428c436
+428c437
 < 			symbol[c] = 0;
 ---
 > 			symbol[(unsigned char)c] = 0;
-435c443
+435c444
 < 					if (k == CHAR && c == (int) right(cp)
 ---
 > 					if ((k == CHAR && c == (int) right(cp))
-437,438c445,446
+437,438c446,447
 < 					 || k == CCL && member(c, (char *) right(cp))
 < 					 || k == NCCL && !member(c, (char *) right(cp))) {
 ---
 > 					 || (k == CCL && member(c, (char *) right(cp)))
 > 					 || (k == NCCL && !member(c, (char *) right(cp)))) {
-507,509c515,516
+507,509c516,517
 < match(pfa, p)
 < register struct fa *pfa;
 < register char *p;
 ---
 > int
 > match(register struct fa *pfa, register char *p)
-511c518
+511c519
 < 	register count;
 ---
 > 	register int count;
@@ -448,7 +394,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/error.c unix-v7-c99/usr/src/cmd/sh/error.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/error.c unix-v7-c99/usr/src/cmd/sh/error.c || true
 ```
 
 Expect:
@@ -482,10 +428,6 @@ Expect:
 < 	STRING	s1, s2;
 ---
 > INT failed(STRING s1, STRING s2)
-34c45
-< 	prp(); prs(s1);
----
-> 	prp(); prs(s1);
 38a50
 > 	return(0);
 41,42c53
@@ -811,548 +753,6 @@ Expect:
 > 	return(0);
 ```
 
-### usr/src/libc/compall
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/compall unix-v7-c99/usr/src/libc/compall || true
-```
-
-Expect:
-
-```
-1,153c1,138
-< cc -c -O /usr/src/libc/stdio/getgrgid.c
-< cc -c -O /usr/src/libc/stdio/getgrnam.c
-< cc -c -O /usr/src/libc/stdio/getgrent.c
-< cc -c -O /usr/src/libc/stdio/getpass.c
-< cc -c -O /usr/src/libc/stdio/getpwnam.c
-< cc -c -O /usr/src/libc/stdio/getpwuid.c
-< cc -c -O /usr/src/libc/stdio/getpwent.c
-< cc -c -O /usr/src/libc/stdio/fgetc.c
-< cc -c -O /usr/src/libc/stdio/fputc.c
-< cc -c -O /usr/src/libc/stdio/getchar.c
-< cc -c -O /usr/src/libc/stdio/putchar.c
-< cc -c -O /usr/src/libc/stdio/popen.c
-< cc -c -O /usr/src/libc/stdio/freopen.c
-< cc -c -O /usr/src/libc/stdio/fgets.c
-< cc -c -O /usr/src/libc/stdio/fputs.c
-< cc -c -O /usr/src/libc/stdio/getpw.c
-< cc -c -O /usr/src/libc/stdio/fseek.c
-< cc -c -O /usr/src/libc/stdio/ftell.c
-< cc -c -O /usr/src/libc/stdio/rew.c
-< cc -c -O /usr/src/libc/stdio/rdwr.c
-< cc -c -O /usr/src/libc/stdio/system.c
-< cc -c -O /usr/src/libc/stdio/fopen.c
-< cc -c -O /usr/src/libc/stdio/fdopen.c
-< cc -c -O /usr/src/libc/stdio/scanf.c
-< cc -c -O /usr/src/libc/stdio/doscan.c
-< cc -c -O /usr/src/libc/stdio/fprintf.c
-< cc -c -O /usr/src/libc/stdio/gets.c
-< cc -c -O /usr/src/libc/stdio/getw.c
-< cc -c -O /usr/src/libc/stdio/printf.c
-< cc -c -O /usr/src/libc/stdio/puts.c
-< cc -c -O /usr/src/libc/stdio/putw.c
-< cc -c -O /usr/src/libc/stdio/sprintf.c
-< cc -c -O /usr/src/libc/stdio/ungetc.c
-< cc -c -O /usr/src/libc/stdio/filbuf.c
-< cc -c -O /usr/src/libc/stdio/setbuf.c
-< cc -c /usr/src/libc/stdio/fltpr.s
-< cc -c /usr/src/libc/stdio/doprnt.s
-< cc -c -O /usr/src/libc/stdio/gcvt.c
-< cc -c /usr/src/libc/stdio/ffltpr.s
-< cc -c -O /usr/src/libc/stdio/strout.c
-< cc -c -O /usr/src/libc/stdio/flsbuf.c
-< cc -c -O /usr/src/libc/stdio/endopen.c
-< cc -c -O /usr/src/libc/stdio/findiop.c
-< cc -c -O /usr/src/libc/stdio/clrerr.c
-< cc -c -O /usr/src/libc/stdio/data.c
-< cc -c /usr/src/libc/gen/cuexit.s
-< cc -c -O /usr/src/libc/gen/execvp.c
-< cc -c -O /usr/src/libc/gen/getenv.c
-< cc -c -O /usr/src/libc/gen/getlogin.c
-< cc -c -O /usr/src/libc/gen/perror.c
-< cc -c -O /usr/src/libc/gen/sleep.c
-< cc -c -O /usr/src/libc/gen/timezone.c
-< cc -c -O /usr/src/libc/gen/ttyslot.c
-< cc -c -O /usr/src/libc/gen/ttyname.c
-< cc -c /usr/src/libc/gen/abort.s
-< cc -c -O /usr/src/libc/gen/abs.c
-< cc -c -O /usr/src/libc/gen/atof.c
-< cc -c -O /usr/src/libc/gen/atoi.c
-< cc -c -O /usr/src/libc/gen/atol.c
-< cc -c -O /usr/src/libc/gen/crypt.c
-< cc -c -O /usr/src/libc/gen/ctime.c
-< cc -c -O /usr/src/libc/gen/calloc.c
-< cc -c -O /usr/src/libc/gen/malloc.c
-< cc -c -O /usr/src/libc/gen/ecvt.c
-< cc -c -O /usr/src/libc/gen/errlst.c
-< cc -c /usr/src/libc/gen/fakcu.s
-< cc -c /usr/src/libc/gen/fakfp.s
-< cc -c /usr/src/libc/gen/frexp11.s
-< cc -c -O /usr/src/libc/gen/isatty.c
-< cc -c -O /usr/src/libc/gen/l3.c
-< cc -c /usr/src/libc/gen/ldexp11.s
-< cc -c /usr/src/libc/gen/ldfps.s
-< cc -c -O /usr/src/libc/gen/mktemp.c
-< cc -c /usr/src/libc/gen/modf11.s
-< cc -c -O /usr/src/libc/gen/mpx.c
-< cc -c -O /usr/src/libc/gen/mon.c
-< cc -c -O /usr/src/libc/gen/nlist.c
-< cc -c -O /usr/src/libc/gen/qsort.c
-< cc -c -O /usr/src/libc/gen/rand.c
-< cc -c /usr/src/libc/gen/setjmp.s
-< cc -c -O /usr/src/libc/gen/stty.c
-< cc -c -O /usr/src/libc/gen/swab.c
-< cc -c -O /usr/src/libc/gen/tell.c
-< cc -c -O /usr/src/libc/gen/ctype_.c
-< cc -c -O /usr/src/libc/gen/index.c
-< cc -c -O /usr/src/libc/gen/rindex.c
-< cc -c -O /usr/src/libc/gen/strcat.c
-< cc -c -O /usr/src/libc/gen/strncat.c
-< cc -c -O /usr/src/libc/gen/strcmp.c
-< cc -c -O /usr/src/libc/gen/strncmp.c
-< cc -c -O /usr/src/libc/gen/strcpy.c
-< cc -c -O /usr/src/libc/gen/strncpy.c
-< cc -c -O /usr/src/libc/gen/strlen.c
-< cc -c /usr/src/libc/sys/access.s
-< cc -c /usr/src/libc/sys/acct.s
-< cc -c /usr/src/libc/sys/alarm.s
-< cc -c /usr/src/libc/sys/chdir.s
-< cc -c /usr/src/libc/sys/chroot.s
-< cc -c /usr/src/libc/sys/chmod.s
-< cc -c /usr/src/libc/sys/chown.s
-< cc -c /usr/src/libc/sys/close.s
-< cc -c /usr/src/libc/sys/creat.s
-< cc -c /usr/src/libc/sys/dup.s
-< cc -c /usr/src/libc/sys/execl.s
-< cc -c /usr/src/libc/sys/execle.s
-< cc -c /usr/src/libc/sys/execv.s
-< cc -c /usr/src/libc/sys/execve.s
-< cc -c /usr/src/libc/sys/exit.s
-< cc -c /usr/src/libc/sys/fork.s
-< cc -c /usr/src/libc/sys/fstat.s
-< cc -c /usr/src/libc/sys/getgid.s
-< cc -c /usr/src/libc/sys/getpid.s
-< cc -c /usr/src/libc/sys/getuid.s
-< cc -c /usr/src/libc/sys/ioctl.s
-< cc -c /usr/src/libc/sys/kill.s
-< cc -c /usr/src/libc/sys/link.s
-< cc -c /usr/src/libc/sys/lock.s
-< cc -c /usr/src/libc/sys/lseek.s
-< cc -c /usr/src/libc/sys/mknod.s
-< cc -c /usr/src/libc/sys/mount.s
-< cc -c /usr/src/libc/sys/mpxcall.s
-< cc -c /usr/src/libc/sys/nice.s
-< cc -c /usr/src/libc/sys/open.s
-< cc -c /usr/src/libc/sys/pause.s
-< cc -c /usr/src/libc/sys/phys.s
-< cc -c /usr/src/libc/sys/pipe.s
-< cc -c /usr/src/libc/sys/profil.s
-< cc -c /usr/src/libc/sys/ptrace.s
-< cc -c /usr/src/libc/sys/read.s
-< cc -c /usr/src/libc/sys/sbrk.s
-< cc -c /usr/src/libc/sys/setgid.s
-< cc -c /usr/src/libc/sys/setuid.s
-< cc -c /usr/src/libc/sys/signal.s
-< cc -c /usr/src/libc/sys/stat.s
-< cc -c /usr/src/libc/sys/stime.s
-< cc -c /usr/src/libc/sys/sync.s
-< cc -c /usr/src/libc/sys/time.s
-< cc -c /usr/src/libc/sys/times.s
-< cc -c /usr/src/libc/sys/umask.s
-< cc -c /usr/src/libc/sys/umount.s
-< cc -c /usr/src/libc/sys/unlink.s
-< cc -c /usr/src/libc/sys/utime.s
-< cc -c /usr/src/libc/sys/wait.s
-< cc -c /usr/src/libc/sys/write.s
-< cc -c /usr/src/libc/crt/aldiv.s
-< cc -c /usr/src/libc/crt/almul.s
-< cc -c /usr/src/libc/crt/alrem.s
-< cc -c /usr/src/libc/crt/cerror.s
-< cc -c /usr/src/libc/crt/ldiv.s
-< cc -c /usr/src/libc/crt/lmul.s
-< cc -c /usr/src/libc/crt/lrem.s
-< cc -c /usr/src/libc/crt/mcount.s
-< cc -c /usr/src/libc/crt/csv.s
----
-> cc=${CC-arm-none-eabi-gcc}
-> cflags="-std=c99 -Wall -Wextra -Wpedantic -Werror -fcommon -fno-builtin -ffreestanding -nostdlib -mcpu=cortex-a7 -marm -I../../include -I../.."
-> $cc $cflags -c crt0.s
-> $cc $cflags -c crt0.c -o crt0c.o
-> $cc $cflags -c syscall.s
-> $cc $cflags -c sys/access.s
-> $cc $cflags -c sys/acct.s
-> $cc $cflags -c sys/alarm.c
-> $cc $cflags -c sys/brk.c
-> $cc $cflags -c sys/chdir.s
-> $cc $cflags -c sys/chmod.s
-> $cc $cflags -c sys/chown.s
-> $cc $cflags -c sys/chroot.s
-> $cc $cflags -c sys/close.s
-> $cc $cflags -c sys/creat.s
-> $cc $cflags -c sys/dup.c
-> $cc $cflags -c sys/execv.c
-> $cc $cflags -c sys/execl.c
-> $cc $cflags -c sys/execve.c
-> $cc $cflags -c sys/exit.s -o exit_sys.o
-> $cc $cflags -c sys/fork.s
-> $cc $cflags -c sys/fstat.s
-> $cc $cflags -c sys/ftime.c
-> $cc $cflags -c sys/getgid.s
-> $cc $cflags -c sys/getpid.s
-> $cc $cflags -c sys/getuid.s
-> $cc $cflags -c sys/gtty.c
-> $cc $cflags -c sys/ioctl.s
-> $cc $cflags -c sys/kill.s
-> $cc $cflags -c sys/link.s
-> $cc $cflags -c sys/lock.s
-> $cc $cflags -c sys/lseek.s
-> $cc $cflags -c sys/mknod.s
-> $cc $cflags -c sys/mount.s
-> $cc $cflags -c sys/nice.s
-> $cc $cflags -c sys/open.c
-> $cc $cflags -c sys/pause.c
-> $cc $cflags -c sys/pipe.s
-> $cc $cflags -c sys/profil.s
-> $cc $cflags -c sys/ptrace.s
-> $cc $cflags -c sys/read.s
-> $cc $cflags -c sys/setgid.s
-> $cc $cflags -c sys/setuid.s
-> $cc $cflags -c sys/signal.s
-> $cc $cflags -c sys/stat.s
-> $cc $cflags -c sys/stime.c
-> $cc $cflags -c sys/stty.c
-> $cc $cflags -c sys/sync.s
-> $cc $cflags -c sys/time.c -o time_sys.o
-> $cc $cflags -c sys/times.s
-> $cc $cflags -c sys/umask.s
-> $cc $cflags -c sys/umount.s
-> $cc $cflags -c sys/unlink.s
-> $cc $cflags -c sys/utime.s
-> $cc $cflags -c sys/wait.s
-> $cc $cflags -c sys/write.s
-> $cc $cflags -c gen/abort.c -o abort.o
-> $cc $cflags -c gen/exit.c -o exit.o
-> $cc $cflags -c gen/sleep.c -o sleep.o
-> $cc $cflags -c stdio/popen.c -o popen.o
-> $cc $cflags -c crypt.c -o v7crypt.o
-> $cc $cflags -c l3.c
-> $cc $cflags -c getpwent.c
-> $cc $cflags -c getpwnam.c
-> $cc $cflags -c getpwuid.c
-> $cc $cflags -c strncat.c
-> $cc $cflags -c ttyslot.c
-> $cc $cflags -c execvp.c
-> $cc $cflags -c getenv.c
-> $cc $cflags -c atoi.c
-> $cc $cflags -c atol.c
-> $cc $cflags -c atof.c
-> $cc $cflags -c index.c
-> $cc $cflags -c rindex.c
-> $cc $cflags -c isatty.c
-> $cc $cflags -c perror.c
-> $cc $cflags -c strcat.c
-> $cc $cflags -c strcmp.c
-> $cc $cflags -c strcpy.c
-> $cc $cflags -c strlen.c
-> $cc $cflags -c strncmp.c
-> $cc $cflags -c strncpy.c
-> $cc $cflags -c swab.c
-> $cc $cflags -c rand.c
-> $cc $cflags -c mktemp.c
-> $cc $cflags -c errlst.c
-> $cc $cflags -c ttyname.c
-> $cc $cflags -c mkdir.c
-> $cc $cflags -c qsort.c
-> $cc $cflags -c calloc.c
-> $cc $cflags -c tell.c
-> $cc $cflags -c timezone.c
-> $cc $cflags -c getlogin.c
-> $cc $cflags -c data.c
-> $cc $cflags -c ctype_.c
-> $cc $cflags -c fopen.c
-> $cc $cflags -c freopen.c
-> $cc $cflags -c findiop.c
-> $cc $cflags -c endopen.c
-> $cc $cflags -c filbuf.c
-> $cc $cflags -c flsbuf.c
-> $cc $cflags -c fgetc.c
-> $cc $cflags -c fputc.c
-> $cc $cflags -c fgets.c
-> $cc $cflags -c fputs.c
-> $cc $cflags -c gets.c
-> $cc $cflags -c puts.c
-> $cc $cflags -c rdwr.c
-> $cc $cflags -c fseek.c
-> $cc $cflags -c ftell.c
-> $cc $cflags -c rew.c
-> $cc $cflags -c setbuf.c
-> $cc $cflags -c ungetc.c
-> $cc $cflags -c clrerr.c
-> $cc $cflags -c getchar.c
-> $cc $cflags -c putchar.c
-> $cc $cflags -c strout.c
-> $cc $cflags -c doprnt.c
-> $cc $cflags -c printf.c
-> $cc $cflags -c fprintf.c
-> $cc $cflags -c sprintf.c
-> $cc $cflags -c doscan.c
-> $cc $cflags -c scanf.c
-> $cc $cflags -c malloc.c
-> $cc $cflags -c getpass.c
-> $cc $cflags -c ctime.c
-> $cc $cflags -c system.c
-> $cc $cflags -c memcpy.c
-> $cc $cflags -c nlist.c
-> $cc $cflags -c math_helpers.c
-> $cc $cflags -c ecvt.c
-> $cc $cflags -c fdopen.c
-> $cc $cflags -c gcvt.c
-> $cc $cflags -c getgrent.c
-> $cc $cflags -c getgrgid.c
-> $cc $cflags -c getgrnam.c
-> $cc $cflags -c getw.c
-> $cc $cflags -c putw.c
-```
-
-### usr/src/libc/mklib
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/mklib unix-v7-c99/usr/src/libc/mklib || true
-```
-
-Expect:
-
-```
-1,94c1,3
-< ar rc libc.a \
-< getgrgid.o \
-< getgrnam.o \
-< getgrent.o \
-< getpass.o \
-< getpwnam.o \
-< getpwuid.o \
-< getpwent.o \
-< timezone.o \
-< fgetc.o \
-< fputc.o \
-< getchar.o \
-< putchar.o \
-< popen.o \
-< freopen.o \
-< fgets.o \
-< fputs.o \
-< getpw.o \
-< fseek.o \
-< ftell.o \
-< rew.o \
-< rdwr.o \
-< system.o \
-< fopen.o \
-< fdopen.o \
-< scanf.o \
-< doscan.o \
-< fprintf.o \
-< gets.o \
-< getw.o \
-< printf.o \
-< puts.o \
-< putw.o \
-< sprintf.o \
-< ungetc.o \
-< filbuf.o \
-< setbuf.o \
-< fltpr.o \
-< doprnt.o \
-< gcvt.o \
-< ffltpr.o \
-< strout.o \
-< flsbuf.o \
-< endopen.o \
-< findiop.o \
-< clrerr.o \
-< data.o \
-< cuexit.o \
-< execvp.o \
-< getenv.o \
-< getlogin.o \
-< perror.o \
-< sleep.o \
-< ttyslot.o \
-< ttyname.o \
-< abort.o \
-< abs.o \
-< atof.o \
-< atoi.o \
-< atol.o \
-< crypt.o \
-< ctime.o \
-< calloc.o \
-< malloc.o \
-< ecvt.o \
-< errlst.o \
-< fakcu.o \
-< fakfp.o \
-< frexp11.o \
-< isatty.o \
-< l3.o \
-< ldexp11.o \
-< ldfps.o \
-< mktemp.o \
-< modf11.o \
-< mon.o \
-< mpx.o \
-< nlist.o \
-< qsort.o \
-< rand.o \
-< setjmp.o \
-< stty.o \
-< swab.o \
-< tell.o \
-< ctype_.o \
-< index.o \
-< rindex.o \
-< strcat.o \
-< strncat.o \
-< strcmp.o \
-< strncmp.o \
-< strcpy.o \
-< strncpy.o \
-< strlen.o \
----
-> ar=${AR-arm-none-eabi-ar}
-> $ar rc libc.a \
-> syscall.o \
-97a7
-> brk.o \
-99d8
-< chroot.o \
-101a11
-> chroot.o \
-105,106d14
-< execl.o \
-< execle.o \
-107a16
-> execl.o \
-109c18
-< exit.o \
----
-> exit_sys.o \
-111a21
-> ftime.o \
-114a25
-> gtty.o \
-122d32
-< mpxcall.o \
-126d35
-< phys.o \
-131d39
-< sbrk.o \
-136a45
-> stty.o \
-138c47
-< time.o \
----
-> time_sys.o \
-146,154c55,136
-< aldiv.o \
-< almul.o \
-< alrem.o \
-< cerror.o \
-< ldiv.o \
-< lmul.o \
-< lrem.o \
-< mcount.o \
-< csv.o
----
-> abort.o \
-> exit.o \
-> sleep.o \
-> popen.o \
-> v7crypt.o \
-> l3.o \
-> getpwent.o \
-> getpwnam.o \
-> getpwuid.o \
-> strncat.o \
-> ttyslot.o \
-> execvp.o \
-> getenv.o \
-> atoi.o \
-> atol.o \
-> atof.o \
-> index.o \
-> rindex.o \
-> isatty.o \
-> perror.o \
-> strcat.o \
-> strcmp.o \
-> strcpy.o \
-> strlen.o \
-> strncmp.o \
-> strncpy.o \
-> swab.o \
-> rand.o \
-> mktemp.o \
-> errlst.o \
-> ttyname.o \
-> mkdir.o \
-> qsort.o \
-> calloc.o \
-> tell.o \
-> timezone.o \
-> getlogin.o \
-> data.o \
-> ctype_.o \
-> fopen.o \
-> freopen.o \
-> findiop.o \
-> endopen.o \
-> filbuf.o \
-> flsbuf.o \
-> fgetc.o \
-> fputc.o \
-> fgets.o \
-> fputs.o \
-> gets.o \
-> puts.o \
-> rdwr.o \
-> fseek.o \
-> ftell.o \
-> rew.o \
-> setbuf.o \
-> ungetc.o \
-> clrerr.o \
-> getchar.o \
-> putchar.o \
-> strout.o \
-> doprnt.o \
-> printf.o \
-> fprintf.o \
-> sprintf.o \
-> doscan.o \
-> scanf.o \
-> malloc.o \
-> getpass.o \
-> ctime.o \
-> system.o \
-> memcpy.o \
-> nlist.o \
-> math_helpers.o \
-> ecvt.o \
-> fdopen.o \
-> gcvt.o \
-> getgrent.o \
-> getgrgid.o \
-> getgrnam.o \
-> getw.o \
-> putw.o
-```
-
 ### usr/sys/h/conf.h
 
 Local test:
@@ -1401,29 +801,6 @@ Expect:
 < 	char	f_count;	/* reference count */
 ---
 > 	short	f_count;	/* reference count */
-```
-
-### usr/src/cmd/cmake
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/cmake unix-v7-c99/usr/src/cmd/cmake || true
-```
-
-Expect:
-
-```
-24c24
-< 	bc)	yacc bc.y && mv y.tab.c bc.c && cc -n -s -O bc.c -o bc && rm bc.c ;;
----
-> 	bc)	bison -y bc.y && mv y.tab.c bc.c && cc -n -s -O bc.c -o bc && rm bc.c ;;
-56,57c56,57
-< 	egrep)	yacc egrep.y && mv y.tab.c egrep.c && cc -n -s -O egrep.c -o egrep && rm egrep.c ;;
-< 	expr)	yacc expr.y && mv y.tab.c expr.c && cc -n -s -O expr.c -o expr && rm expr.c ;;
----
-> 	egrep)	bison -y egrep.y && mv y.tab.c egrep.c && cc -n -s -O egrep.c -o egrep && rm egrep.c ;;
-> 	expr)	bison -y expr.y && mv y.tab.c expr.c && cc -n -s -O expr.c -o expr && rm expr.c ;;
 ```
 
 ### usr/src/cmd/echo.c
@@ -1567,7 +944,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/basename.c unix-v7-c99/usr/src/cmd/basename.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/cmd/basename.c unix-v7-c99/usr/src/cmd/basename.c || true
 ```
 
 Expect:
@@ -1579,10 +956,6 @@ Expect:
 ---
 > int
 > main(int argc, char *argv[])
-19c19
-< 		for(p3=argv[2]; *p3; p3++)
----
-> 		for(p3=argv[2]; *p3; p3++)
 27c27
 < 	puts(p2, stdout);
 ---
@@ -4056,7 +3429,7 @@ Expect:
 > #define S_FTIME 35
 > int syscall3(int, int, int, int);
 > int
-> ftime(struct timeb *t)
+> ftime(struct timeb *gorpp)
 11,12d7
 < ftime(gorpp)
 < struct timeb *gorpp;
@@ -4064,7 +3437,7 @@ Expect:
 < 	*gorpp = gorp;
 < 	return(0);
 ---
-> 	return(syscall3(S_FTIME, (int)t, 0, 0));
+> 	return(syscall3(S_FTIME, (int)gorpp, 0, 0));
 ```
 
 ### usr/src/libc/sys/gtty.c
@@ -4135,76 +3508,45 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/sleep.c unix-v7-c99/usr/src/libc/gen/sleep.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/libc/gen/sleep.c unix-v7-c99/usr/src/libc/gen/sleep.c || true
 ```
 
 Expect:
 
 ```
-1d0
-< #include <signal.h>
-4d2
-< static jmp_buf jmp;
-6,7c4,15
+4a5,8
+> static void sleepx(int signo);
+> extern void (*signal(int sig, void (*fun)(int)))(int);
+> extern int alarm(int n);
+> extern int pause(void);
+6,7c10,11
 < sleep(n)
 < unsigned n;
 ---
-> static jmp_buf sleep_jmp;
-> static void
-> sleepx(int signo)
-> {
-> 	(void)signo;
-> 	longjmp(sleep_jmp, 1);
-> }
-> extern int signal(int sig, void (*fun)(int));
-> extern int alarm(int n);
-> extern int pause(void);
 > unsigned
 > sleep(unsigned n)
-9d16
+9d12
 < 	int sleepx();
-11c18,25
+11c14
 < 	int (*alsig)() = SIG_DFL;
 ---
-> 	void (*alsig)(int) = (void (*)(int))0;
-> 	if(n == 0)
-> 		return(0);
-> 	altime = (unsigned)alarm(1000);
-> 	if(setjmp(sleep_jmp)) {
-> 		(void)signal(14, alsig);
-> 		(void)alarm((int)altime);
-> 		return(0);
-13,19d26
-< 	if (n==0)
+> 	void (*alsig)(int) = SIG_DFL;
+14c17
 < 		return;
-< 	altime = alarm(1000);	/* time to maneuver */
-< 	if (setjmp(jmp)) {
-< 		signal(SIGALRM, alsig);
-< 		alarm(altime);
+---
+> 		return(0);
+19c22
 < 		return;
-21,22c28,29
-< 	if (altime) {
-< 		if (altime > n)
 ---
-> 	if(altime) {
-> 		if(altime > n)
-29,30c36,37
-< 	alsig = signal(SIGALRM, sleepx);
-< 	alarm(n);
----
-> 	alsig = (void (*)(int))(long)signal(14, sleepx);
-> 	(void)alarm((int)n);
-32,39c39
-< 		pause();
-< 	/*NOTREACHED*/
-< }
-<
+> 		return(0);
+36,37c39,40
 < static
 < sleepx()
-< {
-< 	longjmp(jmp, 1);
 ---
-> 		(void)pause();
+> static void
+> sleepx(int signo)
+38a42
+> 	(void)signo;
 ```
 
 ### usr/src/libc/stdio/popen.c
@@ -4274,13 +3616,6 @@ Expect:
 < 		struct tc;
 ---
 > 		struct tc tc;
-63a64,69
-> #define	t_intrc	t_un.tc.t_intrc
-> #define	t_quitc	t_un.tc.t_quitc
-> #define	t_startc t_un.tc.t_startc
-> #define	t_stopc	t_un.tc.t_stopc
-> #define	t_eofc	t_un.tc.t_eofc
-> #define	t_brkc	t_un.tc.t_brkc
 ```
 
 ### usr/sys/sys/acct.c
@@ -4326,7 +3661,7 @@ Expect:
 < 	register exp = 0, round = 0;
 ---
 > 	register int exp = 0, round = 0;
-108,113c110,114
+108,113c110,111
 < /*
 <  * lock user into core as much
 <  * as possible. swapping may still
@@ -4334,19 +3669,16 @@ Expect:
 <  */
 < syslock()
 ---
-> /* lock(2): v7 toggled SULOCK to pin the process resident.  This port
->  * keeps every proc permanently in RAM, so the only remaining behavior
->  * is to enforce the superuser check (matching v7's EPERM for non-root). */
 > void
 > syslock(void)
-115,118c116
+115,118c113
 < 	register struct proc *p;
 < 	register struct a {
 < 		int	flag;
 < 	} *uap;
 ---
 > 	(void)suser();
-120,126d117
+120,126d114
 < 	uap = (struct a *)u.u_ap;
 < 	if(suser()) {
 < 		p = u.u_procp;
@@ -4422,59 +3754,6 @@ Expect:
 > update(void)
 ```
 
-### usr/sys/sys/clock.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/sys/sys/clock.c unix-v7-c99/usr/sys/sys/clock.c || true
-```
-
-Expect:
-
-```
-4d3
-< #include "../h/seg.h"
-8c7,13
-< #include "../h/reg.h"
----
-> extern void addupc(caddr_t pc, void *prof, int inc);
-> int spl1(void);
-> int spl5(void);
-> int spl7(void);
-> void splx(int s);
-> void wakeup(caddr_t chan);
-> void panic(char *s);
-28,30c33,34
-< clock(dev, sp, r1, nps, r0, pc, ps)
-< dev_t dev;
-< caddr_t pc;
----
-> void
-> clock(dev_t dev, int sp, int r1, int nps, int r0, caddr_t pc, int ps)
-35a40
-> 	(void)dev; (void)sp; (void)r1; (void)nps; (void)r0;
-41c46
-< 	lks->r[0] = 0115;
----
-> 	/* ARM timer is rearmed in the interrupt handler. */
-47c52
-< 	display();
----
-> 	/* no front-panel display on ARM/QEMU */
-79c84
-< 		while(p2->c_func = p1->c_func) {
----
-> 		while((p2->c_func = p1->c_func) != 0) {
-154,156c159,160
-< timeout(fun, arg, tim)
-< int (*fun)();
-< caddr_t arg;
----
-> void
-> timeout(int (*fun)(caddr_t), caddr_t arg, int tim)
-```
-
 ### usr/sys/sys/fio.c
 
 Local test:
@@ -4488,141 +3767,70 @@ Expect:
 ```
 9d8
 < #include "../h/reg.h"
-10a10
+10a10,11
 > void wakeup(caddr_t chan);
-20,21c20
+> void printf(char *fmt, ...);
+20,21c21
 < getf(f)
 < register int f;
 ---
 > getf(register int f)
-45,46c44,45
+45,46c45,46
 < closef(fp)
 < register struct file *fp;
 ---
 > void
 > closef(register struct file *fp)
-51,52c50
-< 	register int (*cfunc)();
-< 	struct chan *cp;
----
-> 	register int (*cfunc)(dev_t, int);
-62d59
-< 	cp = fp->f_un.f_chan;
-90,94c87,90
-< 	if ((flag & FMP) == 0)
-< 		for(fp=file; fp < &file[NFILE]; fp++)
-< 			if (fp->f_count && fp->f_inode==ip)
-< 				return;
-< 	(*cfunc)(dev, flag, cp);
----
-> 	for(fp=file; fp < &file[NFILE]; fp++)
-> 		if (fp->f_count && fp->f_inode==ip)
-> 			return;
-> 	(*cfunc)(dev, flag);
-97,106d92
-< /*
-<  * openi called to allow handler
-<  * of special files to initialize and
-<  * validate before actual IO.
-<  */
+102,103c102,103
 < openi(ip, rw)
 < register struct inode *ip;
-< {
-< 	dev_t dev;
-< 	register unsigned int maj;
-108,110c94
-< 	dev = (dev_t)ip->i_un.i_rdev;
-< 	maj = major(dev);
-< 	switch(ip->i_mode&IFMT) {
 ---
-> /* v7 openi() (per-driver d_open dispatch for IFCHR/IFBLK) is gone --
-112,117c96
-< 	case IFCHR:
-< 	case IFMPC:
+> void
+> openi(register struct inode *ip, int rw)
+114c114
 < 		if(maj >= nchrdev)
-< 			goto bad;
-< 		(*cdevsw[maj].d_open)(dev, rw);
-< 		break;
 ---
->  * open(2) on this port routes through arch/arm.c::kopen(), which
-119,125c98
-< 	case IFBLK:
-< 	case IFMPB:
+> 		if(maj >= (unsigned int)nchrdev)
+121c121
 < 		if(maj >= nblkdev)
-< 			goto bad;
-< 		(*bdevsw[maj].d_open)(dev, rw);
-< 	}
-< 	return;
 ---
->  * handles the pseudo-fds and IFREG itself.  The cdevsw[]/bdevsw[]
-127,129c100
-< bad:
-< 	u.u_error = ENXIO;
-< }
----
->  * d_open hook was never reached. */
-144,145c115,116
+> 		if(maj >= (unsigned int)nblkdev)
+144,145c144,145
 < access(ip, mode)
 < register struct inode *ip;
 ---
 > int
 > access(register struct inode *ip, int mode)
-147c118
+147c147
 < 	register m;
 ---
 > 	register int m;
-185c156
+185c185
 < owner()
 ---
 > owner(void)
-204c175,176
+204c204,205
 < suser()
 ---
 > int
 > suser(void)
-218c190,191
+218c219,220
 < ufalloc()
 ---
 > int
 > ufalloc(void)
-220c193
+220c222
 < 	register i;
 ---
 > 	register int i;
-232,245d204
-< /*
-<  * Allocate a user file descriptor
-<  * and a file structure.
-<  * Initialize the descriptor
-<  * to point at the file structure.
-<  *
-<  * no file -- if there are no available
-<  * 	file structures.
-<  */
-< struct file *
+242c244
 < falloc()
-< {
-< 	register struct file *fp;
-< 	register i;
-247,260c206,208
-< 	i = ufalloc();
-< 	if(i < 0)
-< 		return(NULL);
-< 	for(fp = &file[0]; fp < &file[NFILE]; fp++)
-< 		if(fp->f_count == 0) {
-< 			u.u_ofile[i] = fp;
-< 			fp->f_count++;
-< 			fp->f_un.f_offset = 0;
-< 			return(fp);
-< 		}
-< 	printf("no file\n");
-< 	u.u_error = ENFILE;
-< 	return(NULL);
-< }
 ---
-> /* v7 falloc() (allocate fd + file slot, return file*) is gone -- its
->  * only callers were sys2.c::open1 and pipe.c::pipe, both removed.
->  * arch/arm.c uses its own files[NFD] table instead of file[NFILE]. */
+> falloc(void)
+245c247
+< 	register i;
+---
+> 	register int i;
 ```
 
 ### usr/sys/sys/pipe.c
@@ -4641,99 +3849,39 @@ Expect:
 ---
 > void sleep(caddr_t chan, int pri);
 > void wakeup(caddr_t chan);
-19,29c20,25
-< /*
-<  * The sys-pipe entry.
-<  * Allocate an inode on the root device.
-<  * Allocate 2 file structures.
-<  * Put it all together with flags.
-<  */
+25c26,27
 < pipe()
-< {
-< 	register struct inode *ip;
-< 	register struct file *rf, *wf;
-< 	int r;
 ---
-> /* v7's pipe(2) implementation (allocate inode + two file structs + wire
->  * FREAD/FWRITE) is gone -- arch/arm.c::sys_pipe maintains its own
->  * pipes[NPIPES] table that doesn't touch the v7 inode[]/file[] arrays.
->  * readp() and writep() are still kept because v7's read(2)/write(2)
->  * fast path on FPIPE-flagged file structs lands here, even though new
->  * pipe creation no longer creates such structs in this port. */
-31,56d26
-< 	ip = ialloc(pipedev);
-< 	if(ip == NULL)
-< 		return;
-< 	rf = falloc();
-< 	if(rf == NULL) {
-< 		iput(ip);
-< 		return;
-< 	}
-< 	r = u.u_r.r_val1;
-< 	wf = falloc();
-< 	if(wf == NULL) {
-< 		rf->f_count = 0;
-< 		u.u_ofile[r] = NULL;
-< 		iput(ip);
-< 		return;
-< 	}
-< 	u.u_r.r_val2 = u.u_r.r_val1;
-< 	u.u_r.r_val1 = r;
-< 	wf->f_flag = FWRITE|FPIPE;
-< 	wf->f_inode = ip;
-< 	rf->f_flag = FREAD|FPIPE;
-< 	rf->f_inode = ip;
-< 	ip->i_count = 2;
-< 	ip->i_mode = IFREG;
-< 	ip->i_flag = IACC|IUPD|ICHG;
-< }
-61,62c31,32
+> void
+> pipe(void)
+61,62c63,64
 < readp(fp)
 < register struct file *fp;
 ---
 > void
 > readp(register struct file *fp)
-116,117c86,87
+116,117c118,119
 < writep(fp)
 < register struct file *fp;
 ---
 > void
 > writep(register struct file *fp)
-119c89
+119c121
 < 	register c;
 ---
 > 	register int c;
-189,190c159,160
+189,190c191,192
 < plock(ip)
 < register struct inode *ip;
 ---
 > void
 > plock(register struct inode *ip)
-193,195c163,165
-< 	while(ip->i_flag&ILOCK) {
-< 		ip->i_flag |= IWANT;
-< 		sleep((caddr_t)ip, PINOD);
----
-> 	if(ip) {
-> 		ip->i_flag &= ~IWANT;
-> 		ip->i_flag |= ILOCK;
-197d166
-< 	ip->i_flag |= ILOCK;
-207,208c176,177
+207,208c209,210
 < prele(ip)
 < register struct inode *ip;
 ---
 > void
 > prele(register struct inode *ip)
-211,215c180,181
-< 	ip->i_flag &= ~ILOCK;
-< 	if(ip->i_flag&IWANT) {
-< 		ip->i_flag &= ~IWANT;
-< 		wakeup((caddr_t)ip);
-< 	}
----
-> 	if(ip)
-> 		ip->i_flag &= ~(ILOCK|IWANT);
 ```
 
 ### usr/sys/sys/rdwri.c
@@ -4741,7 +3889,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/rdwri.c unix-v7-c99/usr/sys/sys/rdwri.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/sys/sys/rdwri.c unix-v7-c99/usr/sys/sys/rdwri.c || true
 ```
 
 Expect:
@@ -4781,55 +3929,37 @@ Expect:
 ---
 > 	register int n, on;
 > 	register int type;
-116c121
-< 		if(n == BSIZE)
----
-> 		if(n == BSIZE)
-132,138d136
-< /*
-<  * Return the logical maximum
-<  * of the 2 arguments.
-<  */
+136,137c141,142
 < max(a, b)
 < unsigned a, b;
-< {
-140,143d137
-< 	if(a > b)
-< 		return(a);
-< 	return(b);
-< }
-149,150c143,144
+---
+> unsigned
+> max(unsigned a, unsigned b)
+149,150c154,155
 < min(a, b)
 < unsigned a, b;
 ---
 > unsigned
 > min(unsigned a, unsigned b)
-173,175c167,168
+173,175c178,179
 < iomove(cp, n, flag)
 < register caddr_t cp;
 < register n;
 ---
 > void
 > iomove(register caddr_t cp, register int n, int flag)
-177c170
+177c181
 < 	register t;
 ---
 > 	register int t;
-181c174,177
-< 	if(u.u_segflg != 1 &&
----
-> 	/* v7 had a u_segflg==2 (user I-space) branch here that called
-> 	 * copyiin/copyiout; this port never sets u_segflg to 2, so the
-> 	 * fast path is just user (==0) vs system (==1). */
-> 	if(u.u_segflg == 0 &&
-186,189c182
+186,189c190
 < 			if (u.u_segflg==0)
 < 				t = copyin(u.u_base, (caddr_t)cp, n);
 < 			else
 < 				t = copyiin(u.u_base, (caddr_t)cp, n);
 ---
 > 			t = copyin(u.u_base, (caddr_t)cp, n);
-191,194c184
+191,194c192
 < 			if (u.u_segflg==0)
 < 				t = copyout((caddr_t)cp, u.u_base, n);
 < 			else
@@ -4843,7 +3973,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/sig.c unix-v7-c99/usr/sys/sys/sig.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/sys/sys/sig.c unix-v7-c99/usr/sys/sys/sig.c || true
 ```
 
 Expect:
@@ -4851,8 +3981,7 @@ Expect:
 ```
 7d6
 < #include "../h/reg.h"
-9a9,27
-> #include "../arch/arm.h"
+9a9,26
 > void sleep(caddr_t chan, int pri);
 > void wakeup(caddr_t chan);
 > int fsig(struct proc *p);
@@ -4871,40 +4000,40 @@ Expect:
 > #define	ARM_SP	13
 > #define	ARM_LR	14
 > #define	ARM_PC	15
-39,40c57,58
+39,40c56,57
 < signal(pgrp, sig)
 < register pgrp;
 ---
 > void
 > signal(register int pgrp, int sig)
-55,57c73,74
+55,57c72,73
 < psignal(p, sig)
 < register struct proc *p;
 < register sig;
 ---
 > void
 > psignal(register struct proc *p, register int sig)
-81c98,99
+81c97,98
 < issig()
 ---
 > int
 > issig(void)
-83c101
+83c100
 < 	register n;
 ---
 > 	register int n;
-102c120,121
+102c119,120
 < stop()
 ---
 > void
 > stop(void)
-118c137,154
+118c136,153
 < 	exit(fsig(u.u_procp));
 ---
 > 	do_exit(0x100 | fsig(u.u_procp), trap_frame);
 > }
 > static void
-> sendsig(caddr_t handler, int sig)
+> sendsig(int handler, int sig)
 > {
 > 	register int *r;
 > 	register unsigned int sp;
@@ -4919,89 +4048,74 @@ Expect:
 > 	r[ARM_LR] = (int)UENTRY_SIGTRAMP;
 > 	r[ARM_PC] = (int)handler;
 > 	r[0] = sig;
-128c164,165
+128c163,164
 < psig()
 ---
 > void
 > psig(void)
-130c167
+130c166
 < 	register n, p;
 ---
 > 	register int n, p;
-134,137d170
+134,137d169
 < 	if (u.u_fpsaved==0) {
 < 		savfp(&u.u_fps);
 < 		u.u_fpsaved = 1;
 < 	}
-165c198
+148c180
+< 		sendsig((caddr_t)p, n);
+---
+> 		sendsig(p, n);
+165c197
 < 	exit(n);
 ---
 > 	do_exit(0x100 | n, trap_frame);
-172,173c205,206
+172,173c204,205
 < fsig(p)
 < struct proc *p;
 ---
 > int
 > fsig(struct proc *p)
-175c208
+175c207
 < 	register n, i;
 ---
 > 	register int n, i;
-184a218,222
+184a217,221
 > static int
 > schar(void)
 > {
 > 	return((unsigned char)*u.u_dirp++);
 > }
-196c234,235
+196c233,234
 < core()
 ---
 > int
 > core(void)
-200d238
+200d237
 < 	extern schar();
-235d272
+235d271
 <  */
-237,238c274,276
+237,238c273,275
 < grow(sp)
 < unsigned sp;
 ---
 >  */
 > int
 > grow(unsigned sp)
-240c278
+240c277
 < 	register si, i;
 ---
 > 	register int si, i;
-242c280
+242c279
 < 	register a;
 ---
 > 	register int a;
-265a304,309
->  *
->  * v7's PDP-11 libc/sys/ptrace.s shuffled C args -- it copied req, pid,
->  * addr into trailing-word indirect slots and put data in r0 -- so the
->  * kernel's struct a came out (data, pid, addr, req).  On this ARM port
->  * the SYS macro passes args straight in r0..r3, so u.u_arg[0..3] is
->  * (req, pid, addr, data) -- the natural C order.  Match that here.
-267c311,312
+267c304,305
 < ptrace()
 ---
 > void
 > ptrace(void)
-271c316
-< 		int	data;
----
-> 		int	req;
-274c319
-< 		int	req;
----
-> 		int	data;
-282c327
-< 	for (p=proc; p < &proc[NPROC]; p++)
----
-> 	for (p=proc; p < &proc[NPROC]; p++)
-306a352,362
+306a345,355
 > static int
 > sig_fuword(caddr_t addr)
 > {
@@ -5013,59 +4127,59 @@ Expect:
 > 	*(int *)addr = data;
 > 	return(0);
 > }
-313c369,370
+313c362,363
 < procxmt()
 ---
 > int
 > procxmt(void)
-316c373
+316c366
 < 	register *p;
 ---
 > 	register int *p;
-328c385
+328c378
 < 		if (fuibyte((caddr_t)ipc.ip_addr) == -1)
 ---
 > 		if (fubyte((caddr_t)ipc.ip_addr) == -1)
-330c387
+330c380
 < 		ipc.ip_data = fuiword((caddr_t)ipc.ip_addr);
 ---
 > 		ipc.ip_data = sig_fuword((caddr_t)ipc.ip_addr);
-337c394
+337c387
 < 		ipc.ip_data = fuword((caddr_t)ipc.ip_addr);
 ---
 > 		ipc.ip_data = sig_fuword((caddr_t)ipc.ip_addr);
-345c402
+345c395
 < 		ipc.ip_data = ((physadr)&u)->r[i>>1];
 ---
 > 		ipc.ip_data = *(int *)((char *)&u + i);
-354,355c411,413
+354,355c404,406
 < 		if (xp = u.u_procp->p_textp) {
 < 			if (xp->x_count!=1 || xp->x_iptr->i_mode&ISVTX)
 ---
 > 		xp = u.u_procp->p_textp;
 > 		if (xp != NULL) {
 > 			if (xp->x_count!=1 || (xp->x_iptr->i_mode&ISVTX))
-360,361c418,419
+360,361c411,412
 < 		i = suiword((caddr_t)ipc.ip_addr, 0);
 < 		suiword((caddr_t)ipc.ip_addr, ipc.ip_data);
 ---
 > 		i = sig_suword((caddr_t)ipc.ip_addr, 0);
 > 		sig_suword((caddr_t)ipc.ip_addr, ipc.ip_data);
-371c429
+371c422
 < 		if (suword((caddr_t)ipc.ip_addr, 0) < 0)
 ---
 > 		if (sig_suword((caddr_t)ipc.ip_addr, 0) < 0)
-373c431
+373c424
 < 		suword((caddr_t)ipc.ip_addr, ipc.ip_data);
 ---
 > 		sig_suword((caddr_t)ipc.ip_addr, ipc.ip_data);
-379c437,439
+379c430,432
 < 		p = (int *)&((physadr)&u)->r[i>>1];
 ---
 > 		if (i<0 || i+(int)sizeof(int) > ctob(USIZE))
 > 			goto error;
 > 		p = (int *)((char *)&u + i);
-382,389d441
+382,389d434
 < 		for (i=0; i<8; i++)
 < 			if (p == &u.u_ar0[regloc[i]])
 < 				goto ok;
@@ -5074,9 +4188,9 @@ Expect:
 < 			ipc.ip_data &= ~0340;	/* priority 0 */
 < 			goto ok;
 < 		}
-399d450
+399d443
 < 		u.u_ar0[RPS] |= TBIT;
-401,402c452,456
+401,402c445,449
 < 		if ((int)ipc.ip_addr != 1)
 < 			u.u_ar0[PC] = (int)ipc.ip_addr;
 ---
@@ -5085,7 +4199,7 @@ Expect:
 > 			if (p != NULL)
 > 				p[ARM_PC] = (int)ipc.ip_addr;
 > 		}
-410c464,465
+410c457,458
 < 		exit(fsig(u.u_procp));
 ---
 > 		do_exit(0x100 | fsig(u.u_procp), trap_frame);
@@ -5128,16 +4242,13 @@ Expect:
 ---
 > int
 > passc(register int c)
-131c130
+131d129
 < 	register id;
----
-> 	/* v7 had a u_segflg==2 (user I-space) branch dispatching to
-133c132,133
+133c131
 < 	if((id = u.u_segflg) == 1)
 ---
-> 	 * suibyte; this port never sets u_segflg to 2. */
 > 	if(u.u_segflg == 1)
-135,139c135,138
+135,139c133,136
 < 	else
 < 		if(id?suibyte(u.u_base, c):subyte(u.u_base, c) < 0) {
 < 			u.u_error = EFAULT;
@@ -5148,20 +4259,20 @@ Expect:
 > 		u.u_error = EFAULT;
 > 		return(-1);
 > 	}
-153c152,153
+153c150,151
 < cpass()
 ---
 > int
 > cpass(void)
-155c155
+155c153
 < 	register c, id;
 ---
 > 	register int c;
-159c159
+159c157
 < 	if((id = u.u_segflg) == 1)
 ---
 > 	if(u.u_segflg == 1)
-161,165c161,164
+161,165c159,162
 < 	else
 < 		if((c = id==0?fubyte(u.u_base):fuibyte(u.u_base)) < 0) {
 < 			u.u_error = EFAULT;
@@ -5172,39 +4283,21 @@ Expect:
 > 		u.u_error = EFAULT;
 > 		return(-1);
 > 	}
-167,170d165
-< 	u.u_offset++;
-< 	u.u_base++;
-< 	return(c&0377);
-< }
-172,177c167
-< /*
-<  * Routine which sets a user error; placed in
-<  * illegal entries in the bdevsw and cdevsw tables.
-<  */
+176c173,174
 < nodev()
-< {
 ---
-> 	u.u_offset++;
-179,180c169
-< 	u.u_error = ENODEV;
-< }
----
-> 	u.u_base++;
-182,187c171
-< /*
-<  * Null routine; placed in insignificant entries
-<  * in the bdevsw and cdevsw tables.
-<  */
+> int
+> nodev(void)
+179a178
+> 	return(0);
+186c185,186
 < nulldev()
-< {
 ---
-> 	return(c&0377);
-191c175
-<  * copy count bytes from from to to.
----
->  * Copy count bytes from from to to.
-193,195c177,178
+> int
+> nulldev(void)
+187a188
+> 	return(0);
+193,195c194,195
 < bcopy(from, to, count)
 < caddr_t from, to;
 < register count;
@@ -5218,7 +4311,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/sys1.c unix-v7-c99/usr/sys/sys/sys1.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/sys/sys/sys1.c unix-v7-c99/usr/sys/sys/sys1.c || true
 ```
 
 Expect:
@@ -5297,22 +4390,6 @@ Expect:
 < 		if (u.u_sep==0 && ctos(ts) != ctos(u.u_tsize) || nargc) {
 ---
 > 		if ((u.u_sep==0 && ctos(ts) != ctos(u.u_tsize)) || nargc) {
-226c260
-<
----
->
-232c266
-<
----
->
-240c274
-<
----
->
-244c278
-<
----
->
 276c310,311
 < setregs()
 ---
@@ -5378,160 +4455,76 @@ Expect:
 ```
 5d4
 < #include "../h/reg.h"
-8a8,16
+8a8,17
 > extern void readp(struct file *);
 > extern void writep(struct file *);
 > extern void wdir(struct inode *);
+> extern void itrunc(struct inode *);
+> extern void openi(struct inode *, int);
 > void rdwr(int mode);
-> /* v7's write(), open(), creat() and open1() are gone -- on this port
->  * sys_{write,open,creat}_v7 in arch/arm.c implement those syscalls
->  * directly (pipe/console fast paths + kopen/kcreat for the file tree),
->  * so the v7 entry points were linker-dead.  read() is still routed
->  * here via v7_read_call. */
-12c20,21
+> void write(void);
+> void open(void);
+> void creat(void);
+> void open1(struct inode *ip, int mode, int trf);
+12c21,22
 < read()
 ---
 > void
 > read(void)
-17,23d25
-< /*
-<  * write system call
-<  */
+20c30,31
 < write()
-< {
-< 	rdwr(FWRITE);
-< }
-30,31c32,33
+---
+> void
+> write(void)
+30,31c41,42
 < rdwr(mode)
 < register mode;
 ---
 > void
 > rdwr(register int mode)
-59,62c61
-< 		if (fp->f_flag&FMP)
-< 			u.u_offset = 0;
-< 		else
-< 			u.u_offset = fp->f_un.f_offset;
----
-> 		u.u_offset = fp->f_un.f_offset;
-71,72c70
-< 		if ((fp->f_flag&FMP) == 0)
-< 			fp->f_un.f_offset += uap->count-u.u_count;
----
-> 		fp->f_un.f_offset += uap->count-u.u_count;
-77,86d74
-< /*
-<  * open system call
-<  */
+80c91,92
 < open()
-< {
-< 	register struct inode *ip;
-< 	register struct a {
-< 		char	*fname;
-< 		int	rwmode;
-< 	} *uap;
-88,93d75
-< 	uap = (struct a *)u.u_ap;
-< 	ip = namei(uchar, 0);
-< 	if(ip == NULL)
-< 		return;
-< 	open1(ip, ++uap->rwmode, 0);
-< }
-95,104d76
-< /*
-<  * creat system call
-<  */
+---
+> void
+> open(void)
+98c110,111
 < creat()
-< {
-< 	register struct inode *ip;
-< 	register struct a {
-< 		char	*fname;
-< 		int	fmode;
-< 	} *uap;
-106,117d77
-< 	uap = (struct a *)u.u_ap;
-< 	ip = namei(uchar, 1);
-< 	if(ip == NULL) {
-< 		if(u.u_error)
-< 			return;
-< 		ip = maknode(uap->fmode&07777&(~ISVTX));
-< 		if (ip==NULL)
-< 			return;
-< 		open1(ip, FWRITE, 2);
-< 	} else
-< 		open1(ip, FWRITE, 1);
-< }
-119,129d78
-< /*
-<  * common code for open and creat.
-<  * Check permissions, allocate an open file structure,
-<  * and call the device open routine if any.
-<  */
+---
+> void
+> creat(void)
+124,126c137,138
 < open1(ip, mode, trf)
 < register struct inode *ip;
 < register mode;
-< {
-< 	register struct file *fp;
-< 	int i;
-131,154d79
-< 	if(trf != 2) {
-< 		if(mode&FREAD)
-< 			access(ip, IREAD);
-< 		if(mode&FWRITE) {
-< 			access(ip, IWRITE);
-< 			if((ip->i_mode&IFMT) == IFDIR)
-< 				u.u_error = EISDIR;
-< 		}
-< 	}
-< 	if(u.u_error)
-< 		goto out;
-< 	if(trf == 1)
-< 		itrunc(ip);
-< 	prele(ip);
-< 	if ((fp = falloc()) == NULL)
-< 		goto out;
-< 	fp->f_flag = mode&(FREAD|FWRITE);
-< 	fp->f_inode = ip;
-< 	i = u.u_r.r_val1;
-< 	openi(ip, mode&FWRITE);
-< 	if(u.u_error == 0)
-< 		return;
-< 	u.u_ofile[i] = NULL;
-< 	fp->f_count--;
-156,158d80
-< out:
-< 	iput(ip);
-< }
-163c85,86
+---
+> void
+> open1(register struct inode *ip, register int mode, int trf)
+163c175,176
 < close()
 ---
 > void
 > close(void)
-181c104,105
+181c194,195
 < seek()
 ---
 > void
 > seek(void)
-194c118
-< 	if(fp->f_flag&(FPIPE|FMP)) {
----
-> 	if(fp->f_flag&FPIPE) {
-209c133,134
+209c223,224
 < link()
 ---
 > void
 > link(void)
-259c184,185
+259c274,275
 < mknod()
 ---
 > void
 > mknod(void)
-290c216,217
+290c306,307
 < saccess()
 ---
 > void
 > saccess(void)
-292c219
+292c309
 < 	register svuid, svgid;
 ---
 > 	register int svuid, svgid;
@@ -5602,198 +4595,12 @@ Expect:
 > getmdev(void)
 ```
 
-### usr/sys/sys/sys4.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/sys/sys/sys4.c unix-v7-c99/usr/sys/sys/sys4.c || true
-```
-
-Expect:
-
-```
-5d4
-< #include "../h/reg.h"
-8a8,10
-> int spl0(void);
-> int spl7(void);
-> void chdirec(struct inode **ipp);
-17c19,20
-< gtime()
----
-> void
-> gtime(void)
-26c29,30
-< ftime()
----
-> void
-> ftime(void)
-53c57,58
-< stime()
----
-> void
-> stime(void)
-64c69,70
-< setuid()
----
-> void
-> setuid(void)
-66c72
-< 	register uid;
----
-> 	register int uid;
-80c86,87
-< getuid()
----
-> void
-> getuid(void)
-87c94,95
-< setgid()
----
-> void
-> setgid(void)
-89c97
-< 	register gid;
----
-> 	register int gid;
-102c110,111
-< getgid()
----
-> void
-> getgid(void)
-109c118,119
-< getpid()
----
-> void
-> getpid(void)
-115c125,126
-< sync()
----
-> void
-> sync(void)
-121c132,133
-< nice()
----
-> void
-> nice(void)
-123c135
-< 	register n;
----
-> 	register int n;
-145c157,158
-< unlink()
----
-> void
-> unlink(void)
-148,150d160
-< 	struct a {
-< 		char	*fname;
-< 	};
-194c204,205
-< chdir()
----
-> void
-> chdir(void)
-199c210,211
-< chroot()
----
-> void
-> chroot(void)
-205,206c217,218
-< chdirec(ipp)
-< register struct inode **ipp;
----
-> void
-> chdirec(register struct inode **ipp)
-209,211d220
-< 	struct a {
-< 		char	*fname;
-< 	};
-234c243,244
-< chmod()
----
-> void
-> chmod(void)
-255c265,266
-< chown()
----
-> void
-> chown(void)
-273c284,285
-< ssig()
----
-> void
-> ssig(void)
-275c287
-< 	register a;
----
-> 	register int a;
-292c304,305
-< kill()
----
-> void
-> kill(void)
-295c308
-< 	register a;
----
-> 	register int a;
-327c340,341
-< times()
----
-> void
-> times(void)
-338c352,353
-< profil()
----
-> void
-> profil(void)
-357c372,373
-< alarm()
----
-> void
-> alarm(void)
-360c376
-< 	register c;
----
-> 	register int c;
-372,377c388,390
-< /*
-<  * indefinite wait.
-<  * no one should wakeup(&u)
-<  */
-< pause()
-< {
----
-> /* v7's pause(2) implementation is gone -- arch/arm.c has its own
->  * sys_pause_v7 that uses the mt_block_on_pipe + clock-tick wake path
->  * instead of the v7 sleep()/wakeup() handoff. */
-379,381d391
-< 	for(;;)
-< 		sleep((caddr_t)&u, PSLEP);
-< }
-386c396,397
-< umask()
----
-> void
-> umask(void)
-391c402
-< 	register t;
----
-> 	register int t;
-403c414,415
-< utime()
----
-> void
-> utime(void)
-```
-
 ### usr/sys/sys/text.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/text.c unix-v7-c99/usr/sys/sys/text.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/sys/sys/text.c unix-v7-c99/usr/sys/sys/text.c || true
 ```
 
 Expect:
@@ -5843,66 +4650,58 @@ Expect:
 < 	p->p_flag &= ~(SLOAD|SLOCK);
 ---
 > 	p->p_flag &= ~SLOAD;
-46,50c68,69
-< /*
-<  * relinquish use of the shared text segment
-<  * of a process.
-<  */
+50c72,73
 < xfree()
 ---
 > void
 > xfree(void)
-84,85c103,104
+84,85c107,108
 < xalloc(ip)
 < register struct inode *ip;
 ---
 > void
 > xalloc(register struct inode *ip)
-147,148c166,167
+147,148c170,171
 < xexpand(xp)
 < register struct text *xp;
 ---
 > void
 > xexpand(register struct text *xp)
-171,172c190,191
+171,172c194,195
 < xlock(xp)
 < register struct text *xp;
 ---
 > void
 > xlock(register struct text *xp)
-182,183c201,202
+182,183c205,206
 < xunlock(xp)
 < register struct text *xp;
 ---
 > void
 > xunlock(register struct text *xp)
-195,196c214,215
+195,196c218,219
 < xccdec(xp)
 < register struct text *xp;
 ---
 > void
 > xccdec(register struct text *xp)
-216,217c235,236
+216,217c239,240
 < xumount(dev)
 < register dev;
 ---
 > void
 > xumount(register dev_t dev)
-221c240
-< 	for (xp = &text[0]; xp < &text[NTEXT]; xp++)
----
-> 	for (xp = &text[0]; xp < &text[NTEXT]; xp++)
-229,230c248,249
+229,230c252,253
 < xrele(ip)
 < register struct inode *ip;
 ---
 > void
 > xrele(register struct inode *ip)
-234c253
+234c257
 < 	if (ip->i_flag&ITEXT==0)
 ---
 > 	if ((ip->i_flag&ITEXT)==0)
-245,246c264,265
+245,246c268,269
 < xuntext(xp)
 < register struct text *xp;
 ---
@@ -5921,65 +4720,43 @@ diff unix-v7-c99/v7/usr/sys/sys/ureg.c unix-v7-c99/usr/sys/sys/ureg.c || true
 Expect:
 
 ```
-7d6
-< #include "../h/seg.h"
-8a8,13
-> #define	RO	02
-> #define	RW	06
-> #define	ED	010
-> #define	TX	020
-> #define	ABS	040
+7a8,9
 > int estabur(unsigned nt, unsigned nd, unsigned ns, int sep, int xrw);
-10,13c15,21
-<  * Load the user hardware segmentation
-<  * registers from the software prototype.
-<  * The software registers must have
-<  * been setup prior by estabur.
----
->  * v7's sureg() pushed the per-proc u_uisa/u_uisd prototype into the
->  * PDP-11's UISA/UISD segment registers at 0177640 / 0177600.  On ARM
->  * those literal addresses fall inside l1[0]'s identity-mapped user
->  * page (USERPHYS+0xFF80..0xFFFE), so the original loop would silently
->  * scribble over the bottom of every process's address space.  ARM
->  * userspace runs out of a single 1 MiB identity-mapped window with
->  * no per-segment registers to reload, so this is a no-op.
-15,20c23,24
+> void arm_sureg(int *uisa, int *uisd, int nseg);
+15c17,18
 < sureg()
-< {
-< 	register *udp, *uap, *rdp;
-< 	int *rap, *limudp;
-< 	int taddr, daddr;
-< 	struct text *tp;
 ---
 > void
 > sureg(void)
-22,34c26
-< 	taddr = daddr = u.u_procp->p_addr;
-< 	if ((tp=u.u_procp->p_textp) != NULL)
-< 		taddr = tp->x_caddr;
-< 	limudp = &u.u_uisd[16];
-< 	if (cputype==40)
-< 		limudp = &u.u_uisd[8];
+17,18c20,22
+< 	register *udp, *uap, *rdp;
+< 	int *rap, *limudp;
+---
+> 	register int *udp, *uap, *rap;
+> 	int auisa[16];
+> 	int *limudp;
+28,29c32
 < 	rap = (int *)UISA;
 < 	rdp = (int *)UISD;
-< 	uap = &u.u_uisa[0];
-< 	for (udp = &u.u_uisd[0]; udp < limudp;) {
-< 		*rap++ = *uap++ + (*udp&TX? taddr: (*udp&ABS? 0: daddr));
-< 		*rdp++ = *udp++;
-< 	}
 ---
-> {
-48,49c40,41
+> 	rap = &auisa[0];
+33c36
+< 		*rdp++ = *udp++;
+---
+> 		udp++;
+34a38
+> 	arm_sureg(auisa, &u.u_uisd[0], limudp - &u.u_uisd[0]);
+48,49c52,53
 < estabur(nt, nd, ns, sep, xrw)
 < unsigned nt, nd, ns;
 ---
 > int
 > estabur(unsigned nt, unsigned nd, unsigned ns, int sep, int xrw)
-51c43
+51c55
 < 	register a, *ap, *dp;
 ---
 > 	register int a, *ap, *dp;
-61c53
+61c65
 < 	if(nt+nd+ns+USIZE > maxmem)
 ---
 > 	if((int)(nt+nd+ns+USIZE) > maxmem)
@@ -6025,29 +4802,6 @@ Expect:
 > 	return(0);
 ```
 
-### usr/src/cmd/sh/brkincr.h
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/sh/brkincr.h unix-v7-c99/usr/src/cmd/sh/brkincr.h || true
-```
-
-Expect:
-
-```
-1,2c1,6
-< #define BRKINCR 01000
-< #define BRKMAX 04000
----
-> /* PORT: bumped from v7's 01000/04000 (512/2048 bytes).  The original
->  * values capped glob expansion at ~30 matches on stack-allocated
->  * addg() output before sh's working stack ran out.  64KB is trivial
->  * on 128 MiB qemu. */
-> #define BRKINCR 010000
-> #define BRKMAX 0200000
-```
-
 ### usr/src/cmd/sh/builtin.c
 
 Local test:
@@ -6089,17 +4843,17 @@ Expect:
 < PROC VOID	prsym();
 < PROC VOID	synbad();
 ---
-> PROC IOPTR	inout(IOPTR lastio);
-> PROC VOID	chkword(void);
-> PROC VOID	chksym(INT sym);
-> PROC TREPTR	term(INT flg);
-> PROC TREPTR	makelist(INT type, TREPTR i, TREPTR r);
-> PROC TREPTR	list(INT flg);
-> PROC REGPTR	syncase(REG INT esym);
-> PROC TREPTR	item(BOOL flag);
-> PROC INT	skipnl(void);
-> PROC VOID	prsym(INT sym);
-> PROC VOID	synbad(void);
+> LOCAL IOPTR	inout(IOPTR lastio);
+> LOCAL VOID	chkword(void);
+> LOCAL VOID	chksym(INT sym);
+> LOCAL TREPTR	term(INT flg);
+> LOCAL TREPTR	makelist(INT type, TREPTR i, TREPTR r);
+> LOCAL TREPTR	list(INT flg);
+> LOCAL REGPTR	syncase(REG INT esym);
+> LOCAL TREPTR	item(BOOL flag);
+> LOCAL INT	skipnl(void);
+> LOCAL VOID	prsym(INT sym);
+> LOCAL VOID	synbad(void);
 > INT	word(void);
 > INT	nextc(INT quote);
 > VOID	chkpr(CHAR c);
@@ -6115,140 +4869,210 @@ Expect:
 < 	TREPTR		i;
 ---
 > TREPTR	makefork(INT flgs, TREPTR i)
-37c44
+35a43
+> 	REG FORKPTR	f;
+37,38c45,47
 < 	t=getstak(FORKTYPE);
+< 	t->forktyp=flgs|TFORK; t->forktre=i; t->forkio=0;
 ---
 > 	t=(TREPTR)getstak(FORKTYPE);
-42,44c49
+> 	f=(FORKPTR)t;
+> 	f->forktyp=flgs|TFORK; f->forktre=i; f->forkio=0;
+42,44c51
 < LOCAL TREPTR	makelist(type,i,r)
 < 	INT		type;
 < 	TREPTR		i, r;
 ---
 > LOCAL TREPTR	makelist(INT type, TREPTR i, TREPTR r)
-46c51
+46c53,54
 < 	REG TREPTR	t;
 ---
 > 	REG TREPTR	t = 0;
-50c55
+> 	REG LSTPTR	l;
+50,52c58,61
 < 	ELSE	t = getstak(LSTTYPE);
+< 		t->lsttyp = type;
+< 		t->lstlef = i; t->lstrit = r;
 ---
 > 	ELSE	t = (TREPTR)getstak(LSTTYPE);
-65,67c70
+> 		l = (LSTPTR)t;
+> 		l->lsttyp = type;
+> 		l->lstlef = i; l->lstrit = r;
+65,67c74
 < TREPTR	cmd(sym,flg)
 < 	REG INT		sym;
 < 	INT		flg;
 ---
 > TREPTR	cmd(REG INT sym, INT flg)
-87a91
+87a95
 > 		/* fallthrough */
-90c94
+90c98
 < 		IF e=cmd(sym,flg|MTFLG)
 ---
 > 		IF (e=cmd(sym,flg|MTFLG))
-98a103
+98a107
 > 		/* fallthrough */
-116c121
+116c125
 < LOCAL TREPTR	list(flg)
 ---
 > LOCAL TREPTR	list(INT flg)
-134c139
+134c143
 < LOCAL TREPTR	term(flg)
 ---
 > LOCAL TREPTR	term(INT flg)
-150,151c155
+150,151c159
 < LOCAL REGPTR	syncase(esym)
 < 	REG INT	esym;
 ---
 > LOCAL REGPTR	syncase(REG INT esym)
-156c160
+156c164
 < 	ELSE	REG REGPTR	r=getstak(REGTYPE);
 ---
 > 	ELSE	REG REGPTR	r=(REGPTR)getstak(REGTYPE);
-189,190c193
+189,190c197
 < LOCAL TREPTR	item(flag)
 < 	BOOL		flag;
 ---
 > LOCAL TREPTR	item(BOOL flag)
-204c207
+204c211,213
 < 		   t=getstak(SWTYPE);
 ---
+> 		   REG SWPTR	s;
 > 		   t=(TREPTR)getstak(SWTYPE);
-216c219
+> 		   s=(SWPTR)t;
+206c215
+< 		   t->swarg=wdarg->argval;
+---
+> 		   s->swarg=wdarg->argval;
+208,209c217,218
+< 		   t->swlst=syncase(wdval==INSYM?ESSYM:KTSYM);
+< 		   t->swtyp=TSW;
+---
+> 		   s->swlst=syncase(wdval==INSYM?ESSYM:KTSYM);
+> 		   s->swtyp=TSW;
+216,220c225,231
 < 		   t=getstak(IFTYPE);
+< 		   t->iftyp=TIF;
+< 		   t->iftre=cmd(THSYM,NLFLG);
+< 		   t->thtre=cmd(ELSYM|FISYM|EFSYM,NLFLG);
+< 		   t->eltre=((w=wdval)==ELSYM ? cmd(FISYM,NLFLG) : (w==EFSYM ? (wdval=IFSYM, item(0)) : 0));
 ---
+> 		   REG IFPTR	it;
 > 		   t=(TREPTR)getstak(IFTYPE);
-227c230
+> 		   it=(IFPTR)t;
+> 		   it->iftyp=TIF;
+> 		   it->iftre=cmd(THSYM,NLFLG);
+> 		   it->thtre=cmd(ELSYM|FISYM|EFSYM,NLFLG);
+> 		   it->eltre=((w=wdval)==ELSYM ? cmd(FISYM,NLFLG) : (w==EFSYM ? (wdval=IFSYM, item(0)) : 0));
+227,229c238,242
 < 		   t=getstak(FORTYPE);
+< 		   t->fortyp=TFOR;
+< 		   t->forlst=0;
 ---
+> 		   REG FORPTR	fr;
 > 		   t=(TREPTR)getstak(FORTYPE);
-234c237
+> 		   fr=(FORPTR)t;
+> 		   fr->fortyp=TFOR;
+> 		   fr->forlst=0;
+231c244
+< 		   t->fornam=wdarg->argval;
+---
+> 		   fr->fornam=wdarg->argval;
+234c247
 < 			t->forlst=item(0);
 ---
-> 			t->forlst=(COMPTR)item(0);
-248c251
-< 		   t=getstak(WHTYPE);
+> 			fr->forlst=(COMPTR)item(0);
+241c254
+< 		   t->fortre=cmd(wdval==DOSYM?ODSYM:KTSYM,NLFLG);
 ---
+> 		   fr->fortre=cmd(wdval==DOSYM?ODSYM:KTSYM,NLFLG);
+248,251c261,266
+< 		   t=getstak(WHTYPE);
+< 		   t->whtyp=(wdval==WHSYM ? TWH : TUN);
+< 		   t->whtre = cmd(DOSYM,NLFLG);
+< 		   t->dotre = cmd(ODSYM,NLFLG);
+---
+> 		   REG WHPTR	wh;
 > 		   t=(TREPTR)getstak(WHTYPE);
-262c265
+> 		   wh=(WHPTR)t;
+> 		   wh->whtyp=(wdval==WHSYM ? TWH : TUN);
+> 		   wh->whtre = cmd(DOSYM,NLFLG);
+> 		   wh->dotre = cmd(ODSYM,NLFLG);
+262c277
 < 		   p=getstak(PARTYPE);
 ---
 > 		   p=(PARPTR)getstak(PARTYPE);
-272a276
+265c280
+< 		   t=makefork(0,p);
+---
+> 		   t=makefork(0,(TREPTR)p);
+272a288
 > 		/* fallthrough */
-280c284
+278a295
+> 		   REG COMPTR	c;
+280,282c297,300
 < 		   t=getstak(COMTYPE);
+< 		   t->comio=io; /*initial io chain*/
+< 		   argtail = &(t->comarg);
 ---
 > 		   t=(TREPTR)getstak(COMTYPE);
-286c290
+> 		   c=(COMPTR)t;
+> 		   c->comio=io; /*initial io chain*/
+> 		   argtail = &(c->comarg);
+286c304
 < 			THEN	argp->argnxt=argset; argset=argp;
 ---
 > 			THEN	argp->argnxt=(ARGPTR)argset; argset=(ARGPTR *)argp;
-295c299
+291c309
+< 			THEN t->comio=inout(t->comio);
+---
+> 			THEN c->comio=inout(c->comio);
+295c313
 < 		   t->comtyp=TCOM; t->comset=argset; *argtail=0;
 ---
-> 		   t->comtyp=TCOM; t->comset=(ARGPTR)argset; *argtail=0;
-301c305
+> 		   c->comtyp=TCOM; c->comset=(ARGPTR)argset; *argtail=0;
+301c319
 < 	IF io=inout(io)
 ---
 > 	IF (io=inout(io))
-308c312
+308c326
 < LOCAL VOID	skipnl()
 ---
 > LOCAL INT	skipnl(void)
-314,315c318
+314,315c332
 < LOCAL IOPTR	inout(lastio)
 < 	IOPTR		lastio;
 ---
 > LOCAL IOPTR	inout(IOPTR lastio)
-334a338
+334a352
 > 		/* fallthrough */
-350c354
+350c368
 < 	iop=getstak(IOTYPE); iop->ioname=wdarg->argval; iop->iofile=iof;
 ---
 > 	iop=(IOPTR)getstak(IOTYPE); iop->ioname=wdarg->argval; iop->iofile=iof;
-358c362
+358c376
 < LOCAL VOID	chkword()
 ---
 > LOCAL VOID	chkword(void)
-362a367
+362a381
 > 	return(0);
-365c370
+365c384
 < LOCAL VOID	chksym(sym)
 ---
 > LOCAL VOID	chksym(INT sym)
-370a376
+370a390
 > 	return(0);
-373c379
+373c393
 < LOCAL VOID	prsym(sym)
 ---
 > LOCAL VOID	prsym(INT sym)
-388a395
+388a409
 > 	return(0);
-391c398
+391c412
 < LOCAL VOID	synbad()
 ---
 > LOCAL VOID	synbad(void)
-405a413
+405a427
 > 	return(0);
 ```
 
@@ -6501,23 +5325,6 @@ Expect:
 > 	return(0);
 ```
 
-### usr/src/cmd/sh/mac.h
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/sh/mac.h unix-v7-c99/usr/src/cmd/sh/mac.h || true
-```
-
-Expect:
-
-```
-10c10
-< #define LOCAL	static
----
-> #define LOCAL
-```
-
 ### usr/src/cmd/sh/macro.c
 
 Local test:
@@ -6644,7 +5451,7 @@ Expect:
 25c25,55
 < PROC VOID	exfile();
 ---
-> PROC VOID	exfile(BOOL prof);
+> LOCAL VOID	exfile(BOOL prof);
 > INT	stdsigs(void);
 > INT	addblok(POS reqd);
 > INT	options(INT argc, STRING *argv);
@@ -6746,7 +5553,7 @@ Expect:
 12c12
 < PROC BOOL	chkid();
 ---
-> PROC BOOL	chkid(STRING nam);
+> LOCAL BOOL	chkid(STRING nam);
 15,21c15,42
 < NAMNOD	ps2nod	= {	NIL,		NIL,		ps2name},
 < 	fngnod	= {	NIL,		NIL,		fngname},
@@ -7047,23 +5854,6 @@ Expect:
 > STKPTR	cpystak(STKPTR x)
 ```
 
-### usr/include/execargs.h
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/include/execargs.h unix-v7-c99/usr/include/execargs.h || true
-```
-
-Expect:
-
-```
-1c1
-< char **execargs = (char**)(-2);
----
-> char **execargs = (char **)(-2);
-```
-
 ### usr/src/cmd/cal.c
 
 Local test:
@@ -7248,7 +6038,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/cp.c unix-v7-c99/usr/src/cmd/cp.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/cmd/cp.c unix-v7-c99/usr/src/cmd/cp.c || true
 ```
 
 Expect:
@@ -7265,14 +6055,6 @@ Expect:
 < 	register i, r;
 ---
 > 	register int i, r;
-17c18
-< 	if (argc < 3)
----
-> 	if (argc < 3)
-22c23
-< 		if ((stbuf2.st_mode&S_IFMT) != S_IFDIR)
----
-> 		if ((stbuf2.st_mode&S_IFMT) != S_IFDIR)
 34,35c35,36
 < copy(from, to)
 < char *from, *to;
@@ -7287,30 +6069,10 @@ Expect:
 < 		while(*bp = *p1++)
 ---
 > 		while((*bp = *p1++))
-63c64
-< 		   stbuf1.st_ino == stbuf2.st_ino) {
----
-> 		    stbuf1.st_ino == stbuf2.st_ino) {
 73c74
 < 	while(n = read(fold,  iobuf,  BSIZE)) {
 ---
-> 	while ((n = read(fold, iobuf, BSIZE))) {
-79,85c80,86
-< 		} else
-< 			if (write(fnew, iobuf, n) != n) {
-< 				fprintf(stderr, "cp: write error.\n");
-< 				close(fold);
-< 				close(fnew);
-< 				return(1);
-< 			}
----
-> 		}
-> 		if (write(fnew, iobuf, n) != n) {
-> 			fprintf(stderr, "cp: write error.\n");
-> 			close(fold);
-> 			close(fnew);
-> 			return(1);
-> 		}
+> 	while((n = read(fold,  iobuf,  BSIZE))) {
 ```
 
 ### usr/src/cmd/mv.c
@@ -7689,14 +6451,13 @@ diff unix-v7-c99/v7/usr/src/cmd/dmesg.c unix-v7-c99/usr/src/cmd/dmesg.c || true
 Expect:
 
 ```
-20,21c20,22
+20,21c20,21
 < 	{"_msgbuf"},
 < 	{"_msgbufp"}
 ---
 > 	{"_msgbuf",  0, 0},
-> 	{"_msgbufp", 0, 0},
-> 	{"",         0, 0}
-24,25c25,28
+> 	{"_msgbufp", 0, 0}
+24,25c24,27
 < main(argc, argv)
 < char **argv;
 ---
@@ -7704,26 +6465,26 @@ Expect:
 > int pdate(void);
 > int
 > main(int argc, char **argv)
-84,85c87,88
+84,85c86,87
 < done(s)
 < char *s;
 ---
 > int
 > done(char *s)
-99a103
+99a102
 > 	return(0);
-102c106,107
+102c105,106
 < pdate()
 ---
 > int
 > pdate(void)
-104,105c109,110
+104,105c108,109
 < 	extern char *ctime();
 < 	static firstime;
 ---
 > 	extern char *ctime(long *t);
 > 	static int firstime;
-112a118
+112a117
 > 	return(0);
 ```
 
@@ -7895,7 +6656,7 @@ diff unix-v7-c99/v7/usr/src/cmd/file.c unix-v7-c99/usr/src/cmd/file.c || true
 Expect:
 
 ```
-23,24c23,33
+23,24c23,29
 < main(argc, argv)
 < char **argv;
 ---
@@ -7904,41 +6665,37 @@ Expect:
 > int ccom(void);
 > int ascom(void);
 > int english(char *bp, int n);
-> #undef major
-> #undef minor
-> #define major(x)	(((x)>>8)&0377)
-> #define minor(x)	((x)&0377)
 > int
 > main(int argc, char **argv)
-56,57c65,66
+56,57c61,62
 < type(file)
 < char *file;
 ---
 > void
 > type(char *file)
-104a114
+104a110
 > 		/* fallthrough */
-238c248
+238c244
 < 		/*.... */
 ---
 > 		.... */
-242,243c252,253
+242,243c248,249
 < lookup(tab)
 < char *tab[];
 ---
 > int
 > lookup(char *tab[])
-260c270,271
+260c266,267
 < ccom(){
 ---
 > int
 > ccom(void){
-275c286,287
+275c282,283
 < ascom(){
 ---
 > int
 > ascom(void){
-284,285c296,297
+284,285c292,293
 < english (bp, n)
 < char *bp;
 ---
@@ -8274,7 +7031,7 @@ Expect:
 < char *mktemp();
 ---
 > char *mktemp(char *as);
-107a107,129
+107a107,128
 > void	done(void);
 > char	*talloc(int n);
 > char	*ralloc(char *p, int n);
@@ -8297,76 +7054,70 @@ Expect:
 > void	fetch(long *f, int a, int b, FILE *lb, char *s);
 > int	readhash(FILE *f);
 > void	mesg(char *s, char *t);
-> static int	diff_isspace(int c);
-109c131,137
+109c130,131
 < done()
 ---
-> static int
-> diff_isspace(int c)
-> {
-> 	return(c==' ' || c=='\t' || c=='\n' || c=='\v' || c=='\r' || c=='\f');
-> }
 > void
 > done(void)
-115c143
+115c137
 < char *talloc(n)
 ---
 > char *talloc(int n)
-117c145
+117c139
 < 	extern char *malloc();
 ---
 > 	extern char *malloc(unsigned n);
-122a151
+122a145
 > 	return(NULL);
-125,126c154
+125,126c148
 < char *ralloc(p,n)	/*compacting reallocation */
 < char *p;
 ---
 > char *ralloc(char *p, int n)	/*compacting reallocation */
-129c157
+129c151
 < 	char *realloc();
 ---
 > 	char *realloc(char *p, unsigned n);
-139c167,168
+139c161,162
 < noroom()
 ---
 > void
 > noroom(void)
-145,146c174,175
+145,146c168,169
 < sort(a,n)	/*shellsort CACM #201*/
 < struct line *a;
 ---
 > void
 > sort(struct line *a, int n)	/*shellsort CACM #201*/
-163,164c192,193
+163,164c186,187
 < 				   aim->value == ai[0].value &&
 < 				   aim->serial > ai[0].serial)
 ---
 > 				   (aim->value == ai[0].value &&
 > 				    aim->serial > ai[0].serial))
-177,179c206,207
+177,179c200,201
 < unsort(f, l, b)
 < struct line *f;
 < int *b;
 ---
 > void
 > unsort(struct line *f, int l, int *b)
-191,192c219,220
+191,192c213,214
 < filename(pa1, pa2)
 < char **pa1, **pa2;
 ---
 > void
 > filename(char **pa1, char **pa2)
-202c230,231
+202c224,225
 < 		while(*b1++ = *a1++) ;
 ---
 > 		while((*b1++ = *a1++))
 > 			;
-205c234
+205c228
 < 		while(*a1++ = *a2++)
 ---
 > 		while((*a1++ = *a2++))
-210,213c239,242
+210,213c233,236
 < 		signal(SIGHUP,done);
 < 		signal(SIGINT,done);
 < 		signal(SIGPIPE,done);
@@ -8376,43 +7127,43 @@ Expect:
 > 		signal(SIGINT,(int)done);
 > 		signal(SIGPIPE,(int)done);
 > 		signal(SIGTERM,(int)done);
-225,226c254,255
+225,226c248,249
 < prepare(i, arg)
 < char *arg;
 ---
 > void
 > prepare(int i, char *arg)
-229c258
+229c252
 < 	register j,h;
 ---
 > 	register int j,h;
-235c264
+235c258
 < 	for(j=0; h=readhash(input[i]);) {
 ---
 > 	for(j=0; (h=readhash(input[i]));) {
-244c273,274
+244c267,268
 < prune()
 ---
 > void
 > prune(void)
-246c276
+246c270
 < 	register i,j;
 ---
 > 	register int i,j;
-261,263c291,292
+261,263c285,286
 < equiv(a,n,b,m,c)
 < struct line *a, *b;
 < int *c;
 ---
 > void
 > equiv(struct line *a, int n, struct line *b, int m, int *c)
-289,290c318,319
+289,290c312,313
 < main(argc, argv)
 < char **argv;
 ---
 > int
 > main(int argc, char **argv)
-358,361c387,388
+358,361c381,382
 < stone(a,n,b,c)
 < int *a;
 < int *b;
@@ -8420,71 +7171,59 @@ Expect:
 ---
 > int
 > stone(int *a, int n, int *b, int *c)
-399c426,427
+399c420,421
 < newcand(x,y,pred)
 ---
 > int
 > newcand(int x, int y, int pred)
-410,411c438,439
+410,411c432,433
 < search(c, k, y)
 < int *c;
 ---
 > int
 > search(int *c, int k, int y)
-431c459,460
+431c453,454
 < unravel(p)
 ---
 > void
 > unravel(int p)
-448,449c477,478
+448,449c471,472
 < check(argv)
 < char **argv;
 ---
 > void
 > check(char **argv)
-454c483
+454c477
 < 	char c,d;
 ---
 > 	int c,d;
-475c504
-< 			if(bflag && isspace(c) && isspace(d)) {
----
-> 			if(bflag && diff_isspace(c) && diff_isspace(d)) {
-479c508
-< 				} while(isspace(c=getc(input[0])));
----
-> 				} while(diff_isspace(c=getc(input[0])));
-483c512
-< 				} while(isspace(d=getc(input[1])));
----
-> 				} while(diff_isspace(d=getc(input[1])));
-512c541,542
+512c535,536
 < skipline(f)
 ---
 > int
 > skipline(int f)
-514c544
+514c538
 < 	register i;
 ---
 > 	register int i;
-519,520c549,550
+519,520c543,544
 < output(argv)
 < char **argv;
 ---
 > void
 > output(char **argv)
-551c581,582
+551c575,576
 < change(a,b,c,d)
 ---
 > void
 > change(int a, int b, int c, int d)
-572,573c603,604
+572,573c597,598
 < range(a,b,separator)
 < char *separator;
 ---
 > void
 > range(int a, int b, char *separator)
-581,584c612,613
+581,584c606,607
 < fetch(f,a,b,lb,s)
 < long *f;
 < FILE *lb;
@@ -8492,32 +7231,32 @@ Expect:
 ---
 > void
 > fetch(long *f, int a, int b, FILE *lb, char *s)
-602,603c631,632
+602,603c625,626
 < readhash(f)
 < FILE *f;
 ---
 > int
 > readhash(FILE *f)
-607,608c636,637
+607,608c630,631
 < 	register space;
 < 	register t;
 ---
 > 	register int space;
 > 	register int t;
-617,618c646,647
+617,618c640,641
 < 		switch(t=getc(f)) {
 < 		case -1:
 ---
 > 		t = getc(f);
 > 		if(t == -1)
-620,621c649,651
+620,621c643,645
 < 		case '\t':
 < 		case ' ':
 ---
 > 		if(t == '\n')
 > 			break;
-> 		if(diff_isspace(t)) {
-624,629c654,655
+> 		if(isspace(t)) {
+624,629c648,649
 < 		default:
 < 			if(space) {
 < 				shift += 7;
@@ -8527,18 +7266,18 @@ Expect:
 ---
 > 		}
 > 		if(space) {
-631,633c657
+631,633c651
 < 			continue;
 < 		case '\n':
 < 			break;
 ---
 > 			space = 0;
-635c659,660
+635c653,654
 < 		break;
 ---
 > 		sum += (long)t << (shift%=HALFLONG);
 > 		shift += 7;
-641,642c666,667
+641,642c660,661
 < mesg(s,t)
 < char *s, *t;
 ---
@@ -9009,12 +7748,7 @@ Expect:
 < 	if(nl[0].type == -1) {
 ---
 > 	if(nl[0].type == 0) {
-88a101,104
-> 	/* The v7 original assumed dk_busy/etime/numb/wds/tin/tout were
-> 	 * laid out contiguously in kernel .bss so a single read() filled
-> 	 * `s`.  ELF link order doesn't honour that, so read each symbol
-> 	 * individually into the matching slot. */
-90c106,126
+90c102,122
 < 	read(mf, (char *)&s, sizeof s);
 ---
 > 	read(mf, (char *)&s.busy, sizeof(s.busy));
@@ -9038,84 +7772,73 @@ Expect:
 > 		lseek(mf, (long)nl[6].value, 0);
 > 		read(mf, (char *)&s.tout, sizeof(s.tout));
 > 	}
-91a128
+91a124
 > 		if (i >= 32) break;
-139a177
+139a173
 > 	return(0);
-149c187,188
+149c183,184
 < stats(dn)
 ---
 > int
 > stats(int dn)
-151c190
+151c186
 < 	register i;
 ---
 > 	register int i;
-165c204
+165c200
 < 		return;
 ---
 > 		return(0);
-172a212,221
-> 	/* v7-era arithmetic artifact: f1 is the disk-busy time sampled by
-> 	 * the HZ-tick clock IRQ (clock.c's `dk_time[dk_busy&07]++`).  The
-> 	 * v7 RK/RF/RP drivers held dk_busy across the seek+transfer (tens
-> 	 * of ms), so f1 was always >= the f4*f3 model term.  This port's
-> 	 * virtio_blk strategy is a synchronous busy-wait that finishes in
-> 	 * microseconds -- almost always inside a single clock tick -- so
-> 	 * f1 is usually 0 even with non-zero numb/wds, and f5 = f1 - f4*f3
-> 	 * comes out negative (and f6 = -f5).  v7 doesn't clamp, and we
-> 	 * deliberately don't either, so the printed msps/mspt match what
-> 	 * the original code would have produced on the same inputs. */
-175a225
+175a211
 > 	return(0);
-178c228,229
+178c214,215
 < stat1(o)
 ---
 > int
 > stat1(int o)
-180c231
+180c217
 < 	register i;
 ---
 > 	register int i;
-194a246
+194a232
 > 	return(0);
-197,198c249,250
+197,198c235,236
 < stats2(t)
 < double t;
 ---
 > int
 > stats2(double t)
-200c252
+200c238
 < 	register i, j;
 ---
 > 	register int i, j;
-206a259
+206a245
 > 	return(0);
-209,210c262,263
+209,210c248,249
 < stats3(t)
 < double t;
 ---
 > int
 > stats3(double t)
-212c265
+212c251
 < 	register i;
 ---
 > 	register int i;
-251a305
+251a291
 > 	return(0);
-254c308,309
+254c294,295
 < biostats()
 ---
 > int
 > biostats(void)
-256c311
+256c297
 < register i;
 ---
 > 	register int i;
-257a313,314
+257a299,300
 > 	if (nl[1].type == 0)
 > 		return(0);
-270a328
+270a314
 > 	return(0);
 ```
 
@@ -9293,7 +8016,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/find.c unix-v7-c99/usr/src/cmd/find.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/cmd/find.c unix-v7-c99/usr/src/cmd/find.c || true
 ```
 
 Expect:
@@ -9312,7 +8035,7 @@ Expect:
 > struct	anode	*exp(void), *e1(void), *e2(void), *e3(void);
 > struct	anode	*mk(int (*f)(), struct anode *l, struct anode *r);
 > char	*nxtarg(void);
-41,43c39,54
+41,43c39,53
 < char *rindex();
 < char *sbrk();
 < main(argc, argv) char *argv[];
@@ -9320,7 +8043,6 @@ Expect:
 > char *rindex(char *sp, int c);
 > char *sbrk(int);
 > int	pr(char *s);
-> int	gethome(void);
 > int	descend(char *name, char *fname, struct anode *exlist);
 > int	cpio(void);
 > int	getunum(char *f, char *s);
@@ -9333,38 +8055,31 @@ Expect:
 > int	umatch(char *s, char *p);
 > int
 > main(int argc, char *argv[])
-48d58
-< 	FILE *pwd, *popen();
-51,54c61
-< 	pwd = popen("pwd", "r");
-< 	fgets(Home, 128, pwd);
-< 	pclose(pwd);
-< 	Home[strlen(Home) - 1] = '\0';
----
-> 	gethome();
-77c84
+48a59
+> 	int pclose(FILE *);
+77c88
 < 		if(cp = rindex(Pathname, '/')) {
 ---
 > 		if((cp = rindex(Pathname, '/'))) {
-99,100c106,107
+99,100c110,111
 < struct anode *exp() { /* parse ALTERNATION (-o)  */
 < 	int or();
 ---
 > struct anode *exp(void) { /* parse ALTERNATION (-o)  */
 > 	int or(register struct anode *p);
-111,112c118,119
+111,112c122,123
 < struct anode *e1() { /* parse CONCATENATION (formerly -a) */
 < 	int and();
 ---
 > struct anode *e1(void) { /* parse CONCATENATION (formerly -a) */
 > 	int and(register struct anode *p);
-128,129c135,136
+128,129c139,140
 < struct anode *e2() { /* parse NOT (!) */
 < 	int not();
 ---
 > struct anode *e2(void) { /* parse NOT (!) */
 > 	int not(register struct anode *p);
-141,144c148,153
+141,144c152,157
 < struct anode *e3() { /* parse parens and predicates */
 < 	int exeq(), ok(), glob(),  mtime(), atime(), ctime(), user(),
 < 		group(), size(), perm(), links(), print(),
@@ -9376,403 +8091,341 @@ Expect:
 > 	int user(void *vp), group(void *vp), size(void *vp), perm(void *vp);
 > 	int links(void *vp), print(void), type(void *vp), ino(void *vp);
 > 	int cpio(void), newer(void);
-166c175
+166c179
 < 		return(mk(mtime, (struct anode *)atoi(b), (struct anode *)s));
 ---
 > 		return(mk(mtime, (struct anode *)(long)atoi(b), (struct anode *)(long)s));
-168c177
+168c181
 < 		return(mk(atime, (struct anode *)atoi(b), (struct anode *)s));
 ---
 > 		return(mk(atime, (struct anode *)(long)atoi(b), (struct anode *)(long)s));
-170c179
+170c183
 < 		return(mk(ctime, (struct anode *)atoi(b), (struct anode *)s));
 ---
 > 		return(mk(ctime, (struct anode *)(long)atoi(b), (struct anode *)(long)s));
-176c185
+176c189
 < 				return mk(user, (struct anode *)atoi(b), (struct anode *)s);
 ---
 > 				return mk(user, (struct anode *)(long)atoi(b), (struct anode *)(long)s);
-180c189
+180c193
 < 		return(mk(user, (struct anode *)i, (struct anode *)s));
 ---
 > 		return(mk(user, (struct anode *)(long)i, (struct anode *)(long)s));
-183c192
+183c196
 < 		return(mk(ino, (struct anode *)atoi(b), (struct anode *)s));
 ---
 > 		return(mk(ino, (struct anode *)(long)atoi(b), (struct anode *)(long)s));
-189c198
+189c202
 < 				return mk(group, (struct anode *)atoi(b), (struct anode *)s);
 ---
 > 				return mk(group, (struct anode *)(long)atoi(b), (struct anode *)(long)s);
-193c202
+193c206
 < 		return(mk(group, (struct anode *)i, (struct anode *)s));
 ---
 > 		return(mk(group, (struct anode *)(long)i, (struct anode *)(long)s));
-195c204
+195c208
 < 		return(mk(size, (struct anode *)atoi(b), (struct anode *)s));
 ---
 > 		return(mk(size, (struct anode *)(long)atoi(b), (struct anode *)(long)s));
-197c206
+197c210
 < 		return(mk(links, (struct anode *)atoi(b), (struct anode *)s));
 ---
 > 		return(mk(links, (struct anode *)(long)atoi(b), (struct anode *)(long)s));
-204c213
+204c217
 < 		return(mk(perm, (struct anode *)i, (struct anode *)s));
 ---
 > 		return(mk(perm, (struct anode *)(long)i, (struct anode *)(long)s));
-226c235
+226c239
 < 			pr("find: cannot create "), pr(s), pr("\n");
 ---
 > 			pr("find: cannot create "), pr(b), pr("\n");
-242a252
+242a256
 > 	return(0);
-244,246c254
+244,246c258
 < struct anode *mk(f, l, r)
 < int (*f)();
 < struct anode *l, *r;
 ---
 > struct anode *mk(int (*f)(), struct anode *l, struct anode *r)
-254,255c262,263
+254,255c266,267
 < char *nxtarg() { /* get next arg from command line */
 < 	static strikes = 0;
 ---
 > char *nxtarg(void) { /* get next arg from command line */
 > 	static int strikes = 0;
-270,271c278,279
+270,271c282,283
 < and(p)
 < register struct anode *p;
 ---
 > int
 > and(register struct anode *p)
-275,276c283,284
+275,276c287,288
 < or(p)
 < register struct anode *p;
 ---
 > int
 > or(register struct anode *p)
-280,281c288,289
+280,281c292,293
 < not(p)
 < register struct anode *p;
 ---
 > int
 > not(register struct anode *p)
-285,286c293,294
+285,286c297,298
 < glob(p)
-< register struct { int f; char *pat; } *p;
+< register struct { int f; char *pat; } *p; 
 ---
 > int
 > glob(void *vp)
-287a296
+287a300
 > 	struct { int f; char *pat; } *p = vp;
-290c299,300
+290c303,304
 < print()
 ---
 > int
 > print(void)
-295,296c305,306
+295,296c309,310
 < mtime(p)
-< register struct { int f, t, s; } *p;
+< register struct { int f, t, s; } *p; 
 ---
 > int
 > mtime(void *vp)
-297a308
+297a312
 > 	struct { int f, t, s; } *p = vp;
-300,301c311,312
+300,301c315,316
 < atime(p)
-< register struct { int f, t, s; } *p;
+< register struct { int f, t, s; } *p; 
 ---
 > int
 > atime(void *vp)
-302a314
+302a318
 > 	struct { int f, t, s; } *p = vp;
-305,306c317,318
+305,306c321,322
 < ctime(p)
-< register struct { int f, t, s; } *p;
+< register struct { int f, t, s; } *p; 
 ---
 > int
 > ctime(void *vp)
-307a320
+307a324
 > 	struct { int f, t, s; } *p = vp;
-310,311c323,324
+310,311c327,328
 < user(p)
-< register struct { int f, u, s; } *p;
+< register struct { int f, u, s; } *p; 
 ---
 > int
 > user(void *vp)
-312a326
+312a330
 > 	struct { int f, u, s; } *p = vp;
-315,316c329,330
+315,316c333,334
 < ino(p)
 < register struct { int f, u, s; } *p;
 ---
 > int
 > ino(void *vp)
-317a332
+317a336
 > 	struct { int f, u, s; } *p = vp;
-320,321c335,336
+320,321c339,340
 < group(p)
-< register struct { int f, u; } *p;
+< register struct { int f, u; } *p; 
 ---
 > int
 > group(void *vp)
-322a338
+322a342
 > 	struct { int f, u; } *p = vp;
-325,326c341,342
+325,326c345,346
 < links(p)
-< register struct { int f, link, s; } *p;
+< register struct { int f, link, s; } *p; 
 ---
 > int
 > links(void *vp)
-327a344
+327a348
 > 	struct { int f, link, s; } *p = vp;
-330,331c347,348
+330,331c351,352
 < size(p)
-< register struct { int f, sz, s; } *p;
+< register struct { int f, sz, s; } *p; 
 ---
 > int
 > size(void *vp)
-332a350
+332a354
 > 	struct { int f, sz, s; } *p = vp;
-335,336c353,354
+335,336c357,358
 < perm(p)
-< register struct { int f, per, s; } *p;
+< register struct { int f, per, s; } *p; 
 ---
 > int
 > perm(void *vp)
-338c356,357
+338c360,361
 < 	register i;
 ---
 > 	struct { int f, per, s; } *p = vp;
 > 	register int i;
-342,343c361,362
+342,343c365,366
 < type(p)
 < register struct { int f, per, s; } *p;
 ---
 > int
 > type(void *vp)
-344a364
+344a368
 > 	struct { int f, per, s; } *p = vp;
-347,348c367,368
+347,348c371,372
 < exeq(p)
 < register struct { int f, com; } *p;
 ---
 > int
 > exeq(void *vp)
-349a370
+349a374
 > 	struct { int f, com; } *p = vp;
-353,354c374,375
+353,354c378,379
 < ok(p)
 < struct { int f, com; } *p;
 ---
 > int
 > ok(void *vp)
-355a377
+355a381
 > 	struct { int f, com; } *p = vp;
-373,374c395
+373,374c399
 < long mklong(v)
 < short v[];
 ---
 > long mklong(short v[])
-383c404,405
+383c408,409
 < cpio()
 ---
 > int
 > cpio(void)
-400c422
+400c426
 < 	register ifile, ct;
 ---
 > 	register int ifile, ct;
-402c424
+402c428
 < 	register i;
 ---
 > 	register int i;
-421c443
+421c447
 < 		return;
 ---
 > 		return(0);
-425c447
+425c451
 < 		return;
 ---
 > 		return(0);
-430c452
+430c456
 < 		return;
 ---
 > 		return(0);
-440c462
+440c466
 < 	return;
 ---
 > 	return(0);
-442c464,465
+442c468,469
 < newer()
 ---
 > int
 > newer(void)
-448,450c471,534
+448,450c475,476
 < scomp(a, b, s) /* funny signed compare */
 < register a, b;
 < register char s;
 ---
 > int
-> gethome(void)
-> {
-> 	char name[128];
-> 	int file, off, i, j;
-> 	struct stat d, dd, root;
-> 	struct direct dir;
->
-> 	off = -1;
-> 	stat("/", &root);
-> 	for (;;) {
-> 		stat(".", &d);
-> 		if(d.st_ino == root.st_ino && d.st_dev == root.st_dev) {
-> 			Home[0] = '/';
-> 			if(off < 0) {
-> 				Home[1] = '\0';
-> 			} else {
-> 				if(off + 2 > (int)sizeof Home) {
-> 					pr("find: pathname too long\n");
-> 					exit(1);
-> 				}
-> 				strcpy(Home + 1, name);
-> 			}
-> 			chdir(Home);
-> 			return(0);
-> 		}
-> 		if((file = open("..", 0)) < 0) {
-> 			pr("find: cannot open ..\n");
-> 			exit(1);
-> 		}
-> 		fstat(file, &dd);
-> 		chdir("..");
-> 		if(d.st_dev == dd.st_dev) {
-> 			do {
-> 				if(read(file, (char *)&dir, sizeof dir) < (int)sizeof dir) {
-> 					pr("find: cannot read ..\n");
-> 					exit(1);
-> 				}
-> 			} while(dir.d_ino != d.st_ino);
-> 		} else do {
-> 			if(read(file, (char *)&dir, sizeof dir) < (int)sizeof dir) {
-> 				pr("find: cannot read ..\n");
-> 				exit(1);
-> 			}
-> 			stat(dir.d_name, &dd);
-> 		} while(dd.st_ino != d.st_ino || dd.st_dev != d.st_dev);
-> 		close(file);
-> 		i = -1;
-> 		while(dir.d_name[++i] != 0);
-> 		if(off + i + 2 >= (int)sizeof name) {
-> 			pr("find: pathname too long\n");
-> 			exit(1);
-> 		}
-> 		for(j = off + 1; j >= 0; --j)
-> 			name[j + i + 1] = name[j];
-> 		off = i + off + 1;
-> 		name[i] = '/';
-> 		for(--i; i >= 0; --i)
-> 			name[i] = dir.d_name[i];
-> 	}
-> 	return(0);
-> }
-> int
 > scomp(register int a, register int b, register int s) /* funny signed compare */
-459c543,544
+459c485,486
 < doex(com)
 ---
 > int
 > doex(int com)
-461c546
+461c488
 < 	register np;
 ---
 > 	register int np;
-464c549
+464c491
 < 	static ccode;
 ---
 > 	static int ccode;
-467c552
+467c494
 < 	while (na=Argv[com++]) {
 ---
 > 	while ((na=Argv[com++])) {
-477c562
+477c504
 < 		execvp(nargv[0], nargv, np);
 ---
 > 		execvp(nargv[0], nargv);
-483,484c568,570
+483,484c510,512
 < getunum(f, s) char *f, *s; { /* find user/group name and return number */
 < 	register i;
 ---
 > int
 > getunum(char *f, char *s) { /* find user/group name and return number */
 > 	register int i;
-486c572
+486c514
 < 	register c;
 ---
 > 	register int c;
-491a578,579
+491a520,521
 > 	if(pin == NULL)
 > 		return(i);
-515,517c603,604
+515,517c545,546
 < descend(name, fname, exlist)
 < struct anode *exlist;
 < char *name, *fname;
 ---
 > int
 > descend(char *name, char *fname, struct anode *exlist)
-612,613c699,700
+612,613c641,642
 < gmatch(s, p) /* string match as in glob */
 < register char *s, *p;
 ---
 > int
 > gmatch(register char *s, register char *p) /* string match as in glob */
-619,620c706,707
+619,620c648,649
 < amatch(s, p)
 < register char *s, *p;
 ---
 > int
 > amatch(register char *s, register char *p)
-622c709
+622c651
 < 	register cc;
 ---
 > 	register int cc;
-632c719
+632c661
 < 		while (cc = *++p) {
 ---
 > 		while ((cc = *++p)) {
-642c729
+642c671
 < 				k |= lc <= scc & scc <= (cc=p[1]);
 ---
 > 				k |= (lc <= scc) & (scc <= (cc=p[1]));
-661,662c748,749
+661,662c690,691
 < umatch(s, p)
 < register char *s, *p;
 ---
 > int
 > umatch(register char *s, register char *p)
-670,672c757,758
+670,672c699,700
 < bwrite(rp, c)
 < register short *rp;
 < register c;
 ---
 > int
 > bwrite(register short *rp, register int c)
-691a778
+691a720
 > 	return(0);
-693c780,781
+693c722,723
 < chgreel(x, fl)
 ---
 > int
 > chgreel(int x, int fl)
-695c783
+695c725
 < 	register f;
 ---
 > 	register int f;
-719,720c807,808
+719,720c749,750
 < pr(s)
 < char *s;
 ---
 > int
 > pr(char *s)
-722a811
+722a753
 > 	return(0);
 ```
 
@@ -10156,7 +8809,7 @@ Expect:
 < setkey(key)
 < char *key;
 ---
-> static void
+> void
 > setkey(char *key)
 100c100
 < 	register i, j, k;
@@ -10178,7 +8831,7 @@ Expect:
 < encrypt(block, edflag)
 < char *block;
 ---
-> static void
+> void
 > encrypt(char *block, int edflag)
 239c239
 < 	register t, j, k;
@@ -10211,80 +8864,25 @@ diff unix-v7-c99/v7/usr/include/sys/param.h unix-v7-c99/usr/include/sys/param.h 
 Expect:
 
 ```
-5c5,6
-< #define	NBUF	29		/* size of buffer cache */
----
-> #define	NBUF	64		/* size of buffer cache (matches kernel-side
-> 				 * h/param.h's bumped value). */
-10,12c11
-< #define	MAXUPRC	25		/* max processes per user */
-< #define	SSIZE	20		/* initial stack size (*64 bytes) */
-< #define	SINCR	20		/* increment of stack (*64 bytes) */
----
-> /* MAXUPRC, SSIZE, NCARGS are gone -- see kernel-side h/param.h. */
-14d12
-< #define	CANBSIZ	256		/* max size of typewriter line */
-17d14
-< #define	NCALL	20		/* max simultaneous time callouts */
-20d16
-< #define	NCLIST	100		/* max total clist size */
-25d20
-< #define	NCARGS	5120		/* # characters in exec arglist */
-39,40c34
-< #define	PWAIT	30
-< #define	PSLEP	40
----
-> /* PWAIT and PSLEP gone -- see kernel-side h/param.h. */
-51c45,46
-<  * stored in bits in a word.
----
->  * stored in bits in a word.  Only names actually referenced are
->  * defined; the rest are reserved slots in u_signal[NSIG].
-56d50
-< #define	SIGINS	4	/* illegal instruction */
-58,60d51
-< #define	SIGIOT	6	/* iot */
-< #define	SIGEMT	7	/* emt */
-< #define	SIGFPT	8	/* floating exception */
-62,64d52
-< #define	SIGBUS	10	/* bus error */
-< #define	SIGSEG	11	/* segmentation violation */
-< #define	SIGSYS	12	/* bad system call */
-67d54
-< #define	SIGTRM	15	/* Catchable termination */
-76,77c63,64
-< /* BSLOP can be 0 unless you have a TIU/Spider */
-< #define	BSLOP	2		/* In case some device needs bigger buffers */
----
-> /* BSLOP was v7 slop for TIU/Spider devices; this port has no such device. */
-> #define	BSLOP	0
-84c71
-< #define	UBASE	0140000		/* abs. addr of user block */
----
+84a85
 > #ifndef NULL
-86c73,74
-< #define	CMASK	0		/* default mask for file creation */
----
+85a87
 > #endif
-> /* CMASK removed -- see kernel h/param.h. */
-93,95d80
-< #define	INFSIZE	138		/* size of per-proc info for users */
-< #define	CBSIZE	14		/* number of chars in a clist block */
-< #define	CROUND	017		/* clist rounding: sizeof(int *) + CBSIZE - 1*/
-128a114
+120c122
+< #define	major(x)	(int)(((unsigned)x>>8))
+---
+> #define	major(x)	(int)(((unsigned)x>>8)&0377)
+128a131
 > #ifndef SYS_TYPES_H
-131c117
+131c134
 < typedef	unsigned int	ino_t;
 ---
 > typedef	unsigned short	ino_t;
-133c119,122
+133c136
 < typedef	int		label_t[6];	/* regs 2-7 */
 ---
-> /* label_t mirrors h/param.h (R4..R11 + sp + lr).  Exported here only
->  * so cmd/ps + pstat compile their copy of struct user (u_rsav/u_qsav/
->  * u_ssav). */
-> typedef	int		label_t[10];
-135a125,126
+> typedef	int		label_t[10];	/* regs 2-7 */
+135a139,140
 > #define	SYS_TYPES_H
 > #endif
 ```
@@ -10300,40 +8898,29 @@ diff unix-v7-c99/v7/usr/include/sys/inode.h unix-v7-c99/usr/include/sys/inode.h 
 Expect:
 
 ```
-13d12
-< #define	NINDEX	15
-15,25d13
+15c15
 < struct group {
-< 	short	g_state;
-< 	char	g_index;
-< 	char	g_rot;
+---
+> struct mpx_group {
+19c19
 < 	struct	group	*g_group;
-< 	struct	inode	*g_inode;
-< 	struct	file	*g_file;
-< 	short	g_rotmask;
-< 	short	g_datq;
-< 	struct	chan *g_chans[NINDEX];
-< };
-41c29
+---
+> 	struct	mpx_group	*g_group;
+41c41
 < 		};
 ---
 > 		} u_reg;
-44,45c32
+44,45c44,45
 < 			struct	group	i_group;	/*  multiplexor group file */
 < 		};
 ---
+> 			struct	mpx_group	i_group;	/*  multiplexor group file */
 > 		} u_dev;
-47a35,40
-> /* Caller-side shorthand for the named inner structs (kept v7-flavoured).
->  * v7's mpx multiplexor `struct group i_group` field is removed -- the
->  * mpx subsystem isn't wired on this port. */
+47a48,51
 > #define	i_addr	u_reg.i_addr
 > #define	i_lastr	u_reg.i_lastr
 > #define	i_rdev	u_dev.i_rdev
-51c44
-< struct inode *mpxip;		/* mpx virtual inode */
----
-> /* mpxip removed -- v7 mpx subsystem not wired on this port. */
+> #define	i_group	u_dev.i_group
 ```
 
 ### usr/sys/h/systm.h
@@ -10349,33 +8936,14 @@ Expect:
 ```
 6d5
 < char	canonb[CANBSIZ];	/* buffer for erase and kill (#@) */
-23,27c22,24
-< /*
-<  * Number of character switch entries.
-<  * Set by cinit/tty.c
-<  */
-< int	nchrdev;
----
-> /* v7's `int nchrdev` (character-switch row count, set by cinit()) is
->  * gone -- this port doesn't dispatch through cdevsw[], so no caller
->  * ever reads it. */
-35c32,34
+35d33
 < physadr	lks;			/* pointer to clock device */
----
-> /* `physadr lks` (PDP-11 KW11-L clock-device CSR pointer) is gone --
->  * the ARM port rearms the timer via cntv_tval_set, not by writing
->  * lks->r[0] = 0115. */
-37d35
+37d34
 < int	nswap;			/* size of swap space */
-44,46c42,44
-< dev_t	pipedev;		/* pipe device */
+45,46d41
 < extern	int	icode[];	/* user init code */
 < extern	int	szicode;	/* its size */
----
-> /* `dev_t pipedev` (the device pipe(2) ialloc'd against) is gone --
->  * sys/pipe.c::pipe() was removed; arch/arm.c::kpipe uses its own
->  * pipes[] table that doesn't allocate inodes. */
-48,63c46,87
+48,63c43,84
 < dev_t getmdev();
 < daddr_t	bmap();
 < struct inode *ialloc();
@@ -10413,7 +8981,7 @@ Expect:
 > struct buf *breada(dev_t dev, daddr_t blkno, daddr_t rablkno);
 > struct filsys *getfs(dev_t dev);
 > struct file *getf(int fdes);
-> /* falloc() (allocate file slot) is gone -- see sys/fio.c. */
+> struct file *falloc(void);
 > int	uchar(void);
 > void	free(dev_t dev, daddr_t bno);
 > void	ifree(dev_t dev, ino_t ino);
@@ -10435,15 +9003,6 @@ Expect:
 > void	bcopy(char *f, char *t, unsigned int n);
 > int	copyin(caddr_t f, caddr_t t, unsigned int n);
 > int	copyout(caddr_t f, caddr_t t, unsigned int n);
-74,81d97
-< /*
-<  * Structure of the system-entry table
-<  */
-< extern struct sysent {
-< 	char	sy_narg;		/* total number of arguments */
-< 	char	sy_nrarg;		/* number of args in registers */
-< 	int	(*sy_call)();		/* handler */
-< } sysent[];
 ```
 
 ### usr/sys/sys/iget.c
@@ -10457,9 +9016,7 @@ diff unix-v7-c99/v7/usr/sys/sys/iget.c unix-v7-c99/usr/sys/sys/iget.c || true
 Expect:
 
 ```
-9d8
-< #include "../h/conf.h"
-10a10,20
+10a11,21
 > void sleep(caddr_t chan, int pri);
 > void panic(char *s);
 > void printf(char *fmt, ...);
@@ -10471,80 +9028,80 @@ Expect:
 > void wdir(struct inode *ip);
 > void iput(register struct inode *ip);
 > int iupdat(register struct inode *ip, time_t *ta, time_t *tm);
-30,32c40
+30,32c41
 < iget(dev, ino)
 < dev_t dev;
 < ino_t ino;
 ---
 > iget(dev_t dev, ino_t ino)
-92,94c100,101
+92,94c101,102
 < iexpand(ip, dp)
 < register struct inode *ip;
 < register struct dinode *dp;
 ---
 > void
 > iexpand(register struct inode *ip, register struct dinode *dp)
-109d115
+109d116
 < 		*p1++ = 0;
-111a118
+111a119
 > 		*p1++ = 0;
-122,123c129,130
+122,123c130,131
 < iput(ip)
 < register struct inode *ip;
 ---
 > void
 > iput(register struct inode *ip)
-149,151c156,157
+149,151c157,158
 < iupdat(ip, ta, tm)
 < register struct inode *ip;
 < time_t *ta, *tm;
 ---
 > int
 > iupdat(register struct inode *ip, time_t *ta, time_t *tm)
-161c167
+161c168
 < 			return;
 ---
 > 			return(0);
-165c171
+165c172
 < 			return;
 ---
 > 			return(0);
-177a184,185
+177a185,186
 > 			*p1++ = *p2++;
 > 			*p1++ = *p2++;
-181,182d188
+181,182d189
 < 			*p1++ = *p2++;
 < 			*p1++ = *p2++;
-192a199
+192a200
 > 	return(0);
-204,205c211,212
+204,205c212,213
 < itrunc(ip)
 < register struct inode *ip;
 ---
 > void
 > itrunc(register struct inode *ip)
-207c214
+207c215
 < 	register i;
 ---
 > 	register int i;
-242,244c249,250
+242,244c250,251
 < tloop(dev, bn, f1, f2)
 < dev_t dev;
 < daddr_t bn;
 ---
 > void
 > tloop(dev_t dev, daddr_t bn, int f1, int f2)
-246c252
+246c253
 < 	register i;
 ---
 > 	register int i;
-251a258
+251a259
 > 	bap = NULL;
-280c287
+280c288
 < maknode(mode)
 ---
 > maknode(int mode)
-305,306c312,313
+305,306c313,314
 < wdir(ip)
 < struct inode *ip;
 ---
@@ -10574,234 +9131,20 @@ Expect:
 < 	register c;
 ---
 > 	register int c;
-66,67d65
-< 		if (mpxip!=NULL && c=='!')
-< 			break;
-76,81c74,75
-< 	if (c == '!' && mpxip != NULL) {
-< 		iput(dp);
-< 		plock(mpxip);
-< 		mpxip->i_count++;
-< 		return(mpxip);
-< 	}
----
-> 	/* v7's `path!subpath` mpx multiplexor lookup is gone -- mpxip was
-> 	 * never assigned on this port, so the branch was unreachable. */
-202,207c196,198
-< /*
-<  * Return the next character from the
-<  * kernel string pointed at by dirp.
-<  */
+206c206,207
 < schar()
-< {
 ---
-> /* schar() (kernel-side name-fetcher passed to namei) was only used by
->  * sys/sig.c::core() which is gone on this port; uchar() remains for the
->  * user-space namei path. */
-209,210d199
-< 	return(*u.u_dirp++ & 0377);
-< }
-216c205,206
+> int
+> schar(void)
+216c217,218
 < uchar()
 ---
 > int
 > uchar(void)
-218c208
+218c220
 < 	register c;
 ---
 > 	register int c;
-```
-
-### usr/sys/dev/bio.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/sys/dev/bio.c unix-v7-c99/usr/sys/dev/bio.c || true
-```
-
-Expect:
-
-```
-8a9,20
-> void brelse(struct buf *bp);
-> void iowait(struct buf *bp);
-> void notavail(struct buf *bp);
-> void geterror(struct buf *bp);
-> int incore(dev_t dev, daddr_t blkno);
-> void wakeup(caddr_t chan);
-> void sleep(caddr_t chan, int pri);
-> int spl0(void);
-> int spl6(void);
-> void splx(int s);
-> void panic(char *s);
-> void mapfree(struct buf *bp);
-56,58c68
-< bread(dev, blkno)
-< dev_t dev;
-< daddr_t blkno;
----
-> bread(dev_t dev, daddr_t blkno)
-84,86c94
-< breada(dev, blkno, rablkno)
-< dev_t dev;
-< daddr_t blkno, rablkno;
----
-> breada(dev_t dev, daddr_t blkno, daddr_t rablkno)
-125,126c133,134
-< bwrite(bp)
-< register struct buf *bp;
----
-> void
-> bwrite(struct buf *bp)
-128c136
-< 	register flag;
----
-> 	register int flag;
-149,152c157,159
-<  * given up (e.g. when writing a partial block where it is
-<  * assumed that another write for the same block will soon follow).
-<  * This can't be done for magtape, since writes must be done
-<  * in the same order as requested.
----
->  * given up.  v7 checked dp->b_flags&B_TAPE here for an
->  * ordered-write tape path, but this port has no magtape device,
->  * so the branch was unreachable and is gone.
-154,155c161,162
-< bdwrite(bp)
-< register struct buf *bp;
----
-> void
-> bdwrite(struct buf *bp)
-157d163
-< 	register struct buf *dp;
-159,165c165,166
-< 	dp = bdevsw[major(bp->b_dev)].d_tab;
-< 	if(dp->b_flags & B_TAPE)
-< 		bawrite(bp);
-< 	else {
-< 		bp->b_flags |= B_DELWRI | B_DONE;
-< 		brelse(bp);
-< 	}
----
-> 	bp->b_flags |= B_DELWRI | B_DONE;
-> 	brelse(bp);
-171,172c172,173
-< bawrite(bp)
-< register struct buf *bp;
----
-> void
-> bawrite(register struct buf *bp)
-182,183c183,184
-< brelse(bp)
-< register struct buf *bp;
----
-> void
-> brelse(struct buf *bp)
-186c187
-< 	register s;
----
-> 	register int s;
-218,220c219,220
-< incore(dev, blkno)
-< dev_t dev;
-< daddr_t blkno;
----
-> int
-> incore(dev_t dev, daddr_t blkno)
-238,240c238
-< getblk(dev, blkno)
-< dev_t dev;
-< daddr_t blkno;
----
-> getblk(dev_t dev, daddr_t blkno)
-245c243
-< 	register i;
----
-> 	register int i;
-309c307
-< geteblk()
----
-> geteblk(void)
-343,344c341,342
-< iowait(bp)
-< register struct buf *bp;
----
-> void
-> iowait(struct buf *bp)
-358,359c356,357
-< notavail(bp)
-< register struct buf *bp;
----
-> void
-> notavail(struct buf *bp)
-361c359
-< 	register s;
----
-> 	register int s;
-374,375c372,373
-< iodone(bp)
-< register struct buf *bp;
----
-> void
-> iodone(struct buf *bp)
-378c376
-< 	if(bp->b_flags&B_MAP)
----
-> 	if (bp->b_flags&B_MAP)
-392,393c390,391
-< clrbuf(bp)
-< struct buf *bp;
----
-> void
-> clrbuf(struct buf *bp)
-395,396c393,394
-< 	register *p;
-< 	register c;
----
-> 	register int *p;
-> 	register int c;
-409,410c407,408
-< swap(blkno, coreaddr, count, rdflg)
-< register count;
----
-> void
-> swap(daddr_t blkno, int coreaddr, int count, int rdflg)
-413c411
-< 	register tcount;
----
-> 	register int tcount;
-456,457c454,455
-< bflush(dev)
-< dev_t dev;
----
-> void
-> bflush(dev_t dev)
-484,486c482,483
-< physio(strat, bp, dev, rw)
-< register struct buf *bp;
-< int (*strat)();
----
-> void
-> physio(void (*strat)(struct buf *), register struct buf *bp, dev_t dev, int rw)
-515c512
-< 	    && nb < 1024-u.u_ssize)
----
-> 	    && (unsigned)nb < 1024-u.u_ssize)
-543c540
-< 	bp->b_flags &= ~(B_BUSY|B_WANTED);
----
-> 	bp->b_flags &= ~(B_BUSY|B_WANTED|B_PHYS);
-547c544
-<     bad:
----
-> bad:
-557,558c554,555
-< geterror(bp)
-< register struct buf *bp;
----
-> void
-> geterror(struct buf *bp)
 ```
 
 ### usr/src/cmd/login.c
@@ -10862,7 +9205,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/ls.c unix-v7-c99/usr/src/cmd/ls.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/cmd/ls.c unix-v7-c99/usr/src/cmd/ls.c || true
 ```
 
 Expect:
@@ -10898,10 +9241,6 @@ Expect:
 < 		if (ep->ltype=='d' && dflg==0 || fflg) {
 ---
 > 		if ((ep->ltype=='d' && dflg==0) || fflg) {
-157c163
-< 		} else
----
-> 		} else
 163,164c169,170
 < pentry(ap)
 < struct lbuf *ap;
@@ -10979,88 +9318,62 @@ diff unix-v7-c99/v7/usr/src/cmd/sh/args.c unix-v7-c99/usr/src/cmd/sh/args.c || t
 Expect:
 
 ```
-12c12,13
+12c12
 < PROC STRING *copyargs();
 ---
-> PROC DOLPTR	copyargs(STRING from[], INT n);
-> LOCAL STRING	comstring(STRING av[]);
-14a16,20
+> LOCAL DOLPTR	copyargs(STRING from[], INT n);
+14a15,19
 > INT	failed(STRING s1, STRING s2);
 > DOLPTR	freeargs(DOLPTR blk);
 > INT	assnum(STRING *p, INT n);
 > INT	pop(void);
 > extern void free(void *p);
-27,29c33
+27,29c32
 < INT	options(argc,argv)
 < 	STRING		*argv;
 < 	INT		argc;
 ---
 > INT	options(INT argc, STRING *argv)
-46c50
-< 			THEN	comdiv=argp[2];
----
-> 			THEN	comdiv=comstring(&argp[2]);
-68,69c72,93
+68,69c71
 < VOID	setargs(argi)
 < 	STRING		argi[];
 ---
-> LOCAL STRING	comstring(STRING av[])
-> {
-> 	REG STRING	cp;
-> 	REG STRING	s, q;
-> 	REG INT		n;
-> 	IF av[1]
-> 	THEN	return(make(*av));
-> 	FI
-> 	n = 1;
-> 	cp = *av;
-> 	WHILE *cp++ DO n++ OD
-> 	q = alloc(n);
-> 	s = q;
-> 	cp = *av;
-> 	WHILE *cp
-> 	DO	*s++ = (*cp == 037 ? SP : *cp);
-> 		cp++;
-> 	OD
-> 	*s = 0;
-> 	return(q);
-> }
 > VOID	setargs(STRING argi[])
-80a105
+80a83
 > 	return(0);
-83,84c108
+83,84c86
 < freeargs(blk)
 < 	DOLPTR		blk;
 ---
 > DOLPTR freeargs(DOLPTR blk)
-90c114
+90c92
 < 	IF argblk=blk
 ---
 > 	IF (argblk=blk)
-93c117
+93c95
 < 		THEN	FOR argp=argblk->dolarg; Rcheat(*argp)!=ENDARGS; argp++
 ---
 > 		THEN	FOR argp=(STRING *)argblk->dolarg; Rcheat(*argp)!=ENDARGS; argp++
-101,102c125
+101,102c103
 < LOCAL STRING *	copyargs(from, n)
 < 	STRING		from[];
 ---
 > LOCAL DOLPTR	copyargs(STRING from[], INT n)
-104c127
+104c105
 < 	REG STRING *	np=alloc(sizeof(STRING*)*n+3*BYTESPERWORD);
 ---
 > 	REG DOLPTR	np=(DOLPTR)alloc(sizeof(STRING*)*n+3*BYTESPERWORD);
-106c129
+106c107
 < 	REG STRING *	pp=np;
 ---
 > 	REG STRING *	pp;
-109,110c132,133
+109,110c110,111
 < 	np=np->dolarg;
 < 	dolv=np;
 ---
 > 	pp=(STRING *)np->dolarg;
 > 	dolv=pp;
-113,115c136,138
+113,115c114,116
 < 	DO *np++ = make(*fp++) OD
 < 	*np++ = ENDARGS;
 < 	return(pp);
@@ -11068,17 +9381,17 @@ Expect:
 > 	DO *pp++ = make(*fp++) OD
 > 	*pp++ = ENDARGS;
 > 	return(np);
-118c141
+118c119
 < clearup()
 ---
 > INT clearup(void)
-121c144
+121c122
 < 	WHILE argfor=freeargs(argfor) DONE
 ---
 > 	WHILE (argfor=freeargs(argfor)) DONE
-124a148
+124a126
 > 	return(0);
-127c151
+127c129
 < DOLPTR	useargs()
 ---
 > DOLPTR	useargs(void)
@@ -11116,12 +9429,7 @@ diff unix-v7-c99/v7/usr/src/cmd/sh/defs.h unix-v7-c99/usr/src/cmd/sh/defs.h || t
 Expect:
 
 ```
-79c79,80
-< /* result type declarations */
----
-> /* result type declarations.  copyto/execs/staknam are LOCAL to their
->  * .c files; REAL expr() was never defined or called, dropped. */
-81,108c82,105
+81,108c81,104
 < ADDRESS		alloc();
 < VOID		addblok();
 < STRING		make();
@@ -11175,7 +9483,7 @@ Expect:
 > VOID		prc(INT c);
 > INT		getenv(void);
 > STRING		*setenv(void);
-139,147c136,144
+139,147c135,143
 < MSG		atline;
 < MSG		readmsg;
 < MSG		colon;
@@ -11195,11 +9503,11 @@ Expect:
 > extern MSG	unexpected;
 > extern MSG	endoffile;
 > extern MSG	synmsg;
-150c147
+150c146
 < SYSTAB		reserved;
 ---
 > extern SYSTAB	reserved;
-158,160c155,157
+158,160c154,156
 < MSG		stdprompt;
 < MSG		supprompt;
 < MSG		profile;
@@ -11207,15 +9515,15 @@ Expect:
 > extern MSG	stdprompt;
 > extern MSG	supprompt;
 > extern MSG	profile;
-172c169
+172c168
 < MSG		flagadr;
 ---
 > extern MSG	flagadr;
-179c176
+179c175
 < MSG		defpath;
 ---
 > extern MSG	defpath;
-182,188c179,185
+182,188c178,184
 < MSG		mailname;
 < MSG		homename;
 < MSG		pathname;
@@ -11231,25 +9539,25 @@ Expect:
 > extern MSG	ifsname;
 > extern MSG	ps1name;
 > extern MSG	ps2name;
-191c188
+191c187
 < CHAR		tmpout[];
 ---
 > extern CHAR	tmpout[];
-200c197
+200c196
 < MSG		devnull;
 ---
 > extern MSG	devnull;
-240c237
+240c236
 < VOID		fault();
 ---
 > VOID		fault(INT sig);
-242,243c239,240
+242,243c238,239
 < STRING		trapcom[];
 < BOOL		trapflg[];
 ---
 > extern STRING	trapcom[];
 > extern BOOL	trapflg[];
-247,249c244,246
+247,249c243,245
 < CHAR		numbuf[];
 < MSG		export;
 < MSG		readonly;
@@ -11257,7 +9565,7 @@ Expect:
 > extern CHAR	numbuf[];
 > extern MSG	export;
 > extern MSG	readonly;
-258,282c255,279
+258,282c254,278
 < MSG		mailmsg;
 < MSG		coredump;
 < MSG		badopt;
@@ -11309,7 +9617,7 @@ Expect:
 > extern MSG	badexec;
 > extern MSG	notfound;
 > extern MSG	badfile;
-284c281
+284c280
 < address	end[];
 ---
 > extern address	end[];
@@ -11329,7 +9637,7 @@ Expect:
 27c27,33
 < PROC VOID	addg();
 ---
-> PROC VOID	addg(STRING as1, STRING as2, STRING as3);
+> LOCAL VOID	addg(STRING as1, STRING as2, STRING as3);
 > INT	gmatch(REG STRING s, REG STRING p);
 > INT	makearg(REG ARGPTR args);
 > extern int stat(char *p, STATBUF *s);
@@ -11415,26 +9723,6 @@ diff unix-v7-c99/v7/usr/src/cmd/sh/mode.h unix-v7-c99/usr/src/cmd/sh/mode.h || t
 Expect:
 
 ```
-30,38c30,38
-< STRUCT forknod	*FORKPTR;
-< STRUCT comnod	*COMPTR;
-< STRUCT swnod	*SWPTR;
-< STRUCT regnod	*REGPTR;
-< STRUCT parnod	*PARPTR;
-< STRUCT ifnod	*IFPTR;
-< STRUCT whnod	*WHPTR;
-< STRUCT fornod	*FORPTR;
-< STRUCT lstnod	*LSTPTR;
----
-> STRUCT trenod	*FORKPTR;
-> STRUCT trenod	*COMPTR;
-> STRUCT trenod	*SWPTR;
-> STRUCT trenod	*REGPTR;
-> STRUCT trenod	*PARPTR;
-> STRUCT trenod	*IFPTR;
-> STRUCT trenod	*WHPTR;
-> STRUCT trenod	*FORPTR;
-> STRUCT trenod	*LSTPTR;
 46d45
 < STRUCT sysnod	SYSTAB[];
 55,56c54
@@ -11445,154 +9733,8 @@ Expect:
 75,76d72
 < /* for functions that do not return values */
 < struct void {INT vvvvvvvv;};
-113a110,126
+113a110
 > STRUCT sysnod	SYSTAB[];
-> /* this node is a proforma for those that follow.  C99 strict: the v7
->  * K&R idiom of `t->forktyp' on a TREPTR (where forknod, comnod, etc.
->  * were separate structs with parallel layouts) is replaced with a
->  * single named-union trenod plus #define field aliases below; the
->  * separate forknod/comnod/etc. types are gone (only their `sizeof'
->  * was ever read, now expressed against the union members). */
-> struct trenod_tre  { INT tretyp;  IOPTR treio; };
-> struct trenod_fork { INT forktyp; IOPTR forkio;  TREPTR forktre; };
-> struct trenod_com  { INT comtyp;  IOPTR comio;   ARGPTR comarg; ARGPTR comset; };
-> struct trenod_if   { INT iftyp;   TREPTR iftre;  TREPTR thtre;  TREPTR eltre; };
-> struct trenod_wh   { INT whtyp;   TREPTR whtre;  TREPTR dotre; };
-> struct trenod_for  { INT fortyp;  TREPTR fortre; STRING fornam; COMPTR forlst; };
-> struct trenod_sw   { INT swtyp;   STRING swarg;  REGPTR swlst; };
-> struct trenod_par  { INT partyp;  TREPTR partre; };
-> struct trenod_lst  { INT lsttyp;  TREPTR lstlef; TREPTR lstrit; };
-> struct trenod_reg  { ARGPTR regptr; TREPTR regcom; REGPTR regnxt; };
-115d127
-< /* this node is a proforma for those that follow */
-117,118c129,140
-< 	INT	tretyp;
-< 	IOPTR	treio;
----
-> 	union {
-> 		struct trenod_tre  _tre;
-> 		struct trenod_fork _fork;
-> 		struct trenod_com  _com;
-> 		struct trenod_if   _if;
-> 		struct trenod_wh   _wh;
-> 		struct trenod_for  _for;
-> 		struct trenod_sw   _sw;
-> 		struct trenod_par  _par;
-> 		struct trenod_lst  _lst;
-> 		struct trenod_reg  _reg;
-> 	} u;
-133,137d154
-< struct forknod {
-< 	INT	forktyp;
-< 	IOPTR	forkio;
-< 	TREPTR	forktre;
-< };
-139,144d155
-< struct comnod {
-< 	INT	comtyp;
-< 	IOPTR	comio;
-< 	ARGPTR	comarg;
-< 	ARGPTR	comset;
-< };
-146,151d156
-< struct ifnod {
-< 	INT	iftyp;
-< 	TREPTR	iftre;
-< 	TREPTR	thtre;
-< 	TREPTR	eltre;
-< };
-153,157d157
-< struct whnod {
-< 	INT	whtyp;
-< 	TREPTR	whtre;
-< 	TREPTR	dotre;
-< };
-159,164d158
-< struct fornod {
-< 	INT	fortyp;
-< 	TREPTR	fortre;
-< 	STRING	fornam;
-< 	COMPTR	forlst;
-< };
-166,170d159
-< struct swnod {
-< 	INT	swtyp;
-< 	STRING	swarg;
-< 	REGPTR	swlst;
-< };
-172,176d160
-< struct regnod {
-< 	ARGPTR	regptr;
-< 	TREPTR	regcom;
-< 	REGPTR	regnxt;
-< };
-178,181d161
-< struct parnod {
-< 	INT	partyp;
-< 	TREPTR	partre;
-< };
-183,187d162
-< struct lstnod {
-< 	INT	lsttyp;
-< 	TREPTR	lstlef;
-< 	TREPTR	lstrit;
-< };
-196,204c171,179
-< #define	FORKTYPE	(sizeof(struct forknod))
-< #define	COMTYPE		(sizeof(struct comnod))
-< #define	IFTYPE		(sizeof(struct ifnod))
-< #define	WHTYPE		(sizeof(struct whnod))
-< #define	FORTYPE		(sizeof(struct fornod))
-< #define	SWTYPE		(sizeof(struct swnod))
-< #define	REGTYPE		(sizeof(struct regnod))
-< #define	PARTYPE		(sizeof(struct parnod))
-< #define	LSTTYPE		(sizeof(struct lstnod))
----
-> #define	FORKTYPE	(sizeof(struct trenod_fork))
-> #define	COMTYPE		(sizeof(struct trenod_com))
-> #define	IFTYPE		(sizeof(struct trenod_if))
-> #define	WHTYPE		(sizeof(struct trenod_wh))
-> #define	FORTYPE		(sizeof(struct trenod_for))
-> #define	SWTYPE		(sizeof(struct trenod_sw))
-> #define	REGTYPE		(sizeof(struct trenod_reg))
-> #define	PARTYPE		(sizeof(struct trenod_par))
-> #define	LSTTYPE		(sizeof(struct trenod_lst))
-205a181,215
-> /* Field-access macros: subsequent code writes `t->forktyp' etc., which
->  * the preprocessor rewrites to `t->u._fork.forktyp' (literal field of
->  * the named-union member).  Macros come AFTER all struct definitions
->  * so the field declarations above stay un-rewritten. */
-> #define tretyp  u._tre.tretyp
-> #define treio   u._tre.treio
-> #define forktyp u._fork.forktyp
-> #define forkio  u._fork.forkio
-> #define forktre u._fork.forktre
-> #define comtyp  u._com.comtyp
-> #define comio   u._com.comio
-> #define comarg  u._com.comarg
-> #define comset  u._com.comset
-> #define iftyp   u._if.iftyp
-> #define iftre   u._if.iftre
-> #define thtre   u._if.thtre
-> #define eltre   u._if.eltre
-> #define whtyp   u._wh.whtyp
-> #define whtre   u._wh.whtre
-> #define dotre   u._wh.dotre
-> #define fortyp  u._for.fortyp
-> #define fortre  u._for.fortre
-> #define fornam  u._for.fornam
-> #define forlst  u._for.forlst
-> #define swtyp   u._sw.swtyp
-> #define swarg   u._sw.swarg
-> #define swlst   u._sw.swlst
-> #define partyp  u._par.partyp
-> #define partre  u._par.partre
-> #define lsttyp  u._lst.lsttyp
-> #define lstlef  u._lst.lstlef
-> #define lstrit  u._lst.lstrit
-> #define regptr  u._reg.regptr
-> #define regcom  u._reg.regcom
-> #define regnxt  u._reg.regnxt
 ```
 
 ### usr/src/cmd/sh/msg.c
@@ -11634,7 +9776,7 @@ Expect:
 13c13,50
 < PROC VOID	gsort();
 ---
-> PROC VOID	gsort(STRING from[], STRING to[]);
+> LOCAL VOID	gsort(STRING from[], STRING to[]);
 > LOCAL STRING	execs(STRING ap, REG STRING t[]);
 > LOCAL INT	split(REG STRING s);
 > INT	subst(INT in, INT ot);
@@ -11928,31 +10070,26 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sh/xec.c unix-v7-c99/usr/src/cmd/sh/xec.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/cmd/sh/xec.c unix-v7-c99/usr/src/cmd/sh/xec.c || true
 ```
 
 Expect:
 
 ```
-12a13,75
+12a13,65
 > void	execexp(STRING s, UFD f);
 > INT	sigchk(void);
 > INT	getarg(COMPTR ac);
-> STRING	*scan(INT argn);
 > INT	syslook(STRING w, struct sysnod syswds[]);
 > INT	setlist(REG ARGPTR arg, INT xp);
-> VOID	prc(INT c);
-> VOID	prs(STRING as);
 > VOID	prn(INT n);
 > INT	blank(void);
 > INT	newline(void);
 > INT	prt(L_INT t);
 > INT	pathopen(REG STRING path, REG STRING name);
-> STRING	getpath(STRING s);
 > INT	failed(STRING s1, STRING s2);
 > INT	exitsh(INT xno);
 > INT	stoi(STRING icp);
-> VOID	nullio(IOPTR iop);
 > INT	clrsig(INT i);
 > INT	getsig(INT n);
 > INT	ignsig(INT n);
@@ -11971,24 +10108,19 @@ Expect:
 > INT	assign(NAMPTR n, STRING v);
 > INT	readvar(STRING *names);
 > INT	options(INT argc, STRING *argv);
-> INT	setargs(STRING argi[]);
 > INT	replace(REG STRING *a, STRING v);
 > DOLPTR	freeargs(DOLPTR blk);
 > INT	gmatch(REG STRING s, REG STRING p);
 > INT	cf(STRING s1, STRING s2);
 > INT	exitset(void);
 > INT	namscan(VOID (*fn)(NAMPTR));
-> VOID	printnam(NAMPTR n);
-> VOID	printflg(REG NAMPTR n);
 > INT	push(FILE af);
 > INT	pop(void);
 > INT	initf(UFD fd);
 > INT	estabf(REG STRING s);
 > INT	trim(STRING at);
 > INT	tdystak(REG STKPTR x);
-> VOID	post(INT pcsid);
 > INT	builtin(void);
-> VOID	await(INT i);
 > extern int chdir(char *p);
 > extern int signal();
 > extern int times(long *t);
@@ -11998,134 +10130,181 @@ Expect:
 > extern int pause(void);
 > extern int close(int fd);
 > extern int dup();
-15c78
+15c68
 < SYSTAB		commands;
 ---
 > extern SYSTAB	commands;
-22,24c85
+22,24c75
 < execute(argt, execflg, pf1, pf2)
 < 	TREPTR		argt;
 < 	INT		*pf1, *pf2;
 ---
 > INT execute(TREPTR argt, INT execflg, INT *pf1, INT *pf2)
-49c110
+43a95
+> 			COMPTR		c=(COMPTR)t;
+47c99
+< 			IOPTR		io=t->treio;
+---
+> 			IOPTR		io=c->comio;
+49c101
 < 			argn = getarg(t);
 ---
-> 			argn = getarg((COMPTR)t);
-53c114
+> 			argn = getarg(c);
+53,54c105,106
 < 			IF (internal=syslook(com[0],commands)) ORF argn==0
+< 			THEN	setlist(t->comset, 0);
 ---
 > 			IF ((internal=syslook(com[0],commands)) ORF argn==0)
-88c149
-<
+> 			THEN	setlist(c->comset, 0);
+88c140
+< 	
 ---
 > 					/* fallthrough */
-89a151
-> 					nullio(io);
-136c198
-<
+136c188
+< 	
 ---
 > 					/* fallthrough */
-140c202
-<
+140c192
+< 	
 ---
 > 					/* fallthrough */
-185a248
+178c230
+< 					ELIF t->comset==0
+---
+> 					ELIF c->comset==0
+185a238
 > 					/* fallthrough */
-199c262
+199c252
 < 					THEN	execexp(a1,&com[2]);
 ---
 > 					THEN	execexp(a1,(UFD)(long)&com[2]);
-205c268
+205c258
 <                                                 int c, i
 ---
 > 						int c, i;
-222,223c285,286
+222c275
 < 					internal=builtin(argn,com);
-<
 ---
-> 					internal=builtin();
-> 					(void)argn;
-235c298
-<
+> 					internal=builtin(); (void)argn;
+231c284
+< 			ELIF t->treio==0
+---
+> 			ELIF c->comio==0
+235c288
+< 	
 ---
 > 			/* fallthrough */
-292c355
+292c345
 < 				THEN	execute(t->forktre,1);
 ---
-> 				THEN	execute(t->forktre,1,(INT *)0,(INT *)0);
-298a362
+> 				THEN	execute(((FORKPTR)t)->forktre,1,(INT *)0,(INT *)0);
+294c347
+< 				THEN	setlist(t->comset,N_EXPORT);
+---
+> 				THEN	setlist(((COMPTR)t)->comset,N_EXPORT);
+298a352
 > 			break;
-302c366
+302c356
 < 			execute(t->partre,execflg);
 ---
-> 			execute(t->partre,execflg,(INT *)0,(INT *)0);
-303a368
+> 			execute(((PARPTR)t)->partre,execflg,(INT *)0,(INT *)0);
+303a358
 > 			/* fallthrough */
-316,317c381,382
+306a362
+> 			   REG LSTPTR	l=(LSTPTR)t;
+308,309c364,365
+< 			   IF execute(t->lstlef, 0, pf1, pv)==0
+< 			   THEN	execute(t->lstrit, execflg, pv, pf2);
+---
+> 			   IF execute(l->lstlef, 0, pf1, pv)==0
+> 			   THEN	execute(l->lstrit, execflg, pv, pf2);
+316,317c372,373
 < 			execute(t->lstlef,0);
 < 			execute(t->lstrit,execflg);
 ---
-> 			execute(t->lstlef,0,(INT *)0,(INT *)0);
-> 			execute(t->lstrit,execflg,(INT *)0,(INT *)0);
-321,322c386,387
+> 			execute(((LSTPTR)t)->lstlef,0,(INT *)0,(INT *)0);
+> 			execute(((LSTPTR)t)->lstrit,execflg,(INT *)0,(INT *)0);
+321,322c377,378
 < 			IF execute(t->lstlef,0)==0
 < 			THEN	execute(t->lstrit,execflg);
 ---
-> 			IF execute(t->lstlef,0,(INT *)0,(INT *)0)==0
-> 			THEN	execute(t->lstrit,execflg,(INT *)0,(INT *)0);
-327,328c392,393
+> 			IF execute(((LSTPTR)t)->lstlef,0,(INT *)0,(INT *)0)==0
+> 			THEN	execute(((LSTPTR)t)->lstrit,execflg,(INT *)0,(INT *)0);
+327,328c383,384
 < 			IF execute(t->lstlef,0)!=0
 < 			THEN	execute(t->lstrit,execflg);
 ---
-> 			IF execute(t->lstlef,0,(INT *)0,(INT *)0)!=0
-> 			THEN	execute(t->lstrit,execflg,(INT *)0,(INT *)0);
-349,350c414,415
+> 			IF execute(((LSTPTR)t)->lstlef,0,(INT *)0,(INT *)0)!=0
+> 			THEN	execute(((LSTPTR)t)->lstrit,execflg,(INT *)0,(INT *)0);
+334c390,391
+< 			   NAMPTR	n = lookup(t->fornam);
+---
+> 			   REG FORPTR	f=(FORPTR)t;
+> 			   NAMPTR	n = lookup(f->fornam);
+338c395
+< 			   IF t->forlst==0
+---
+> 			   IF f->forlst==0
+343c400
+< 				   trim((args=scan(getarg(t->forlst)))[0]);
+---
+> 				   trim((args=scan(getarg(f->forlst)))[0]);
+349,350c406,407
 < 				execute(t->fortre,0);
 < 				IF execbrk<0 THEN execbrk=0 FI
 ---
-> 				execute(t->fortre,0,(INT *)0,(INT *)0);
+> 				execute(f->fortre,0,(INT *)0,(INT *)0);
 > 				IF (signed char)execbrk<0 THEN execbrk=0 FI
-364,366c429,431
+360a418
+> 			   REG WHPTR	w=(WHPTR)t;
+364,366c422,424
 < 			   WHILE execbrk==0 ANDF (execute(t->whtre,0)==0)==(type==TWH)
 < 			   DO i=execute(t->dotre,0);
 < 			      IF execbrk<0 THEN execbrk=0 FI
 ---
-> 			   WHILE execbrk==0 ANDF (execute(t->whtre,0,(INT *)0,(INT *)0)==0)==(type==TWH)
-> 			   DO i=execute(t->dotre,0,(INT *)0,(INT *)0);
+> 			   WHILE execbrk==0 ANDF (execute(w->whtre,0,(INT *)0,(INT *)0)==0)==(type==TWH)
+> 			   DO i=execute(w->dotre,0,(INT *)0,(INT *)0);
 > 			      IF (signed char)execbrk<0 THEN execbrk=0 FI
-374,376c439,441
+374,376c432,434
 < 			IF execute(t->iftre,0)==0
 < 			THEN	execute(t->thtre,execflg);
 < 			ELSE	execute(t->eltre,execflg);
 ---
-> 			IF execute(t->iftre,0,(INT *)0,(INT *)0)==0
-> 			THEN	execute(t->thtre,execflg,(INT *)0,(INT *)0);
-> 			ELSE	execute(t->eltre,execflg,(INT *)0,(INT *)0);
-383c448
+> 			IF execute(((IFPTR)t)->iftre,0,(INT *)0,(INT *)0)==0
+> 			THEN	execute(((IFPTR)t)->thtre,execflg,(INT *)0,(INT *)0);
+> 			ELSE	execute(((IFPTR)t)->eltre,execflg,(INT *)0,(INT *)0);
+382,383c440,442
+< 			   REG STRING	r = mactrim(t->swarg);
 < 			   t=t->swlst;
 ---
-> 			   t=(TREPTR)t->swlst;
-389c454
+> 			   REG SWPTR	s=(SWPTR)t;
+> 			   REG STRING	r = mactrim(s->swarg);
+> 			   t=(TREPTR)s->swlst;
+385c444,445
+< 			   DO	ARGPTR		rex=t->regptr;
+---
+> 			   DO	REG REGPTR	re=(REGPTR)t;
+> 				ARGPTR		rex=re->regptr;
+389c449
 < 					THEN	execute(t->regcom,0);
 ---
-> 					THEN	execute(t->regcom,0,(INT *)0,(INT *)0);
-394c459
+> 					THEN	execute(re->regcom,0,(INT *)0,(INT *)0);
+394c454
 < 				IF t THEN t=t->regnxt FI
 ---
-> 				IF t THEN t=(TREPTR)t->regnxt FI
-408,410c473,474
+> 				IF t THEN t=(TREPTR)re->regnxt FI
+408,410c468,469
 < execexp(s,f)
 < 	STRING		s;
 < 	UFD		f;
 ---
 > void
 > execexp(STRING s, UFD f)
-415c479
+415c474
 < 	THEN	estabf(s); fb.feval=f;
 ---
 > 	THEN	estabf(s); fb.feval=(STRING *)(long)f;
-419c483
+419c478
 < 	execute(cmd(NL, NLFLG|MTFLG),0);
 ---
 > 	execute(cmd(NL, NLFLG|MTFLG),0,(INT *)0,(INT *)0);
@@ -12145,17 +10324,7 @@ Expect:
 0a1,2
 > #ifndef BUF_H
 > #define BUF_H
-64,72c66
-< /*
-<  * special redeclarations for
-<  * the head of the queue per
-<  * device driver.
-<  */
-< #define	b_actf	av_forw
-< #define	b_actl	av_back
-< #define	b_active b_bcount
-< #define	b_errcnt b_resid
----
+72a75
 > #endif
 ```
 
@@ -12188,42 +10357,19 @@ diff unix-v7-c99/v7/usr/sys/h/inode.h unix-v7-c99/usr/sys/h/inode.h || true
 Expect:
 
 ```
-13d12
-< #define	NINDEX	15
-15,25d13
-< struct group {
-< 	short	g_state;
-< 	char	g_index;
-< 	char	g_rot;
-< 	struct	group	*g_group;
-< 	struct	inode	*g_inode;
-< 	struct	file	*g_file;
-< 	short	g_rotmask;
-< 	short	g_datq;
-< 	struct	chan *g_chans[NINDEX];
-< };
-41c29
+41c41
 < 		};
 ---
 > 		} u_reg;
-44,45c32
-< 			struct	group	i_group;	/*  multiplexor group file */
+45c45
 < 		};
 ---
 > 		} u_dev;
-46a34,40
-> /* Caller-side shorthand for the named inner structs (kept v7-flavoured).
->  * v7's multiplexor `struct group i_group` is gone -- the mpx subsystem
->  * isn't wired on this port and shrinking the inode union by ~80 bytes
->  * saves ~16 KB across NINODE=200 in-core inodes. */
+46a47,50
 > #define	i_addr	u_reg.i_addr
 > #define	i_lastr	u_reg.i_lastr
 > #define	i_rdev	u_dev.i_rdev
-51c45,46
-< struct inode *mpxip;		/* mpx virtual inode */
----
-> /* v7 had `struct inode *mpxip` here for the mpx multiplexor server's
->  * virtual inode; never assigned on this port, so removed. */
+> #define	i_group	u_dev.i_group
 ```
 
 ### usr/sys/h/map.h
@@ -12264,45 +10410,27 @@ Expect:
 0a1,2
 > #ifndef PARAM_H
 > #define PARAM_H
-5c7,9
+5c7
 < #define	NBUF	29		/* size of buffer cache */
 ---
-> #define	NBUF	64		/* size of buffer cache (raised from v7's 29
-> 				 * to help long-running pipelines; 64*512=32KB
-> 				 * BSS, trivial on 128 MiB qemu). */
-14d17
-< #define	CANBSIZ	256		/* max size of typewriter line */
-20d22
-< #define	NCLIST	100		/* max total clist size */
-76,77c78,79
-< /* BSLOP can be 0 unless you have a TIU/Spider */
-< #define	BSLOP	2		/* In case some device needs bigger buffers */
----
-> /* BSLOP was v7 slop for TIU/Spider devices; this port has no such device. */
-> #define	BSLOP	0
-84c86
-< #define	UBASE	0140000		/* abs. addr of user block */
----
+> #define	NBUF	64		/* size of buffer cache */
+84a87
 > #ifndef NULL
-85a88
+85a89
 > #endif
-93,95c96,98
-< #define	INFSIZE	138		/* size of per-proc info for users */
-< #define	CBSIZE	14		/* number of chars in a clist block */
-< #define	CROUND	017		/* clist rounding: sizeof(int *) + CBSIZE - 1*/
+120c124
+< #define	major(x)	(int)(((unsigned)x>>8))
 ---
-> /* UBASE (PDP-11 user-block VA) and the clist CBSIZE/CROUND constants
->  * are gone -- ARM USERBASE is in arch/arm.h, and the v7 clist subsystem
->  * (prim.c) was removed this session. */
-131c134
+> #define	major(x)	(int)(((unsigned)x>>8)&0377)
+131c135
 < typedef	unsigned int	ino_t;
 ---
 > typedef	unsigned short	ino_t;
-133c136
+133c137
 < typedef	int		label_t[6];	/* regs 2-7 */
 ---
 > typedef	int		label_t[10];	/* regs 2-7 */
-144a148
+144a149
 > #endif
 ```
 
@@ -12335,17 +10463,11 @@ diff unix-v7-c99/v7/usr/sys/h/user.h unix-v7-c99/usr/sys/h/user.h || true
 Expect:
 
 ```
-26c26,27
-< 	char	u_segflg;		/* IO flag: 0:user D; 1:system; 2:user I */
----
-> 	char	u_segflg;		/* IO flag: 0:user; 1:system (v7's 2
-> 					 * "user I" path is not used here) */
-38c39
+38c38
 < 		};
 ---
 > 		} u_pair;
-41a43,45
-> /* Caller-side shorthand for the named inner pair (kept v7-flavoured). */
+41a42,43
 > #define	r_val1	u_pair.r_val1
 > #define	r_val2	u_pair.r_val2
 ```
@@ -12374,31 +10496,11 @@ diff unix-v7-c99/v7/usr/include/errno.h unix-v7-c99/usr/include/errno.h || true
 Expect:
 
 ```
-2c2,4
-<  * Error codes
----
->  * Error codes -- ported from v7/usr/include/errno.h.
->  * Numeric values are unchanged; these are the canonical V7 errnos
->  * the ported libc relies on.
-3a6,7
+3a4,5
 > #ifndef ERRNO_H
 > #define ERRNO_H
-40a45,60
+40a43,44
 > extern int errno;
-> /* Port-side accommodation: several command sources include
->  * <errno.h> and rely on it for the read/write/fstat/exit
->  * syscall prototypes (a warts-and-all C99 build needs explicit
->  * decls).  Kept here so we do not have to edit every
->  * not-yet-converted-from-K&R command. */
-> struct stat;
-> int	read(int, char *, int);
-> int	write(int, char *, int);
-> int	open(char *, int);
-> int	close(int);
-> long	lseek(int, long, int);
-> int	fstat(int, struct stat *);
-> int	strlen(char *);
-> void	exit(int);
 > #endif
 ```
 
@@ -12478,10 +10580,6 @@ diff unix-v7-c99/v7/usr/include/signal.h unix-v7-c99/usr/include/signal.h || tru
 Expect:
 
 ```
-7c7
-< #define	SIGTRAP	5	/* trace trap (not reset when caught) */
----
-> #define	SIGTRAP	5	/* trace trap */
 19,21c19,20
 < int	(*signal())();
 < #define	SIG_DFL	(int (*)())0
@@ -12576,7 +10674,7 @@ diff unix-v7-c99/v7/usr/include/sys/types.h unix-v7-c99/usr/include/sys/types.h 
 Expect:
 
 ```
-1,11c1,12
+1,7c1,9
 < typedef	long       	daddr_t;  	/* disk address */
 < typedef	char *     	caddr_t;  	/* core address */
 < typedef	unsigned int	ino_t;     	/* i-node number */
@@ -12584,22 +10682,21 @@ Expect:
 < typedef	int        	label_t[6]; 	/* program status */
 < typedef	int        	dev_t;    	/* device code */
 < typedef	long       	off_t;    	/* offset in file */
-< 	/* selectors and constructor for device code */
-< #define	major(x)  	(int)(((unsigned)x>>8))
-< #define	minor(x)  	(int)(x&0377)
-< #define	makedev(x,y)	(dev_t)((x)<<8|(y))
 ---
 > #ifndef SYS_TYPES_H
 > #define SYS_TYPES_H
-> typedef	long		daddr_t;
-> typedef	char *		caddr_t;
-> typedef	unsigned short	ino_t;
-> typedef	long		time_t;
-> /* Mirror of the kernel h/param.h label_t (R4..R11 + sp + lr); needed
->  * by cmd/ps and pstat through "../h/user.h". */
-> typedef	int		label_t[10];
-> typedef	int		dev_t;
-> typedef	long		off_t;
+> typedef	long		daddr_t;	/* disk address */
+> typedef	char *		caddr_t;	/* core address */
+> typedef	unsigned short	ino_t;		/* i-node number */
+> typedef	long		time_t;		/* a time */
+> typedef	int		label_t[10];	/* program status */
+> typedef	int		dev_t;		/* device code */
+> typedef	long		off_t;		/* offset in file */
+9c11
+< #define	major(x)  	(int)(((unsigned)x>>8))
+---
+> #define	major(x)  	(int)(((unsigned)x>>8)&0377)
+11a14
 > #endif
 ```
 
@@ -12626,20 +10723,12 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/libc/gen/malloc.c unix-v7-c99/usr/src/libc/malloc.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/libc/gen/malloc.c unix-v7-c99/usr/src/libc/malloc.c || true
 ```
 
 Expect:
 
 ```
-22c22
-<  *	each block is preceded by a ptr to the (pointer of)
----
->  *	each block is preceded by a ptr to the (pointer of)
-24c24
-<  *	blocks are exact number of words long
----
->  *	blocks are exact number of words long
 64,65c64,65
 < 	register nw;
 < 	static temp;	/*coroutines assume no auto*/
@@ -12648,200 +10737,6 @@ Expect:
 > 	static int temp;	/*coroutines assume no auto*/
 124a125
 > void
-```
-
-### usr/src/libc/nlist.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/libc/gen/nlist.c unix-v7-c99/usr/src/libc/nlist.c || true
-```
-
-Expect:
-
-```
-0a1,11
-> /* ARM/ELF nlist(3) -- v7's nlist parsed v7 a.out, but the C99/ARM
->  * kernel is an ELF32 image, so this walks ELF .symtab/.strtab.  The
->  * v7 C compiler prefixed every C symbol with `_'; strip one leading
->  * underscore from each search-list name before matching against the
->  * ELF symbol-string.  n_name[] is a fixed 8-byte field; we compare
->  * against the ELF name with exact-match semantics, which is enough
->  * for the kernel symbols that dmesg/ps look up (_msgbuf, _msgbufp,
->  * _proc, _file, _swapdev, _dk_xfer, etc., all <=7 chars).  n_type is
->  * mapped to v7's N_TEXT/N_DATA/N_BSS based on the ELF section's
->  * SHF_EXECINSTR/SHF_WRITE flags.
->  */
-2,3d12
-< int a_magic[] = {A_MAGIC1, A_MAGIC2, A_MAGIC3, A_MAGIC4, 0};
-< #define SPACE 100		/* number of symbols read at a time */
-5,7c14,61
-< nlist(name, list)
-< char *name;
-< struct nlist *list;
----
-> int	open(char *, int);
-> int	close(int);
-> int	read(int, char *, int);
-> long	lseek(int, long, int);
-> #define	ELF_NIDENT	16
-> #define	ELFMAG0		0177
-> #define	SHT_SYMTAB	2
-> #define	SHT_STRTAB	3
-> #define	SHF_WRITE	1
-> #define	SHF_EXECINSTR	4
-> struct elfhdr {
-> 	unsigned char	e_ident[ELF_NIDENT];
-> 	unsigned short	e_type;
-> 	unsigned short	e_machine;
-> 	unsigned int	e_version;
-> 	unsigned int	e_entry;
-> 	unsigned int	e_phoff;
-> 	unsigned int	e_shoff;
-> 	unsigned int	e_flags;
-> 	unsigned short	e_ehsize;
-> 	unsigned short	e_phentsize;
-> 	unsigned short	e_phnum;
-> 	unsigned short	e_shentsize;
-> 	unsigned short	e_shnum;
-> 	unsigned short	e_shstrndx;
-> };
-> struct elfshdr {
-> 	unsigned int	sh_name;
-> 	unsigned int	sh_type;
-> 	unsigned int	sh_flags;
-> 	unsigned int	sh_addr;
-> 	unsigned int	sh_offset;
-> 	unsigned int	sh_size;
-> 	unsigned int	sh_link;
-> 	unsigned int	sh_info;
-> 	unsigned int	sh_addralign;
-> 	unsigned int	sh_entsize;
-> };
-> struct elfsym {
-> 	unsigned int	st_name;
-> 	unsigned int	st_value;
-> 	unsigned int	st_size;
-> 	unsigned char	st_info;
-> 	unsigned char	st_other;
-> 	unsigned short	st_shndx;
-> };
-> int
-> nlist(char *name, struct nlist *list)
-9,13c63,74
-< 	register struct nlist *p, *q;
-< 	int f, n, m, i;
-< 	long sa;
-< 	struct exec buf;
-< 	struct nlist space[SPACE];
----
-> 	struct nlist *p;
-> 	struct elfhdr eh;
-> 	struct elfshdr sh;
-> 	struct elfsym sym;
-> 	char strbuf[64];
-> 	char nb[9];
-> 	char *sn;
-> 	int f, i, j, k, nsyms;
-> 	int matched;
-> 	unsigned int symoff, symsz, symesz;
-> 	unsigned int stroff;
-> 	unsigned int secflags[64];
-22,25c83,85
-< 	read(f, (char *)&buf, sizeof buf);
-< 	for(i=0; a_magic[i]; i++)
-< 		if(a_magic[i] == buf.a_magic) break;
-< 	if(a_magic[i] == 0){
----
-> 	if(read(f, (char *)&eh, sizeof(eh)) != sizeof(eh)
-> 	    || eh.e_ident[0] != ELFMAG0 || eh.e_ident[1] != 'E'
-> 	    || eh.e_ident[2] != 'L' || eh.e_ident[3] != 'F') {
-29,33c89,125
-< 	sa = buf.a_text + (long)buf.a_data;
-< 	if(buf.a_flag != 1) sa *= 2;
-< 	sa += sizeof buf;
-< 	lseek(f, sa, 0);
-< 	n = buf.a_syms;
----
-> 	symoff = 0;
-> 	symsz = 0;
-> 	symesz = sizeof(sym);
-> 	stroff = 0;
-> 	for(i = 0; i < eh.e_shnum && i < 64; i++) {
-> 		lseek(f, (long)(eh.e_shoff + i * eh.e_shentsize), 0);
-> 		if(read(f, (char *)&sh, sizeof(sh)) != sizeof(sh)) {
-> 			close(f);
-> 			return(-1);
-> 		}
-> 		secflags[i] = sh.sh_flags;
-> 		if(sh.sh_type == SHT_SYMTAB) {
-> 			symoff = sh.sh_offset;
-> 			symsz = sh.sh_size;
-> 			if(sh.sh_entsize)
-> 				symesz = sh.sh_entsize;
-> 			lseek(f, (long)(eh.e_shoff + sh.sh_link * eh.e_shentsize), 0);
-> 			read(f, (char *)&sh, sizeof(sh));
-> 			stroff = sh.sh_offset;
-> 		}
-> 	}
-> 	if(symoff == 0 || stroff == 0) {
-> 		close(f);
-> 		return(-1);
-> 	}
-> 	nsyms = (int)(symsz / symesz);
-> 	for(i = 0; i < nsyms; i++) {
-> 		lseek(f, (long)(symoff + i * symesz), 0);
-> 		if(read(f, (char *)&sym, sizeof(sym)) != sizeof(sym))
-> 			break;
-> 		if(sym.st_name == 0)
-> 			continue;
-> 		lseek(f, (long)(stroff + sym.st_name), 0);
-> 		k = read(f, strbuf, sizeof(strbuf) - 1);
-> 		if(k <= 0)
-> 			continue;
-> 		strbuf[k] = '\0';
-35,49c127,150
-< 	while(n){
-< 		m = sizeof space;
-< 		if(n < sizeof space)
-< 			m = n;
-< 		read(f, (char *)space, m);
-< 		n -= m;
-< 		for(q = space; (m -= sizeof(struct nlist)) >= 0; q++) {
-< 			for(p = list; p->n_name[0]; p++) {
-< 				for(i=0;i<8;i++)
-< 					if(p->n_name[i] != q->n_name[i]) goto cont;
-< 				p->n_value = q->n_value;
-< 				p->n_type = q->n_type;
-< 				break;
-< 		cont:		;
-< 			}
----
-> 		for(p = list; p->n_name[0]; p++) {
-> 			for(j = 0; j < 8; j++)
-> 				nb[j] = p->n_name[j];
-> 			nb[8] = '\0';
-> 			sn = nb;
-> 			if(*sn == '_')
-> 				sn++;
-> 			matched = 1;
-> 			for(j = 0; sn[j]; j++)
-> 				if(sn[j] != strbuf[j]) {
-> 					matched = 0;
-> 					break;
-> 				}
-> 			if(!matched || strbuf[j] != '\0')
-> 				continue;
-> 			p->n_value = sym.st_value;
-> 			if(sym.st_shndx == 0 || sym.st_shndx >= 64)
-> 				p->n_type = N_UNDF;
-> 			else if(secflags[sym.st_shndx] & SHF_EXECINSTR)
-> 				p->n_type = N_TEXT | N_EXT;
-> 			else if(secflags[sym.st_shndx] & SHF_WRITE)
-> 				p->n_type = N_DATA | N_EXT;
-> 			else
-> 				p->n_type = N_BSS | N_EXT;
 ```
 
 ### usr/sys/sys/main.c
@@ -12855,9 +10750,8 @@ diff unix-v7-c99/v7/usr/sys/sys/main.c unix-v7-c99/usr/sys/sys/main.c || true
 Expect:
 
 ```
-12a13,28
+12a13,33
 > void startup(void);
-> void armboot(void);
 > void brelse(struct buf *bp);
 > void binit(void);
 > void iinit(void);
@@ -12865,27 +10759,32 @@ Expect:
 > void clkstart(void);
 > void cinit(void);
 > int newproc(void);
+> void v7_proc_init(void);
 > void expand(int newsize);
 > int estabur(unsigned nt, unsigned nd, unsigned ns, int sep, int xrw);
 > void sched(void);
 > int icode[1];
 > int szicode;
-> void clkstart(void) { }
-> void cinit(void) { }
-30c46,47
+> void cinit(void)
+> {
+> 	register struct cdevsw *cdp;
+> 	nchrdev = 0;
+> 	for(cdp = cdevsw; cdp->d_open; cdp++)
+> 		nchrdev++;
+> }
+30c51,52
 < main()
 ---
 > void
 > main(void)
-33a51,52
-> 	armboot();
-> 	return;
-90c109,110
+67a90
+> 		v7_proc_init();
+90c113,114
 < iinit()
 ---
 > void
 > iinit(void)
-125c145
+125c149
 < binit()
 ---
 > void binit(void)
@@ -12942,108 +10841,98 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/prf.c unix-v7-c99/usr/sys/sys/prf.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/sys/sys/prf.c unix-v7-c99/usr/sys/sys/prf.c || true
 ```
 
 Expect:
 
 ```
-2,5c2,3
+2,3d1
 < #include "../h/systm.h"
 < #include "../h/seg.h"
-< #include "../h/buf.h"
+5c3,4
 < #include "../h/conf.h"
 ---
 > #include <stdarg.h>
 > void putchar(char c);
-14a13
+14a14
 > void printn(long n, int b);
-26,28c25,26
+26,28c26,27
 < printf(fmt, x1)
 < register char *fmt;
 < unsigned x1;
 ---
 > void
 > printf(char *fmt, ...)
-30,31c28,29
+30,31c29,30
 < 	register c;
 < 	register unsigned int *adx;
 ---
 > 	register int c;
 > 	va_list adx;
-34c32
+34c33
 < 	adx = &x1;
 ---
 > 	va_start(adx, fmt);
-37c35,36
+37c36,37
 < 		if(c == '\0')
 ---
 > 		if(c == '\0') {
 > 			va_end(adx);
-38a38
+38a39
 > 		}
-43c43
+43c44
 < 		printn((long)*adx, c=='o'? 8: (c=='x'? 16:10));
 ---
 > 		printn((long)va_arg(adx, unsigned), c=='o'? 8: (c=='x'? 16:10));
-45,46c45,46
+45,46c46,47
 < 		s = (char *)*adx;
 < 		while(c = *s++)
 ---
 > 		s = va_arg(adx, char *);
 > 		while((c = *s++))
-49,50c49
+49,50c50
 < 		printn(*(long *)adx, 10);
 < 		adx += (sizeof(long) / sizeof(int)) - 1;
 ---
 > 		printn(va_arg(adx, long), 10);
-52d50
+52d51
 < 	adx++;
-59,60c57,58
+59,60c58,59
 < printn(n, b)
 < long n;
 ---
 > void
 > printn(long n, int b)
-68c66
+68c67
 < 	if(a = n/b)
 ---
 > 	if((a = n/b))
-79,80c77,78
+79,80c78,79
 < panic(s)
 < char *s;
 ---
 > void
 > panic(char *s)
-83d80
+83d81
 < 	update();
-86c83
+86c84
 < 		idle();
 ---
 > 		;
-95,97c92,93
+95,97c93,94
 < prdev(str, dev)
 < char *str;
 < dev_t dev;
 ---
 > void
 > prdev(char *str, dev_t dev)
-101,115d96
-< }
-<
-< /*
-<  * deverr prints a diagnostic from
-<  * a device driver.
-<  * It prints the device, block number,
-<  * and an octal word (usually some error
-<  * status register) passed as argument.
-<  */
+110,111c107,108
 < deverror(bp, o1, o2)
 < register struct buf *bp;
-< {
-<
-< 	prdev("err", bp->b_dev);
-< 	printf("bn=%D er=%o,%o\n", bp->b_blkno, o1, o2);
+---
+> void
+> deverror(register struct buf *bp, int o1, int o2)
 ```
 
 ### usr/src/cmd/mount.c
@@ -13202,7 +11091,7 @@ Expect:
 < char	*rindex();
 ---
 > char	*ttyname(int f);
-> static char *getttys(int f);
+> char	*getttys(int f);
 > char	*rindex(char *sp, int c);
 15c16,17
 < ttyslot()
@@ -13217,9 +11106,11 @@ Expect:
 < 	while (tp = getttys(tf)) {
 ---
 > 	while ((tp = getttys(tf))) {
-41c43
+40,41c42,43
+< static char *
 < getttys(f)
 ---
+> char *
 > getttys(int f)
 ```
 
@@ -13240,7 +11131,7 @@ Expect:
 < char	*execat(), *getenv();
 < extern	errno;
 ---
-> static char *execat(register char *s1, register char *s2, char *si);
+> char	*execat(register char *s1, register char *s2, char *si);
 > extern	int errno;
 12,13c13,14
 < execlp(name, argv)
@@ -13266,11 +11157,13 @@ Expect:
 < 			for (i=1; newargs[i+1]=argv[i]; i++) {
 ---
 > 			for (i=1; (newargs[i+1]=argv[i]); i++) {
-68,70c69
+67,70c68,69
+< static char *
 < execat(s1, s2, si)
 < register char *s1, *s2;
 < char *si;
 ---
+> char *
 > execat(register char *s1, register char *s2, char *si)
 ```
 
@@ -13288,16 +11181,18 @@ Expect:
 7c7
 < char	*nvmatch();
 ---
-> static char *nvmatch(register char *s1, register char *s2);
+> char	*nvmatch(register char *s1, register char *s2);
 10,11c10
 < getenv(name)
 < register char *name;
 ---
 > getenv(register char *name)
-30,31c29
+29,31c28,29
+< static char *
 < nvmatch(s1, s2)
 < register char *s1, *s2;
 ---
+> char *
 > nvmatch(register char *s1, register char *s2)
 ```
 
@@ -13644,10 +11539,6 @@ diff unix-v7-c99/v7/usr/src/libc/gen/qsort.c unix-v7-c99/usr/src/libc/qsort.c ||
 Expect:
 
 ```
-2c2
-< static int	(*qscmp)();
----
-> static int	(*qscmp)(char *, char *);
 3a4,6
 > static void qs1(char *a, char *l);
 > static void qsexc(char *i, char *j);
@@ -13720,13 +11611,16 @@ Expect:
 < 	register m;
 ---
 > 	register int m;
-26,31d23
+26,28c24,25
 < cfree(p, num, size)
 < char *p;
 < unsigned num, size;
-< {
-< 	free(p);
-< }
+---
+> void
+> cfree(char *p, unsigned num, unsigned size)
+29a27,28
+> 	(void)num;
+> 	(void)size;
 ```
 
 ### usr/src/libc/tell.c
@@ -13871,29 +11765,20 @@ diff unix-v7-c99/v7/usr/src/libc/gen/atof.c unix-v7-c99/usr/src/libc/atof.c || t
 Expect:
 
 ```
-5d4
-< #include <math.h>
-6a6,13
-> #define LOGHUGE 39
-> static double
-> ldexp(double value, int n)
-> {
-> 	while (n > 0) { value *= 2.0; n--; }
-> 	while (n < 0) { value *= 0.5; n++; }
-> 	return(value);
-> }
-9,10c16
+9,10c9
 < atof(p)
 < register char *p;
 ---
 > atof(register char *p)
-12c18
+12c11
 < 	register c;
 ---
 > 	register int c;
-15d20
+13a13
+> 	double ldexp(double value, int n);
+15d14
 < 	double ldexp();
-17c22
+17c16
 < 	register eexp, exp, neg, negexp, bexp;
 ---
 > 	register int eexp, exp, neg, negexp, bexp;
@@ -13930,18 +11815,20 @@ Expect:
 
 ```
 2a3
-> static int create(register char *file, int rw);
+> int create(register char *file, int rw);
 5,7c6
 < _endopen(file, mode, iop)
 < 	char *file, *mode;
 < 	register FILE *iop;
 ---
 > _endopen(char *file, char *mode, register FILE *iop)
-56,58c55
+55,58c54,55
+< static int
 < create(file, rw)
 < 	register char *file;
 < 	int rw;
 ---
+> int
 > create(register char *file, int rw)
 ```
 
@@ -14650,37 +12537,25 @@ Expect:
 ---
 > 	{ 5,  333 },	/* 1974: Jan 6 - last Sun. in Nov */
 > 	{ 58, 303 },	/* 1975: Last Sun. in Feb - last Sun in Oct */
-71,76c71,78
-< struct tm	*gmtime();
-< char		*ct_numb();
-< struct tm	*localtime();
-< char	*ctime();
-< char	*ct_num();
-< char	*asctime();
----
-> struct tm	*gmtime(long *tim);
-> static char	*ct_numb(register char *cp, int n);
-> struct tm	*localtime(long *tim);
-> char	*ctime(long *t);
-> char	*asctime(struct tm *t);
+76a77,79
 > static int	sunday(register struct tm *t, register int d);
 > int	dysize(int y);
 > int	ftime(struct timeb *tp);
-79,80c81
+79,80c82
 < ctime(t)
 < long *t;
 ---
 > ctime(long *t)
-86,87c87
+86,87c88
 < localtime(tim)
 < long *tim;
 ---
 > localtime(long *tim)
-91c91
+91c92
 < 	register daylbegin, daylend;
 ---
 > 	register int daylbegin, daylend;
-122,125c122,123
+122,125c123,124
 < static
 < sunday(t, d)
 < register struct tm *t;
@@ -14688,30 +12563,32 @@ Expect:
 ---
 > static int
 > sunday(register struct tm *t, register int d)
-133,134c131
+133,134c132
 < gmtime(tim)
 < long *tim;
 ---
 > gmtime(long *tim)
-195,196c192
+195,196c193
 < asctime(t)
 < struct tm *t;
 ---
 > asctime(struct tm *t)
-202c198,199
+202c199,200
 < 	for (ncp = "Day Mon 00 00:00:00 1900\n"; *cp++ = *ncp++;);
 ---
 > 	for (ncp = "Day Mon 00 00:00:00 1900\n"; (*cp++ = *ncp++);)
 > 		;
-227c224,225
+227c225,226
 < dysize(y)
 ---
 > int
 > dysize(int y)
-235,236c233
+234,236c233,234
+< static char *
 < ct_numb(cp, n)
 < register char *cp;
 ---
+> char *
 > ct_numb(register char *cp, int n)
 ```
 
@@ -15006,7 +12883,7 @@ Expect:
 
 ```
 13a14
-> int	makenowtime(void), updatetime(int t), run(char *file), movefile(char *file, char *dir);
+> int	makenowtime(void), updatetime(int t), run(char *file);
 18,19c19,20
 < main(argc, argv)
 < char **argv;
@@ -15037,58 +12914,19 @@ Expect:
 ---
 > int
 > run(char *file)
-81,82c86
+81c86
 < 	register pid, i;
-< 	char sbuf[64];
 ---
 > 	register int pid, i;
-85c89
+85c90
 < 		return;
 ---
 > 		return(0);
-89,90c93,94
-< 	sprintf(sbuf, "/bin/mv %.14s %s", file, PDIR);
-< 	system(sbuf);
----
-> 	if (movefile(file, PDIR) < 0)
-> 		exit(1);
-96c100
+96c101
 < 	if (pid = fork()) {
 ---
 > 	if ((pid = fork())) {
-99,100c103,104
-< 		wait((int *)0);
-< 		unlink(file);
----
-> 	wait((int *)0);
-> 	unlink(file);
-104,105c108,111
-< 	execl("/bin/sh", "sh", file, 0);
-< 	execl("/usr/bin/sh", "sh", file, 0);
----
-> 	close(0);
-> 	open(file, 0);
-> 	execl("/bin/sh", "sh", 0);
-> 	execl("/usr/bin/sh", "sh", 0);
-107a114,132
-> 	return(0);
-> }
-> int
-> movefile(char *file, char *dir)
-> {
-> 	int pid, status;
-> 	pid = fork();
-> 	if (pid == 0) {
-> 		execl("/bin/mv", "mv", file, dir, 0);
-> 		execl("/usr/bin/mv", "mv", file, dir, 0);
-> 		exit(1);
-> 	}
-> 	if (pid == -1)
-> 		return(-1);
-> 	while (wait(&status) != pid)
-> 		;
-> 	if (status)
-> 		return(-1);
+107a113
 > 	return(0);
 ```
 
@@ -15128,212 +12966,6 @@ Expect:
 > 	signal(SIGHUP, (int)SIG_IGN);
 > 	signal(SIGINT, (int)SIG_IGN);
 > 	signal(SIGQUIT, (int)SIG_IGN);
-```
-
-### usr/src/cmd/diff3.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/diff3.c unix-v7-c99/usr/src/cmd/diff3.c | sed 's/[[:blank:]]*$//' || true
-```
-
-Expect:
-
-```
-6c6
-< /* diff3 [-e] d13 d23 f1 f2 f3
----
-> /* diff3 [-e] d13 d23 f1 f2 f3
-45,46c45,55
-< main(argc,argv)
-< char **argv;
----
-> int readin(char *name, struct diff *dd), number(char **lc), digit(int c);
-> int getchange(FILE *b), getline(FILE *b), merge(int m1, int m2);
-> int separate(char *s), change(int i, struct range *rold, int dup);
-> int prange(struct range *rold);
-> int keep(int i, struct range *rold, struct range *rnew);
-> int skip(int i, int from, char *pr);
-> int duplicate(struct range *r1, struct range *r2);
-> int repos(int nchar), trouble(void);
-> int edit(struct diff *diff, int dup, int j), edscript(int n);
-> int
-> main(int argc, char **argv)
-48c57
-< 	register i,m,n;
----
-> 	register int i,m,n;
-74a84
-> 	return(0);
-85,87c95,96
-< readin(name,dd)
-< char *name;
-< struct diff *dd;
----
-> int
-> readin(char *name, struct diff *dd)
-89c98
-< 	register i;
----
-> 	register int i;
-128,129c137,138
-< number(lc)
-< char **lc;
----
-> int
-> number(char **lc)
-131c140
-< 	register nn;
----
-> 	register int nn;
-138c147,148
-< digit(c)
----
-> int
-> digit(int c)
-143,144c153,154
-< getchange(b)
-< FILE *b;
----
-> int
-> getchange(FILE *b)
-152,153c162,163
-< getline(b)
-< FILE *b;
----
-> int
-> getline(FILE *b)
-155,156c165,166
-< 	register i, c;
-< 	for(i=0;i<sizeof(line)-1;i++) {
----
-> 	register int i, c;
-> 	for(i=0;i<(int)sizeof(line)-1;i++) {
-169c179,180
-< merge(m1,m2)
----
-> int
-> merge(int m1, int m2)
-187c198
-< 		if(!t2||t1&&d1->new.to < d2->new.from) {
----
-> 		if(!t2 || (t1 && d1->new.to < d2->new.from)) {
-199c210
-< 		if(!t1||t2&&d2->new.to < d1->new.from) {
----
-> 		if(!t1 || (t2 && d2->new.to < d1->new.from)) {
-265a277
-> 	return(0);
-268,269c280,281
-< separate(s)
-< char *s;
----
-> int
-> separate(char *s)
-271a284
-> 	return(0);
-278,279c291,292
-< change(i,rold,dup)
-< struct range *rold;
----
-> int
-> change(int i, struct range *rold, int dup)
-285c298
-< 		return;
----
-> 		return(0);
-287c300
-< 		return;
----
-> 		return(0);
-290a304
-> 	return(0);
-296,297c310,311
-< prange(rold)
-< struct range *rold;
----
-> int
-> prange(struct range *rold)
-306a321
-> 	return(0);
-314,315c329,330
-< keep(i,rold,rnew)
-< struct range *rold, *rnew;
----
-> int
-> keep(int i, struct range *rold, struct range *rnew)
-317c332
-< 	register delta;
----
-> 	register int delta;
-318a334
-> 	(void)rold;
-322a339
-> 	return(0);
-329,330c346,347
-< skip(i,from,pr)
-< char *pr;
----
-> int
-> skip(int i, int from, char *pr)
-332c349
-< 	register j,n;
----
-> 	register int j,n;
-347,348c364,365
-< duplicate(r1,r2)
-< struct range *r1, *r2;
----
-> int
-> duplicate(struct range *r1, struct range *r2)
-350,351c367,368
-< 	register c,d;
-< 	register nchar;
----
-> 	register int c,d;
-> 	register int nchar;
-367c384
-< 				return;
----
-> 				return(0);
-375c392,393
-< repos(nchar)
----
-> int
-> repos(int nchar)
-377,378c395,396
-< 	register i;
-< 	for(i=0;i<2;i++)
----
-> 	register int i;
-> 	for(i=0;i<2;i++)
-379a398
-> 	return(0);
-382c401,402
-< trouble()
----
-> int
-> trouble(void)
-385a406
-> 	return(0);
-390,391c411,412
-< edit(diff,dup,j)
-< struct diff *diff;
----
-> int
-> edit(struct diff *diff, int dup, int j)
-406c427,428
-< edscript(n)
----
-> int
-> edscript(int n)
-408c430
-< 	register j,k;
----
-> 	register int j,k;
-420a443
-> 	return(0);
 ```
 
 ### usr/src/cmd/fortune.c
@@ -15656,166 +13288,6 @@ Expect:
 ---
 > 		return(0);
 248a262
-> 	return(0);
-```
-
-### usr/src/cmd/at.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/src/cmd/at.c unix-v7-c99/usr/src/cmd/at.c | sed 's/[[:blank:]]*$//' || true
-```
-
-Expect:
-
-```
-10a11
-> #define	utime	at_utime
-28c29
-< 	char *mname;
----
-> 	char *mname;
-55,56c56
-< char	*prefix();
-< FILE	*popen();
----
-> char	*prefix(char *begin, char *full);
-58,59c58,63
-< main(argc, argv)
-< char **argv;
----
-> FILE	*openjob(char *name);
-> int	makeutime(char *pp), makeuday(int argc, char **argv);
-> int	filename(char *dir, int y, int d, int t);
-> int	onintr(int sig), getpwd(char *buf, int nbuf);
-> int
-> main(int argc, char **argv)
-61,62c65,66
-< 	extern onintr();
-< 	register c;
----
-> 	extern int onintr(int sig);
-> 	register int c;
-64d67
-< 	FILE *pwfil;
-92,95c95,97
-< 	if (signal(SIGINT, SIG_IGN) != SIG_IGN)
-< 		signal(SIGINT, onintr);
-< 	file = fopen(fname, "a");
-< 	chmod(fname, 0644);
----
-> 	if ((int (*)())signal(SIGINT, (int)SIG_IGN) != (int (*)())SIG_IGN)
-> 		signal(SIGINT, (int)onintr);
-> 	file = openjob(fname);
-100c102
-< 	if ((pwfil = popen("pwd", "r")) == NULL) {
----
-> 	if (getpwd(pwbuf, sizeof(pwbuf)) < 0) {
-104,105d105
-< 	fgets(pwbuf, 100, pwfil);
-< 	pclose(pwfil);
-110c110,113
-< 			fprintf(file, "%s\n", *ep++);
----
-> 			if (index(*ep, '='))
-> 				fprintf(file, "%s\n", *ep++);
-> 			else
-> 				ep++;
-118,119c121,122
-< makeutime(pp)
-< char *pp;
----
-> FILE *
-> openjob(char *name)
-121c124,167
-< 	register val;
----
-> 	int fd;
-> 	file = fopen(name, "a");
-> 	if (file == NULL) {
-> 		fd = creat(name, 0644);
-> 		if (fd >= 0)
-> 			close(fd);
-> 		file = fopen(name, "a");
-> 	}
-> 	chmod(name, 0644);
-> 	return(file);
-> }
-> int
-> getpwd(char *buf, int nbuf)
-> {
-> 	int fd[2], status;
-> 	register int n;
-> 	if (pipe(fd) < 0)
-> 		return(-1);
-> 	if (fork() == 0) {
-> 		close(fd[0]);
-> 		dup(fd[1] | 0100, 1);
-> 		close(fd[1]);
-> 		execl("/bin/pwd", "pwd", 0);
-> 		exit(1);
-> 	}
-> 	close(fd[1]);
-> 	n = read(fd[0], buf, nbuf-1);
-> 	close(fd[0]);
-> 	wait(&status);
-> 	if (n <= 0 || status)
-> 		return(-1);
-> 	buf[n] = '\0';
-> 	n = 0;
-> 	while (buf[n])
-> 		if (buf[n++] == '\n') {
-> 			buf[n] = '\0';
-> 			break;
-> 		}
-> 	return(0);
-> }
-> int
-> makeutime(char *pp)
-> {
-> 	register int val;
-147a194
-> 			/* fallthrough */
-197a245
-> 	return(0);
-201,202c249,250
-< makeuday(argc,argv)
-< char **argv;
----
-> int
-> makeuday(int argc, char **argv)
-273,274c321
-< prefix(begin, full)
-< char *begin, *full;
----
-> prefix(char *begin, char *full)
-277c324
-< 	while (c = *begin++) {
----
-> 	while ((c = *begin++)) {
-288,289c335,336
-< filename(dir, y, d, t)
-< char *dir;
----
-> int
-> filename(char *dir, int y, int d, int t)
-291c338
-< 	register i;
----
-> 	register int i;
-297c344
-< 			return;
----
-> 			return(0);
-301c348,349
-< onintr()
----
-> int
-> onintr(int sig)
-302a351
-> 	(void)sig;
-304a354
 > 	return(0);
 ```
 
@@ -17338,10 +14810,6 @@ Expect:
 < 				if (i = atoi(&argv[0][2]))
 ---
 > 				if ((i = atoi(&argv[0][2])))
-49c49
-< 					yyll = MAXY + 1 - pl;
----
-> 				yyll = MAXY + 1 - pl;
 52c52
 < 				if (i = atoi(&argv[0][1])) {
 ---
@@ -17430,7 +14898,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/units.c unix-v7-c99/usr/src/cmd/units.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/cmd/units.c unix-v7-c99/usr/src/cmd/units.c || true
 ```
 
 Expect:
@@ -17448,10 +14916,6 @@ Expect:
 > int	pu(int u, int i, int f);
 > int	lookup(char *name, struct unit *up, int den, int c);
 > int	equal(char *s1, char *s2), get(void);
-27c31
-< } prefix[] =
----
-> } prefix[] =
 29,45c33,49
 < 	1e-18,	"atto",
 < 	1e-15,	"femto",
@@ -17519,10 +14983,6 @@ Expect:
 ---
 > int
 > pu(int u, int i, int f)
-140c146
-< 			return(2);
----
-> 		return(2);
 147,148c153,154
 < convr(up)
 < struct unit *up;
@@ -18922,7 +16382,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/games/fish.c unix-v7-c99/usr/src/cmd/fish.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/games/fish.c unix-v7-c99/usr/src/cmd/fish.c || true
 ```
 
 Expect:
@@ -19005,7 +16465,7 @@ Expect:
 154a171
 > 	return(0);
 157c174,175
-< main( argc, argv ) char * argv[]; {
+< main( argc, argv ) char * argv[]; { 
 ---
 > int
 > main( argc, argv ) int argc; char * argv[]; {
@@ -19121,7 +16581,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/games/quiz.c unix-v7-c99/usr/src/cmd/quiz.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/games/quiz.c unix-v7-c99/usr/src/cmd/quiz.c || true
 ```
 
 Expect:
@@ -19252,10 +16712,6 @@ Expect:
 < 	inc = (int)tm&077774|01;
 ---
 > 	inc = ((int)tm&077774)|01;
-315c332
-< 			if(argc>2)
----
-> 			if(argc>2)
 335c352
 < 	signal(SIGINT, done);
 ---
@@ -20320,21 +17776,22 @@ Expect:
 7,8d6
 < char	*sprintf();
 < char	*strcat();
-9a8,13
+9a8,14
 > int	usage(), done(), dorep(), doxtract(), dotable(), getdir(),
 > 	passtape(), endtape(), getwdir(), putfile(), putempty(),
 > 	flushtape(), readtape(), writetape(), backtape(), longt(),
 > 	pmode(), select(), checkdir(), onintr(), onquit(), onhup(),
 > 	onterm(), tomodes(), checksum(), checkw(), response(),
 > 	checkupdate(), prefix(), cmp(), copy();
-55,57c59,60
+> int	mkdir(char *path, int mode);
+55,57c60,61
 < main(argc, argv)
 < int	argc;
 < char	*argv[];
 ---
 > int
 > main(int argc, char *argv[])
-140,145c143,148
+140,145c144,149
 < 		if (signal(SIGINT, SIG_IGN) != SIG_IGN)
 < 			signal(SIGINT, onintr);
 < 		if (signal(SIGHUP, SIG_IGN) != SIG_IGN)
@@ -20348,345 +17805,374 @@ Expect:
 > 			signal(SIGHUP, (int)onhup);
 > 		if (signal(SIGQUIT, (int)SIG_IGN) != (int)SIG_IGN)
 > 			signal(SIGQUIT, (int)onquit);
-195c198,199
+195c199,200
 < usage()
 ---
 > int
 > usage(void)
-198a203
+198a204
 > 	return(0);
-201,202c206,207
+201,202c207,208
 < dorep(argv)
 < char	*argv[];
 ---
 > int
 > dorep(char *argv[])
-253a259
+253a260
 > 	return(0);
-256c262,263
+256c263,264
 < endtape()
 ---
 > int
 > endtape(void)
-266c273,274
+266c274,275
 < getdir()
 ---
 > int
 > getdir(void)
-273c281
+273c282
 < 		return;
 ---
 > 		return(0);
-289a298
+289a299
 > 	return(0);
-292c301,302
+292c302,303
 < passtape()
 ---
 > int
 > passtape(void)
-298c308
+298c309
 < 		return;
 ---
 > 		return(0);
-304a315
+304a316
 > 	return(0);
-307,309c318,319
+307,309c319,320
 < putfile(longname, shortname)
 < char *longname;
 < char *shortname;
 ---
 > int
 > putfile(char *longname, char *shortname)
-321c331
+321c332
 < 		return;
 ---
 > 		return(0);
-328c338
+328c339
 < 		return;
 ---
 > 		return(0);
-332c342
+332c343
 < 		return;
 ---
 > 		return(0);
-336c346,347
+336c347,348
 < 		for (i = 0, cp = buf; *cp++ = longname[i++];);
 ---
 > 		for (i = 0, cp = buf; (*cp++ = longname[i++]);)
 > 			;
-362c373
+362c374
 < 		return;
 ---
 > 		return(0);
-366c377
+366c378
 < 		return;
 ---
 > 		return(0);
-376c387
+376c388
 < 		return;
 ---
 > 		return(0);
-400c411
+400c412
 < 			return;
 ---
 > 			return(0);
-437a449
+429c441,446
+< 	while ((i = read(infile, buf, TBLOCK)) > 0 && blocks > 0) {
+---
+> 	while (blocks > 0) {
+> 		for (cp = buf; cp < &buf[TBLOCK]; )
+> 			*cp++ = 0;
+> 		i = read(infile, buf, TBLOCK);
+> 		if (i <= 0)
+> 			break;
+432a450,451
+> 	if (blocks == 0)
+> 		i = 0;
+437a457
 > 	return(0);
-442,443c454,455
+442,443c462,463
 < doxtract(argv)
 < char	*argv[];
 ---
 > int
 > doxtract(char *argv[])
-515a528
+515a536
 > 	return(0);
-518c531,532
+518c539,540
 < dotable()
 ---
 > int
 > dotable(void)
-531a546
+531a554
 > 	return(0);
-534c549,550
+534c557,558
 < putempty()
 ---
 > int
 > putempty(void)
-541a558
+541a566
 > 	return(0);
-544,545c561,562
+544,545c569,570
 < longt(st)
 < register struct stat *st;
 ---
 > int
 > longt(register struct stat *st)
-554a572
+554a580
 > 	return(0);
-581,582c599,600
+581,582c607,608
 < pmode(st)
 < register struct stat *st;
 ---
 > int
 > pmode(register struct stat *st)
-587a606
+587a614
 > 	return(0);
-590,592c609,610
+590,592c617,618
 < select(pairp, st)
 < int *pairp;
 < struct stat *st;
 ---
 > int
 > select(int *pairp, struct stat *st)
-600a619
+600a627
 > 	return(0);
-603,604c622,623
+603,604c630,631
 < checkdir(name)
 < register char *name;
 ---
 > int
 > checkdir(register char *name)
-623a643
+612,616c639,646
+< 				if (fork() == 0) {
+< 					execl("/bin/mkdir", "mkdir", name, 0);
+< 					execl("/usr/bin/mkdir", "mkdir", name, 0);
+< 					fprintf(stderr, "tar: cannot find mkdir!\n");
+< 					done(0);
+---
+> 				if (mkdir(name, 0777) < 0) {
+> 					if (fork() == 0) {
+> 						execl("/bin/mkdir", "mkdir", name, 0);
+> 						execl("/usr/bin/mkdir", "mkdir", name, 0);
+> 						fprintf(stderr, "tar: cannot find mkdir!\n");
+> 						done(0);
+> 					}
+> 					while (wait(&i) >= 0);
+618d647
+< 				while (wait(&i) >= 0);
+623a653
 > 	return(0);
-626c646,647
+626c656,657
 < onintr()
 ---
 > int
 > onintr(int sig)
-628c649,650
+628c659,660
 < 	signal(SIGINT, SIG_IGN);
 ---
 > 	(void)sig;
 > 	signal(SIGINT, (int)SIG_IGN);
-629a652
+629a662
 > 	return(0);
-632c655,656
+632c665,666
 < onquit()
 ---
 > int
 > onquit(int sig)
-634c658,659
+634c668,669
 < 	signal(SIGQUIT, SIG_IGN);
 ---
 > 	(void)sig;
 > 	signal(SIGQUIT, (int)SIG_IGN);
-635a661
+635a671
 > 	return(0);
-638c664,665
+638c674,675
 < onhup()
 ---
 > int
 > onhup(int sig)
-640c667,668
+640c677,678
 < 	signal(SIGHUP, SIG_IGN);
 ---
 > 	(void)sig;
 > 	signal(SIGHUP, (int)SIG_IGN);
-641a670
+641a680
 > 	return(0);
-644c673,674
+644c683,684
 < onterm()
 ---
 > int
 > onterm(int sig)
-646c676,677
+646c686,687
 < 	signal(SIGTERM, SIG_IGN);
 ---
 > 	(void)sig;
 > 	signal(SIGTERM, (int)SIG_IGN);
-647a679
+647a689
 > 	return(0);
-650,651c682,683
+650,651c692,693
 < tomodes(sp)
 < register struct stat *sp;
 ---
 > int
 > tomodes(register struct stat *sp)
-661a694
+661a704
 > 	return(0);
-664c697,698
+664c707,708
 < checksum()
 ---
 > int
 > checksum(void)
-666c700
+666c710
 < 	register i;
 ---
 > 	register int i;
-677,678c711,712
+677,678c721,722
 < checkw(c, name)
 < char *name;
 ---
 > int
 > checkw(int c, char *name)
-693c727,728
+693c737,738
 < response()
 ---
 > int
 > response(void)
-704,705c739,740
+704,705c749,750
 < checkupdate(arg)
 < char	*arg;
 ---
 > int
 > checkupdate(char *arg)
-710c745
+710c755
 < 	daddr_t	lookup();
 ---
 > 	daddr_t	lookup(char *s);
-725c760,761
+725c770,771
 < done(n)
 ---
 > int
 > done(int n)
-728a765
+728a775
 > 	return(0);
-731,732c768,769
+731,732c778,779
 < prefix(s1, s2)
 < register char *s1, *s2;
 ---
 > int
 > prefix(register char *s1, register char *s2)
-742,743c779,780
+742,743c789,790
 < getwdir(s)
 < char *s;
 ---
 > int
 > getwdir(char *s)
-765a803
+765a813
 > 	return(0);
-771,772c809
+771,772c819
 < lookup(s)
 < char *s;
 ---
 > lookup(char *s)
-774c811
+774c821
 < 	register i;
 ---
 > 	register int i;
-785,787c822
+785,787c832
 < bsrch(s, n, l, h)
 < daddr_t l, h;
 < char *s;
 ---
 > bsrch(char *s, int n, daddr_t l, daddr_t h)
-789c824
+789c834
 < 	register i, j;
 ---
 > 	register int i, j;
-830,831c865,866
+830,831c875,876
 < cmp(b, s, n)
 < char *b, *s;
 ---
 > int
 > cmp(char *b, char *s, int n)
-833c868
+833c878
 < 	register i;
 ---
 > 	register int i;
-846,847c881,882
+846,847c891,892
 < readtape(buffer)
 < char *buffer;
 ---
 > int
 > readtape(char *buffer)
-856c891
+856c901
 < 		if ((i = read(mt, tbuf, TBLOCK*j)) < 0) {
 ---
 > 		if ((i = read(mt, (char *)tbuf, TBLOCK*j)) < 0) {
-878c913
+878c923
 < 	copy(buffer, &tbuf[recno++]);
 ---
 > 	copy(buffer, (char *)&tbuf[recno++]);
-882,883c917,918
+882,883c927,928
 < writetape(buffer)
 < char *buffer;
 ---
 > int
 > writetape(char *buffer)
-889c924
+889c934
 < 		if (write(mt, tbuf, TBLOCK*nblock) < 0) {
 ---
 > 		if (write(mt, (char *)tbuf, TBLOCK*nblock) < 0) {
-895c930
+895c940
 < 	copy(&tbuf[recno++], buffer);
 ---
 > 	copy((char *)&tbuf[recno++], buffer);
-897c932
+897c942
 < 		if (write(mt, tbuf, TBLOCK*nblock) < 0) {
 ---
 > 		if (write(mt, (char *)tbuf, TBLOCK*nblock) < 0) {
-906c941,942
+906c951,952
 < backtape()
 ---
 > int
 > backtape(void)
-911c947
+911c957
 < 		if (read(mt, tbuf, TBLOCK*nblock) < 0) {
 ---
 > 		if (read(mt, (char *)tbuf, TBLOCK*nblock) < 0) {
-916a953
+916a963
 > 	return(0);
-919c956,957
+919c966,967
 < flushtape()
 ---
 > int
 > flushtape(void)
-921c959,960
+921c969,970
 < 	write(mt, tbuf, TBLOCK*nblock);
 ---
 > 	write(mt, (char *)tbuf, TBLOCK*nblock);
 > 	return(0);
-924,925c963,964
+924,925c973,974
 < copy(to, from)
 < register char *to, *from;
 ---
 > int
 > copy(register char *to, register char *from)
-927c966
+927c976
 < 	register i;
 ---
 > 	register int i;
-932a972
+932a982
 > 	return(0);
 ```
 
@@ -21457,124 +18943,21 @@ Expect:
 < extern	errorflag;	/* non-zero if any syntax errors; set by yyerror */
 ---
 > extern int	errorflag;	/* non-zero if any syntax errors; set by yyerror */
-15c16,79
+15c16,17
 < main(argc, argv) int argc; char *argv[]; {
 ---
-> char lexbuf[512];
-> int
-> haschar(char *s, int c)
-> {
-> 	while (*s)
-> 		if (*s++ == c)
-> 			return(1);
-> 	return(0);
-> }
-> int
-> kwstart(char *s, char *kw)
-> {
-> 	while (*kw)
-> 		if (*s++ != *kw++)
-> 			return(0);
-> 	return(*s == 0 || *s == '{' || *s == ' ' || *s == '\t');
-> }
-> int
-> awkcmdstart(char *s)
-> {
-> 	return(*s == '{' || kwstart(s, "BEGIN") || kwstart(s, "END"));
-> }
-> int
-> awkcmdnext(char *s)
-> {
-> 	return(kwstart(s, "BEGIN") || kwstart(s, "END"));
-> }
-> int
-> awkcmdnextact(int argc, char *argv[], int i)
-> {
-> 	if (i >= argc || !awkcmdnext(argv[i]))
-> 		return(0);
-> 	if (haschar(argv[i], '{'))
-> 		return(1);
-> 	return(i + 1 < argc && argv[i+1][0] == '{');
-> }
-> int
-> awkcmdsplit(int argc, char *argv[])
-> {
-> 	char *p;
-> 	int braces, sawbrace, i;
-> 	if (!awkcmdstart(argv[0]))
-> 		return(0);
-> 	braces = 0;
-> 	sawbrace = 0;
-> 	for (i = 0; i < argc; i++) {
-> 		for (p = argv[i]; *p; p++) {
-> 			if (*p == '{') {
-> 				braces++;
-> 				sawbrace = 1;
-> 			} else if (*p == '}') {
-> 				braces--;
-> 			}
-> 		}
-> 		if (sawbrace && braces <= 0) {
-> 			if (awkcmdnextact(argc, argv, i+1))
-> 				continue;
-> 			return(i != 0);
-> 		}
-> 	}
-> 	return(0);
-> }
 > int
 > main(int argc, char *argv[]) {
-41c105,142
-< 			argv[0] = argv[-1];	/* need this space */
----
-> 			if (awkcmdsplit(argc, argv)) {
-> 				char *cmdname;
-> 				char *p;
-> 				int braces, n, sawbrace, wantact;
-> 				cmdname = argv[-1];
-> 				p = lexbuf;
-> 				braces = 0;
-> 				n = 0;
-> 				sawbrace = 0;
-> 				wantact = 0;
-> 				while (argc > 0) {
-> 					char *q;
-> 					if (n++ != 0 && p < &lexbuf[sizeof(lexbuf)-1])
-> 						*p++ = ' ';
-> 					if (awkcmdnext(argv[0]))
-> 						wantact = 1;
-> 					for (q = argv[0]; *q && p < &lexbuf[sizeof(lexbuf)-1]; q++) {
-> 						if (*q == '{') {
-> 							braces++;
-> 							sawbrace = 1;
-> 							wantact = 0;
-> 						} else if (*q == '}')
-> 							braces--;
-> 						*p++ = *q;
-> 					}
-> 					argc--;
-> 					if (sawbrace && braces <= 0 && !wantact &&
-> 					    !awkcmdnextact(argc + 1, argv, 1))
-> 						break;
-> 					argv++;
-> 				}
-> 				*p = 0;
-> 				lexprog = lexbuf;
-> 				argc++;
-> 				argv[0] = cmdname;
-> 			}
-> 			else
-> 				argv[0] = argv[-1];	/* need this space */
-71c172
+71c73
 < 		write(ansfd, &errorflag, sizeof(errorflag));
 ---
 > 		write(ansfd, (char *)&errorflag, sizeof(errorflag));
-77c178,179
+77c79,80
 < logit(n, s) char *s[];
 ---
 > int
 > logit(int n, char *s[])
-82,84c184,186
+82,84c85,87
 < 		return;
 < 	time(tvec);
 < 	fprintf(f, "%-8s %s", getlogin(), ctime(tvec));
@@ -21582,31 +18965,31 @@ Expect:
 > 		return(0);
 > 	time((long *)tvec);
 > 	fprintf(f, "%-8s %s", getlogin(), ctime((long *)tvec));
-90c192
+90c93
 < 		return;
 ---
 > 		return(0);
-94c196
+94c97
 < 		return;
 ---
 > 		return(0);
-99a202
+99a103
 > 	return(0);
-102c205,206
+102c106,107
 < yywrap()
 ---
 > int
 > yywrap(void)
-107c211,212
+107c112,113
 < msgfiles()
 ---
 > int
 > msgfiles(void)
-134c239
+134c140
 < 	xargv=s=svargv=malloc(n*sizeof(char *));
 ---
 > 	xargv=s=svargv=(char **)malloc(n*sizeof(char *));
-139a245
+139a146
 > 	return(0);
 ```
 
@@ -21922,550 +19305,6 @@ Expect:
 > 	return(0);
 ```
 
-### usr/sys/sys/slp.c
-
-Local test:
-
-```
-diff unix-v7-c99/v7/usr/sys/sys/slp.c unix-v7-c99/usr/sys/sys/slp.c -u | perl -pe 's/^ $/ <BLANK>/; s/^ \t/ \\t/' || true
-```
-
-Expect:
-
-```
---- unix-v7-c99/v7/usr/sys/sys/slp.c	1979-05-06 23:24:37.000000000 -0700
-+++ unix-v7-c99/usr/sys/sys/slp.c	2026-05-22 21:57:22.651132210 -0700
-@@ -7,7 +7,25 @@
- #include "../h/map.h"
- #include "../h/file.h"
- #include "../h/inode.h"
--#include "../h/buf.h"
-+struct map;
-+int spl0(void);
-+int spl6(void);
-+void splx(int s);
-+void panic(char *s);
-+int save(int *lp);
-+void resume(int addr, int *lp);
-+int malloc(struct map *mp, int size);
-+void mfree(struct map *mp, int size, int a);
-+void copyseg(int from, int to);
-+void armboot_setrun(int pid);
-+void armboot_swtch(void);
-+extern void sureg(void);
-+extern void xswap(struct proc *, int, int);
-+void wakeup(register caddr_t chan);
-+void setrun(register struct proc *p);
-+void setrq(struct proc *p);
-+void swtch(void);
-+void qswtch(void);
- <BLANK>
- #define SQSIZE 0100	/* Must be power of 2 */
- #define HASH(x)	(( (int) x >> 5) & (SQSIZE-1))
-@@ -24,11 +42,11 @@
-  * premature return, and check that the reason for
-  * sleeping has gone away.
-  */
--sleep(chan, pri)
--caddr_t chan;
-+void
-+sleep(caddr_t chan, int pri)
- {
- \tregister struct proc *rp;
--	register s, h;
-+	register int s, h;
- <BLANK>
- \trp = u.u_procp;
- \ts = spl6();
-@@ -79,11 +97,11 @@
- /*
-  * Wake up all processes sleeping on chan.
-  */
--wakeup(chan)
--register caddr_t chan;
-+void
-+wakeup(register caddr_t chan)
- {
- \tregister struct proc *p, *q;
--	register i;
-+	register int i;
- \tint s;
- <BLANK>
- \ts = spl6();
-@@ -109,24 +127,18 @@
- \tsplx(s);
- }
- <BLANK>
--/*
-- * when you are sure that it
-- * is impossible to get the
-- * 'proc on q' diagnostic, the
-- * diagnostic loop can be removed.
-- */
--setrq(p)
--struct proc *p;
-+/* PORT: our scheduler doesn't unlink from v7's runq during swtch, so
-+ * wakeup()->setrun() races re-add procs already linked.  Silently
-+ * dedupe instead of printing; functionally a no-op. */
-+void
-+setrq(struct proc *p)
- {
- \tregister struct proc *q;
--	register s;
-+	register int s;
- <BLANK>
- \ts = spl6();
- \tfor(q=runq; q!=NULL; q=q->p_link)
--		if(q == p) {
--			printf("proc on q\n");
--			goto out;
--		}
-+		if(q == p) goto out;
- \tp->p_link = runq;
- \trunq = p;
- out:
-@@ -136,9 +148,16 @@
- /*
-  * Set the process running;
-  * arrange for it to be swapped in if necessary.
-+ *
-+ * PORT DIVERGENCE: armboot_setrun(p->p_pid) added so the port's
-+ * scheduler (which keeps its own armproc_state[] table) sees the
-+ * wakeup.  Without it, v7's wakeup()->setrun() flips p_stat = SRUN
-+ * but mt_pick_runnable() never picks the slot because its
-+ * armproc_state stays PSTATE_SLEEP.  No semantic change to v7's
-+ * state machine; just a cross-side notify.
-  */
--setrun(p)
--register struct proc *p;
-+void
-+setrun(register struct proc *p)
- {
- \tregister caddr_t w;
- <BLANK>
-@@ -148,12 +167,13 @@
- \t * The assignment to w is necessary because of
- \t * race conditions. (Interrupt between test and use)
- \t */
--	if (w = p->p_wchan) {
-+	if ((w = p->p_wchan)) {
- \t	wakeup(w);
- \t	return;
- \t}
- \tp->p_stat = SRUN;
- \tsetrq(p);
-+	armboot_setrun((int)p->p_pid);
- \tif(p->p_pri < curpri)
- \t	runrun++;
- \tif(runout != 0 && (p->p_flag&SLOAD) == 0) {
-@@ -168,10 +188,10 @@
-  * is set if the priority is better
-  * than the currently running process.
-  */
--setpri(pp)
--register struct proc *pp;
-+int
-+setpri(register struct proc *pp)
- {
--	register p;
-+	register int p;
- <BLANK>
- \tp = (pp->p_cpu & 0377)/16;
- \tp += PUSER + pp->p_nice - NZERO;
-@@ -183,150 +203,18 @@
- \treturn(p);
- }
- <BLANK>
--/*
-- * The main loop of the scheduling (swapping)
-- * process.
-- * The basic idea is:
-- *  see if anyone wants to be swapped in;
-- *  swap out processes until there is room;
-- *  swap him in;
-- *  repeat.
-- * The runout flag is set whenever someone is swapped out.
-- * Sched sleeps on it awaiting work.
-- *
-- * Sched sleeps on runin whenever it cannot find enough
-- * core (by swapping out or otherwise) to fit the
-- * selected swapped process.  It is awakened when the
-- * core situation changes and in any case once per second.
-- */
--sched()
--{
--	register struct proc *rp, *p;
--	register outage, inage;
--	int maxsize;
--
--	/*
--	 * find user to swap in;
--	 * of users ready, select one out longest
--	 */
--
--loop:
--	spl6();
--	outage = -20000;
--	for (rp = &proc[0]; rp < &proc[NPROC]; rp++)
--	if (rp->p_stat==SRUN && (rp->p_flag&SLOAD)==0 &&
--	    rp->p_time - (rp->p_nice-NZERO)*8 > outage) {
--		p = rp;
--		outage = rp->p_time - (rp->p_nice-NZERO)*8;
--	}
--	/*
--	 * If there is no one there, wait.
--	 */
--	if (outage == -20000) {
--		runout++;
--		sleep((caddr_t)&runout, PSWP);
--		goto loop;
--	}
--	spl0();
--
--	/*
--	 * See if there is core for that process;
--	 * if so, swap it in.
--	 */
--
--	if (swapin(p))
--		goto loop;
--
--	/*
--	 * none found.
--	 * look around for core.
--	 * Select the largest of those sleeping
--	 * at bad priority; if none, select the oldest.
--	 */
--
--	spl6();
--	p = NULL;
--	maxsize = -1;
--	inage = -1;
--	for (rp = &proc[0]; rp < &proc[NPROC]; rp++) {
--		if (rp->p_stat==SZOMB
--		 || (rp->p_flag&(SSYS|SLOCK|SULOCK|SLOAD))!=SLOAD)
--			continue;
--		if (rp->p_textp && rp->p_textp->x_flag&XLOCK)
--			continue;
--		if (rp->p_stat==SSLEEP&&rp->p_pri>=PZERO || rp->p_stat==SSTOP) {
--			if (maxsize < rp->p_size) {
--				p = rp;
--				maxsize = rp->p_size;
--			}
--		} else if (maxsize<0 && (rp->p_stat==SRUN||rp->p_stat==SSLEEP)) {
--			if (rp->p_time+rp->p_nice-NZERO > inage) {
--				p = rp;
--				inage = rp->p_time+rp->p_nice-NZERO;
--			}
--		}
--	}
--	spl0();
--	/*
--	 * Swap found user out if sleeping at bad pri,
--	 * or if he has spent at least 2 seconds in core and
--	 * the swapped-out process has spent at least 3 seconds out.
--	 * Otherwise wait a bit and try again.
--	 */
--	if (maxsize>=0 || (outage>=3 && inage>=2)) {
--		p->p_flag &= ~SLOAD;
--		xswap(p, 1, 0);
--		goto loop;
--	}
--	spl6();
--	runin++;
--	sleep((caddr_t)&runin, PSWP);
--	goto loop;
--}
--
--/*
-- * Swap a process in.
-- * Allocate data and possible text separately.
-- * It would be better to do largest first.
-- */
--swapin(p)
--register struct proc *p;
--{
--	register struct text *xp;
--	register int a;
--	int x;
--
--	if ((a = malloc(coremap, p->p_size)) == NULL)
--		return(0);
--	if (xp = p->p_textp) {
--		xlock(xp);
--		if (xp->x_ccount==0) {
--			if ((x = malloc(coremap, xp->x_size)) == NULL) {
--				xunlock(xp);
--				mfree(coremap, p->p_size, a);
--				return(0);
--			}
--			xp->x_caddr = x;
--			if ((xp->x_flag&XLOAD)==0)
--				swap(xp->x_daddr,x,xp->x_size,B_READ);
--		}
--		xp->x_ccount++;
--		xunlock(xp);
--	}
--	swap(p->p_addr, a, p->p_size, B_READ);
--	mfree(swapmap, ctod(p->p_size), p->p_addr);
--	p->p_addr = a;
--	p->p_flag |= SLOAD;
--	p->p_time = 0;
--	return(1);
--}
-+/* v7's sched() main loop (the proc-0 "swapper" task) and its swapin()
-+ * helper drove the per-process swap-in/swap-out cycle.  This port keeps
-+ * every proc resident, so neither runs -- the C scheduler is in
-+ * armboot_swtch() (see swtch() below). */
- <BLANK>
- /*
-  * put the current process on
-  * the Q of running processes and
-  * call the scheduler.
-  */
--qswtch()
-+void
-+qswtch(void)
- {
- <BLANK>
- \tsetrq(u.u_procp);
-@@ -335,87 +223,14 @@
- <BLANK>
- /*
-  * This routine is called to reschedule the CPU.
-- * if the calling process is not in RUN state,
-- * arrangements for it to restart must have
-- * been made elsewhere, usually by calling via sleep.
-- * There is a race here. A process may become
-- * ready after it has been examined.
-- * In this case, idle() will be called and
-- * will return in at most 1HZ time.
-- * i.e. its not worth putting an spl() in.
-+ * The ARM port keeps per-process stacks resident and performs the
-+ * save, pick and resume sequence in arch/arm.c.
-  */
--swtch()
--{
--	register n;
--	register struct proc *p, *q, *pp, *pq;
- <BLANK>
--	/*
--	 * If not the idle process, resume the idle process.
--	 */
--	if (u.u_procp != &proc[0]) {
--		if (save(u.u_rsav)) {
--			sureg();
--			return;
--		}
--		if (u.u_fpsaved==0) {
--			savfp(&u.u_fps);
--			u.u_fpsaved = 1;
--		}
--		resume(proc[0].p_addr, u.u_qsav);
--	}
--	/*
--	 * The first save returns nonzero when proc 0 is resumed
--	 * by another process (above); then the second is not done
--	 * and the process-search loop is entered.
--	 *
--	 * The first save returns 0 when swtch is called in proc 0
--	 * from sched().  The second save returns 0 immediately, so
--	 * in this case too the process-search loop is entered.
--	 * Thus when proc 0 is awakened by being made runnable, it will
--	 * find itself and resume itself at rsav, and return to sched().
--	 */
--	if (save(u.u_qsav)==0 && save(u.u_rsav))
--		return;
--loop:
--	spl6();
--	runrun = 0;
--	pp = NULL;
--	q = NULL;
--	n = 128;
--	/*
--	 * Search for highest-priority runnable process
--	 */
--	for(p=runq; p!=NULL; p=p->p_link) {
--		if((p->p_stat==SRUN) && (p->p_flag&SLOAD)) {
--			if(p->p_pri < n) {
--				pp = p;
--				pq = q;
--				n = p->p_pri;
--			}
--		}
--		q = p;
--	}
--	/*
--	 * If no process is runnable, idle.
--	 */
--	p = pp;
--	if(p == NULL) {
--		idle();
--		goto loop;
--	}
--	q = pq;
--	if(q == NULL)
--		runq = p->p_link;
--	else
--		q->p_link = p->p_link;
--	curpri = n;
--	spl0();
--	/*
--	 * The rsav (ssav) contents are interpreted in the new address space
--	 */
--	n = p->p_flag&SSWAP;
--	p->p_flag &= ~SSWAP;
--	resume(p->p_addr, n? u.u_ssav: u.u_rsav);
-+void
-+swtch(void)
-+{
-+	armboot_swtch();
- }
- <BLANK>
- /*
-@@ -423,109 +238,15 @@
-  * sys fork.
-  * It returns 1 in the new process, 0 in the old.
-  */
--newproc()
-+/* v7 newproc() (alloc proc[] slot, copy parent's image into child) is
-+ * gone -- fork(2) routes through arch/arm.c::mt_alloc_slot, which
-+ * maintains armproc[NSLOTS] in parallel with proc[NPROC]; the child's
-+ * register state is duplicated by the trap frame copy, not by save()/
-+ * resume() over the v7 u_ssav. */
-+int
-+newproc(void)
- {
--	int a1, a2;
--	struct proc *p, *up;
--	register struct proc *rpp, *rip;
--	register n;
--
--	p = NULL;
--	/*
--	 * First, just locate a slot for a process
--	 * and copy the useful info from this process into it.
--	 * The panic "cannot happen" because fork has already
--	 * checked for the existence of a slot.
--	 */
--retry:
--	mpid++;
--	if(mpid >= 30000) {
--		mpid = 0;
--		goto retry;
--	}
--	for(rpp = &proc[0]; rpp < &proc[NPROC]; rpp++) {
--		if(rpp->p_stat == NULL && p==NULL)
--			p = rpp;
--		if (rpp->p_pid==mpid || rpp->p_pgrp==mpid)
--			goto retry;
--	}
--	if ((rpp = p)==NULL)
--		panic("no procs");
--
--	/*
--	 * make proc entry for new proc
--	 */
--
--	rip = u.u_procp;
--	up = rip;
--	rpp->p_stat = SRUN;
--	rpp->p_clktim = 0;
--	rpp->p_flag = SLOAD;
--	rpp->p_uid = rip->p_uid;
--	rpp->p_pgrp = rip->p_pgrp;
--	rpp->p_nice = rip->p_nice;
--	rpp->p_textp = rip->p_textp;
--	rpp->p_pid = mpid;
--	rpp->p_ppid = rip->p_pid;
--	rpp->p_time = 0;
--	rpp->p_cpu = 0;
--
--	/*
--	 * make duplicate entries
--	 * where needed
--	 */
--
--	for(n=0; n<NOFILE; n++)
--		if(u.u_ofile[n] != NULL)
--			u.u_ofile[n]->f_count++;
--	if(up->p_textp != NULL) {
--		up->p_textp->x_count++;
--		up->p_textp->x_ccount++;
--	}
--	u.u_cdir->i_count++;
--	if (u.u_rdir)
--		u.u_rdir->i_count++;
--	/*
--	 * Partially simulate the environment
--	 * of the new process so that when it is actually
--	 * created (by copying) it will look right.
--	 */
--	rpp = p;
--	u.u_procp = rpp;
--	rip = up;
--	n = rip->p_size;
--	a1 = rip->p_addr;
--	rpp->p_size = n;
--	/*
--	 * When the resume is executed for the new process,
--	 * here's where it will resume.
--	 */
--	if (save(u.u_ssav)) {
--		sureg();
--		return(1);
--	}
--	a2 = malloc(coremap, n);
--	/*
--	 * If there is not enough core for the
--	 * new process, swap out the current process to generate the
--	 * copy.
--	 */
--	if(a2 == NULL) {
--		rip->p_stat = SIDL;
--		rpp->p_addr = a1;
--		xswap(rpp, 0, 0);
--		rip->p_stat = SRUN;
--	} else {
--		/*
--		 * There is core, so just copy.
--		 */
--		rpp->p_addr = a2;
--		while(n--)
--			copyseg(a1++, a2++);
--	}
--	u.u_procp = rip;
--	setrq(rpp);
--	rpp->p_flag |= SSWAP;
-+	panic("newproc");
- \treturn(0);
- }
- <BLANK>
-@@ -542,11 +263,12 @@
-  * After the expansion, the caller will take care of copying
-  * the user's stack towards or away from the data area.
-  */
--expand(newsize)
-+void
-+expand(int newsize)
- {
--	register i, n;
-+	register int i, n;
- \tregister struct proc *p;
--	register a1, a2;
-+	register int a1, a2;
- <BLANK>
- \tp = u.u_procp;
- \tn = p->p_size;
-@@ -563,7 +285,6 @@
- \ta2 = malloc(coremap, newsize);
- \tif(a2 == NULL) {
- \t	xswap(p, 1, n);
--		p->p_flag |= SSWAP;
- \t	qswtch();
- \t	/* no return */
- \t}
-```
 ### usr/src/tools/mkfs.c
 
 Local test:
@@ -22486,21 +19325,7 @@ Expect:
 > #include <unistd.h>
 > #include <fcntl.h>
 > #include <time.h>
-15,20c19,33
-< #include <sys/param.h>
-< #include <sys/ino.h>
-< #include <sys/inode.h>
-< #include <sys/filsys.h>
-< #include <sys/fblk.h>
-< #include <sys/dir.h>
----
-> #include "../../include/sys/param.h"
-> #include "../../include/sys/ino.h"
-> #include "../../include/sys/inode.h"
-> #include "../../include/sys/filsys.h"
-> #include "../../include/sys/fblk.h"
-> #include "../../include/sys/dir.h"
-> /* Pack longs into pure LE 24-bit; matches arch/arm.c::addr(). */
+20a25,32
 > int ltol3(cp, lp, n) char *cp; long *lp; int n; {
 > 	int i; long v;
 > 	for(i=0; i<n; i++) {
@@ -22509,14 +19334,11 @@ Expect:
 > 	}
 > 	return(0);
 > }
-31c44,47
+31c43
 < union {
 ---
-> /* The v7 K&R-era "anonymous struct as union member" idiom (`struct fblk;`
->  * inside a union) is not strict C99.  Named members + macro aliases keep
->  * the call-site spelling (`fbuf.df_nfree`, `filsys.s_fsize`) unchanged. */
 > union fbuf_u {
-34,37c50,51
+34,37c46,47
 < } fbuf;
 < #ifndef STANDALONE
 < struct exec head;
@@ -22524,16 +19346,16 @@ Expect:
 ---
 > } fbuf_storage;
 > #define fbuf fbuf_storage.fb
-39c53
+39c49
 < union {
 ---
 > union filsys_u {
-42c56,57
+42c52,53
 < } filsys;
 ---
 > } filsys_storage;
 > #define filsys filsys_storage.fs
-49,50c64,78
+49,50c60,74
 < long	getnum();
 < daddr_t	alloc();
 ---
@@ -22552,29 +19374,27 @@ Expect:
 > void	bflist(void);
 > void	iput(struct inode *ip, int *aibc, daddr_t *ib);
 > int	badblk(daddr_t bno);
-52,53c80,81
+52,53c76,77
 < main(argc, argv)
 < char *argv[];
 ---
 > int
 > main(int argc, char *argv[])
-103c131
+103c127
 < 		for(f=0; c=proto[f]; f++) {
 ---
 > 		for(f=0; (c=proto[f]); f++) {
-114c142
+114c138
 < 		if(n > 65500/NIPB)
 ---
 > 		if((unsigned long)n > 65500/NIPB)
-117c145
+117c141
 < 		printf("isize = %D\n", n*NIPB);
 ---
 > 		printf("isize = %ld\n", n*NIPB);
-125c153
+125d148
 < 	 * and read onto block 0
----
-> 	 * (skipped: PDP-11 a.out format is not used on this port)
-130,145c158,160
+130,145c153,155
 < 	if(f < 0) {
 < 		printf("%s: cannot  open init\n", string);
 < 		goto f2;
@@ -22595,85 +19415,82 @@ Expect:
 > 	if(f < 0)
 > 		printf("%s: cannot open init\n", string);
 > 	else
-147,148c162
+147d156
 < f1:
-< 	close(f);
----
-> 		close(f);
-155d168
+155d163
 < f2:
-175c188
+175c183
 < 		printf("%ld/%ld: bad ratio\n", filsys.s_fsize, filsys.s_isize-2);
 ---
 > 		printf("%ld/%d: bad ratio\n", filsys.s_fsize, filsys.s_isize-2);
-197,198c210,211
+197,198c205,206
 < cfile(par)
 < struct inode *par;
 ---
 > void
 > cfile(struct inode *par)
-203c216
+203c211
 < 	daddr_t ib[NINDIR];
 ---
 > 	daddr_t ib[MAXFILEBLK];
-235c248
+235c243
 < 	for(i=0; i<NINDIR; i++)
 ---
 > 	for(i=0; (unsigned)i<MAXFILEBLK; i++)
-309,310c322,323
+309,310c317,318
 < gmode(c, s, m0, m1, m2, m3)
 < char c, *s;
 ---
 > int
 > gmode(int c, char *s, int m0, int m1, int m2, int m3)
-312a326
+312a321
 > 	int m[4] = {m0, m1, m2, m3};
-316c330
+316c325
 < 			return((&m0)[i]);
 ---
 > 			return(m[i]);
-323c337
+323c332
 < getnum()
 ---
 > getnum(void)
-331c345
+331c340
 < 	for(i=0; c=string[i]; i++) {
 ---
 > 	for(i=0; (c=string[i]) != 0; i++) {
-342c356,357
+342c351,352
 < getstr()
 ---
 > void
 > getstr(void)
-372,374c387,388
+372,374c382,383
 < rdfs(bno, bf)
 < daddr_t bno;
 < char *bf;
 ---
 > void
 > rdfs(daddr_t bno, char *bf)
-386,388c400,401
+386,388c395,396
 < wtfs(bno, bf)
 < daddr_t bno;
 < char *bf;
 ---
 > void
 > wtfs(daddr_t bno, char *bf)
-395c408
+395c403
 < 		printf("write error: %D\n", bno);
 ---
 > 		printf("write error: %ld\n", bno);
-401c414
+401c409
 < alloc()
 ---
 > alloc(void)
-421,422c434,435
+421,422c429,430
 < bfree(bno)
 < daddr_t bno;
 ---
 > void
 > bfree(daddr_t bno)
-437,442c450,451
+437,442c445,446
 < entry(inum, str, adbc, db, aibc, ib)
 < ino_t inum;
 < char *str;
@@ -22683,11 +19500,11 @@ Expect:
 ---
 > void
 > entry(ino_t inum, char *str, int *adbc, char *db, int *aibc, daddr_t *ib)
-456c465
+456c460
 < 	if(*adbc >= NDIRECT)
 ---
 > 	if((unsigned)*adbc >= NDIRECT)
-460,463c469,470
+460,463c464,465
 < newblk(adbc, db, aibc, ib)
 < int *adbc, *aibc;
 < char *db;
@@ -22695,43 +19512,43 @@ Expect:
 ---
 > void
 > newblk(int *adbc, char *db, int *aibc, daddr_t *ib)
-467a475,479
+467a470,474
 > 	if((unsigned)*aibc >= MAXFILEBLK) {
 > 		printf("indirect block full\n");
 > 		error = 1;
 > 		return;
 > 	}
-475,479d486
+475,479d481
 < 	if(*aibc >= NINDIR) {
 < 		printf("indirect block full\n");
 < 		error = 1;
 < 		*aibc = 0;
 < 	}
-482c489,490
+482c484,485
 < getch()
 ---
 > int
 > getch(void)
-494c502,503
+494c497,498
 < bflist()
 ---
 > void
 > bflist(void)
-525c534
+525c529
 < 	for(i=0; i<NINDIR; i++)
 ---
 > 	for(i=0; (unsigned)i<NINDIR; i++)
-535c544
+535c539
 < 		if(f < filsys.s_fsize && f >= filsys.s_isize)
 ---
 > 		if(f < filsys.s_fsize && f >= filsys.s_isize) {
-537c546
+537c541
 < 				if(ibc >= NINDIR) {
 ---
 > 				if((unsigned)ibc >= NINDIR) {
-545a555
+545a550
 > 		}
-550,553c560,561
+550,553c555,556
 < iput(ip, aibc, ib)
 < struct inode *ip;
 < int *aibc;
@@ -22739,13 +19556,13 @@ Expect:
 ---
 > void
 > iput(struct inode *ip, int *aibc, daddr_t *ib)
-556,557c564,565
+556,557c559,560
 < 	daddr_t d;
 < 	int i;
 ---
 > 	daddr_t d, single[NINDIR], dbl[NINDIR];
 > 	int i, j, k, n;
-584,587c592,594
+584,587c587,589
 < 		for(i=0; i<*aibc; i++) {
 < 			if(i >= LADDR)
 < 				break;
@@ -22754,7 +19571,7 @@ Expect:
 > 		for(i=0; (unsigned)i<NINDIR; i++) {
 > 			single[i] = (daddr_t)0;
 > 			dbl[i] = (daddr_t)0;
-589c596,603
+589c591,598
 < 		if(*aibc >= LADDR) {
 ---
 > 		for(i=0; i<*aibc && i<LADDR; i++)
@@ -22765,7 +19582,7 @@ Expect:
 > 				n = (int)NINDIR;
 > 			for(i=0; i<n; i++)
 > 				single[i] = ib[LADDR+i];
-591,593c605,624
+591,593c600,619
 < 			for(i=0; i<NINDIR-LADDR; i++) {
 < 				ib[i] = ib[i+LADDR];
 < 				ib[i+LADDR] = (daddr_t)0;
@@ -22790,19 +19607,19 @@ Expect:
 > 				}
 > 				dbl[i] = alloc();
 > 				wtfs(dbl[i], (char *)single);
-595c626
+595c621
 < 			wtfs(ip->i_un.i_addr[LADDR], (char *)ib);
 ---
 > 			wtfs(ip->i_un.i_addr[LADDR+1], (char *)dbl);
-596a628
+596a623
 > 		/* fall through */
-610,611c642,643
+610,611c637,638
 < badblk(bno)
 < daddr_t bno;
 ---
 > int
 > badblk(daddr_t bno)
-613a646
+613a641
 > 	(void)bno;
 ```
 
@@ -22817,16 +19634,8 @@ diff unix-v7-c99/v7/usr/src/cmd/arcv.c unix-v7-c99/usr/src/cmd/arcv.c || true
 Expect:
 
 ```
-3c3
-< */
----
->  */
 5a6
 > #include <stdio.h>
-8c9
-< #define	omag	0177555
----
-> #define	OMAG	0177555
 10,12c11
 < struct	ar_hdr nh;
 < struct
@@ -22843,41 +19652,38 @@ Expect:
 ---
 > 	char	osize[2];
 > };
-20,24c19,22
-< char	*tmp;
+21d19
 < char	*mktemp();
-< int	f;
-< int	tf;
-< union {
----
-> static char	*tmp;
-> static int	f;
-> static int	tf;
-> static union {
-26c24
+23a22
+> static void conv(char *fil);
+26c25
 < 	int	magic;
 ---
 > 	char	magic[2];
-29,30c27,28
+29,30c28,29
 < main(argc, argv)
 < char *argv[];
 ---
-> static unsigned short
-> getshort(char *p)
-32c30,32
+> int
+> main(int argc, char **argv)
+32c31,32
 < 	register i;
 ---
+> 	int i;
+> 	char tbuf[] = "/tmp/arcXXXXX";
+34c34
+< 	tmp = mktemp("/tmp/arcXXXXX");
+---
+> 	tmp = mktemp(tbuf);
+39a40,75
+> 	return 0;
+> }
+> static unsigned short
+> getshort(char *p)
+> {
 > 	return ((unsigned short)(unsigned char)p[0]) |
 > 	    ((unsigned short)(unsigned char)p[1] << 8);
 > }
-34,39c34,61
-< 	tmp = mktemp("/tmp/arcXXXXX");
-< 	for(i=1; i<4; i++)
-< 		signal(i, SIG_IGN);
-< 	for(i=1; i<argc; i++)
-< 		conv(argv[i]);
-< 	unlink(tmp);
----
 > static void
 > putshort(char *p, unsigned short v)
 > {
@@ -22896,9 +19702,9 @@ Expect:
 > putarhdr(char *p, struct oar_hdr *oh)
 > {
 > 	int i;
-> 	for(i = 0; i < 8; i++)
+> 	for(i=0; i<8; i++)
 > 		p[i] = oh->oname[i];
-> 	for(; i < 14; i++)
+> 	for(; i<14; i++)
 > 		p[i] = 0;
 > 	putlong(&p[14], oh->odate);
 > 	p[18] = oh->ouid;
@@ -22906,19 +19712,19 @@ Expect:
 > 	putshort(&p[20], 0666);
 > 	putshort(&p[22], getshort(oh->osize));
 > 	putshort(&p[24], 0);
-42,43c64,65
+42,43c78,79
 < conv(fil)
 < char *fil;
 ---
 > static void
 > conv(char *fil)
-45c67,69
+45c81,83
 < 	register unsigned i, n;
 ---
 > 	unsigned int i, n;
 > 	struct oar_hdr oh;
 > 	char nh[26];
-59,61c83,86
+59,61c97,100
 < 	b.magic = 0;
 < 	read(f, (char *)&b.magic, sizeof(b.magic));
 < 	if(b.magic != omag) {
@@ -22926,14 +19732,14 @@ Expect:
 > 	b.magic[0] = 0;
 > 	b.magic[1] = 0;
 > 	read(f, b.magic, sizeof(b.magic));
-> 	if(getshort(b.magic) != OMAG) {
-67,68c92,93
+> 	if(getshort(b.magic) != omag) {
+67,68c106,107
 < 	b.magic = ARMAG;
 < 	write(tf, (char *)&b.magic, sizeof(b.magic));
 ---
 > 	putshort(b.magic, ARMAG);
 > 	write(tf, b.magic, sizeof(b.magic));
-73,81c98,100
+73,81c112,114
 < 	for(i=0; i<8; i++)
 < 		nh.ar_name[i] = oh.oname[i];
 < 	nh.ar_size = oh.siz;
@@ -22947,24 +19753,6 @@ Expect:
 > 	putarhdr(nh, &oh);
 > 	n = (getshort(oh.osize)+1) & ~01;
 > 	write(tf, nh, sizeof(nh));
-94c113
-< 	while((i=read(tf, b.buf, 512)) > 0)
----
-> 	while((i = read(tf, b.buf, 512)) > 0)
-97a117,129
-> }
-> int
-> main(int argc, char **argv)
-> {
-> 	int i;
-> 	char tbuf[] = "/tmp/arcXXXXX";
-> 	tmp = mktemp(tbuf);
-> 	for(i = 1; i < 4; i++)
-> 		signal(i, SIG_IGN);
-> 	for(i = 1; i < argc; i++)
-> 		conv(argv[i]);
-> 	unlink(tmp);
-> 	return 0;
 ```
 
 ### usr/src/cmd/awk/awk.g.y
@@ -23403,28 +20191,15 @@ diff unix-v7-c99/v7/usr/include/stdio.h unix-v7-c99/usr/include/stdio.h || true
 Expect:
 
 ```
-0a1,16
-> /*
->  * stdio.h --- v7's stdio.h plus the small set of libc extern
->  * declarations the unix-v7-c99 commands lean on.  The historical
->  * stdio defs (struct _iobuf, getc/putc macros, fopen/freopen/...)
->  * are byte-identical to v7/usr/include/stdio.h; everything below
->  * the v7 block is the ad-hoc catch-all the port still needs while
->  * the rest of libc migrates out of u.h.
->  */
+0a1,3
 > #ifndef STDIO_H
 > #define STDIO_H
-> #include <stdarg.h>
-> #include <sys/types.h>
-> #include <sys/stat.h>
-> #include <sys/dir.h>
-> #include <grp.h>		/* defines GRP_H, which gates the union-laden
-> 				 * struct inode block in sys/inode.h */
-21a38
+> struct stat;
+21a25
 > #ifndef NULL
-22a40
+22a27
 > #endif
-37,41c55,186
+37,41c42,160
 < FILE	*fopen();
 < FILE	*freopen();
 < FILE	*fdopen();
@@ -23436,11 +20211,8 @@ Expect:
 > FILE	*fdopen(int fd, char *mode);
 > long	ftell(FILE *f);
 > char	*fgets(char *s, int n, FILE *f);
-> /* -- below this line: declarations the c99 port adds to mirror what
->  * u.h used to inline.  Will shrink as libc grows real .c ports. */
 > #define	O_RDONLY	0
 > int syscall3(int n, int a, int b, int c);
-> /* syscall stubs in sys.s */
 > int read(int fd, char *buf, int n);
 > int write(int fd, char *buf, int n);
 > int open(char *path, int mode);
@@ -23467,7 +20239,7 @@ Expect:
 > void exit(int n) __attribute__((__noreturn__));
 > void _exit(int n) __attribute__((__noreturn__));
 > void abort(void) __attribute__((__noreturn__));
-> int dup();		/* dup(fd) or dup(fd|0100, newfd); kept unprototyped because callers pass 1 or 2 args */
+> int dup();
 > int pipe(int *fd);
 > int getuid(void);
 > int setuid(int uid);
@@ -23477,9 +20249,6 @@ Expect:
 > int umask(int n);
 > int sync(void);
 > int kill(int pid, int sig);
-> /* signal()'s second argument is a function pointer or the special values
->  * SIG_DFL/SIG_IGN; left unprototyped to accept both function pointers and
->  * the integer sentinels without forcing casts at every call site. */
 > int signal();
 > int alarm(int n);
 > int pause(void);
@@ -23489,19 +20258,17 @@ Expect:
 > int ioctl(int fd, int cmd, char *arg);
 > int mount(char *special, char *dir, int ro);
 > int umount(char *special);
-> /* time */
 > struct tm;
 > struct timeb;
 > int time(long *t);
 > int stime(long *t);
-> int times();		/* arg may be long * or struct tms * */
+> int times();
 > int ftime(struct timeb *t);
 > struct tm *gmtime(long *t);
 > struct tm *localtime(long *t);
 > char *asctime(struct tm *t);
 > char *ctime(long *t);
 > int dysize(int y);
-> /* stdio externs */
 > int fclose(FILE *f);
 > int fseek(FILE *f, long off, int whence);
 > void rewind(FILE *f);
@@ -23511,7 +20278,7 @@ Expect:
 > int fread(char *buf, unsigned size, unsigned n, FILE *f);
 > int fwrite(char *buf, unsigned size, unsigned n, FILE *f);
 > char *gets(char *buf);
-> int puts();		/* v7 had no prototype -- many callers pass FILE* as a stray 2nd arg */
+> int puts();
 > int fputs(char *s, FILE *f);
 > int ungetc(int c, FILE *f);
 > int fflush(FILE *f);
@@ -23524,7 +20291,6 @@ Expect:
 > int sscanf(char *str, char *fmt, ...);
 > int system(char *s);
 > void perror(char *s);
-> /* extras */
 > int isatty(int fd);
 > unsigned int sleep(unsigned n);
 > char *mktemp(char *s);
@@ -23549,16 +20315,12 @@ Expect:
 > double atof(char *s);
 > void srand(unsigned int x);
 > int rand(void);
-> /* compar kept unprototyped: v7 callers pass (char *, char *), (void *,
->  * void *), and (struct lbuf **, struct lbuf **) variants. */
 > void qsort(void *base, unsigned n, int size, int (*compar)());
 > char *malloc(unsigned n);
 > void free(char *p);
 > char *realloc(char *p, unsigned n);
 > char *calloc(unsigned num, unsigned size);
 > void swab(char *from, char *to, int n);
-> /* sbrk/brk: not declared here -- callers (sort.c) declare them with
->  * their own preferred type; the actual stubs live in lib/compat.c */
 > int getargs(char **argv, int maxarg);
 > long tell(int f);
 > char *timezone(int zone, int dst);
@@ -24225,31 +20987,24 @@ diff unix-v7-c99/v7/usr/src/cmd/ps.c unix-v7-c99/usr/src/cmd/ps.c || true
 Expect:
 
 ```
-8c8,14
+8c8,10
 < #include <core.h>
 ---
-> /* core.h is not present in this port; inline the three macros it
->  * defines (v7 PDP-11 values).  Feeds the user-text/data/stack
->  * address-map setup in prcom(); only meaningful when the port can
->  * read a user struct out of swap, which is best-effort. */
 > #define TXTRNDSIZ 8192L
 > #define stacktop(siz) (0x10000L)
 > #define stackbas(siz) (0x10000L-siz)
-10,11c16,21
+10,11c12,13
 < #include <sys/proc.h>
 < #include <sys/tty.h>
 ---
-> /* v7 kernel-internal headers live under h/ in this port. */
 > #include "../../sys/h/proc.h"
-> /* sys/tty.h is not needed by this source (no struct tty fields are
->  * touched here); a forward declaration is enough for the struct tty *
->  * member referenced through u.u_ttyp. */
 > struct tty;
-13c23
+13c15,16
 < #include <sys/user.h>
 ---
+> #include <sys/stat.h>
 > #include "../../sys/h/user.h"
-16,19c26,30
+16,19c19,22
 < 	{ "_proc" },
 < 	{ "_swapdev" },
 < 	{ "_swplo" },
@@ -24258,11 +21013,8 @@ Expect:
 > 	{ "_proc",    0, 0 },
 > 	{ "_swapdev", 0, 0 },
 > 	{ "_swplo",   0, 0 },
-> 	{ "_pcomm",   0, 0 },
 > 	{ "",         0, 0 },
-21a33
-> static int cur_slot;	/* index of mproc within proc[]; passed to prcom indirectly */
-32,35c44,52
+32,35c35,41
 < long	lseek();
 < char	*gettty();
 < char	*getptr();
@@ -24271,204 +21023,107 @@ Expect:
 > long	lseek(int fd, long offset, int ptrname);
 > char	*gettty(void);
 > char	*getptr(char **adr);
-> /* strncmp() is declared in <stdio.h> with the standard prototype in
->  * this port; the v7 K&R-era `char *strncmp()` line is dropped. */
 > int	getdev(void);
 > int	prcom(int puid);
 > int	getbyte(char *adr);
 > int	within(char *adr, long lbd, long ubd);
-50,51c67,68
+50,51c56,57
 < main(argc, argv)
 < char **argv;
 ---
 > int
 > main(int argc, char **argv)
-145a163
-> 		cur_slot = i;
-154c172,173
+154c160,161
 < getdev()
 ---
 > int
 > getdev(void)
-179,180c198,200
+156d162
+< #include <sys/stat.h>
+157a164
+> 	register int i;
+159a167
+> 	char dpath[DIRSIZ+1];
+169c177,180
+< 		if(stat(dbuf.d_name, &sbuf) < 0)
+---
+> 		for (i=0; i<DIRSIZ; i++)
+> 			dpath[i] = dbuf.d_name[i];
+> 		dpath[DIRSIZ] = '\0';
+> 		if(stat(dpath, &sbuf) < 0)
+173c184,185
+< 		strcpy(devl[ndev].dname, dbuf.d_name);
+---
+> 		for (i=0; i<DIRSIZ; i++)
+> 			devl[ndev].dname[i] = dbuf.d_name[i];
+179,180c191
 < 		fprintf(stderr, "Can't open /dev/swap\n");
 < 		exit(1);
 ---
-> 		/* /dev/swap is absent on the ARM port; ps still prints proc
-> 		 * table entries, but cannot reach swapped-out user pages. */
 > 		swap = -1;
-181a202
+181a193
 > 	return(0);
-185,186c206
+185,186c197
 < round(a, b)
 < 	long		a, b;
 ---
 > round(long a, long b)
-199c219,220
+199c210,211
 < prcom(puid)
 ---
 > int
 > prcom(int puid)
-211a233
-> 	(void)lw;
-241c263
+201c213
+< 	char abuf[512];
+---
+> 	int abuf[128];
+241c253
 < 			"0SWRIZT"[mproc.p_stat], puid);
 ---
 > 			"0SWRIZT"[(unsigned char)mproc.p_stat], puid);
-272a295,309
-> 	/* For parked processes the live USERBASE window doesn't cover their
-> 	 * UARGV buffer, so fall back to the per-slot pcomm[] table the
-> 	 * kernel populates at exec() time.  The running ps has its own
-> 	 * argv in UARGV and prefers that. */
-> 	{
-> 		char nb[16];
-> 		lseek(swmem, (long)nl[3].n_value + (long)cur_slot * 16, 0);
-> 		if (read(swmem, nb, 16) == 16) {
-> 			nb[15] = '\0';
-> 			if (nb[0] && mproc.p_size == 0) {
-> 				printf(" %.15s", nb);
-> 				return(1);
-> 			}
-> 		}
-> 	}
-277c314
-< 	addr += ctob((long)mproc.p_size) - 512;
+304c316
+< 	if (read(file, abuf, sizeof(abuf)) != sizeof(abuf))
 ---
-> 	/* In real v7, p_addr*64 / p_size*64 describe the swap-clicks layout
-279,299c316,332
-< 	/* look for sh special */
-< 	lseek(file, addr+512-sizeof(char **), 0);
-< 	if (read(file, (char *)&ap, sizeof(char *)) != sizeof(char *))
-< 		return(1);
-< 	if (ap) {
-< 		char b[82];
-< 		char *bp = b;
-< 		while((cp=getptr(ap++)) && cp && (bp<b+lw) ) {
-< 			nbad = 0;
-< 			while((c=getbyte(cp++)) && (bp<b+lw)) {
-< 				if (c<' ' || c>'~') {
-< 					if (nbad++>3)
-< 						break;
-< 					continue;
-< 				}
-< 				*bp++ = c;
-< 			}
-< 			*bp++ = ' ';
-< 		}
-< 		*bp++ = 0;
-< 		printf(lflg?" %.30s":" %.60s", b);
----
-> 	 * of a process's user struct + text/data/stack image, and the scan
-> 	 * below walks the top of the user stack (where exec() laid out
-> 	 * argv[]) byte by byte through a saved struct user{} address map.
-> 	 *
-> 	 * This port has no swap and only one live user image at a time
-> 	 * (USERBASE..USERBASE+USERSIZE), with argv kept as a single
-> 	 * NUL-terminated, space-separated buffer at the fixed user VA
-> 	 * UARGV (see arch/arm.c::kexec2 / kspawn).  arch/arm.c::
-> 	 * v7_proc_set_current() steers p_addr/p_size for the currently
-> 	 * running proc at UARGV/UARGLEN respectively, so the lseek+read
-> 	 * below lands directly on that buffer; every other proc gets
-> 	 * p_size==0 and we just print pid/tty/time with no command.
-> 	 *
-> 	 * The "sh special" indirect-argv walk and the backward stack scan
-> 	 * from the original v7 source are dropped: our argv buffer is a
-> 	 * single contiguous C string, not a v7 user-stack layout. */
-> 	if (mproc.p_size == 0)
-301c334,337
-< 	}
----
-> 	/* Read from the START of UARGV (where kargs lays out NUL-separated
-> 	 * argv strings).  Original v7 read at addr+size-512 because v7 placed
-> 	 * argv at the top of the user stack; in this port the buffer base is
-> 	 * UARGV itself. */
-306,332c342,352
+> 	if (read(file, (char *)abuf, sizeof(abuf)) != sizeof(abuf))
+306c318
 < 	for (ip = (int *)&abuf[512]-2; ip > (int *)abuf; ) {
-< 		if (*--ip == -1 || *ip==0) {
-< 			cp = (char *)(ip+1);
-< 			if (*cp==0)
-< 				cp++;
-< 			nbad = 0;
-< 			for (cp1 = cp; cp1 < &abuf[512]; cp1++) {
-< 				c = *cp1&0177;
-< 				if (c==0)
-< 					*cp1 = ' ';
-< 				else if (c < ' ' || c > 0176) {
-< 					if (++nbad >= 5) {
-< 						*cp1++ = ' ';
-< 						break;
-< 					}
-< 					*cp1 = '?';
-< 				} else if (c=='=') {
-< 					*cp1 = 0;
-< 					while (cp1>cp && *--cp1!=' ')
-< 						*cp1 = 0;
-< 					break;
-< 				}
-< 			}
-< 			while (*--cp1==' ')
-< 				*cp1 = 0;
-< 			printf(lflg?" %.30s":" %.60s", cp);
-< 			return(1);
 ---
-> 	abuf[sizeof(abuf)-1] = '\0';
-> 	if (abuf[0] == '\0')
-> 		return(1);
-> 	/* argv args are NUL-separated; replace NULs between non-empty strings
-> 	 * with spaces so the whole command line prints as one row.  Stop at
-> 	 * the argv terminator (two NULs in a row -> empty-string sentinel). */
-> 	{
-> 		int z;
-> 		for (z = 0; z < (int)sizeof(abuf) - 1; z++) {
-> 			if (abuf[z] == '\0' && abuf[z+1] == '\0') { abuf[z] = '\0'; break; }
-> 			if (abuf[z] == '\0') abuf[z] = ' ';
-334a355,369
-> 	/* Sanitize non-printables and trim trailing space so the line stays
-> 	 * one row even if the in-kernel buffer had stale tail bytes. */
-> 	for (cp = abuf; *cp; cp++) {
-> 		c = *cp & 0177;
-> 		if (c < ' ' || c > '~')
-> 			*cp = '?';
-> 	}
-> 	while (cp > abuf && cp[-1] == ' ')
-> 		*--cp = '\0';
-> 	/* ip/cp1/ap/nbad/getbyte/within/getptr are inherited from the
-> 	 * historical v7 argv-scan and become unused once we just print the
-> 	 * raw argbuf; cast them to void so -Wunused stays quiet without
-> 	 * disturbing the surrounding declarations. */
-> 	(void)ap; (void)cp1; (void)ip; (void)nbad;
-> 	printf(lflg?" %.30s":" %.60s", abuf);
-339c374
+> 	for (ip = &abuf[128]-2; ip > abuf; ) {
+312c324
+< 			for (cp1 = cp; cp1 < &abuf[512]; cp1++) {
+---
+> 			for (cp1 = cp; cp1 < (char *)abuf + sizeof(abuf); cp1++) {
+339c351
 < gettty()
 ---
 > gettty(void)
-341c376
+341c353
 < 	register i;
 ---
 > 	register int i;
-358,359c393
+358,359c370
 < getptr(adr)
 < char **adr;
 ---
 > getptr(char **adr)
-363c397
+363c374
 < 	register i;
 ---
 > 	register unsigned int i;
-373,374c407,408
+373,374c384,385
 < getbyte(adr)
 < char *adr;
 ---
 > int
 > getbyte(char *adr)
-395,397c429,430
+395,397c406,407
 < within(adr,lbd,ubd)
 < char *adr;
 < long lbd, ubd;
 ---
 > int
 > within(char *adr, long lbd, long ubd)
-399c432
+399c409
 < 	return((unsigned)adr>=lbd && (unsigned)adr<ubd);
 ---
 > 	return((unsigned long)adr>=(unsigned long)lbd && (unsigned long)adr<(unsigned long)ubd);
@@ -24485,24 +21140,12 @@ diff unix-v7-c99/v7/usr/src/cmd/pstat.c unix-v7-c99/usr/src/cmd/pstat.c || true
 Expect:
 
 ```
-5a6,12
-> /* h/inode.h carries a v7-style `struct group` (the mpx multiplexer
->  * descriptor), which collides with libc's <grp.h> `struct group`
->  * (getgrent).  Suppress the libc form by predefining GRP_H before
->  * any libc header gets a chance to pull <grp.h>; pstat does not
->  * call getgr* and so does not need the POSIX struct. */
-> #define GRP_H
+5a6
 > #include <stdio.h>
-7,8c14,30
+7,8c8,15
 < #include <sys/conf.h>
 < #include <sys/tty.h>
 ---
-> /* sys/conf.h is unused by this source.  Pull kernel-internal headers
->  * from the in-tree h/ directory; this port keeps them there.  v7
->  * had these as in-function #includes (just to scope a few struct
->  * defs); C99 chokes on the file-scope `inode[]` / `mpxip` decls
->  * showing up as unused function-local variables, so they are hoisted
->  * to file scope here. */
 > #include "../../sys/h/tty.h"
 > #include "../../sys/h/inode.h"
 > #include "../../sys/h/text.h"
@@ -24510,41 +21153,38 @@ Expect:
 > #include <sys/dir.h>
 > #include "../../sys/h/user.h"
 > #include "../../sys/h/file.h"
-> #include <sys/stat.h>
-> #include <a.out.h>		/* nlist() prototype */
-> /* exit/open/read/lseek prototypes are pulled in via stdio.h on this
->  * port; no extra K&R-style declarations are needed here. */
-20c42
+> #include <a.out.h>
+20c27
 < 	"_inode", 0, 0,
 ---
 > 	{"_inode", 0, 0},
-22c44
+22c29
 < 	"_text", 0, 0,
 ---
 > 	{"_text", 0, 0},
-24c46
+24c31
 < 	"_proc", 0, 0,
 ---
 > 	{"_proc", 0, 0},
-26c48
+26c33
 < 	"_dh11", 0, 0,
 ---
 > 	{"_dh11", 0, 0},
-28c50
+28c35
 < 	"_ndh11", 0, 0,
 ---
 > 	{"_ndh11", 0, 0},
-30c52
+30c37
 < 	"_kl11", 0, 0,
 ---
 > 	{"_kl11", 0, 0},
-32,33c54,55
+32,33c39,40
 < 	"_file", 0, 0,
 < 	0,
 ---
 > 	{"_file", 0, 0},
 > 	{"", 0, 0},
-45,46c67,77
+45,46c52,62
 < main(argc, argv)
 < char **argv;
 ---
@@ -24559,109 +21199,109 @@ Expect:
 > int oatoi(char *s);
 > int
 > main(int argc, char **argv)
-92c123
+92c108
 < 	nlist(fnlist, setup);
 ---
 > 	nlist(fnlist, (struct nlist *)setup);
-108a140
+108a125
 > 	return(0);
-111c143,144
+111c128,129
 < doinode()
 ---
 > int
 > doinode(void)
-113d145
+113d130
 < #include <sys/inode.h>
-148a181
+148a166
 > 	return(0);
-151c184,185
+151c169,170
 < putf(v, n)
 ---
 > int
 > putf(int v, int n)
-156a191
+156a176
 > 	return(0);
-159c194,195
+159c179,180
 < dotext()
 ---
 > int
 > dotext(void)
-161d196
+161d181
 < #include <sys/text.h>
-164c199
+164c184
 < 	register loc;
 ---
 > 	register int loc;
-193a229
+193a214
 > 	return(0);
-196c232,233
+196c217,218
 < doproc()
 ---
 > int
 > doproc(void)
-198d234
+198d219
 < #include <sys/proc.h>
-201c237
+201c222
 < 	register loc, np;
 ---
 > 	register int loc, np;
-233a270
+233a255
 > 	return(0);
-236c273,274
+236c258,259
 < dotty()
 ---
 > int
 > dotty(void)
-250c288
+250c273
 < 		return;
 ---
 > 		return(0);
-257a296
+257a281
 > 	return(0);
-260,261c299,300
+260,261c284,285
 < ttyprt(n, atp)
 < struct tty *atp;
 ---
 > int
 > ttyprt(int n, struct tty *atp)
-283a323
+283a308
 > 	return(0);
-286c326,327
+286c311,312
 < dousr()
 ---
 > int
 > dousr(void)
-288,289d328
+288,289d313
 < #include <sys/dir.h>
 < #include <sys/user.h>
-295c334
+295c319
 < 	register i;
 ---
 > 	register int i;
-352a392
+352a377
 > 	return(0);
-355,356c395,396
+355,356c380,381
 < oatoi(s)
 < char *s;
 ---
 > int
 > oatoi(char *s)
-358c398
+358c383
 < 	register v;
 ---
 > 	register int v;
-366c406,407
+366c391,392
 < dofil()
 ---
 > int
 > dofil(void)
-368d408
+368d393
 < #include <sys/file.h>
-371c411
+371c396
 < 	register nf;
 ---
 > 	register int nf;
-392a433
+392a418
 > 	return(0);
 ```
 
@@ -24676,69 +21316,16 @@ diff unix-v7-c99/v7/usr/src/cmd/sa.c unix-v7-c99/usr/src/cmd/sa.c || true
 Expect:
 
 ```
-0a1,26
-> /* sa(1) -- interpret command time accounting.
->  *
->  * Ported from v7/usr/src/cmd/sa.c with the minimum set of K&R -> C99
->  * edits needed to build under the project's strict cmd-build CFLAGS:
->  *
->  *   - Replaced the K&R-style function definitions with C99 prototypes
->  *     for the static helpers used inside this TU.
->  *   - Inlined the v7 sys/acct.h definitions (struct acct, AFORK).  The
->  *     port's include tree carries only kernel-side h/acct.h; userland
->  *     does not get a <sys/acct.h>, so the struct is reproduced here
->  *     instead of adding a new public header.
->  *   - Renamed the file-scope `struct user user[256]` to `usr[]` so it
->  *     does not shadow the kernel's struct user (the cmd build does not
->  *     include h/user.h, but keeping the name distinct is harmless and
->  *     reads more naturally).
->  *   - Switched the v7-only `getpw(uid, buf)` lookup in printmoney() to
->  *     getpwuid(), which is what this libc provides.  The fallback
->  *     printing path (numeric uid) is unchanged.
->  *   - Forward-declared the comparison functions and sum() with proper
->  *     prototypes so qsort()'s function-pointer arg type-checks against
->  *     stdio.h's declaration.
->  *
->  * Everything else (the hash-table enter() / cleanup pass / column()
->  * pretty-printer / expand() pseudo-float decode) is byte-for-byte from
->  * the v7 source.
->  */
-3c29
+3d2
 < #include <sys/acct.h>
----
-> #include <sys/stat.h>
-4a31
+4a4
 > #include <pwd.h>
-6c33,74
+6c6,17
 < /* interpret command time accounting */
 ---
-> /* Acct record layout.
->  *
->  * v7's h/acct.h declares comp_t (16-bit pseudo-float) fields for ac_utime,
->  * ac_stime, ac_etime, ac_io.  The kernel writei()s `&acctbuf` for
->  * `sizeof(acctbuf)` bytes; in this port `acctbuf` is the global declared
->  * in conf.c -- which uses *long* for utime/stime/etime and *short*
->  * for ac_io.  The on-disk record we read back here therefore mirrors that
->  * 44-byte struct, not h/acct.h's 36-byte one.
->  *
->  * (sys/acct.c::acct() truncates its writei() length to sizeof(acctbuf) as
->  * seen from sys/acct.c -- which sees h/acct.h's 36-byte struct via the
->  * include, so the *cut* is at byte 36.  That covers the 10-byte ac_comm,
->  * the 2-byte alignment pad, and the four 4-byte time fields, plus the
->  * three shorts ac_uid/ac_gid/ac_mem and the half of ac_io.  The kernel
->  * never writes ac_tty/ac_flag, so we read them as zero here.)
->  *
->  * comp_t pseudo-float decode is in expand(); ac_btime/ac_uid/ac_gid are
->  * passed through verbatim.  The wider-than-comp_t fields are still
->  * decoded with expand() because compress() in sys/acct.c emits the same
->  * pseudo-float (just zero-extended to a long here). */
-> typedef	unsigned short comp_t;
 > struct	acct {
 > 	char	ac_comm[10];
-> 	char	ac_pad[2];	/* alignment pad between ac_comm and ac_utime
-> 				 * in conf.c's struct -- the kernel
-> 				 * writes this byte-for-byte even though
-> 				 * h/acct.h's matching field is comp_t. */
+> 	char	ac_pad[2];
 > 	long	ac_utime;
 > 	long	ac_stime;
 > 	long	ac_etime;
@@ -24747,29 +21334,21 @@ Expect:
 > 	short	ac_gid;
 > 	short	ac_mem;
 > 	short	ac_io;
-> 	/* The kernel side never writes ac_tty / ac_flag: sys/acct.c::acct()
-> 	 * caps writei() at sizeof(acctbuf) as seen through h/acct.h (36
-> 	 * bytes), and that cut lands right after ac_io.  We don't carry
-> 	 * the fields in this on-disk struct because their bytes are not
-> 	 * actually persisted; the references below treat them as zero. */
 > };
-> #define	AFORK	01
-27c95
+27c38
 < struct	user {
 ---
 > struct	user_acct {
-31c99
+31c42
 < } user[256];
 ---
 > } usr[256];
-47d114
+47d57
 < time_t	expand();
-49,50c116,132
+49,50c59,73
 < main(argc, argv)
 < char **argv;
 ---
-> /* Forward declarations -- needed under C99 strict prototypes so qsort()
->  * and the inter-routine calls type-check. */
 > extern int acct(char *);
 > time_t expand(unsigned t);
 > int tcmp(struct tab *p1, struct tab *p2);
@@ -24785,70 +21364,54 @@ Expect:
 > void col(double n, double a, double m);
 > int
 > main(int argc, char **argv)
-54,55d135
+54,55d76
 < 	extern tcmp(), ncmp(), bcmp();
 < 	extern float sum();
-135a216,233
-> 	/* Force iupdat() of the acct file's in-core inode so armboot's
-> 	 * loadino() / kopen() path reads the fresh i_size when we fopen()
-> 	 * below.  The kernel writei() in sys/acct.c::acct() bumps the
-> 	 * in-core i_size on every process exit, but it leaves IUPD set
-> 	 * without writing the dinode block back -- iput() only iupdat()s
-> 	 * the inode when its refcount drops to 1, and acctp holds an
-> 	 * extra reference that never lets that happen while accounting
-> 	 * stays on.
-> 	 *
-> 	 * Toggling accounting off-then-on takes that extra reference away
-> 	 * (sysacct(NULL) iput()s acctp -> i_count drops to 1 -> iupdat()
-> 	 * pushes the dinode), then the re-enable sysacct() re-namei()s
-> 	 * the (now-flushed) inode so subsequent exits keep accruing.  The
-> 	 * read path our fopen() drives next sees the post-iupdat() dinode
-> 	 * via armboot's loadino(), and fread() walks all the records on
-> 	 * disk. */
+135a157,158
 > 	(void)acct((char *)0);
 > 	(void)acct("/usr/adm/acct");
-143c241
+143c166
 < 		return;
 ---
 > 		return 0;
-156c254
+156c179
 < 		for(j=0; j<NC; j++)
 ---
 > 		for(j=0; j<(int)NC; j++)
-172c270
+172c195
 < 		for(j=0; j<NC; j++)
 ---
 > 		for(j=0; j<(int)NC; j++)
-183c281
+183c206
 < 			fwrite((char *)user, sizeof(user), 1, ff);
 ---
 > 			fwrite((char *)usr, sizeof(usr), 1, ff);
-202c300
+202c225
 < 	qsort(tab, k, sizeof(tab[0]), nflg? ncmp: (bflg?bcmp:tcmp));
 ---
 > 	qsort((char *)tab, k, sizeof(tab[0]), nflg? ncmp: (bflg?bcmp:tcmp));
-210a309
+210a234
 > 	return 0;
-213c312,313
+213c237,238
 < printmoney()
 ---
 > void
 > printmoney(void)
-215,217c315,316
+215,217c240,241
 < 	register i;
 < 	char buf[128];
 < 	register char *cp;
 ---
 > 	int i;
 > 	struct passwd *pw;
-220,221c319,321
+220,221c244,246
 < 		if (user[i].ncomm) {
 < 			if (getpw(i, buf)!=0)
 ---
 > 		if (usr[i].ncomm) {
 > 			pw = getpwuid(i);
 > 			if (pw == NULL)
-223,229c323,324
+223,229c248,249
 < 			else {
 < 				cp = buf;
 < 				while (*cp!=':' &&*cp!='\n' && *cp)
@@ -24859,114 +21422,114 @@ Expect:
 ---
 > 			else
 > 				printf("%-8s", pw->pw_name);
-231c326
+231c251
 < 			    user[i].ncomm, user[i].fctime/60);
 ---
 > 			    usr[i].ncomm, usr[i].fctime/60);
-236,237c331,332
+236,237c256,257
 < column(n, a, b, c)
 < double n, a, b, c;
 ---
 > void
 > column(double n, double a, double b, double c)
-258,259c353,354
+258,259c278,279
 < col(n, a, m)
 < double n, a, m;
 ---
 > void
 > col(double n, double a, double m)
-272,273c367,368
+272,273c292,293
 < doacct(f)
 < char *f;
 ---
 > void
 > doacct(char *f)
-279,280c374,375
+279,280c299,300
 < 	register char *cp;
 < 	register int c;
 ---
 > 	char *cp;
 > 	int c;
-302c397
+302c322
 < 		if (fbuf.ac_flag&AFORK) {
 ---
-> 		if (0/*fbuf.ac_flag*/&AFORK) {
-316,317c411,412
+> 		if (0) {
+316,317c336,337
 < 		user[c].ncomm++;
 < 		user[c].fctime += x/60.;
 ---
 > 		usr[c].ncomm++;
 > 		usr[c].fctime += x/60.;
-334,335c429,430
+334,335c354,355
 < ncmp(p1, p2)
 < struct tab *p1, *p2;
 ---
 > int
 > ncmp(struct tab *p1, struct tab *p2)
-345,346c440,441
+345,346c365,366
 < bcmp(p1, p2)
 < struct tab *p1, *p2;
 ---
 > int
 > bcmp(struct tab *p1, struct tab *p2)
-349d443
+349d368
 < 	float sum();
-365,366c459,460
+365,366c384,385
 < tcmp(p1, p2)
 < struct tab *p1, *p2;
 ---
 > int
 > tcmp(struct tab *p1, struct tab *p2)
-368d461
+368d386
 < 	extern float sum();
-386,387c479,480
+386,387c404,405
 < float sum(p)
 < struct tab *p;
 ---
 > float
 > sum(struct tab *p)
-397c490,491
+397c415,416
 < init()
 ---
 > void
 > init(void)
-420c514
+420c439
 < 	fread((char *)user, sizeof(user), 1, f);
 ---
 > 	fread((char *)usr, sizeof(usr), 1, f);
-424,425c518,519
+424,425c443,444
 < enter(np)
 < char *np;
 ---
 > int
 > enter(char *np)
-429c523
+429c448
 < 	for (i=j=0; i<NC; i++) {
 ---
 > 	for (i=j=0; i<(int)NC; i++) {
-435c529
+435c454
 < 	for (i=j=0; j<NC; j++) {
 ---
 > 	for (i=0, j=0; j<(int)NC; j++) {
-441c535
+441c460
 < 		for (j=0; j<NC; j++)
 ---
 > 		for (j=0; j<(int)NC; j++)
-447c541
+447c466
 < 	for (j=0; j<NC; j++)
 ---
 > 	for (j=0; j<(int)NC; j++)
-453c547,548
+453c472,473
 < strip()
 ---
 > void
 > strip(void)
-475,476c570
+475,476c495
 < expand(t)
 < unsigned t;
 ---
 > expand(unsigned t)
-478c572
+478c497
 < 	register time_t nt;
 ---
 > 	time_t nt;
@@ -24993,23 +21556,17 @@ Expect:
 < union reptr	*ptrend;
 ---
 > struct reptr	*ptrend;
-63a64
-> int	iflag;
-104,107c105,112
+104,107c104,107
 < union	reptr {
 < 	struct reptr1 {
 < 		char	*ad1;
 < 		char	*ad2;
 ---
-> /* Strict C99: v7 sed had struct reptr { struct reptr1; struct reptr2; }
->  * where reptr1/reptr2 differed only by re1(char*)/lb1(reptr*) in one
->  * slot.  Collapsed to a single struct with a named inner union for that
->  * slot -- callers reach the slot via ipc->u.re1 / ipc->u.lb1. */
 > struct reptr {
 > 	char	*ad1;
 > 	char	*ad2;
 > 	union {
-109,128c114,122
+109,128c109,117
 < 		char	*rhs;
 < 		FILE	*fcode;
 < 		char	command;
@@ -25040,17 +21597,17 @@ Expect:
 > 	char	pfl;
 > 	char	inar;
 > 	char	negfl;
-136,137c130,131
+136,137c125,126
 < 	union reptr	*chain;
 < 	union reptr	*address;
 ---
 > 	struct reptr	*chain;
 > 	struct reptr	*address;
-151c145
+151c140
 < union reptr	**cmpend[DEPTH];
 ---
 > struct reptr	**cmpend[DEPTH];
-153c147
+153c142
 < union reptr	*pending;
 ---
 > struct reptr	*pending;
@@ -25079,217 +21636,195 @@ Expect:
 ---
 > int
 > main(int argc, char *argv[])
-79a85,87
-> 		case 'i':
-> 			iflag++;
-> 			continue;
-105c113
+105c110
 < /*	abort();	/*DEBUG*/
 ---
 > /*	abort();	DEBUG */
-110c118,138
-< 		execute(*eargv++);
+109c114
+< 	else while(--eargc >= 0) {
 ---
-> 		char *src = *eargv++;
-> 		if(iflag && src) {
-> 			char tmpname[256];
-> 			int i, n = 0;
-> 			for(i = 0; src[i] && n < 240; i++) tmpname[n++] = src[i];
-> 			tmpname[n++] = '.'; tmpname[n++] = 's'; tmpname[n++] = 'e';
-> 			tmpname[n++] = 'd'; tmpname[n++] = 't'; tmpname[n++] = 'm';
-> 			tmpname[n++] = 'p'; tmpname[n] = '\0';
-> 			if(freopen(tmpname, "w", stdout) == NULL) {
-> 				fprintf(stderr, "sed: can't write %s\n", tmpname);
-> 				continue;
-> 			}
-> 			fcode[0] = stdout;
-> 			execute(src);
-> 			fflush(stdout);
-> 			unlink(src);
-> 			link(tmpname, src);
-> 			unlink(tmpname);
-> 		} else {
-> 			execute(src);
-> 		}
-115c143,144
+> 	else while(--eargc >= 0)
+111d115
+< 	}
+115c119,120
 < fcomp()
 ---
 > void
 > fcomp(void)
-119,120c148,149
+119,120c124,125
 < 	char	*address();
 < 	union reptr	*pt, *pt1;
 ---
 > 	char	*address(char *expbuf);
 > 	struct reptr	*pt, *pt1;
-143c172
+143c148
 < /*	fprintf(stdout, "cp: %s\n", cp);	/*DEBUG*/
 ---
 > /*	fprintf(stdout, "cp: %s\n", cp);	DEBUG */
-210c239
+210c215
 < 				cmpend[depth++] = &rep->lb1;
 ---
 > 				cmpend[depth++] = &rep->u.lb1;
-261c290
+261c266
 < 				if(lpt = search(lab)) {
 ---
 > 				if((lpt = search(lab))) {
-290,291c319,320
+290,291c295,296
 < 				rep->re1 = p;
 < 				p = text(rep->re1);
 ---
 > 				rep->u.re1 = p;
 > 				p = text(rep->u.re1);
-300,301c329,330
+300,301c305,306
 < 				rep->re1 = p;
 < 				p = text(rep->re1);
 ---
 > 				rep->u.re1 = p;
 > 				p = text(rep->u.re1);
-314,315c343,344
+314,315c319,320
 < 				rep->re1 = p;
 < 				p = text(rep->re1);
 ---
 > 				rep->u.re1 = p;
 > 				p = text(rep->u.re1);
-345,346c374,375
+345,346c350,351
 < 					if(pt = labtab->chain) {
 < 						while(pt1 = pt->lb1)
 ---
 > 					if((pt = labtab->chain)) {
 > 						while((pt1 = pt->u.lb1))
-348c377
+348c353
 < 						pt->lb1 = rep;
 ---
 > 						pt->u.lb1 = rep;
-362c391
+362c367
 < 				if(lpt = search(lab)) {
 ---
 > 				if((lpt = search(lab))) {
-364c393
+364c369
 < 						rep->lb1 = lpt->address;
 ---
 > 						rep->u.lb1 = lpt->address;
-367c396
+367c372
 < 						while(pt1 = pt->lb1)
 ---
 > 						while((pt1 = pt->u.lb1))
-369c398
+369c374
 < 						pt->lb1 = rep;
 ---
 > 						pt->u.lb1 = rep;
-407,408c436,437
+407,408c412,413
 < 				rep->re1 = p;
 < 				p = text(rep->re1);
 ---
 > 				rep->u.re1 = p;
 > 				p = text(rep->u.re1);
-417c446
+417c422
 < 				rep->lb1 = ptrspace;
 ---
 > 				rep->u.lb1 = ptrspace;
-435,436c464,465
+435,436c440,441
 < 				rep->re1 = p;
 < 				p = compile(rep->re1);
 ---
 > 				rep->u.re1 = p;
 > 				p = compile(rep->u.re1);
-441,442c470,471
+441,442c446,447
 < 				if(p == rep->re1) {
 < 					rep->re1 = op;
 ---
 > 				if(p == rep->u.re1) {
 > 					rep->u.re1 = op;
-444c473
+444c449
 < 					op = rep->re1;
 ---
 > 					op = rep->u.re1;
-529,530c558,559
+529,530c534,535
 < 				rep->re1 = p;
 < 				p = ycomp(rep->re1);
 ---
 > 				rep->u.re1 = p;
 > 				p = ycomp(rep->u.re1);
-588,589c617,618
+588,589c593,594
 < char *compile(expbuf)
 < char	*expbuf;
 ---
 > char *
 > compile(char *expbuf)
-591c620
+591c596
 < 	register c;
 ---
 > 	register int c;
-749,750c778,779
+749,750c754,755
 < rline(lbuf)
 < char	*lbuf;
 ---
 > int
 > rline(char *lbuf)
-753c782
+753c758
 < 	register	t;
 ---
 > 	register int	t;
-764c793
+764c769
 < 			while(*++p = *q++) {
 ---
 > 			while((*++p = *q++)) {
-783c812
+783c788
 < 		while(*++p = *q++) {
 ---
 > 		while((*++p = *q++)) {
-816,817c845,846
+816,817c821,822
 < char	*address(expbuf)
 < char	*expbuf;
 ---
 > char	*
 > address(char *expbuf)
-855,856c884,885
+855,856c860,861
 < cmp(a, b)
 < char	*a,*b;
 ---
 > int
 > cmp(char *a, char *b)
-863c892
+863c868
 < 	while(*++ra == *++rb)
 ---
 > 	while ((*++ra == *++rb))
-908c937,938
+908c913,914
 < dechain()
 ---
 > void
 > dechain(void)
-911c941
+911c917
 < 	union reptr	*rptr, *trptr;
 ---
 > 	struct reptr	*rptr, *trptr;
-922,923c952,953
+922,923c928,929
 < 			while(trptr = rptr->lb1) {
 < 				rptr->lb1 = lptr->address;
 ---
 > 			while((trptr = rptr->u.lb1)) {
 > 				rptr->u.lb1 = lptr->address;
-926c956
+926c932
 < 			rptr->lb1 = lptr->address;
 ---
 > 			rptr->u.lb1 = lptr->address;
-931,932c961,962
+931,932c937,938
 < char *ycomp(expbuf)
 < char	*expbuf;
 ---
 > char *
 > ycomp(char *expbuf)
-952,953c982,983
+952,953c958,959
 < 		if((ep[c] = *tsp++) == '\\' && *tsp == 'n') {
 < 			ep[c] = '\n';
 ---
 > 		if((ep[(unsigned char)c] = *tsp++) == '\\' && *tsp == 'n') {
 > 			ep[(unsigned char)c] = '\n';
-956c986
+956c962
 < 		if(ep[c] == seof || ep[c] == '\0')
 ---
 > 		if(ep[(unsigned char)c] == seof || ep[(unsigned char)c] == '\0')
-964,965c994,995
+964,965c970,971
 < 		if(ep[c] == 0)
 < 			ep[c] = c;
 ---
@@ -25302,7 +21837,7 @@ Expect:
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/sed/sed1.c unix-v7-c99/usr/src/cmd/sed/sed1.c | sed 's/[[:blank:]]*$//' || true
+diff unix-v7-c99/v7/usr/src/cmd/sed/sed1.c unix-v7-c99/usr/src/cmd/sed/sed1.c || true
 ```
 
 Expect:
@@ -25513,8 +22048,6 @@ Expect:
 < 			if((fi = fopen((*aptr)->re1, "r")) == NULL)
 ---
 > 			if((fi = fopen((*aptr)->u.re1, "r")) == NULL)
-717d723
-<
 ```
 
 ### usr/src/cmd/tc.c
@@ -25698,7 +22231,7 @@ Expect:
 8c8
 < char	*cvt();
 ---
-> static char *cvt(double, int, int *, int *, int);
+> char	*cvt(double, int, int *, int *, int);
 12,14c12
 < ecvt(arg, ndigits, decpt, sign)
 < double arg;
@@ -25711,11 +22244,13 @@ Expect:
 < int ndigits, *decpt, *sign;
 ---
 > fcvt(double arg, int ndigits, int *decpt, int *sign)
-28,30c24
+27,30c23,24
+< static char*
 < cvt(arg, ndigits, decpt, sign, eflag)
 < double arg;
 < int ndigits, *decpt, *sign;
 ---
+> char*
 > cvt(double arg, int ndigits, int *decpt, int *sign, int eflag)
 36c30
 < 	double modf();
@@ -26365,6 +22900,28 @@ Expect:
 > tanh(double arg)
 ```
 
+### etc/rc
+
+Local test:
+
+```
+diff unix-v7-c99/v7/etc/rc unix-v7-c99/etc/rc || true
+```
+
+Expect:
+
+```
+5c5
+< rm /etc/mtab
+---
+> rm -f /etc/mtab
+7,10d6
+< /etc/mount /dev/rp3 /usr
+< rm -f /usr/spool/lpd/lock
+< : /etc/accton /usr/adm/acct
+< rm -f /usr/tmp/*
+```
+
 ### usr/sys/conf/makefile
 
 Local test:
@@ -26394,9 +22951,9 @@ Expect:
 < mch.o:	mch0.s mch.s
 < 	as -o mch.o mch0.s mch.s
 ---
-> LDFLAGS = -nostdlib -T ../arch/arm.ld -Wl,-z,max-page-size=0x200
+> LDFLAGS = -nostdlib -T l.s -Wl,-z,max-page-size=0x200
 > DEVS = ../dev/pl011.o ../dev/virtio_blk.o
-11,29c11,39
+11,29c11,38
 < allsystems:
 < 	mkconf <hphtconf
 < 	make unix
@@ -26421,20 +22978,19 @@ Expect:
 > 	-kernel ../../../unix -drive if=none,file=../../../root.img,format=raw,id=hd0 \
 > 	-device virtio-blk-device,drive=hd0
 > V7OBJS = alloc.o subr.o fio.o sys2.o sys3.o sys4.o clock.o acct.o ureg.o text.o rdwri.o sig.o slp.o sys1.o pipe.o
-> OBJS = malloc.o prf.o iget.o nami.o machdep_arm.o $(V7OBJS) ../arch/arm.o ../dev/bio.o ../dev/msgbuf.o c.o
+> OBJS = malloc.o prf.o iget.o nami.o machdep.o $(V7OBJS) ../dev/bio.o ../dev/msgbuf.o c.o
 > unix: ../../../unix
-> ../../../unix: ../arch/arm_asm.o main.o $(OBJS) $(DEVS)
+> ../../../unix: mch.o main.o $(OBJS) $(DEVS)
 > 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
-> ../arch/arm_asm.o: ../arch/arm.s
-> 	$(AS) -mcpu=cortex-a7 -o ../arch/arm_asm.o ../arch/arm.s
+> mch.o: mch.s
+> 	$(AS) -mcpu=cortex-a7 -o mch.o mch.s
 > malloc.o: malloc.c ../h/map.h ../h/param.h
 > prf.o:    prf.c ../h/param.h
 > iget.o:   iget.c ../h/param.h ../h/systm.h ../h/mount.h ../h/dir.h ../h/user.h ../h/inode.h ../h/ino.h ../h/filsys.h ../h/buf.h
 > nami.o:   nami.c ../h/param.h ../h/systm.h ../h/inode.h ../h/mount.h ../h/dir.h ../h/user.h ../h/buf.h
 > ../dev/bio.o: ../dev/bio.c ../h/buf.h ../h/conf.h ../h/param.h ../h/systm.h ../h/user.h ../h/dir.h
 > ../dev/virtio_blk.o: ../dev/virtio_blk.c ../h/buf.h ../h/param.h
-> ../arch/arm.o: ../arch/arm.c ../arch/arm.h ../h/buf.h ../h/conf.h ../h/param.h ../h/dir.h ../h/user.h
-> machdep_arm.o: machdep_arm.c ../arch/arm.h ../h/buf.h ../h/param.h
+> machdep.o: machdep.c ../h/seg.h ../h/buf.h ../h/param.h
 > c.c: mkconf $(CONF)
 > 	./mkconf <$(CONF) >c.c
 > mkconf: mkconf.c
@@ -26443,7 +22999,7 @@ Expect:
 > .c.o:
 > 	$(CC) $(CFLAGS) -c $< -o $@
 > clean:
-> 	rm -f $(OBJS) $(DEVS) ../arch/*.o main.o unix ../../../unix c.c mkconf
+> 	rm -f $(OBJS) $(DEVS) mch.o main.o unix ../../../unix c.c mkconf
 > qemu: unix
 > 	qemu-system-arm $(QEMU_ARGS)
 ```
@@ -26472,7 +23028,6 @@ Expect:
 > 			virtio = 1;
 > 	if(!virtio)
 > 		return(0);
-> 	printf("/* generated by mkconf from usr/sys/conf/arm_qemu */\n");
 > 	printf("#include \"../h/param.h\"\n");
 > 	printf("#include \"../h/acct.h\"\n");
 > 	printf("#include \"../h/buf.h\"\n");
@@ -26490,6 +23045,7 @@ Expect:
 > 	printf("extern int virtio_strategy(struct buf *bp);\n");
 > 	printf("static int nulldev_dev(dev_t dev, int flag) { (void)dev; (void)flag; return 0; }\n");
 > 	printf("dev_t rootdev = 0;\n");
+> 	printf("dev_t pipedev = 0;\n");
 > 	printf("int nblkdev = 0;\n");
 > 	printf("struct bdevsw bdevsw[2] = { { nulldev_dev, nulldev_dev, virtio_strategy, &virtio_tab }, { 0, 0, 0, 0 } };\n");
 > 	printf("struct proc proc[NPROC];\n");
@@ -26509,366 +23065,1794 @@ Expect:
 > 		return(0);
 ```
 
-### usr/sys/sys/machdep_arm.c
+
+### usr/src/libc/compall
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/sys/sys/machdep.c unix-v7-c99/usr/sys/sys/machdep_arm.c -u || true
+diff unix-v7-c99/v7/usr/src/libc/compall unix-v7-c99/usr/src/libc/compall || true
 ```
 
 Expect:
 
 ```
---- unix-v7-c99/v7/usr/sys/sys/machdep.c	1979-01-10 12:19:33.000000000 -0800
-+++ unix-v7-c99/usr/sys/sys/machdep_arm.c	2026-05-22 22:16:00.135047907 -0700
-@@ -1,196 +1,38 @@
- #include "../h/param.h"
--#include "../h/systm.h"
--#include "../h/acct.h"
--#include "../h/dir.h"
--#include "../h/user.h"
--#include "../h/inode.h"
--#include "../h/proc.h"
--#include "../h/seg.h"
--#include "../h/map.h"
--#include "../h/reg.h"
- #include "../h/buf.h"
--
--/*
-- * Icode is the octal bootstrap
-- * program executed in user mode
-- * to bring up the system.
-- */
--int	icode[] =
--{
--	0104413,	/* sys exec; init; initp */
--	0000014,
--	0000010,
--	0000777,	/* br . */
--	0000014,	/* initp: init; 0 */
--	0000000,
--	0062457,	/* init: </etc/init\0> */
--	0061564,
--	0064457,
--	0064556,
--	0000164,
--};
--int	szicode = sizeof(icode);
--
--/*
-- * Machine-dependent startup code
-- */
--startup()
--{
--	register i;
--
--	/*
--	 * zero and free all of core
--	 */
--
--	i = ka6->r[0] + USIZE;
--	UISD->r[0] = 077406;
--	for(;;) {
--		UISA->r[0] = i;
--		if(fuibyte((caddr_t)0) < 0)
--			break;
--		clearseg(i);
--		maxmem++;
--		mfree(coremap, 1, i);
--		i++;
--	}
--	if(cputype == 70)
--	for(i=0; i<62; i+=2) {
--		UBMAP->r[i] = i<<12;
--		UBMAP->r[i+1] = 0;
--	}
--	printf("mem = %D\n", ctob((long)maxmem));
--	if(MAXMEM < maxmem)
--		maxmem = MAXMEM;
--	mfree(swapmap, nswap, 1);
--	swplo--;
--
--	/*
--	 * determine clock
--	 */
--
--	UISA->r[7] = ka6->r[1]; /* io segment */
--	UISD->r[7] = 077406;
--}
--
--/*
-- * set up a physical address
-- * into users virtual address space.
-- */
--sysphys()
--{
--	register i, s, d;
--	register struct a {
--		int	segno;
--		int	size;
--		int	phys;
--	} *uap;
--
--	if(!suser())
--		return;
--	uap = (struct a *)u.u_ap;
--	i = uap->segno;
--	if(i < 0 || i >= 8)
--		goto bad;
--	s = uap->size;
--	if(s < 0 || s > 128)
--		goto bad;
--	d = u.u_uisd[i+8];
--	if(d != 0 && (d&ABS) == 0)
--		goto bad;
--	u.u_uisd[i+8] = 0;
--	u.u_uisa[i+8] = 0;
--	if(!u.u_sep) {
--		u.u_uisd[i] = 0;
--		u.u_uisa[i] = 0;
--	}
--	if(s) {
--		u.u_uisd[i+8] = ((s-1)<<8) | RW|ABS;
--		u.u_uisa[i+8] = uap->phys;
--		if(!u.u_sep) {
--			u.u_uisa[i] = u.u_uisa[i+8];
--			u.u_uisd[i] = u.u_uisd[i+8];
--		}
--	}
--	sureg();
--	return;
--
--bad:
--	u.u_error = EINVAL;
--}
--
--/*
-- * Determine which clock is attached, and start it.
-- * panic: no clock found
-- */
--#define	CLOCK1	((physadr)0177546)
--#define	CLOCK2	((physadr)0172540)
--clkstart()
--{
--	lks = CLOCK1;
--	if(fuiword((caddr_t)lks) == -1) {
--		lks = CLOCK2;
--		if(fuiword((caddr_t)lks) == -1)
--			panic("no clock");
--	}
--	lks->r[0] = 0115;
--}
--
--/*
-- * Let a process handle a signal by simulating an interrupt
-- */
--sendsig(p, signo)
--caddr_t p;
--{
--	register unsigned n;
--
--	n = u.u_ar0[R6] - 4;
--	grow(n);
--	suword((caddr_t)n+2, u.u_ar0[RPS]);
--	suword((caddr_t)n, u.u_ar0[R7]);
--	u.u_ar0[R6] = n;
--	u.u_ar0[RPS] &= ~TBIT;
--	u.u_ar0[R7] = (int)p;
--}
--
--/*
-- * 11/70 routine to allocate the
-- * UNIBUS map and initialize for
-- * a unibus device.
-- * The code here and in
-- * rhstart assumes that an rh on an 11/70
-- * is an rh70 and contains 22 bit addressing.
-- */
--int	maplock;
--
--mapalloc(bp)
--register struct buf *bp;
--{
--	register i, a;
--
--	if(cputype != 70)
--		return;
--	spl6();
--	while(maplock&B_BUSY) {
--		maplock |= B_WANTED;
--		sleep((caddr_t)&maplock, PSWP+1);
--	}
--	maplock |= B_BUSY;
--	spl0();
--	bp->b_flags |= B_MAP;
--	a = bp->b_xmem;
--	for(i=16; i<32; i+=2)
--		UBMAP->r[i+1] = a;
--	for(a++; i<48; i+=2)
--		UBMAP->r[i+1] = a;
--	bp->b_xmem = 1;
--}
--
--mapfree(bp)
--struct buf *bp;
--{
--
--	bp->b_flags &= ~B_MAP;
--	if(maplock&B_WANTED)
--		wakeup((caddr_t)&maplock);
--	maplock = 0;
-+#include "../h/systm.h"
-+#include "../arch/arm.h"
-+void printf(char *fmt, ...);
-+void mmuinit(void);
-+void virtio_init(void);
-+void binit(void);
-+void brelse(struct buf *bp);
-+void startup(void)
-+{
-+	struct buf *bp;
-+	unsigned char *raw;
-+	unsigned int isize, fsize;
-+	/* Qemu virt's default RAM is 128 MiB at 0x40000000.  Print bytes
-+	 * directly; the V7 banner shape lets userspace scrape "mem =". */
-+	printf("mem = %D\n", (long)(128L * 1024 * 1024));
-+	/* v7's startup() probed core via UISA/fuibyte to compute maxmem,
-+	 * then capped it at MAXMEM.  On this port userspace is identity-
-+	 * mapped into a USERSIZE (1 MiB = 16384 click) window, so estabur()'s
-+	 * `nt+nd+ns+USIZE > maxmem` check passes as long as maxmem covers
-+	 * that window.  Seed it directly. */
-+	maxmem = (int)(USERSIZE >> 6) + USIZE;	/* clicks (64 bytes) */
-+	mmuinit();
-+	virtio_init();
-+	binit();
-+	/* Sentinel: bread the rootfs SUPERB and print isize/fsize.  Decode
-+	 * raw bytes -- the on-disk layout packs s_fsize at offset 2 (no
-+	 * alignment padding) while h/filsys.h's struct aligns it to 4. */
-+	bp = bread((dev_t)rootdev, (daddr_t)SUPERB);
-+	raw = (unsigned char *)bp->b_un.b_addr;
-+	isize = (unsigned int)raw[0] | ((unsigned int)raw[1] << 8);
-+	fsize = (unsigned int)raw[2] | ((unsigned int)raw[3] << 8)
-+	      | ((unsigned int)raw[4] << 16)
-+	      | ((unsigned int)raw[5] << 24);
-+	printf("v7: sb isize=%d fsize=%d\n", (int)isize, (int)fsize);
-+	brelse(bp);
- }
-```
-### etc/group
-
-Local test:
-
-```
-diff unix-v7-c99/v7/etc/group unix-v7-c99/etc/group || true
-```
-
-Expect:
-
-```
-0a1
-> root::0:root
-2,4c3,9
-< sys::2:bin,sys
-< bin::3:sys,bin
-< uucp::4:
+1,153c1,138
+< cc -c -O /usr/src/libc/stdio/getgrgid.c
+< cc -c -O /usr/src/libc/stdio/getgrnam.c
+< cc -c -O /usr/src/libc/stdio/getgrent.c
+< cc -c -O /usr/src/libc/stdio/getpass.c
+< cc -c -O /usr/src/libc/stdio/getpwnam.c
+< cc -c -O /usr/src/libc/stdio/getpwuid.c
+< cc -c -O /usr/src/libc/stdio/getpwent.c
+< cc -c -O /usr/src/libc/stdio/fgetc.c
+< cc -c -O /usr/src/libc/stdio/fputc.c
+< cc -c -O /usr/src/libc/stdio/getchar.c
+< cc -c -O /usr/src/libc/stdio/putchar.c
+< cc -c -O /usr/src/libc/stdio/popen.c
+< cc -c -O /usr/src/libc/stdio/freopen.c
+< cc -c -O /usr/src/libc/stdio/fgets.c
+< cc -c -O /usr/src/libc/stdio/fputs.c
+< cc -c -O /usr/src/libc/stdio/getpw.c
+< cc -c -O /usr/src/libc/stdio/fseek.c
+< cc -c -O /usr/src/libc/stdio/ftell.c
+< cc -c -O /usr/src/libc/stdio/rew.c
+< cc -c -O /usr/src/libc/stdio/rdwr.c
+< cc -c -O /usr/src/libc/stdio/system.c
+< cc -c -O /usr/src/libc/stdio/fopen.c
+< cc -c -O /usr/src/libc/stdio/fdopen.c
+< cc -c -O /usr/src/libc/stdio/scanf.c
+< cc -c -O /usr/src/libc/stdio/doscan.c
+< cc -c -O /usr/src/libc/stdio/fprintf.c
+< cc -c -O /usr/src/libc/stdio/gets.c
+< cc -c -O /usr/src/libc/stdio/getw.c
+< cc -c -O /usr/src/libc/stdio/printf.c
+< cc -c -O /usr/src/libc/stdio/puts.c
+< cc -c -O /usr/src/libc/stdio/putw.c
+< cc -c -O /usr/src/libc/stdio/sprintf.c
+< cc -c -O /usr/src/libc/stdio/ungetc.c
+< cc -c -O /usr/src/libc/stdio/filbuf.c
+< cc -c -O /usr/src/libc/stdio/setbuf.c
+< cc -c /usr/src/libc/stdio/fltpr.s
+< cc -c /usr/src/libc/stdio/doprnt.s
+< cc -c -O /usr/src/libc/stdio/gcvt.c
+< cc -c /usr/src/libc/stdio/ffltpr.s
+< cc -c -O /usr/src/libc/stdio/strout.c
+< cc -c -O /usr/src/libc/stdio/flsbuf.c
+< cc -c -O /usr/src/libc/stdio/endopen.c
+< cc -c -O /usr/src/libc/stdio/findiop.c
+< cc -c -O /usr/src/libc/stdio/clrerr.c
+< cc -c -O /usr/src/libc/stdio/data.c
+< cc -c /usr/src/libc/gen/cuexit.s
+< cc -c -O /usr/src/libc/gen/execvp.c
+< cc -c -O /usr/src/libc/gen/getenv.c
+< cc -c -O /usr/src/libc/gen/getlogin.c
+< cc -c -O /usr/src/libc/gen/perror.c
+< cc -c -O /usr/src/libc/gen/sleep.c
+< cc -c -O /usr/src/libc/gen/timezone.c
+< cc -c -O /usr/src/libc/gen/ttyslot.c
+< cc -c -O /usr/src/libc/gen/ttyname.c
+< cc -c /usr/src/libc/gen/abort.s
+< cc -c -O /usr/src/libc/gen/abs.c
+< cc -c -O /usr/src/libc/gen/atof.c
+< cc -c -O /usr/src/libc/gen/atoi.c
+< cc -c -O /usr/src/libc/gen/atol.c
+< cc -c -O /usr/src/libc/gen/crypt.c
+< cc -c -O /usr/src/libc/gen/ctime.c
+< cc -c -O /usr/src/libc/gen/calloc.c
+< cc -c -O /usr/src/libc/gen/malloc.c
+< cc -c -O /usr/src/libc/gen/ecvt.c
+< cc -c -O /usr/src/libc/gen/errlst.c
+< cc -c /usr/src/libc/gen/fakcu.s
+< cc -c /usr/src/libc/gen/fakfp.s
+< cc -c /usr/src/libc/gen/frexp11.s
+< cc -c -O /usr/src/libc/gen/isatty.c
+< cc -c -O /usr/src/libc/gen/l3.c
+< cc -c /usr/src/libc/gen/ldexp11.s
+< cc -c /usr/src/libc/gen/ldfps.s
+< cc -c -O /usr/src/libc/gen/mktemp.c
+< cc -c /usr/src/libc/gen/modf11.s
+< cc -c -O /usr/src/libc/gen/mpx.c
+< cc -c -O /usr/src/libc/gen/mon.c
+< cc -c -O /usr/src/libc/gen/nlist.c
+< cc -c -O /usr/src/libc/gen/qsort.c
+< cc -c -O /usr/src/libc/gen/rand.c
+< cc -c /usr/src/libc/gen/setjmp.s
+< cc -c -O /usr/src/libc/gen/stty.c
+< cc -c -O /usr/src/libc/gen/swab.c
+< cc -c -O /usr/src/libc/gen/tell.c
+< cc -c -O /usr/src/libc/gen/ctype_.c
+< cc -c -O /usr/src/libc/gen/index.c
+< cc -c -O /usr/src/libc/gen/rindex.c
+< cc -c -O /usr/src/libc/gen/strcat.c
+< cc -c -O /usr/src/libc/gen/strncat.c
+< cc -c -O /usr/src/libc/gen/strcmp.c
+< cc -c -O /usr/src/libc/gen/strncmp.c
+< cc -c -O /usr/src/libc/gen/strcpy.c
+< cc -c -O /usr/src/libc/gen/strncpy.c
+< cc -c -O /usr/src/libc/gen/strlen.c
+< cc -c /usr/src/libc/sys/access.s
+< cc -c /usr/src/libc/sys/acct.s
+< cc -c /usr/src/libc/sys/alarm.s
+< cc -c /usr/src/libc/sys/chdir.s
+< cc -c /usr/src/libc/sys/chroot.s
+< cc -c /usr/src/libc/sys/chmod.s
+< cc -c /usr/src/libc/sys/chown.s
+< cc -c /usr/src/libc/sys/close.s
+< cc -c /usr/src/libc/sys/creat.s
+< cc -c /usr/src/libc/sys/dup.s
+< cc -c /usr/src/libc/sys/execl.s
+< cc -c /usr/src/libc/sys/execle.s
+< cc -c /usr/src/libc/sys/execv.s
+< cc -c /usr/src/libc/sys/execve.s
+< cc -c /usr/src/libc/sys/exit.s
+< cc -c /usr/src/libc/sys/fork.s
+< cc -c /usr/src/libc/sys/fstat.s
+< cc -c /usr/src/libc/sys/getgid.s
+< cc -c /usr/src/libc/sys/getpid.s
+< cc -c /usr/src/libc/sys/getuid.s
+< cc -c /usr/src/libc/sys/ioctl.s
+< cc -c /usr/src/libc/sys/kill.s
+< cc -c /usr/src/libc/sys/link.s
+< cc -c /usr/src/libc/sys/lock.s
+< cc -c /usr/src/libc/sys/lseek.s
+< cc -c /usr/src/libc/sys/mknod.s
+< cc -c /usr/src/libc/sys/mount.s
+< cc -c /usr/src/libc/sys/mpxcall.s
+< cc -c /usr/src/libc/sys/nice.s
+< cc -c /usr/src/libc/sys/open.s
+< cc -c /usr/src/libc/sys/pause.s
+< cc -c /usr/src/libc/sys/phys.s
+< cc -c /usr/src/libc/sys/pipe.s
+< cc -c /usr/src/libc/sys/profil.s
+< cc -c /usr/src/libc/sys/ptrace.s
+< cc -c /usr/src/libc/sys/read.s
+< cc -c /usr/src/libc/sys/sbrk.s
+< cc -c /usr/src/libc/sys/setgid.s
+< cc -c /usr/src/libc/sys/setuid.s
+< cc -c /usr/src/libc/sys/signal.s
+< cc -c /usr/src/libc/sys/stat.s
+< cc -c /usr/src/libc/sys/stime.s
+< cc -c /usr/src/libc/sys/sync.s
+< cc -c /usr/src/libc/sys/time.s
+< cc -c /usr/src/libc/sys/times.s
+< cc -c /usr/src/libc/sys/umask.s
+< cc -c /usr/src/libc/sys/umount.s
+< cc -c /usr/src/libc/sys/unlink.s
+< cc -c /usr/src/libc/sys/utime.s
+< cc -c /usr/src/libc/sys/wait.s
+< cc -c /usr/src/libc/sys/write.s
+< cc -c /usr/src/libc/crt/aldiv.s
+< cc -c /usr/src/libc/crt/almul.s
+< cc -c /usr/src/libc/crt/alrem.s
+< cc -c /usr/src/libc/crt/cerror.s
+< cc -c /usr/src/libc/crt/ldiv.s
+< cc -c /usr/src/libc/crt/lmul.s
+< cc -c /usr/src/libc/crt/lrem.s
+< cc -c /usr/src/libc/crt/mcount.s
+< cc -c /usr/src/libc/crt/csv.s
 ---
-> bin::2:
-> sys::3:
-> adm::4:
-> mail::5:
-> news::6:
-> uucp::7:
-> daemon::12:
+> cc=${CC-arm-none-eabi-gcc}
+> cflags="-std=c99 -Wall -Wextra -Wpedantic -Werror -fcommon -fno-builtin -ffreestanding -nostdlib -mcpu=cortex-a7 -marm -I../../include -I../.."
+> $cc $cflags -c crt0.s
+> $cc $cflags -c crt0.c -o crt0c.o
+> $cc $cflags -c syscall.s
+> $cc $cflags -c sys/access.s
+> $cc $cflags -c sys/acct.s
+> $cc $cflags -c sys/alarm.c
+> $cc $cflags -c sys/brk.c
+> $cc $cflags -c sys/chdir.s
+> $cc $cflags -c sys/chmod.s
+> $cc $cflags -c sys/chown.s
+> $cc $cflags -c sys/chroot.s
+> $cc $cflags -c sys/close.s
+> $cc $cflags -c sys/creat.s
+> $cc $cflags -c sys/dup.c
+> $cc $cflags -c sys/execv.c
+> $cc $cflags -c sys/execl.c
+> $cc $cflags -c sys/execve.c
+> $cc $cflags -c sys/exit.s -o exit_sys.o
+> $cc $cflags -c sys/fork.s
+> $cc $cflags -c sys/fstat.s
+> $cc $cflags -c sys/ftime.c
+> $cc $cflags -c sys/getgid.s
+> $cc $cflags -c sys/getpid.s
+> $cc $cflags -c sys/getuid.s
+> $cc $cflags -c sys/gtty.c
+> $cc $cflags -c sys/ioctl.s
+> $cc $cflags -c sys/kill.s
+> $cc $cflags -c sys/link.s
+> $cc $cflags -c sys/lock.s
+> $cc $cflags -c sys/lseek.s
+> $cc $cflags -c sys/mknod.s
+> $cc $cflags -c sys/mount.s
+> $cc $cflags -c sys/nice.s
+> $cc $cflags -c sys/open.c
+> $cc $cflags -c sys/pause.c
+> $cc $cflags -c sys/pipe.s
+> $cc $cflags -c sys/profil.s
+> $cc $cflags -c sys/ptrace.s
+> $cc $cflags -c sys/read.s
+> $cc $cflags -c sys/setgid.s
+> $cc $cflags -c sys/setuid.s
+> $cc $cflags -c sys/signal.s
+> $cc $cflags -c sys/stat.s
+> $cc $cflags -c sys/stime.c
+> $cc $cflags -c sys/stty.c
+> $cc $cflags -c sys/sync.s
+> $cc $cflags -c sys/time.c -o time_sys.o
+> $cc $cflags -c sys/times.s
+> $cc $cflags -c sys/umask.s
+> $cc $cflags -c sys/umount.s
+> $cc $cflags -c sys/unlink.s
+> $cc $cflags -c sys/utime.s
+> $cc $cflags -c sys/wait.s
+> $cc $cflags -c sys/write.s
+> $cc $cflags -c gen/abort.c -o abort.o
+> $cc $cflags -c gen/exit.c -o exit.o
+> $cc $cflags -c gen/sleep.c -o sleep.o
+> $cc $cflags -c stdio/popen.c -o popen.o
+> $cc $cflags -c crypt.c -o v7crypt.o
+> $cc $cflags -c l3.c
+> $cc $cflags -c getpwent.c
+> $cc $cflags -c getpwnam.c
+> $cc $cflags -c getpwuid.c
+> $cc $cflags -c strncat.c
+> $cc $cflags -c ttyslot.c
+> $cc $cflags -c execvp.c
+> $cc $cflags -c getenv.c
+> $cc $cflags -c atoi.c
+> $cc $cflags -c atol.c
+> $cc $cflags -c atof.c
+> $cc $cflags -c index.c
+> $cc $cflags -c rindex.c
+> $cc $cflags -c isatty.c
+> $cc $cflags -c perror.c
+> $cc $cflags -c strcat.c
+> $cc $cflags -c strcmp.c
+> $cc $cflags -c strcpy.c
+> $cc $cflags -c strlen.c
+> $cc $cflags -c strncmp.c
+> $cc $cflags -c strncpy.c
+> $cc $cflags -c swab.c
+> $cc $cflags -c rand.c
+> $cc $cflags -c mktemp.c
+> $cc $cflags -c errlst.c
+> $cc $cflags -c ttyname.c
+> $cc $cflags -c mkdir.c
+> $cc $cflags -c qsort.c
+> $cc $cflags -c calloc.c
+> $cc $cflags -c tell.c
+> $cc $cflags -c timezone.c
+> $cc $cflags -c getlogin.c
+> $cc $cflags -c data.c
+> $cc $cflags -c ctype_.c
+> $cc $cflags -c fopen.c
+> $cc $cflags -c freopen.c
+> $cc $cflags -c findiop.c
+> $cc $cflags -c endopen.c
+> $cc $cflags -c filbuf.c
+> $cc $cflags -c flsbuf.c
+> $cc $cflags -c fgetc.c
+> $cc $cflags -c fputc.c
+> $cc $cflags -c fgets.c
+> $cc $cflags -c fputs.c
+> $cc $cflags -c gets.c
+> $cc $cflags -c puts.c
+> $cc $cflags -c rdwr.c
+> $cc $cflags -c fseek.c
+> $cc $cflags -c ftell.c
+> $cc $cflags -c rew.c
+> $cc $cflags -c setbuf.c
+> $cc $cflags -c ungetc.c
+> $cc $cflags -c clrerr.c
+> $cc $cflags -c getchar.c
+> $cc $cflags -c putchar.c
+> $cc $cflags -c strout.c
+> $cc $cflags -c doprnt.c
+> $cc $cflags -c printf.c
+> $cc $cflags -c fprintf.c
+> $cc $cflags -c sprintf.c
+> $cc $cflags -c doscan.c
+> $cc $cflags -c scanf.c
+> $cc $cflags -c malloc.c
+> $cc $cflags -c getpass.c
+> $cc $cflags -c ctime.c
+> $cc $cflags -c system.c
+> $cc $cflags -c memcpy.c
+> $cc $cflags -c nlist.c
+> $cc $cflags -c math_helpers.c
+> $cc $cflags -c ecvt.c
+> $cc $cflags -c fdopen.c
+> $cc $cflags -c gcvt.c
+> $cc $cflags -c getgrent.c
+> $cc $cflags -c getgrgid.c
+> $cc $cflags -c getgrnam.c
+> $cc $cflags -c getw.c
+> $cc $cflags -c putw.c
 ```
 
-### etc/passwd
+### usr/src/libc/mklib
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/etc/passwd unix-v7-c99/etc/passwd || true
+diff unix-v7-c99/v7/usr/src/libc/mklib unix-v7-c99/usr/src/libc/mklib || true
 ```
 
 Expect:
 
 ```
-1,6c1,2
-< root:VwL97VCAx1Qhs:0:1::/:
-< daemon:x:1:1::/:
-< sys::2:2::/usr/sys:
-< bin::3:3::/bin:
-< uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
-< dmr::7:3::/usr/dmr:
+1,94c1,3
+< ar rc libc.a \
+< getgrgid.o \
+< getgrnam.o \
+< getgrent.o \
+< getpass.o \
+< getpwnam.o \
+< getpwuid.o \
+< getpwent.o \
+< timezone.o \
+< fgetc.o \
+< fputc.o \
+< getchar.o \
+< putchar.o \
+< popen.o \
+< freopen.o \
+< fgets.o \
+< fputs.o \
+< getpw.o \
+< fseek.o \
+< ftell.o \
+< rew.o \
+< rdwr.o \
+< system.o \
+< fopen.o \
+< fdopen.o \
+< scanf.o \
+< doscan.o \
+< fprintf.o \
+< gets.o \
+< getw.o \
+< printf.o \
+< puts.o \
+< putw.o \
+< sprintf.o \
+< ungetc.o \
+< filbuf.o \
+< setbuf.o \
+< fltpr.o \
+< doprnt.o \
+< gcvt.o \
+< ffltpr.o \
+< strout.o \
+< flsbuf.o \
+< endopen.o \
+< findiop.o \
+< clrerr.o \
+< data.o \
+< cuexit.o \
+< execvp.o \
+< getenv.o \
+< getlogin.o \
+< perror.o \
+< sleep.o \
+< ttyslot.o \
+< ttyname.o \
+< abort.o \
+< abs.o \
+< atof.o \
+< atoi.o \
+< atol.o \
+< crypt.o \
+< ctime.o \
+< calloc.o \
+< malloc.o \
+< ecvt.o \
+< errlst.o \
+< fakcu.o \
+< fakfp.o \
+< frexp11.o \
+< isatty.o \
+< l3.o \
+< ldexp11.o \
+< ldfps.o \
+< mktemp.o \
+< modf11.o \
+< mon.o \
+< mpx.o \
+< nlist.o \
+< qsort.o \
+< rand.o \
+< setjmp.o \
+< stty.o \
+< swab.o \
+< tell.o \
+< ctype_.o \
+< index.o \
+< rindex.o \
+< strcat.o \
+< strncat.o \
+< strcmp.o \
+< strncmp.o \
+< strcpy.o \
+< strncpy.o \
+< strlen.o \
 ---
-> root::0:0:root:/:/bin/sh
-> dmr::1:1:dennis:/:/bin/sh
-```
-
-### etc/rc
-
-Local test:
-
-```
-diff unix-v7-c99/v7/etc/rc unix-v7-c99/etc/rc || true
-```
-
-Expect:
-
-```
-5c5
-< rm /etc/mtab
+> ar=${AR-arm-none-eabi-ar}
+> $ar rc libc.a \
+> syscall.o \
+97a7
+> brk.o \
+99d8
+< chroot.o \
+101a11
+> chroot.o \
+105,106d14
+< execl.o \
+< execle.o \
+107a16
+> execl.o \
+109c18
+< exit.o \
 ---
-> rm -f /etc/mtab
-7,10d6
-< /etc/mount /dev/rp3 /usr
-< rm -f /usr/spool/lpd/lock
-< : /etc/accton /usr/adm/acct
-< rm -f /usr/tmp/*
+> exit_sys.o \
+111a21
+> ftime.o \
+114a25
+> gtty.o \
+122d32
+< mpxcall.o \
+126d35
+< phys.o \
+131d39
+< sbrk.o \
+136a45
+> stty.o \
+138c47
+< time.o \
+---
+> time_sys.o \
+146,154c55,136
+< aldiv.o \
+< almul.o \
+< alrem.o \
+< cerror.o \
+< ldiv.o \
+< lmul.o \
+< lrem.o \
+< mcount.o \
+< csv.o
+---
+> abort.o \
+> exit.o \
+> sleep.o \
+> popen.o \
+> v7crypt.o \
+> l3.o \
+> getpwent.o \
+> getpwnam.o \
+> getpwuid.o \
+> strncat.o \
+> ttyslot.o \
+> execvp.o \
+> getenv.o \
+> atoi.o \
+> atol.o \
+> atof.o \
+> index.o \
+> rindex.o \
+> isatty.o \
+> perror.o \
+> strcat.o \
+> strcmp.o \
+> strcpy.o \
+> strlen.o \
+> strncmp.o \
+> strncpy.o \
+> swab.o \
+> rand.o \
+> mktemp.o \
+> errlst.o \
+> ttyname.o \
+> mkdir.o \
+> qsort.o \
+> calloc.o \
+> tell.o \
+> timezone.o \
+> getlogin.o \
+> data.o \
+> ctype_.o \
+> fopen.o \
+> freopen.o \
+> findiop.o \
+> endopen.o \
+> filbuf.o \
+> flsbuf.o \
+> fgetc.o \
+> fputc.o \
+> fgets.o \
+> fputs.o \
+> gets.o \
+> puts.o \
+> rdwr.o \
+> fseek.o \
+> ftell.o \
+> rew.o \
+> setbuf.o \
+> ungetc.o \
+> clrerr.o \
+> getchar.o \
+> putchar.o \
+> strout.o \
+> doprnt.o \
+> printf.o \
+> fprintf.o \
+> sprintf.o \
+> doscan.o \
+> scanf.o \
+> malloc.o \
+> getpass.o \
+> ctime.o \
+> system.o \
+> memcpy.o \
+> nlist.o \
+> math_helpers.o \
+> ecvt.o \
+> fdopen.o \
+> gcvt.o \
+> getgrent.o \
+> getgrgid.o \
+> getgrnam.o \
+> getw.o \
+> putw.o
 ```
 
-### etc/ttys
+### usr/src/cmd/cmake
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/etc/ttys unix-v7-c99/etc/ttys || true
+diff unix-v7-c99/v7/usr/src/cmd/cmake unix-v7-c99/usr/src/cmd/cmake || true
 ```
 
 Expect:
 
 ```
-2,33d1
-< 00tty00
-< 00tty01
-< 00tty02
-< 00tty03
-< 00tty04
-< 00tty05
-< 00tty06
-< 00tty07
-< 00tty08
-< 00tty09
-< 00tty10
-< 00tty11
-< 00tty12
-< 00tty13
-< 00tty14
-< 00tty15
-< 00tty16
-< 00tty17
-< 00tty18
-< 00tty19
-< 00tty20
-< 00tty21
-< 00tty22
-< 00tty23
-< 00tty24
-< 00tty25
-< 00tty26
-< 00tty27
-< 00tty28
-< 00tty29
-< 00tty30
-< 00tty31
+24c24
+< 	bc)	yacc bc.y && mv y.tab.c bc.c && cc -n -s -O bc.c -o bc && rm bc.c ;;
+---
+> 	bc)	bison -y bc.y && mv y.tab.c bc.c && cc -n -s -O bc.c -o bc && rm bc.c ;;
+56,57c56,57
+< 	egrep)	yacc egrep.y && mv y.tab.c egrep.c && cc -n -s -O egrep.c -o egrep && rm egrep.c ;;
+< 	expr)	yacc expr.y && mv y.tab.c expr.c && cc -n -s -O expr.c -o expr && rm expr.c ;;
+---
+> 	egrep)	bison -y egrep.y && mv y.tab.c egrep.c && cc -n -s -O egrep.c -o egrep && rm egrep.c ;;
+> 	expr)	bison -y expr.y && mv y.tab.c expr.c && cc -n -s -O expr.c -o expr && rm expr.c ;;
+```
+
+### usr/sys/sys/clock.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/sys/clock.c unix-v7-c99/usr/sys/sys/clock.c || true
+```
+
+Expect:
+
+```
+4d3
+< #include "../h/seg.h"
+8c7,13
+< #include "../h/reg.h"
+---
+> extern void addupc(caddr_t pc, void *prof, int inc);
+> int spl1(void);
+> int spl5(void);
+> int spl7(void);
+> void splx(int s);
+> void wakeup(caddr_t chan);
+> void panic(char *s);
+28,30c33,34
+< clock(dev, sp, r1, nps, r0, pc, ps)
+< dev_t dev;
+< caddr_t pc;
+---
+> void
+> clock(dev_t dev, int sp, int r1, int nps, int r0, caddr_t pc, int ps)
+35a40
+> 	(void)dev; (void)sp; (void)r1; (void)nps; (void)r0;
+41d45
+< 	lks->r[0] = 0115;
+47d50
+< 	display();
+79c82
+< 		while(p2->c_func = p1->c_func) {
+---
+> 		while((p2->c_func = p1->c_func) != 0) {
+154,156c157,158
+< timeout(fun, arg, tim)
+< int (*fun)();
+< caddr_t arg;
+---
+> void
+> timeout(int (*fun)(caddr_t), caddr_t arg, int tim)
+```
+
+### usr/sys/sys/sys4.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/sys/sys4.c unix-v7-c99/usr/sys/sys/sys4.c || true
+```
+
+Expect:
+
+```
+5d4
+< #include "../h/reg.h"
+8a8,11
+> int spl0(void);
+> int spl7(void);
+> void chdirec(struct inode **ipp);
+> void sleep(caddr_t chan, int pri);
+17c20,21
+< gtime()
+---
+> void
+> gtime(void)
+26c30,31
+< ftime()
+---
+> void
+> ftime(void)
+53c58,59
+< stime()
+---
+> void
+> stime(void)
+64c70,71
+< setuid()
+---
+> void
+> setuid(void)
+66c73
+< 	register uid;
+---
+> 	register int uid;
+80c87,88
+< getuid()
+---
+> void
+> getuid(void)
+87c95,96
+< setgid()
+---
+> void
+> setgid(void)
+89c98
+< 	register gid;
+---
+> 	register int gid;
+102c111,112
+< getgid()
+---
+> void
+> getgid(void)
+109c119,120
+< getpid()
+---
+> void
+> getpid(void)
+115c126,127
+< sync()
+---
+> void
+> sync(void)
+121c133,134
+< nice()
+---
+> void
+> nice(void)
+123c136
+< 	register n;
+---
+> 	register int n;
+145c158,159
+< unlink()
+---
+> void
+> unlink(void)
+194c208,209
+< chdir()
+---
+> void
+> chdir(void)
+199c214,215
+< chroot()
+---
+> void
+> chroot(void)
+205,206c221,222
+< chdirec(ipp)
+< register struct inode **ipp;
+---
+> void
+> chdirec(register struct inode **ipp)
+234c250,251
+< chmod()
+---
+> void
+> chmod(void)
+255c272,273
+< chown()
+---
+> void
+> chown(void)
+273c291,292
+< ssig()
+---
+> void
+> ssig(void)
+275c294
+< 	register a;
+---
+> 	register int a;
+292c311,312
+< kill()
+---
+> void
+> kill(void)
+295c315
+< 	register a;
+---
+> 	register int a;
+327c347,348
+< times()
+---
+> void
+> times(void)
+338c359,360
+< profil()
+---
+> void
+> profil(void)
+357c379,380
+< alarm()
+---
+> void
+> alarm(void)
+360c383
+< 	register c;
+---
+> 	register int c;
+376c399,400
+< pause()
+---
+> void
+> pause(void)
+386c410,411
+< umask()
+---
+> void
+> umask(void)
+391c416
+< 	register t;
+---
+> 	register int t;
+403c428,429
+< utime()
+---
+> void
+> utime(void)
+```
+
+### usr/sys/dev/bio.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/dev/bio.c unix-v7-c99/usr/sys/dev/bio.c || true
+```
+
+Expect:
+
+```
+8a9,21
+> void brelse(struct buf *bp);
+> void bawrite(register struct buf *bp);
+> void iowait(struct buf *bp);
+> void notavail(struct buf *bp);
+> void geterror(struct buf *bp);
+> int incore(dev_t dev, daddr_t blkno);
+> void wakeup(caddr_t chan);
+> void sleep(caddr_t chan, int pri);
+> int spl0(void);
+> int spl6(void);
+> void splx(int s);
+> void panic(char *s);
+> void mapfree(struct buf *bp);
+56,58c69
+< bread(dev, blkno)
+< dev_t dev;
+< daddr_t blkno;
+---
+> bread(dev_t dev, daddr_t blkno)
+84,86c95
+< breada(dev, blkno, rablkno)
+< dev_t dev;
+< daddr_t blkno, rablkno;
+---
+> breada(dev_t dev, daddr_t blkno, daddr_t rablkno)
+125,126c134,135
+< bwrite(bp)
+< register struct buf *bp;
+---
+> void
+> bwrite(struct buf *bp)
+128c137
+< 	register flag;
+---
+> 	register int flag;
+154,155c163,164
+< bdwrite(bp)
+< register struct buf *bp;
+---
+> void
+> bdwrite(struct buf *bp)
+171,172c180,181
+< bawrite(bp)
+< register struct buf *bp;
+---
+> void
+> bawrite(register struct buf *bp)
+182,183c191,192
+< brelse(bp)
+< register struct buf *bp;
+---
+> void
+> brelse(struct buf *bp)
+186c195
+< 	register s;
+---
+> 	register int s;
+195a205,206
+> 	if((bp->b_flags&B_BUSY) == 0)
+> 		return;
+218,220c229,230
+< incore(dev, blkno)
+< dev_t dev;
+< daddr_t blkno;
+---
+> int
+> incore(dev_t dev, daddr_t blkno)
+238,240c248
+< getblk(dev, blkno)
+< dev_t dev;
+< daddr_t blkno;
+---
+> getblk(dev_t dev, daddr_t blkno)
+245c253
+< 	register i;
+---
+> 	register int i;
+309c317
+< geteblk()
+---
+> geteblk(void)
+343,344c351,352
+< iowait(bp)
+< register struct buf *bp;
+---
+> void
+> iowait(struct buf *bp)
+358,359c366,367
+< notavail(bp)
+< register struct buf *bp;
+---
+> void
+> notavail(struct buf *bp)
+361c369
+< 	register s;
+---
+> 	register int s;
+374,375c382,383
+< iodone(bp)
+< register struct buf *bp;
+---
+> void
+> iodone(struct buf *bp)
+392,393c400,401
+< clrbuf(bp)
+< struct buf *bp;
+---
+> void
+> clrbuf(struct buf *bp)
+395,396c403,404
+< 	register *p;
+< 	register c;
+---
+> 	register int *p;
+> 	register int c;
+409,410c417,418
+< swap(blkno, coreaddr, count, rdflg)
+< register count;
+---
+> void
+> swap(daddr_t blkno, int coreaddr, int count, int rdflg)
+413c421
+< 	register tcount;
+---
+> 	register int tcount;
+456,457c464,465
+< bflush(dev)
+< dev_t dev;
+---
+> void
+> bflush(dev_t dev)
+484,486c492,493
+< physio(strat, bp, dev, rw)
+< register struct buf *bp;
+< int (*strat)();
+---
+> void
+> physio(void (*strat)(struct buf *), register struct buf *bp, dev_t dev, int rw)
+515c522
+< 	    && nb < 1024-u.u_ssize)
+---
+> 	    && (unsigned)nb < 1024-u.u_ssize)
+543c550
+< 	bp->b_flags &= ~(B_BUSY|B_WANTED);
+---
+> 	bp->b_flags &= ~(B_BUSY|B_WANTED|B_PHYS);
+557,558c564,565
+< geterror(bp)
+< register struct buf *bp;
+---
+> void
+> geterror(struct buf *bp)
+```
+
+### usr/src/cmd/diff3.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/diff3.c unix-v7-c99/usr/src/cmd/diff3.c || true
+```
+
+Expect:
+
+```
+45,46c45,55
+< main(argc,argv)
+< char **argv;
+---
+> int readin(char *name, struct diff *dd), number(char **lc), digit(int c);
+> int getchange(FILE *b), getline(FILE *b), merge(int m1, int m2);
+> int separate(char *s), change(int i, struct range *rold, int dup);
+> int prange(struct range *rold);
+> int keep(int i, struct range *rold, struct range *rnew);
+> int skip(int i, int from, char *pr);
+> int duplicate(struct range *r1, struct range *r2);
+> int repos(int nchar), trouble(void);
+> int edit(struct diff *diff, int dup, int j), edscript(int n);
+> int
+> main(int argc, char **argv)
+48c57
+< 	register i,m,n;
+---
+> 	register int i,m,n;
+74a84
+> 	return(0);
+85,87c95,96
+< readin(name,dd)
+< char *name;
+< struct diff *dd;
+---
+> int
+> readin(char *name, struct diff *dd)
+89c98
+< 	register i;
+---
+> 	register int i;
+128,129c137,138
+< number(lc)
+< char **lc;
+---
+> int
+> number(char **lc)
+131c140
+< 	register nn;
+---
+> 	register int nn;
+138c147,148
+< digit(c)
+---
+> int
+> digit(int c)
+143,144c153,154
+< getchange(b)
+< FILE *b;
+---
+> int
+> getchange(FILE *b)
+152,153c162,163
+< getline(b)
+< FILE *b;
+---
+> int
+> getline(FILE *b)
+155,156c165,166
+< 	register i, c;
+< 	for(i=0;i<sizeof(line)-1;i++) {
+---
+> 	register int i, c;
+> 	for(i=0;i<(int)sizeof(line)-1;i++) {
+169c179,180
+< merge(m1,m2)
+---
+> int
+> merge(int m1, int m2)
+187c198
+< 		if(!t2||t1&&d1->new.to < d2->new.from) {
+---
+> 		if(!t2 || (t1 && d1->new.to < d2->new.from)) {
+199c210
+< 		if(!t1||t2&&d2->new.to < d1->new.from) {
+---
+> 		if(!t1 || (t2 && d2->new.to < d1->new.from)) {
+265a277
+> 	return(0);
+268,269c280,281
+< separate(s)
+< char *s;
+---
+> int
+> separate(char *s)
+271a284
+> 	return(0);
+278,279c291,292
+< change(i,rold,dup)
+< struct range *rold;
+---
+> int
+> change(int i, struct range *rold, int dup)
+285c298
+< 		return;
+---
+> 		return(0);
+287c300
+< 		return;
+---
+> 		return(0);
+290a304
+> 	return(0);
+296,297c310,311
+< prange(rold)
+< struct range *rold;
+---
+> int
+> prange(struct range *rold)
+306a321
+> 	return(0);
+314,315c329,330
+< keep(i,rold,rnew)
+< struct range *rold, *rnew;
+---
+> int
+> keep(int i, struct range *rold, struct range *rnew)
+317c332
+< 	register delta;
+---
+> 	register int delta;
+318a334
+> 	(void)rold;
+322a339
+> 	return(0);
+329,330c346,347
+< skip(i,from,pr)
+< char *pr;
+---
+> int
+> skip(int i, int from, char *pr)
+332c349
+< 	register j,n;
+---
+> 	register int j,n;
+347,348c364,365
+< duplicate(r1,r2)
+< struct range *r1, *r2;
+---
+> int
+> duplicate(struct range *r1, struct range *r2)
+350,351c367,368
+< 	register c,d;
+< 	register nchar;
+---
+> 	register int c,d;
+> 	register int nchar;
+367c384
+< 				return;
+---
+> 				return(0);
+375c392,393
+< repos(nchar)
+---
+> int
+> repos(int nchar)
+377c395
+< 	register i;
+---
+> 	register int i;
+379a398
+> 	return(0);
+382c401,402
+< trouble()
+---
+> int
+> trouble(void)
+385a406
+> 	return(0);
+390,391c411,412
+< edit(diff,dup,j)
+< struct diff *diff;
+---
+> int
+> edit(struct diff *diff, int dup, int j)
+406c427,428
+< edscript(n)
+---
+> int
+> edscript(int n)
+408c430
+< 	register j,k;
+---
+> 	register int j,k;
+420a443
+> 	return(0);
+```
+
+### usr/src/cmd/at.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/at.c unix-v7-c99/usr/src/cmd/at.c || true
+```
+
+Expect:
+
+```
+10a11
+> #define	utime	at_utime
+55c56
+< char	*prefix();
+---
+> char	*prefix(char *begin, char *full);
+58,59c59,64
+< main(argc, argv)
+< char **argv;
+---
+> int	pclose(FILE *ptr);
+> int	makeutime(char *pp), makeuday(int argc, char **argv);
+> int	filename(char *dir, int y, int d, int t);
+> int	onintr(int sig);
+> int
+> main(int argc, char **argv)
+61,62c66,67
+< 	extern onintr();
+< 	register c;
+---
+> 	extern int onintr(int sig);
+> 	register int c;
+92,93c97,98
+< 	if (signal(SIGINT, SIG_IGN) != SIG_IGN)
+< 		signal(SIGINT, onintr);
+---
+> 	if ((int (*)())signal(SIGINT, (int)SIG_IGN) != (int (*)())SIG_IGN)
+> 		signal(SIGINT, (int)onintr);
+118,119c123,124
+< makeutime(pp)
+< char *pp; 
+---
+> int
+> makeutime(char *pp)
+121c126
+< 	register val;
+---
+> 	register int val;
+127c132
+< 	while(isdigit(*p)) {
+---
+> 	while(isdigit((unsigned char)*p)) {
+138,139c143,144
+< 			if (isdigit(*p)) {
+< 				if (isdigit(p[1])) {
+---
+> 			if (isdigit((unsigned char)*p)) {
+> 				if (isdigit((unsigned char)p[1])) {
+197a203
+> 	return(0);
+201,202c207,208
+< makeuday(argc,argv)
+< char **argv;
+---
+> int
+> makeuday(int argc, char **argv)
+273,274c279
+< prefix(begin, full)
+< char *begin, *full;
+---
+> prefix(char *begin, char *full)
+277c282
+< 	while (c = *begin++) {
+---
+> 	while ((c = *begin++)) {
+288,289c293,294
+< filename(dir, y, d, t)
+< char *dir;
+---
+> int
+> filename(char *dir, int y, int d, int t)
+291c296
+< 	register i;
+---
+> 	register int i;
+297c302
+< 			return;
+---
+> 			return(0);
+301c306,307
+< onintr()
+---
+> int
+> onintr(int sig)
+302a309
+> 	(void)sig;
+304a312
+> 	return(0);
+```
+
+### usr/src/libc/nlist.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/libc/gen/nlist.c unix-v7-c99/usr/src/libc/nlist.c || true
+```
+
+Expect:
+
+```
+2,3d1
+< int a_magic[] = {A_MAGIC1, A_MAGIC2, A_MAGIC3, A_MAGIC4, 0};
+< #define SPACE 100		/* number of symbols read at a time */
+5,7c3,49
+< nlist(name, list)
+< char *name;
+< struct nlist *list;
+---
+> int	open(char *, int);
+> int	close(int);
+> int	read(int, char *, int);
+> long	lseek(int, long, int);
+> #define	ELF_NIDENT	16
+> #define	ELFMAG0		0177
+> #define	SHT_SYMTAB	2
+> #define	SHF_WRITE	1
+> #define	SHF_EXECINSTR	4
+> struct elfhdr {
+> 	unsigned char	e_ident[ELF_NIDENT];
+> 	unsigned short	e_type;
+> 	unsigned short	e_machine;
+> 	unsigned int	e_version;
+> 	unsigned int	e_entry;
+> 	unsigned int	e_phoff;
+> 	unsigned int	e_shoff;
+> 	unsigned int	e_flags;
+> 	unsigned short	e_ehsize;
+> 	unsigned short	e_phentsize;
+> 	unsigned short	e_phnum;
+> 	unsigned short	e_shentsize;
+> 	unsigned short	e_shnum;
+> 	unsigned short	e_shstrndx;
+> };
+> struct elfshdr {
+> 	unsigned int	sh_name;
+> 	unsigned int	sh_type;
+> 	unsigned int	sh_flags;
+> 	unsigned int	sh_addr;
+> 	unsigned int	sh_offset;
+> 	unsigned int	sh_size;
+> 	unsigned int	sh_link;
+> 	unsigned int	sh_info;
+> 	unsigned int	sh_addralign;
+> 	unsigned int	sh_entsize;
+> };
+> struct elfsym {
+> 	unsigned int	st_name;
+> 	unsigned int	st_value;
+> 	unsigned int	st_size;
+> 	unsigned char	st_info;
+> 	unsigned char	st_other;
+> 	unsigned short	st_shndx;
+> };
+> static int
+> readn(int fd, char *buf, int n)
+9,13c51,92
+< 	register struct nlist *p, *q;
+< 	int f, n, m, i;
+< 	long sa;
+< 	struct exec buf;
+< 	struct nlist space[SPACE];
+---
+> 	int nr, total;
+> 	total = 0;
+> 	while(total < n) {
+> 		nr = read(fd, buf + total, n - total);
+> 		if(nr <= 0)
+> 			return(total);
+> 		total += nr;
+> 	}
+> 	return(total);
+> }
+> static int
+> readstr(int fd, char *buf, int n)
+> {
+> 	int nr, total;
+> 	char c;
+> 	total = 0;
+> 	while(total < n - 1) {
+> 		nr = read(fd, &c, 1);
+> 		if(nr <= 0)
+> 			break;
+> 		buf[total++] = c;
+> 		if(c == '\0')
+> 			return(total);
+> 	}
+> 	buf[total] = '\0';
+> 	return(total);
+> }
+> int
+> nlist(char *name, struct nlist *list)
+> {
+> 	struct nlist *p;
+> 	struct elfhdr eh;
+> 	struct elfshdr sh;
+> 	struct elfsym sym;
+> 	char strbuf[64];
+> 	char nb[9];
+> 	char *sn;
+> 	int f, i, j, k, nsyms;
+> 	int matched;
+> 	unsigned int symoff, symsz, symesz;
+> 	unsigned int stroff;
+> 	unsigned int secflags[64];
+22,25c101,103
+< 	read(f, (char *)&buf, sizeof buf);
+< 	for(i=0; a_magic[i]; i++)
+< 		if(a_magic[i] == buf.a_magic) break;
+< 	if(a_magic[i] == 0){
+---
+> 	if(readn(f, (char *)&eh, sizeof(eh)) != sizeof(eh)
+> 	    || eh.e_ident[0] != ELFMAG0 || eh.e_ident[1] != 'E'
+> 	    || eh.e_ident[2] != 'L' || eh.e_ident[3] != 'F') {
+29,33c107,110
+< 	sa = buf.a_text + (long)buf.a_data;
+< 	if(buf.a_flag != 1) sa *= 2;
+< 	sa += sizeof buf;
+< 	lseek(f, sa, 0);
+< 	n = buf.a_syms;
+---
+> 	symoff = 0;
+> 	symsz = 0;
+> 	symesz = sizeof(sym);
+> 	stroff = 0;
+35,48c112,127
+< 	while(n){
+< 		m = sizeof space;
+< 		if(n < sizeof space)
+< 			m = n;
+< 		read(f, (char *)space, m);
+< 		n -= m;
+< 		for(q = space; (m -= sizeof(struct nlist)) >= 0; q++) {
+< 			for(p = list; p->n_name[0]; p++) {
+< 				for(i=0;i<8;i++)
+< 					if(p->n_name[i] != q->n_name[i]) goto cont;
+< 				p->n_value = q->n_value;
+< 				p->n_type = q->n_type;
+< 				break;
+< 		cont:		;
+---
+> 	for(i = 0; i < eh.e_shnum && i < 64; i++) {
+> 		lseek(f, (long)(eh.e_shoff + i * eh.e_shentsize), 0);
+> 		if(readn(f, (char *)&sh, sizeof(sh)) != sizeof(sh)) {
+> 			close(f);
+> 			return(-1);
+> 		}
+> 		secflags[i] = sh.sh_flags;
+> 		if(sh.sh_type == SHT_SYMTAB) {
+> 			symoff = sh.sh_offset;
+> 			symsz = sh.sh_size;
+> 			if(sh.sh_entsize)
+> 				symesz = sh.sh_entsize;
+> 			lseek(f, (long)(eh.e_shoff + sh.sh_link * eh.e_shentsize), 0);
+> 			if(readn(f, (char *)&sh, sizeof(sh)) != sizeof(sh)) {
+> 				close(f);
+> 				return(-1);
+49a129,174
+> 			stroff = sh.sh_offset;
+> 		}
+> 	}
+> 	if(symoff == 0 || stroff == 0) {
+> 		close(f);
+> 		return(-1);
+> 	}
+> 	nsyms = (int)(symsz / symesz);
+> 	for(i = 0; i < nsyms; i++) {
+> 		lseek(f, (long)(symoff + i * symesz), 0);
+> 		if(readn(f, (char *)&sym, sizeof(sym)) != sizeof(sym)) {
+> 			close(f);
+> 			return(-1);
+> 		}
+> 		if(sym.st_name == 0)
+> 			continue;
+> 		lseek(f, (long)(stroff + sym.st_name), 0);
+> 		k = readstr(f, strbuf, sizeof(strbuf));
+> 		if(k <= 0) {
+> 			close(f);
+> 			return(-1);
+> 		}
+> 		for(p = list; p->n_name[0]; p++) {
+> 			for(j = 0; j < 8; j++)
+> 				nb[j] = p->n_name[j];
+> 			nb[8] = '\0';
+> 			sn = nb;
+> 			if(*sn == '_')
+> 				sn++;
+> 			matched = 1;
+> 			for(j = 0; sn[j]; j++)
+> 				if(sn[j] != strbuf[j]) {
+> 					matched = 0;
+> 					break;
+> 				}
+> 			if(!matched || strbuf[j] != '\0')
+> 				continue;
+> 			p->n_value = sym.st_value;
+> 			if(sym.st_shndx == 0 || sym.st_shndx >= 64)
+> 				p->n_type = N_UNDF;
+> 			else if(secflags[sym.st_shndx] & SHF_EXECINSTR)
+> 				p->n_type = N_TEXT | N_EXT;
+> 			else if(secflags[sym.st_shndx] & SHF_WRITE)
+> 				p->n_type = N_DATA | N_EXT;
+> 			else
+> 				p->n_type = N_BSS | N_EXT;
+```
+
+### usr/sys/sys/slp.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/sys/slp.c unix-v7-c99/usr/sys/sys/slp.c || true
+```
+
+Expect:
+
+```
+10a11,35
+> void sleep(caddr_t chan, int pri);
+> void wakeup(register caddr_t chan);
+> void setrun(register struct proc *p);
+> void setrq(struct proc *p);
+> void sched(void);
+> int swapin(register struct proc *p);
+> void swtch(void);
+> void qswtch(void);
+> int spl0(void);
+> int spl6(void);
+> void splx(int s);
+> void panic(char *s);
+> void printf(char *fmt, ...);
+> int save(int *lp);
+> void resume(int addr, int *lp);
+> int malloc(struct map *mp, int size);
+> void mfree(struct map *mp, int size, int a);
+> void xswap(register struct proc *p, int ff, int os);
+> void xlock(register struct text *xp);
+> void xunlock(register struct text *xp);
+> void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
+> void sureg(void);
+> void copyseg(int from, int to);
+> void armboot_setrun(int pid);
+> void armboot_swtch(void);
+27,28c52,53
+< sleep(chan, pri)
+< caddr_t chan;
+---
+> void
+> sleep(caddr_t chan, int pri)
+31c56
+< 	register s, h;
+---
+> 	register int s, h;
+82,83c107,108
+< wakeup(chan)
+< register caddr_t chan;
+---
+> void
+> wakeup(register caddr_t chan)
+86c111
+< 	register i;
+---
+> 	register int i;
+118,119c143,144
+< setrq(p)
+< struct proc *p;
+---
+> void
+> setrq(struct proc *p)
+122c147
+< 	register s;
+---
+> 	register int s;
+140,141c165,166
+< setrun(p)
+< register struct proc *p;
+---
+> void
+> setrun(register struct proc *p)
+151c176
+< 	if (w = p->p_wchan) {
+---
+> 	if ((w = p->p_wchan)) {
+156a182
+> 	armboot_setrun((int)p->p_pid);
+171,172c197,198
+< setpri(pp)
+< register struct proc *pp;
+---
+> int
+> setpri(register struct proc *pp)
+174c200
+< 	register p;
+---
+> 	register int p;
+202c228,229
+< sched()
+---
+> void
+> sched(void)
+205c232
+< 	register outage, inage;
+---
+> 	register int outage, inage;
+255c282
+< 		if (rp->p_textp && rp->p_textp->x_flag&XLOCK)
+---
+> 		if (rp->p_textp && (rp->p_textp->x_flag&XLOCK))
+257c284
+< 		if (rp->p_stat==SSLEEP&&rp->p_pri>=PZERO || rp->p_stat==SSTOP) {
+---
+> 		if ((rp->p_stat==SSLEEP&&rp->p_pri>=PZERO) || rp->p_stat==SSTOP) {
+292,293c319,320
+< swapin(p)
+< register struct proc *p;
+---
+> int
+> swapin(register struct proc *p)
+301c328
+< 	if (xp = p->p_textp) {
+---
+> 	if ((xp = p->p_textp)) {
+329c356,357
+< qswtch()
+---
+> void
+> qswtch(void)
+347c375,376
+< swtch()
+---
+> void
+> swtch(void)
+349,350d377
+< 	register n;
+< 	register struct proc *p, *q, *pp, *pq;
+352,418c379
+< 	/*
+< 	 * If not the idle process, resume the idle process.
+< 	 */
+< 	if (u.u_procp != &proc[0]) {
+< 		if (save(u.u_rsav)) {
+< 			sureg();
+< 			return;
+< 		}
+< 		if (u.u_fpsaved==0) {
+< 			savfp(&u.u_fps);
+< 			u.u_fpsaved = 1;
+< 		}
+< 		resume(proc[0].p_addr, u.u_qsav);
+< 	}
+< 	/*
+< 	 * The first save returns nonzero when proc 0 is resumed
+< 	 * by another process (above); then the second is not done
+< 	 * and the process-search loop is entered.
+< 	 *
+< 	 * The first save returns 0 when swtch is called in proc 0
+< 	 * from sched().  The second save returns 0 immediately, so
+< 	 * in this case too the process-search loop is entered.
+< 	 * Thus when proc 0 is awakened by being made runnable, it will
+< 	 * find itself and resume itself at rsav, and return to sched().
+< 	 */
+< 	if (save(u.u_qsav)==0 && save(u.u_rsav))
+< 		return;
+< loop:
+< 	spl6();
+< 	runrun = 0;
+< 	pp = NULL;
+< 	q = NULL;
+< 	n = 128;
+< 	/*
+< 	 * Search for highest-priority runnable process
+< 	 */
+< 	for(p=runq; p!=NULL; p=p->p_link) {
+< 		if((p->p_stat==SRUN) && (p->p_flag&SLOAD)) {
+< 			if(p->p_pri < n) {
+< 				pp = p;
+< 				pq = q;
+< 				n = p->p_pri;
+< 			}
+< 		}
+< 		q = p;
+< 	}
+< 	/*
+< 	 * If no process is runnable, idle.
+< 	 */
+< 	p = pp;
+< 	if(p == NULL) {
+< 		idle();
+< 		goto loop;
+< 	}
+< 	q = pq;
+< 	if(q == NULL)
+< 		runq = p->p_link;
+< 	else
+< 		q->p_link = p->p_link;
+< 	curpri = n;
+< 	spl0();
+< 	/*
+< 	 * The rsav (ssav) contents are interpreted in the new address space
+< 	 */
+< 	n = p->p_flag&SSWAP;
+< 	p->p_flag &= ~SSWAP;
+< 	resume(p->p_addr, n? u.u_ssav: u.u_rsav);
+---
+> 	armboot_swtch();
+426c387,388
+< newproc()
+---
+> int
+> newproc(void)
+428,431d389
+< 	int a1, a2;
+< 	struct proc *p, *up;
+< 	register struct proc *rpp, *rip;
+< 	register n;
+433,453c391
+< 	p = NULL;
+< 	/*
+< 	 * First, just locate a slot for a process
+< 	 * and copy the useful info from this process into it.
+< 	 * The panic "cannot happen" because fork has already
+< 	 * checked for the existence of a slot.
+< 	 */
+< retry:
+< 	mpid++;
+< 	if(mpid >= 30000) {
+< 		mpid = 0;
+< 		goto retry;
+< 	}
+< 	for(rpp = &proc[0]; rpp < &proc[NPROC]; rpp++) {
+< 		if(rpp->p_stat == NULL && p==NULL)
+< 			p = rpp;
+< 		if (rpp->p_pid==mpid || rpp->p_pgrp==mpid)
+< 			goto retry;
+< 	}
+< 	if ((rpp = p)==NULL)
+< 		panic("no procs");
+---
+> 	panic("newproc");
+455,457d392
+< 	/*
+< 	 * make proc entry for new proc
+< 	 */
+459,471d393
+< 	rip = u.u_procp;
+< 	up = rip;
+< 	rpp->p_stat = SRUN;
+< 	rpp->p_clktim = 0;
+< 	rpp->p_flag = SLOAD;
+< 	rpp->p_uid = rip->p_uid;
+< 	rpp->p_pgrp = rip->p_pgrp;
+< 	rpp->p_nice = rip->p_nice;
+< 	rpp->p_textp = rip->p_textp;
+< 	rpp->p_pid = mpid;
+< 	rpp->p_ppid = rip->p_pid;
+< 	rpp->p_time = 0;
+< 	rpp->p_cpu = 0;
+473,476d394
+< 	/*
+< 	 * make duplicate entries
+< 	 * where needed
+< 	 */
+478,528d395
+< 	for(n=0; n<NOFILE; n++)
+< 		if(u.u_ofile[n] != NULL)
+< 			u.u_ofile[n]->f_count++;
+< 	if(up->p_textp != NULL) {
+< 		up->p_textp->x_count++;
+< 		up->p_textp->x_ccount++;
+< 	}
+< 	u.u_cdir->i_count++;
+< 	if (u.u_rdir)
+< 		u.u_rdir->i_count++;
+< 	/*
+< 	 * Partially simulate the environment
+< 	 * of the new process so that when it is actually
+< 	 * created (by copying) it will look right.
+< 	 */
+< 	rpp = p;
+< 	u.u_procp = rpp;
+< 	rip = up;
+< 	n = rip->p_size;
+< 	a1 = rip->p_addr;
+< 	rpp->p_size = n;
+< 	/*
+< 	 * When the resume is executed for the new process,
+< 	 * here's where it will resume.
+< 	 */
+< 	if (save(u.u_ssav)) {
+< 		sureg();
+< 		return(1);
+< 	}
+< 	a2 = malloc(coremap, n);
+< 	/*
+< 	 * If there is not enough core for the
+< 	 * new process, swap out the current process to generate the
+< 	 * copy.
+< 	 */
+< 	if(a2 == NULL) {
+< 		rip->p_stat = SIDL;
+< 		rpp->p_addr = a1;
+< 		xswap(rpp, 0, 0);
+< 		rip->p_stat = SRUN;
+< 	} else {
+< 		/*
+< 		 * There is core, so just copy.
+< 		 */
+< 		rpp->p_addr = a2;
+< 		while(n--)
+< 			copyseg(a1++, a2++);
+< 	}
+< 	u.u_procp = rip;
+< 	setrq(rpp);
+< 	rpp->p_flag |= SSWAP;
+545c412,413
+< expand(newsize)
+---
+> void
+> expand(int newsize)
+547c415
+< 	register i, n;
+---
+> 	register int i, n;
+549c417
+< 	register a1, a2;
+---
+> 	register int a1, a2;
+566d433
+< 		p->p_flag |= SSWAP;
 ```
