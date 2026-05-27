@@ -13,6 +13,26 @@ The pass condition is:
 - SHA-256 and CRC32 match the expected PRBS digest, and
 - measured wall-time payload throughput is at least 90 Mbps.
 
+### Local WebSocket protocol self-test
+
+Build a native host copy of the streamer and receive a 1 MiB PRBS
+payload over loopback using the package-free receiver. This catches
+WebSocket framing, PRBS byte-order, SHA-256, and CRC32 regressions
+before using the bench.
+
+Build:
+
+```
+mkdir -p logs/local-bin
+gcc -O2 -Wall -Wextra -o logs/local-bin/stream_ws_prbs_stream stm32mp135_test_board/tools/stream_ws_prbs_stream.c
+```
+
+Local test:
+
+```
+logs/local-bin/stream_ws_prbs_stream --port 18765 --bytes 1048576 --seed 0x12345678 --frame-bytes 131072 >logs/local-stream-1m.out 2>&1 & srv=$!; sleep 0.2; python3 logs/stream_ws_receive.py --host 127.0.0.1 --port 18765 --bytes 1048576 --min-rate-Bps 1 --expect-sha256 5b64b12ad6e657f403f9e3e57e4ad6fbd1d8fb14c53a0c7e1dc5dbd2257166b1 --expect-crc32 0xe6568d53 >logs/local-recv-1m.out 2>&1; rc=$?; wait $srv || true; cat logs/local-stream-1m.out logs/local-recv-1m.out; exit $rc
+```
+
 ### Inventory exposes required custom streaming control surface
 
 Confirm the bench exposes the operation surface needed to boot the
@@ -59,14 +79,14 @@ def check(extract_dir):
     return True
 ```
 
-### Build custom Linux image and WebSocket streamer
+### Build custom rootfs, bootloader, and WebSocket streamer
 
-Build the custom-board SD image and a separate target-side WebSocket
-PRBS streamer binary. The streamer is copied to the running board by
-the hardware section; it is not baked into the Buildroot overlay. It
-listens on TCP port 8765, performs the WebSocket opening handshake, and
-sends xorshift32 PRBS bytes using the same seed and byte order as
-`test_serv/plugins/_prbs.py`.
+Build the Buildroot output, custom-board bootloader, and separate
+target-side WebSocket PRBS streamer binary. The streamer is copied to
+the running board by the hardware section; it is not baked into the
+Buildroot overlay. It listens on TCP port 8765, performs the WebSocket
+opening handshake, and sends xorshift32 PRBS bytes using the same seed
+and byte order as `test_serv/plugins/_prbs.py`.
 
 Build:
 
@@ -76,11 +96,6 @@ stm32mp135_test_board/buildroot/output/host/bin/arm-buildroot-linux-uclibcgnueab
 make -C stm32mp135_test_board br
 make -C stm32mp135_test_board patch
 make -C stm32mp135_test_board boot
-make -C stm32mp135_test_board kernel
-make -C stm32mp135_test_board DTS=custom dtb
-make -C stm32mp135_test_board DTS=custom sd
-python3 -c "import base64,os,struct,time; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/stream_refresh_known_hosts_custom.plan','w').write('description \"refresh ssh.custom known_hosts %d\"'%time.time()+chr(10)+'ssh.custom:trust_host_key key=\"'+line+'\"'+chr(10))"
-python3 test_serv/submit.py --server http://localhost:8080 --wait 120 "$RUNPY_WORKDIR/stream_refresh_known_hosts_custom.plan"
 ```
 
 Artifacts:
@@ -88,8 +103,6 @@ Artifacts:
 ```
 stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
-stm32mp135_test_board/buildroot/output/images/sdcard.img
-stm32mp135_test_board/buildroot/output/images/hostkey.pub
 stm32mp135_test_board/tools/stream_ws_prbs_stream.c
 stm32mp135_test_board/build/stream_ws_prbs_stream
 ```
@@ -123,39 +136,57 @@ def check(extract_dir):
     if not binary.exists() or binary.stat().st_size == 0:
         return False
 
+    bootloader = Path("stm32mp135_test_board/bootloader/build/main.stm32")
+    if not bootloader.exists() or bootloader.stat().st_size == 0:
+        return False
+
     desc = subprocess.check_output(["file", str(binary)], text=True)
     return "ARM" in desc and "ELF" in desc
 ```
 
-### Local WebSocket protocol self-test
+### Build custom kernel and SD image
 
-Build a native host copy of the streamer and receive a 1 MiB PRBS
-payload over loopback using the package-free receiver. This catches
-WebSocket framing, PRBS byte-order, SHA-256, and CRC32 regressions
-before using the bench.
-
-Build: nothing required.
-
-Local test:
-
-```
-mkdir -p logs/local-bin
-gcc -O2 -Wall -Wextra -o logs/local-bin/stream_ws_prbs_stream stm32mp135_test_board/tools/stream_ws_prbs_stream.c
-logs/local-bin/stream_ws_prbs_stream --port 18765 --bytes 1048576 --seed 0x12345678 --frame-bytes 131072 >logs/local-stream-1m.out 2>&1 & srv=$!; sleep 0.2; python3 logs/stream_ws_receive.py --host 127.0.0.1 --port 18765 --bytes 1048576 --min-rate-Bps 1 --expect-sha256 5b64b12ad6e657f403f9e3e57e4ad6fbd1d8fb14c53a0c7e1dc5dbd2257166b1 --expect-crc32 0xe6568d53 >logs/local-recv-1m.out 2>&1; rc=$?; wait $srv || true; cat logs/local-stream-1m.out logs/local-recv-1m.out; exit $rc
-```
-
-### Boot custom Linux and start WebSocket streamer
-
-Write the custom-board SD image once, boot Linux, configure Ethernet,
-and start the WebSocket PRBS streamer from UART. This section
-intentionally leaves the streamer running for the following desktop
-receive test. It does not use SSH or a second DFU/SD write cycle.
+Build the custom-board kernel image, custom device tree, SD card image,
+and SSH host key trust plan used by the following hardware sections.
 
 Build:
 
 ```
-make -C stm32mp135_test_board boot
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=custom dtb
+make -C stm32mp135_test_board DTS=custom sd
+python3 -c "import base64,os,struct,time; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/stream_refresh_known_hosts_custom.plan','w').write('description \"refresh ssh.custom known_hosts %d\"'%time.time()+chr(10)+'ssh.custom:trust_host_key key=\"'+line+'\"'+chr(10))"
+python3 test_serv/submit.py --server http://localhost:8080 --wait 120 "$RUNPY_WORKDIR/stream_refresh_known_hosts_custom.plan"
 ```
+
+Artifacts:
+
+```
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+stm32mp135_test_board/buildroot/output/images/hostkey.pub
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+def check(extract_dir):
+    from pathlib import Path
+
+    sd = Path("stm32mp135_test_board/buildroot/output/images/sdcard.img")
+    hostkey = Path("stm32mp135_test_board/buildroot/output/images/hostkey.pub")
+    return (sd.exists() and sd.stat().st_size > 0 and
+            hostkey.exists() and
+            hostkey.read_text().startswith("ssh-ed25519 "))
+```
+
+### Provision custom SD
+
+Write the custom-board SD image once and leave the board stopped at the
+bootloader prompt.
+
+Build: nothing required.
 
 Artifacts:
 
@@ -163,7 +194,6 @@ Artifacts:
 stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
-stm32mp135_test_board/build/stream_ws_prbs_stream
 ```
 
 Test (max 5 min):
@@ -187,6 +217,38 @@ mp135.custom:uart_close
 delay ms=5000
 inventory refresh=true verify=false
 msc.custom:write data=@sdcard.img offset_lba=0
+mark tag=stream_ws_custom_sd_written
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "msc.custom", "write")
+```
+
+### Load and jump custom Linux and start WebSocket streamer
+
+Run `two` from the bootloader to load the kernel and device tree, jump
+into Linux, wait for the login prompt, confirm the expected Ethernet
+address, and start the WebSocket PRBS streamer. This section
+intentionally leaves the streamer running for the following desktop
+receive test.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+stm32mp135_test_board/build/stream_ws_prbs_stream
+```
+
+Test (max 1 min):
+
+```
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -239,7 +301,8 @@ def check(extract_dir):
         extract_dir, "mp135.uart", encoding="utf-8")
     ssh = Verification.load_stream_text(
         extract_dir, "ssh.exec", encoding="utf-8")
-    return (Verification.op_succeeded(ops, "msc.custom", "write") and
+    return ("Copying 1 blocks" in uart and
+            "DDR addr 0xC4000000" in uart and
             "Linux version" in uart and
             "172.25.0.46" in uart and
             Verification.op_succeeded(ops, "ssh.custom", "put") and
