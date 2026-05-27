@@ -75,6 +75,7 @@ delay ms=200
 mp135.evb:uart_write data="x"
 mp135.evb:uart_expect sentinel="> " timeout_ms=8000
 mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="Board EVB" timeout_ms=3000
 mp135.evb:uart_expect sentinel="> " timeout_ms=3000
 mp135.evb:uart_close
 mark tag=bootloader_hold

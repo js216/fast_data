@@ -71,6 +71,7 @@ delay ms=200
 mp135.custom:uart_write data="x"
 mp135.custom:uart_expect sentinel="> " timeout_ms=8000
 mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Board custom" timeout_ms=3000
 mp135.custom:uart_expect sentinel="> " timeout_ms=3000
 mp135.custom:uart_close
 mark tag=bootloader_hold
