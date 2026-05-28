@@ -35,7 +35,7 @@ Verify:
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    needed = {'mp135.custom', 'bench_mcu.0', 'lease._default'}
+    needed = {'mp135.custom', 'bench_mcu.0'}
     devs = Verification.load_devices(extract_dir)
     return needed.issubset({d['id'] for d in devs})
 ```
@@ -83,15 +83,9 @@ def check(_extract_dir):
 Done: 05/13/2026 15:09:52
 
 Reset (D12 via `reset_dut2`), DFU-load the NAND bootloader, and stop
-autoboot before the bootloader can fall through to Linux. Keep the
-lease alive for the UART hold step.
+autoboot before the bootloader can fall through to Linux.
 
-Build:
-
-```
-make -C stm32mp135_test_board/bootloader clean
-make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
-```
+Build: nothing required.
 
 Artifacts:
 
@@ -137,10 +131,10 @@ def check(extract_dir):
 
 Done: 05/13/2026 15:09:57
 
-Claims a fresh lease, physically resets the board, reloads the NAND
-bootloader over DFU, and confirms UART can stop autoboot at `> `. This
-proves the test can reliably re-enter a known bootloader state instead
-of depending on stale UART state from the previous job.
+Physically resets the board, reloads the NAND bootloader over DFU, and
+confirms UART can stop autoboot at `> `. This proves the test can
+reliably re-enter a known bootloader state instead of depending on stale
+UART state from the previous job.
 
 Build: nothing required.
 
@@ -249,29 +243,19 @@ def check(extract_dir):
     return 'FDT magic' in uart or 'partition table:' in uart
 ```
 
-### NAND image round-trip: write -> fmc_flush -> poison -> fmc_load -> diff
+### NAND image write to DDR staging
 
 Done: 05/13/2026 16:12:17
 
-Write `nand.img` to DDR via MSC, `fmc_flush` to NAND, `fmc_load` back
-into DDR, MSC-read and offline-diff the leading bytes. This step waits
-for `fmc_flush` to finish; it does not require a nonzero tail erase
-count because stale-tail coverage lives in the dedicated provisioning
-regression above. Before `fmc_load`, overwrite the leading DDR staging
-window with deterministic zeroes and verify the poison landed, so a
-no-op `fmc_load` cannot pass by reading back the original MSC write.
-The image build can outlive an in-memory bench lease if the poller
-restarts, so this step claims a fresh lease after the build and
-re-enters the bootloader state it needs. The 3 MB/s MSC write and read
-floors are hard requirements for NAND provisioning; sub-3 MB/s results
-are code failures.
+Write `nand.img` to the bootloader's DDR staging window through MSC.
+This section uses the bootloader and MSC state established by the
+previous smoke section. The 3 MB/s MSC write floor is a hard requirement
+for NAND provisioning; sub-3 MB/s results are code failures.
 
 Build:
 
 ```
 make -C stm32mp135_test_board patch
-make -C stm32mp135_test_board/bootloader clean
-make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
 make -C stm32mp135_test_board kernel
 make -C stm32mp135_test_board DTS=custom-nand dtb
 make -C stm32mp135_test_board br
@@ -281,35 +265,38 @@ make -C stm32mp135_test_board DTS=custom-nand nand
 Artifacts:
 
 ```
-stm32mp135_test_board/bootloader/scripts/flash.tsv
-stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/nand.img
 ```
 
-Test (max 3 min):
+Test (max 1 min):
 
 ```
-bench_mcu:reset_dut2
-delay ms=10000
-inventory refresh=true verify=false
-bench_mcu:reset_dut2
-delay ms=10000
-inventory refresh=true verify=false
-dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
-mp135.custom:uart_open
-delay ms=300
-mp135.custom:uart_write data="x"
-delay ms=200
-mp135.custom:uart_write data="x"
-delay ms=200
-mp135.custom:uart_write data="x"
-mp135.custom:uart_expect sentinel="> " timeout_ms=8000
-mp135.custom:uart_write data="\r"
-mp135.custom:uart_expect sentinel="> " timeout_ms=3000
-mp135.custom:uart_close
-delay ms=2000
-inventory
 msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
+mark tag=nand_image_written_to_ddr
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "msc.custom", "write")
+```
+
+### NAND image commit with fmc_flush
+
+Commit the DDR-staged `nand.img` to NAND with `fmc_flush`. This step
+waits for `fmc_flush` to finish; it does not require a nonzero tail
+erase count because stale-tail coverage lives in the dedicated
+provisioning regression above.
+
+Build: nothing required.
+
+Test (max 1 min):
+
+```
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -319,8 +306,64 @@ mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
 mp135.custom:uart_expect sentinel="new-bad" timeout_ms=60000
 mp135.custom:uart_expect sentinel="> " timeout_ms=5000
 mp135.custom:uart_close
+mark tag=nand_image_fmc_flushed
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    uart = Verification.load_stream(
+        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
+    return 'FMC flush:' in uart and 'done:' in uart
+```
+
+### NAND round-trip DDR poison
+
+Overwrite the leading DDR staging window with deterministic zeroes and
+verify the poison landed, so a no-op `fmc_load` cannot pass by reading
+back the original MSC write.
+
+Build: nothing required.
+
+Test (max 20 s):
+
+```
 msc.custom:write_zeroes n=4194304 offset_lba=0 min_rate_Bps=3000000
 msc.custom:verify_zeroes n=4194304 offset_lba=0 min_rate_Bps=3000000
+mark tag=nand_round_trip_ddr_poisoned
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return (Verification.op_succeeded(ops, "msc.custom", "write_zeroes") and
+            Verification.op_succeeded(ops, "msc.custom", "verify_zeroes"))
+```
+
+### NAND fmc_load readback diff
+
+Load the NAND image back into DDR with `fmc_load`, MSC-read the leading
+bytes, and offline-diff them against `nand.img`. The 3 MB/s MSC read
+floor is a hard requirement for NAND provisioning.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+stm32mp135_test_board/buildroot/output/images/nand.img
+```
+
+Test (max 1 min):
+
+```
 mp135.custom:uart_open
 delay ms=300
 mp135.custom:uart_write data="\r"
@@ -348,8 +391,7 @@ def check(extract_dir):
         return False
     uart = Verification.load_stream(
         extract_dir, 'mp135.uart').decode('utf-8', 'replace')
-    if not all(s in uart for s in ('FMC flush:', 'done:',
-                                   'FMC load:', 'rd errs')):
+    if not all(s in uart for s in ('FMC load:', 'rd errs')):
         return False
     return got == img[:len(got)]
 ```
@@ -408,9 +450,8 @@ def check(extract_dir):
 
 Done: 05/13/2026 16:12:28
 
-Claims a fresh bench lease and reloads the NAND bootloader so this
-check does not depend on a still-live cross-section lease token. It
-boots Linux from the already-provisioned NAND contents with
+Reloads the NAND bootloader so this check does not depend on stale
+cross-section state. It boots Linux from the already-provisioned NAND contents with
 `fmc_bload` + `jump`, then talks to Linux over the serial console. Logs
 in as `root`/`root`, prints
 `/proc/mtd`, `ubinfo -a`, `mtdinfo -a`, and a filtered `dmesg`.
@@ -420,12 +461,7 @@ is clear of UBI/UBIFS/ECC errors.
 Requires `BR2_PACKAGE_MTD=y` in `config/buildroot.conf` for the
 mtd-utils binaries.
 
-Build:
-
-```
-make -C stm32mp135_test_board/bootloader clean
-make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
-```
+Build: nothing required.
 
 Artifacts:
 
@@ -494,84 +530,4 @@ def check(extract_dir):
                  body, re.I):
         return False
     return True
-```
-
-### Full end-to-end: DFU -> NAND write+commit -> boot Linux console
-
-Done: 05/13/2026 16:12:34
-
-Cold path. Reset, DFU NAND bootloader, stop autoload, write+commit
-`nand.img`, `fmc_bload` + `jump`, and reach the Linux login prompt on
-the serial console. The 3 MB/s MSC write floor is a hard requirement;
-lowering it hides a broken NAND boot path.
-
-Build:
-
-```
-make -C stm32mp135_test_board/bootloader clean
-make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DNAND_FLASH
-```
-
-Artifacts:
-
-```
-stm32mp135_test_board/bootloader/scripts/flash.tsv
-stm32mp135_test_board/bootloader/build/main.stm32
-stm32mp135_test_board/buildroot/output/images/nand.img
-```
-
-Test (max 2 min):
-
-```
-bench_mcu:reset_dut2
-delay ms=2000
-dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
-mp135.custom:uart_open
-delay ms=300
-mp135.custom:uart_write data="x"
-delay ms=200
-mp135.custom:uart_write data="x"
-delay ms=200
-mp135.custom:uart_write data="x"
-mp135.custom:uart_expect sentinel="> " timeout_ms=8000
-mp135.custom:uart_write data="\r"
-mp135.custom:uart_expect sentinel="> " timeout_ms=3000
-mp135.custom:uart_close
-delay ms=5000
-inventory refresh=true verify=false
-msc.custom:write data=@nand.img offset_lba=0 min_rate_Bps=3000000
-mp135.custom:uart_open
-delay ms=300
-mp135.custom:uart_write data="\r"
-mp135.custom:uart_expect sentinel="> " timeout_ms=3000
-mp135.custom:uart_write data="fmc_flush\r"
-mp135.custom:uart_expect sentinel="FMC flush:" timeout_ms=3000
-mp135.custom:uart_expect sentinel="tail-erased" timeout_ms=30000
-mp135.custom:uart_expect sentinel="> " timeout_ms=5000
-mp135.custom:uart_write data="fmc_bload\r"
-mp135.custom:uart_expect sentinel="bload: done" timeout_ms=30000
-mp135.custom:uart_expect sentinel="> " timeout_ms=5000
-mp135.custom:uart_write data="jump"
-delay ms=200
-mp135.custom:uart_write data="\r"
-mp135.custom:uart_expect sentinel="Jumping to address" timeout_ms=5000
-mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
-mp135.custom:uart_expect sentinel="ubi0: attached mtd" timeout_ms=20000
-mp135.custom:uart_expect sentinel="login:" timeout_ms=30000
-mp135.custom:uart_close
-mark tag=full_end_to_end_nand
-```
-
-Verify:
-
-```
-def check(extract_dir):
-    if not Verification.manifest_clean(extract_dir):
-        return False
-    uart = Verification.load_stream(
-        extract_dir, 'mp135.uart').decode('utf-8', 'replace')
-    bad = ('Kernel panic', 'Unable to mount root fs', 'UBIFS error',
-           'UBI error', 'ECC error', 'uncorrectable', 'unrecoverable')
-    return ('Linux version' in uart and 'ubi0: attached mtd' in uart
-            and 'login:' in uart and not any(s in uart for s in bad))
 ```

@@ -44,3 +44,5 @@ Agents should not make any commits and have no push/pull access.
 Under no circumstances should any agent place a "Done:" marker in any
 mission file anywhere. "## WIP" marker is okay, or splitting mission
 files as per operator request.
+
+Agents must never write or read anything in /tmp.

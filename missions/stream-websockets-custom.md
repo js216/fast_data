@@ -1,12 +1,12 @@
-# Fast Ethernet Data Streaming From STM32MP135 Linux
+# Fast Ethernet Data Streaming From STM32MP135 Custom Linux
 
-Prove that the STM32MP135 EVB can boot Linux, start a deterministic
-userspace WebSocket streamer, and move data over Ethernet to a desktop
-at 90 Mbps or faster with byte-perfect integrity.
+Prove that the STM32MP135 custom board can boot Linux, start a
+deterministic userspace WebSocket streamer, and move data over Ethernet
+to a desktop at 90 Mbps or faster with byte-perfect integrity.
 
 The pass condition is:
 
-- the board is running the Linux image built by this tree,
+- the custom board is running the Linux image built by this tree,
 - Ethernet is configured on the board,
 - a target-side streamer sends deterministic PRBS bytes over WebSocket,
 - the desktop receives the full payload,
@@ -33,11 +33,11 @@ Local test:
 logs/local-bin/stream_ws_prbs_stream --port 18765 --bytes 1048576 --seed 0x12345678 --frame-bytes 131072 >logs/local-stream-1m.out 2>&1 & srv=$!; sleep 0.2; python3 logs/stream_ws_receive.py --host 127.0.0.1 --port 18765 --bytes 1048576 --min-rate-Bps 1 --expect-sha256 5b64b12ad6e657f403f9e3e57e4ad6fbd1d8fb14c53a0c7e1dc5dbd2257166b1 --expect-crc32 0xe6568d53 >logs/local-recv-1m.out 2>&1; rc=$?; wait $srv || true; cat logs/local-stream-1m.out logs/local-recv-1m.out; exit $rc
 ```
 
-### Inventory exposes required streaming control surface
+### Inventory exposes required custom streaming control surface
 
-Confirm the bench exposes the operation surface needed to boot the EVB
-and drive its UART. This is a discovery check only; it must not boot,
-flash, or modify the board.
+Confirm the bench exposes the operation surface needed to boot the
+custom board and drive its UART. This is a discovery check only; it
+must not boot, flash, or modify the board.
 
 Build: nothing required.
 
@@ -45,7 +45,7 @@ Test (max 30 s):
 
 ```
 inventory
-mark tag=stream_ws_inventory
+mark tag=stream_ws_custom_inventory
 ```
 
 Verify:
@@ -60,7 +60,7 @@ def check(extract_dir):
 
     devices = Verification.load_devices(extract_dir)
     device_ids = {d["id"] for d in devices}
-    needed_devices = {"bench_mcu.0", "mp135.evb", "ssh.evb"}
+    needed_devices = {"bench_mcu.0", "mp135.custom", "ssh.custom"}
     if not needed_devices.issubset(device_ids):
         return False
 
@@ -69,7 +69,7 @@ def check(extract_dir):
         "mp135": {"uart_open", "uart_write", "uart_expect", "uart_close"},
         "dfu": {"flash_layout"},
         "msc": {"write", "verify"},
-        "bench_mcu": {"reset_dut"},
+        "bench_mcu": {"reset_dut2"},
     }
     for plugin, names in required_ops.items():
         available = set(ops.get(plugin, {}).get("ops", {}))
@@ -79,14 +79,14 @@ def check(extract_dir):
     return True
 ```
 
-### Build EVB rootfs, bootloader, and WebSocket streamer
+### Build custom rootfs, bootloader, and WebSocket streamer
 
-Build the Buildroot output, EVB bootloader, and separate target-side
-WebSocket PRBS streamer binary. The streamer is copied to the running
-board by the hardware section; it is not baked into the Buildroot
-overlay. It listens on TCP port 8765, performs the WebSocket opening
-handshake, and sends xorshift32 PRBS bytes using the same seed and byte
-order as `test_serv/plugins/_prbs.py`.
+Build the Buildroot output, custom-board bootloader, and separate
+target-side WebSocket PRBS streamer binary. The streamer is copied to
+the running board by the hardware section; it is not baked into the
+Buildroot overlay. It listens on TCP port 8765, performs the WebSocket
+opening handshake, and sends xorshift32 PRBS bytes using the same seed
+and byte order as `test_serv/plugins/_prbs.py`.
 
 Build:
 
@@ -95,8 +95,7 @@ mkdir -p stm32mp135_test_board/build
 stm32mp135_test_board/buildroot/output/host/bin/arm-buildroot-linux-uclibcgnueabihf-gcc -O2 -Wall -Wextra -o stm32mp135_test_board/build/stream_ws_prbs_stream stm32mp135_test_board/tools/stream_ws_prbs_stream.c
 make -C stm32mp135_test_board br
 make -C stm32mp135_test_board patch
-make -C stm32mp135_test_board/bootloader clean
-make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DEVB
+make -C stm32mp135_test_board boot
 ```
 
 Artifacts:
@@ -145,19 +144,19 @@ def check(extract_dir):
     return "ARM" in desc and "ELF" in desc
 ```
 
-### Build EVB kernel and SD image
+### Build custom kernel and SD image
 
-Build the EVB kernel image, EVB device tree, SD card image, and SSH host
-key trust plan used by the following hardware sections.
+Build the custom-board kernel image, custom device tree, SD card image,
+and SSH host key trust plan used by the following hardware sections.
 
 Build:
 
 ```
 make -C stm32mp135_test_board kernel
-make -C stm32mp135_test_board DTS=stm32mp135f-dk dtb
-make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
-python3 -c "import base64,os,struct,time; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/stream_refresh_known_hosts_evb.plan','w').write('description \"refresh ssh.evb known_hosts %d\"'%time.time()+chr(10)+'ssh.evb:trust_host_key key=\"'+line+'\"'+chr(10))"
-python3 test_serv/submit.py --server http://localhost:8080 --wait 120 "$RUNPY_WORKDIR/stream_refresh_known_hosts_evb.plan"
+make -C stm32mp135_test_board DTS=custom dtb
+make -C stm32mp135_test_board DTS=custom sd
+python3 -c "import base64,os,struct,time; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/stream_refresh_known_hosts_custom.plan','w').write('description \"refresh ssh.custom known_hosts %d\"'%time.time()+chr(10)+'ssh.custom:trust_host_key key=\"'+line+'\"'+chr(10))"
+python3 test_serv/submit.py --server http://localhost:8080 --wait 120 "$RUNPY_WORKDIR/stream_refresh_known_hosts_custom.plan"
 ```
 
 Artifacts:
@@ -182,9 +181,9 @@ def check(extract_dir):
             hostkey.read_text().startswith("ssh-ed25519 "))
 ```
 
-### Provision EVB SD
+### Provision custom SD
 
-Write the EVB SD image once and leave the board stopped at the
+Write the custom-board SD image once and leave the board stopped at the
 bootloader prompt.
 
 Build: nothing required.
@@ -200,25 +199,25 @@ stm32mp135_test_board/buildroot/output/images/sdcard.img
 Test (max 5 min):
 
 ```
-bench_mcu:reset_dut
+bench_mcu:reset_dut2
 delay ms=2000
 inventory refresh=true verify=false
-dfu.evb:flash_layout layout=@flash.tsv no_reconnect=true
-mp135.evb:uart_open
+dfu.custom:flash_layout layout=@flash.tsv no_reconnect=true
+mp135.custom:uart_open
 delay ms=300
-mp135.evb:uart_write data="x"
+mp135.custom:uart_write data="x"
 delay ms=200
-mp135.evb:uart_write data="x"
+mp135.custom:uart_write data="x"
 delay ms=200
-mp135.evb:uart_write data="x"
-mp135.evb:uart_expect sentinel="> " timeout_ms=8000
-mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=3000
-mp135.evb:uart_close
+mp135.custom:uart_write data="x"
+mp135.custom:uart_expect sentinel="> " timeout_ms=8000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=3000
+mp135.custom:uart_close
 delay ms=5000
 inventory refresh=true verify=false
-msc.evb:write data=@sdcard.img offset_lba=0
-mark tag=stream_ws_evb_sd_written
+msc.custom:write data=@sdcard.img offset_lba=0
+mark tag=stream_ws_custom_sd_written
 ```
 
 Verify:
@@ -228,10 +227,10 @@ def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
     ops = Verification.load_ops(extract_dir)
-    return Verification.op_succeeded(ops, "msc.evb", "write")
+    return Verification.op_succeeded(ops, "msc.custom", "write")
 ```
 
-### Load and jump EVB Linux and start WebSocket streamer
+### Load and jump custom Linux and start WebSocket streamer
 
 Run `two` from the bootloader to load the kernel and device tree, jump
 into Linux, wait for the login prompt, confirm the expected Ethernet
@@ -250,45 +249,45 @@ stm32mp135_test_board/build/stream_ws_prbs_stream
 Test (max 1 min):
 
 ```
-mp135.evb:uart_open
+mp135.custom:uart_open
 delay ms=300
-mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="t"
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="t"
 delay ms=100
-mp135.evb:uart_write data="w"
+mp135.custom:uart_write data="w"
 delay ms=100
-mp135.evb:uart_write data="o"
+mp135.custom:uart_write data="o"
 delay ms=100
-mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="Copying 1 blocks" timeout_ms=15000
-mp135.evb:uart_expect sentinel="DDR addr 0xC4000000" timeout_ms=15000
-mp135.evb:uart_expect sentinel="> " timeout_ms=5000
-mp135.evb:uart_write data="j"
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Copying 1 blocks" timeout_ms=15000
+mp135.custom:uart_expect sentinel="DDR addr 0xC4000000" timeout_ms=15000
+mp135.custom:uart_expect sentinel="> " timeout_ms=5000
+mp135.custom:uart_write data="j"
 delay ms=100
-mp135.evb:uart_write data="u"
+mp135.custom:uart_write data="u"
 delay ms=100
-mp135.evb:uart_write data="m"
+mp135.custom:uart_write data="m"
 delay ms=100
-mp135.evb:uart_write data="p"
+mp135.custom:uart_write data="p"
 delay ms=100
-mp135.evb:uart_write data="\r"
-mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
-mp135.evb:uart_expect sentinel="Linux version" timeout_ms=5000
-mp135.evb:uart_expect sentinel="login:" timeout_ms=15000
-mp135.evb:uart_write data="root\r"
-mp135.evb:uart_expect sentinel="Password:" timeout_ms=10000
-mp135.evb:uart_write data="root\r"
-mp135.evb:uart_expect sentinel="# " timeout_ms=15000
-mp135.evb:uart_write data="dmesg -n 1 2>/dev/null; true\r"
-mp135.evb:uart_expect sentinel="# " timeout_ms=3000
+mp135.custom:uart_write data="\r"
+mp135.custom:uart_expect sentinel="Jumping to address" timeout_ms=5000
+mp135.custom:uart_expect sentinel="Linux version" timeout_ms=5000
+mp135.custom:uart_expect sentinel="login:" timeout_ms=15000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="Password:" timeout_ms=10000
+mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=15000
+mp135.custom:uart_write data="dmesg -n 1 2>/dev/null; true\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=3000
 delay ms=5000
-mp135.evb:uart_write data="killall -q -9 stream_ws_prbs_stream; ip -4 addr show dev eth0; ip route; uname -a\r"
-mp135.evb:uart_expect sentinel="172.25.0.115" timeout_ms=5000
-mp135.evb:uart_close
-ssh.evb:put data=@stream_ws_prbs_stream path="/tmp/stream_ws_prbs_stream" timeout_ms=20000
-ssh.evb:exec command="chmod +x /tmp/stream_ws_prbs_stream; killall -q -9 stream_ws_prbs_stream; /tmp/stream_ws_prbs_stream --port 8765 --bytes 134217728 --seed 0x12345678 --frame-bytes 131072 >/tmp/stream_ws_prbs_stream.log 2>&1 & echo stream_ws_started=$!" timeout_ms=10000
-mark tag=stream_ws_boot_started
+mp135.custom:uart_write data="killall -q -9 stream_ws_prbs_stream; ip -4 addr show dev eth0; ip route; uname -a\r"
+mp135.custom:uart_expect sentinel="172.25.0.46" timeout_ms=5000
+mp135.custom:uart_close
+ssh.custom:put data=@stream_ws_prbs_stream path="/tmp/stream_ws_prbs_stream" timeout_ms=20000
+ssh.custom:exec command="chmod +x /tmp/stream_ws_prbs_stream; killall -q -9 stream_ws_prbs_stream; /tmp/stream_ws_prbs_stream --port 8765 --bytes 134217728 --seed 0x12345678 --frame-bytes 131072 >/tmp/stream_ws_prbs_stream.log 2>&1 & echo stream_ws_started=$!" timeout_ms=10000
+mark tag=stream_ws_custom_boot_started
 ```
 
 Verify:
@@ -305,26 +304,26 @@ def check(extract_dir):
     return ("Copying 1 blocks" in uart and
             "DDR addr 0xC4000000" in uart and
             "Linux version" in uart and
-            "172.25.0.115" in uart and
-            Verification.op_succeeded(ops, "ssh.evb", "put") and
-            Verification.op_succeeded(ops, "ssh.evb", "exec") and
+            "172.25.0.46" in uart and
+            Verification.op_succeeded(ops, "ssh.custom", "put") and
+            Verification.op_succeeded(ops, "ssh.custom", "exec") and
             "stream_ws_started=" in ssh)
 ```
 
 ### Receive 128 MiB PRBS over WebSocket at 93 Mbps or faster
 
-Connect from the bench desktop to the already-running board streamer.
-Receive exactly 128 MiB, compute SHA-256 and CRC32 while reading, and
-fail if the payload is not bit-perfect or if wall-time payload rate is
-below 93 Mbps.
+Connect from the bench desktop to the already-running custom-board
+streamer. Receive exactly 128 MiB, compute SHA-256 and CRC32 while
+reading, and fail if the payload is not bit-perfect or if wall-time
+payload rate is below 93 Mbps.
 
 Build: nothing required.
 
 Test (max 4 min):
 
 ```
-ws.any:recv url="ws://172.25.0.115:8765/" bytes=134217728 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 min_rate_Bps=11625000 timeout_ms=180000
-mark tag=stream_ws_128m_93mbps_integrity
+ws.any:recv url="ws://172.25.0.46:8765/" bytes=134217728 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 min_rate_Bps=11625000 timeout_ms=180000
+mark tag=stream_ws_custom_128m_93mbps_integrity
 ```
 
 Verify:

@@ -3,10 +3,15 @@
 *.swo
 *.pdf
 
-.claude
-.codex
 doc
 tmp
-__pycache__
 
+.claude
+.codex
+<<<<<<< HEAD
+doc
+tmp
+=======
+>>>>>>> aa7d649ed9795831702eea2985a10683ae188771
+__pycache__
 .runpy_lease
