@@ -93,7 +93,7 @@ class Runner:
     # disjoint missions concurrently (e.g., ssh.md on EVB and
     # ssh-custom.md on the custom board) without clobbering each
     # other's `.workdir` or known_hosts lease state.
-    WORKDIR_PARENT = FAST_DATA / 'logs'
+    WORKDIR_PARENT = FAST_DATA / 'tmp'
     # Bounded retries with backoff for transient bench failures
     # (USB device dropouts, busy queues, FT4222 not-found). The
     # retry sequence is the wait BEFORE the i-th attempt; the first
@@ -112,7 +112,7 @@ class Runner:
         self.workdir = self.WORKDIR_PARENT / f'workdir-{tag}'
         self.workdir.mkdir(parents=True)
         self.lease_state_file = self.WORKDIR_PARENT / f'.runpy_lease-{tag}'
-        self.log_path = Path.cwd() / 'logs/log.txt'
+        self.log_path = Path.cwd() / 'tmp/log.txt'
         self.log_fh = None
         self.user = getpass.getuser()
         self.busy_retry_deadline_s = self._busy_retry_deadline_for_md(
@@ -325,13 +325,13 @@ class Runner:
         command, piping `inputs` (when not None) to the FIRST line's
         stdin.  Mirrors `$ <cmd>` and the full stdout+stderr to the
         per-test run.log and to log.txt; in addition, writes the
-        subprocess stdout (and stderr -- merged) to logs/local.out
+        subprocess stdout (and stderr -- merged) to tmp/local.out
         for byte-exact comparison against the section's Expect block.
         Backslash-at-end-of-line continuations are joined. Returns
         True on success, False on non-zero rc."""
         if local_test is None:
             return True
-        local_out = self.FAST_DATA / 'logs' / 'local.out'
+        local_out = self.FAST_DATA / 'tmp' / 'local.out'
         local_out.parent.mkdir(exist_ok=True)
         local_out.write_bytes(b'')
         local_test = re.sub(r'\\\n[ \t]*', ' ', local_test)
@@ -366,11 +366,11 @@ class Runner:
         return True
 
     def run_expect(self, expect_text):
-        """Byte-exact compare logs/local.out against expect_text.
+        """Byte-exact compare tmp/local.out against expect_text.
         Returns (ok, diff_text).  The markdown fenced-block grammar
         elides the trailing newline of expect_text; we therefore
         compare modulo a single trailing newline on either side."""
-        local_out = self.FAST_DATA / 'logs' / 'local.out'
+        local_out = self.FAST_DATA / 'tmp' / 'local.out'
         actual_bytes = local_out.read_bytes() if local_out.exists() else b''
         # Normalize a single trailing-newline ambiguity between
         # markdown fence (no trailing \n) and emitted file (has \n).
