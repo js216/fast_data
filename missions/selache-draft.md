@@ -1,18 +1,18 @@
-# Selache core cctest sweep
+# Selache draft cctest sweep
 
-Compile every promoted `selache/xtest/cases/cctest_*.c` through the
+Compile every draft `selache/xtest/draft_cases/cctest_*.c` through the
 host toolchains and the Selache target toolchain. Host builds verify
 correctness at build time. Target runs verify both the expected answer
 and the hardware tick budget encoded in each source file.
 
-Each promoted case must carry both:
+Each draft case must carry both:
 
 ```
 /* @expect ... */
 /* @exp_ticks ... */
 ```
 
-### Selache core target sweep
+### Selache draft target sweep
 
 Build:
 
@@ -21,15 +21,15 @@ cd selache && CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target cargo bui
 cd selache && CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target cargo test --all-targets
 cd selache && CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target cargo clippy --all-targets --release -- -D warnings
 CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target make -C selache/xtest clean
-CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target make -C selache/xtest gcc -j$(nproc)
-CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target make -C selache/xtest clang -j$(nproc)
-CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target make -C selache/xtest sel -j$(nproc)
+CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target make -C selache/xtest drafts-gcc -j$(nproc)
+CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target make -C selache/xtest drafts-clang -j$(nproc)
+CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target make -C selache/xtest drafts-sel -j$(nproc)
 ```
 
 Foreach:
 
 ```
-ldr in selache/xtest/build/sel/cctest_*.0x*.ldr
+ldr in selache/xtest/build/drafts/sel/cctest_*.0x*.ldr
 ```
 
 Test (max 2 min):
@@ -41,7 +41,7 @@ dsp:boot ldr=@ldr timeout_ms=2500
 dsp:uart_expect sentinel="start\r\n" timeout_ms=2500
 dsp:uart_expect sentinel="got " timeout_ms=60000
 dsp:uart_close
-mark tag=cctest_core_run
+mark tag=cctest_draft_run
 ```
 
 Verify:
@@ -54,7 +54,7 @@ def check(extract_dir, ldr):
     m = re.match(r'(cctest_.*)\.(0x[0-9a-fA-F]+)\.ldr$', name)
     if not m:
         return False
-    source = '/home/agent1/fast_data/selache/xtest/cases/' + m.group(1) + '.c'
+    source = '/home/agent1/fast_data/selache/xtest/draft_cases/' + m.group(1) + '.c'
     with open(source) as f:
         src = f.read()
     em = re.search(r'@expect\s+(0x[0-9a-fA-F]+|[0-9]+)', src)
