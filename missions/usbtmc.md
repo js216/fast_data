@@ -57,9 +57,11 @@ def check(extract_dir):
     ops = json.loads(Path(extract_dir, "bench.ops.json").read_text())
     required_ops = {
         "bench_mcu": {"reset_dut"},
+        "dmesg": {"tail"},
         "dfu": {"flash_layout"},
         "msc": {"write", "verify"},
         "mp135": {"uart_open", "uart_write", "uart_expect", "uart_close"},
+        "usbtmc": {"identify", "list"},
     }
     for plugin, names in required_ops.items():
         available = set(ops.get(plugin, {}).get("ops", {}))
@@ -72,11 +74,11 @@ def check(extract_dir):
     return any(k == "usb" or k.startswith("usb.") for k in ops)
 ```
 
-### Build EVB Linux USBTMC Image
+### Build EVB Base USBTMC Inputs
 
-Build the EVB Linux image with the minimal pieces needed for Linux to
-configure the USB device controller and expose the USBTMC implementation.
-This section does not touch hardware.
+Prepare the EVB kernel tree, Buildroot output, and EVB bootloader input
+needed by the final image packaging step. This section does not touch
+hardware.
 
 Build:
 
@@ -85,9 +87,6 @@ make -C stm32mp135_test_board patch
 make -C stm32mp135_test_board br
 make -C stm32mp135_test_board/bootloader clean
 make -C stm32mp135_test_board/bootloader -j$(nproc) CFLAGS_EXTRA=-DEVB
-make -C stm32mp135_test_board kernel
-make -C stm32mp135_test_board DTS=stm32mp135f-dk dtb
-make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
 ```
 
 Artifacts:
@@ -95,7 +94,6 @@ Artifacts:
 ```
 stm32mp135_test_board/bootloader/scripts/flash.tsv
 stm32mp135_test_board/bootloader/build/main.stm32
-stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
 Test: no hardware.
@@ -109,16 +107,49 @@ def check(_extract_dir):
     return (
         Path("stm32mp135_test_board/bootloader/scripts/flash.tsv").is_file()
         and Path("stm32mp135_test_board/bootloader/build/main.stm32").stat().st_size > 0
-        and Path("stm32mp135_test_board/buildroot/output/images/sdcard.img").stat().st_size > 0
     )
 ```
 
-### EVB Linux Gadget Baseline
+### Package EVB Linux USBTMC Image
 
-Boot EVB Linux and prove that Linux, not ROM DFU or the bare-metal MSC
-bootloader, owns the USB device controller. A known in-tree gadget such
-as mass-storage is enough for this baseline; this is only a UDC,
-configfs, and cable-path proof.
+Build the EVB kernel image, install the USBTMC gadget daemon in the
+rootfs, and package the final SD image. This section does not touch
+hardware.
+
+Build:
+
+```
+make -C stm32mp135_test_board kernel
+make -C stm32mp135_test_board DTS=stm32mp135f-dk dtb
+make -C stm32mp135_test_board usbtmc-gadget
+make -C stm32mp135_test_board rootfs
+make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
+```
+
+Artifacts:
+
+```
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    return (
+        Path("stm32mp135_test_board/buildroot/output/images/sdcard.img").stat().st_size > 0
+        and Path("stm32mp135_test_board/build/usbtmc_gadget").stat().st_size > 0
+    )
+```
+
+### Write EVB SD Image
+
+Flash the EVB bootloader, stop at the bootloader prompt, and write the
+prepared SD image over MSC. This section does not verify or boot Linux.
 
 Build: nothing required.
 
@@ -130,7 +161,7 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
-Test (max 5 min):
+Test (max 1 min):
 
 ```
 bench_mcu:reset_dut
@@ -150,6 +181,39 @@ mp135.evb:uart_close
 delay ms=5000
 inventory refresh=true verify=false
 msc.evb:write data=@sdcard.img offset_lba=0 min_rate_Bps=3000000
+mark tag=evb_sd_written
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return (
+        Verification.op_succeeded(ops, "dfu.evb", "flash_layout")
+        and Verification.op_succeeded(ops, "msc.evb", "write")
+    )
+```
+
+### Verify EVB SD Image And Load Linux
+
+Verify the already-written EVB SD image, then load Linux/DTB with
+`two`. This section does not jump into Linux.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (inherits the bootloader-at-`> ` state and written SD image from
+the previous section; max 1 min):
+
+```
 msc.evb:verify data=@sdcard.img offset_lba=0 min_rate_Bps=3000000
 mp135.evb:uart_open
 delay ms=300
@@ -157,6 +221,42 @@ mp135.evb:uart_write data="\r"
 mp135.evb:uart_expect sentinel="> " timeout_ms=5000
 mp135.evb:uart_write data="two\r"
 mp135.evb:uart_expect sentinel="> " timeout_ms=15000
+mp135.evb:uart_close
+mark tag=evb_sd_verified_linux_loaded
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "msc.evb", "verify")
+```
+
+### Boot EVB Linux Gadget Baseline
+
+Boot EVB Linux from the already-written SD image and prove that Linux,
+not ROM DFU or the bare-metal MSC bootloader, owns the USB device
+controller. This section starts at `jump` and ends at the Linux login.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
+Test (inherits the loaded Linux/DTB-at-`> ` state and written SD image
+from the previous section; max 1 min):
+
+```
+mp135.evb:uart_open
+delay ms=300
+mp135.evb:uart_write data="\r"
+mp135.evb:uart_expect sentinel="> " timeout_ms=5000
 mp135.evb:uart_write data="jump\r"
 mp135.evb:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.evb:uart_expect sentinel="Linux version" timeout_ms=10000
@@ -168,14 +268,16 @@ mp135.evb:uart_write data="root\r"
 mp135.evb:uart_expect sentinel="# " timeout_ms=5000
 mp135.evb:uart_write data="dmesg -n 1 2>/dev/null; true\r"
 mp135.evb:uart_expect sentinel="# " timeout_ms=3000
-mp135.evb:uart_write data="test -d /sys/kernel/config/usb_gadget && echo USB_GADGET_CONFIGFS_OK\r"
-mp135.evb:uart_expect sentinel="USB_GADGET_CONFIGFS_OK" timeout_ms=5000
-mp135.evb:uart_write data="test -e /sys/class/udc/49000000.usb && echo USB_UDC_PRESENT_OK\r"
-mp135.evb:uart_expect sentinel="USB_UDC_PRESENT_OK" timeout_ms=5000
-mp135.evb:uart_write data="s=$(cat /sys/class/udc/49000000.usb/state 2>/dev/null); echo USB_UDC_STATE_$s\r"
-mp135.evb:uart_expect sentinel="USB_UDC_STATE_" timeout_ms=5000
+mp135.evb:uart_write data="test -s /run/usbtmc_gadget.ready && echo USBTMC_READY_OK\r"
+mp135.evb:uart_expect sentinel="USBTMC_READY_OK" timeout_ms=5000
+mp135.evb:uart_write data="set -- /sys/class/udc/*; udc=${1##*/}; echo MANUFACTURER_$(cat /sys/kernel/config/usb_gadget/usbtmc/strings/0x409/manufacturer); echo SERIAL_$(cat /sys/kernel/config/usb_gadget/usbtmc/strings/0x409/serialnumber); echo VID_$(cat /sys/kernel/config/usb_gadget/usbtmc/idVendor); echo PID_$(cat /sys/kernel/config/usb_gadget/usbtmc/idProduct); echo UDC_NAME_$udc; echo UDC_STATE_$(cat /sys/class/udc/$udc/state 2>/dev/null); echo ___USBTMC_EVB_SYSFS_DONE___\r"
+mp135.evb:uart_expect sentinel="MANUFACTURER_STMicroelectronics" timeout_ms=5000
+mp135.evb:uart_expect sentinel="SERIAL_evb-linux-usbtmc-0001" timeout_ms=5000
+mp135.evb:uart_expect sentinel="VID_0x0483" timeout_ms=5000
+mp135.evb:uart_expect sentinel="PID_0x571e" timeout_ms=5000
+mp135.evb:uart_expect sentinel="UDC_STATE_configured" timeout_ms=5000
+mp135.evb:uart_expect sentinel="___USBTMC_EVB_SYSFS_DONE___" timeout_ms=5000
 mp135.evb:uart_close
-usb.host:descriptor vendor=0x0483 product=0x571e class=0x00 configured=true
 mark tag=evb_linux_gadget_baseline
 ```
 
@@ -187,12 +289,17 @@ def check(extract_dir):
         return False
     ops = Verification.load_ops(extract_dir)
     uart = Verification.load_stream_text(extract_dir, "mp135.uart")
-    return (
-        Verification.op_succeeded(ops, "dfu.evb", "flash_layout")
-        and Verification.op_succeeded(ops, "msc.evb", "verify")
-        and "USB_GADGET_CONFIGFS_OK" in uart
-        and "USB_UDC_PRESENT_OK" in uart
-    )
+    for s in [
+        "USBTMC_READY_OK",
+        "MANUFACTURER_STMicroelectronics",
+        "SERIAL_evb-linux-usbtmc-0001",
+        "VID_0x0483",
+        "PID_0x571e",
+        "UDC_STATE_configured",
+    ]:
+        if s not in uart:
+            return False
+    return True
 ```
 
 ### EVB USBTMC Enumeration And Capabilities
@@ -212,14 +319,8 @@ The host must also issue `GET_CAPABILITIES` and verify a successful
 USBTMC status byte, `bcdUSBTMC >= 0x0100`, USB488 capability fields
 consistent with the descriptor, and reserved bytes/bits cleared.
 
-Build:
-
-```
-make -C stm32mp135_test_board br
-make -C stm32mp135_test_board kernel
-make -C stm32mp135_test_board DTS=stm32mp135f-dk dtb
-make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
-```
+Build: nothing required; this section reuses the EVB image built in
+`Build EVB Linux USBTMC Image`.
 
 Artifacts:
 
@@ -229,13 +330,70 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
-Test: boot EVB Linux, wait for the Linux-created USB gadget to
-enumerate, capture host-side descriptors, and issue the USBTMC and
-USB488 capability requests from the host.
+Test (inherits the booted EVB Linux USBTMC gadget from the previous
+section; max 30 s):
 
-Verify: the manifest is clean, descriptor fields and endpoint counts
-match the USBTMC USB488 contract, no mass-storage interface remains
-exposed, and capability requests return valid success responses.
+```
+delay ms=1500
+inventory refresh=true verify=false
+usbtmc.any:list
+dmesg.any:tail lines=300 timeout_ms=5000
+mark tag=evb_usbtmc_enumeration
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import json
+
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    devices = json.loads(Verification.load_stream_text(extract_dir, "usbtmc.list"))
+    evb_devices = [
+        d for d in devices
+        if d.get("serial") == "evb-linux-usbtmc-0001"
+    ]
+    if len(evb_devices) != 1:
+        return False
+    dev = evb_devices[0]
+    expected = {
+        "manufacturer": "STMicroelectronics",
+        "pid": "571e",
+        "product": "STM32MP135 Linux USBTMC",
+        "serial": "evb-linux-usbtmc-0001",
+        "vid": "0483",
+    }
+    for k, v in expected.items():
+        if dev.get(k) != v:
+            return False
+
+    dmesg = Verification.load_stream_text(extract_dir, "dmesg.tail")
+    lines = dmesg.splitlines()
+    enum_indexes = [
+        i for i, line in enumerate(lines)
+        if "New USB device found, idVendor=0483, idProduct=571e" in line
+    ]
+    if not enum_indexes:
+        return False
+
+    after_enum = "\n".join(lines[enum_indexes[-1]:])
+    required = [
+        "New USB device found, idVendor=0483, idProduct=571e",
+        "Product: STM32MP135 Linux USBTMC",
+        "Manufacturer: STMicroelectronics",
+        "SerialNumber: evb-linux-usbtmc-0001",
+    ]
+    forbidden = [
+        "usb_control_msg returned -110",
+        "can't read capabilities",
+        "Device sent reply with wrong MsgID",
+    ]
+    return all(s in after_enum for s in required) and not any(
+        s in after_enum for s in forbidden
+    )
+```
 
 ### EVB USBTMC Command Behavior
 
@@ -261,14 +419,8 @@ The command suite must cover:
 - an unsupported command records a controlled error, and
 - `SYST:ERR?` reports and clears that error.
 
-Build:
-
-```
-make -C stm32mp135_test_board br
-make -C stm32mp135_test_board kernel
-make -C stm32mp135_test_board DTS=stm32mp135f-dk dtb
-make -C stm32mp135_test_board DTS=stm32mp135f-dk sd
-```
+Build: nothing required; this section reuses the booted EVB Linux
+USBTMC gadget from the previous section.
 
 Artifacts:
 
@@ -278,8 +430,9 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
-Test: boot EVB Linux, verify USBTMC enumeration, then issue the command
-suite from the host through USBTMC-framed bulk transfers.
+Test: reuse the booted EVB Linux USBTMC gadget, verify enumeration,
+then issue the command suite from the host through USBTMC-framed bulk
+transfers.
 
 Verify: every response exactly matches the mission contract and the
 device remains responsive after the invalid-command path.
@@ -302,10 +455,10 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
-Test: boot EVB Linux, verify USBTMC enumeration, transfer deterministic
-PRBS payloads in both supported directions using USBTMC headers, and
-have the host verify length, SHA-256, and CRC32 without trusting
-target-side summaries.
+Test: reuse the booted EVB Linux USBTMC gadget, verify enumeration,
+transfer deterministic PRBS payloads in both supported directions using
+USBTMC headers, and have the host verify length, SHA-256, and CRC32
+without trusting target-side summaries.
 
 Verify: every tested payload is bit-perfect and no USBTMC transfer
 wedges the device.
@@ -325,43 +478,10 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
-Test: boot EVB Linux, verify USBTMC enumeration, transfer a large
-deterministic payload, and record wall-clock throughput at the host.
+Test: reuse the booted EVB Linux USBTMC gadget, verify enumeration,
+transfer a large deterministic payload, and record wall-clock
+throughput at the host.
 
 Verify: SHA-256 and CRC32 match the expected PRBS digest, the full byte
 count is received, and host-observed throughput is at least the mission
 floor selected during implementation.
-
-### Custom Board USBTMC Parity
-
-Run the completed USBTMC behavior on the custom board. The custom board
-must enumerate as USBTMC, answer the command suite, preserve binary
-payload integrity, and meet the same throughput floor unless the mission
-explicitly documents a board-specific hardware limit.
-
-Build:
-
-```
-make -C stm32mp135_test_board br
-make -C stm32mp135_test_board/bootloader clean
-make -C stm32mp135_test_board/bootloader -j$(nproc)
-make -C stm32mp135_test_board kernel
-make -C stm32mp135_test_board DTS=custom dtb
-make -C stm32mp135_test_board DTS=custom sd
-```
-
-Artifacts:
-
-```
-stm32mp135_test_board/bootloader/scripts/flash.tsv
-stm32mp135_test_board/bootloader/build/main.stm32
-stm32mp135_test_board/buildroot/output/images/sdcard.img
-```
-
-Test: boot the custom-board Linux image, verify host-side USBTMC
-enumeration, run the command suite, run binary integrity transfers, and
-run the sustained throughput transfer.
-
-Verify: descriptor enumeration passes, all command responses match,
-binary transfers are bit-perfect, throughput meets the selected floor,
-and the UART transcript contains no USB gadget, UDC, or endpoint errors.
