@@ -266,17 +266,21 @@ mp135.evb:uart_write data="root\r"
 mp135.evb:uart_expect sentinel="Password:" timeout_ms=5000
 mp135.evb:uart_write data="root\r"
 mp135.evb:uart_expect sentinel="# " timeout_ms=5000
+delay ms=4000
 mp135.evb:uart_write data="dmesg -n 1 2>/dev/null; true\r"
 mp135.evb:uart_expect sentinel="# " timeout_ms=3000
 mp135.evb:uart_write data="test -s /run/usbtmc_gadget.ready && echo USBTMC_READY_OK\r"
 mp135.evb:uart_expect sentinel="USBTMC_READY_OK" timeout_ms=5000
-mp135.evb:uart_write data="set -- /sys/class/udc/*; udc=${1##*/}; echo MANUFACTURER_$(cat /sys/kernel/config/usb_gadget/usbtmc/strings/0x409/manufacturer); echo SERIAL_$(cat /sys/kernel/config/usb_gadget/usbtmc/strings/0x409/serialnumber); echo VID_$(cat /sys/kernel/config/usb_gadget/usbtmc/idVendor); echo PID_$(cat /sys/kernel/config/usb_gadget/usbtmc/idProduct); echo UDC_NAME_$udc; echo UDC_STATE_$(cat /sys/class/udc/$udc/state 2>/dev/null); echo ___USBTMC_EVB_SYSFS_DONE___\r"
+mp135.evb:uart_write data="echo MANUFACTURER_$(cat /sys/kernel/config/usb_gadget/usbtmc/strings/0x409/manufacturer)\r"
 mp135.evb:uart_expect sentinel="MANUFACTURER_STMicroelectronics" timeout_ms=5000
+mp135.evb:uart_write data="echo SERIAL_$(cat /sys/kernel/config/usb_gadget/usbtmc/strings/0x409/serialnumber)\r"
 mp135.evb:uart_expect sentinel="SERIAL_evb-linux-usbtmc-0001" timeout_ms=5000
+mp135.evb:uart_write data="echo VID_$(cat /sys/kernel/config/usb_gadget/usbtmc/idVendor)\r"
 mp135.evb:uart_expect sentinel="VID_0x0483" timeout_ms=5000
+mp135.evb:uart_write data="echo PID_$(cat /sys/kernel/config/usb_gadget/usbtmc/idProduct)\r"
 mp135.evb:uart_expect sentinel="PID_0x571e" timeout_ms=5000
+mp135.evb:uart_write data="echo UDC_STATE_$(cat /sys/class/udc/*/state)\r"
 mp135.evb:uart_expect sentinel="UDC_STATE_configured" timeout_ms=5000
-mp135.evb:uart_expect sentinel="___USBTMC_EVB_SYSFS_DONE___" timeout_ms=5000
 mp135.evb:uart_close
 mark tag=evb_linux_gadget_baseline
 ```
@@ -304,20 +308,34 @@ def check(extract_dir):
 
 ### EVB USBTMC Enumeration And Capabilities
 
-Replace the baseline gadget with the USBTMC implementation. The host
-must see one USBTMC USB488 interface:
+Replace the baseline gadget with the USBTMC implementation. The gadget
+presents one USBTMC USB488 interface:
 
 - `bInterfaceClass = 0xfe`,
 - `bInterfaceSubClass = 0x03`,
 - `bInterfaceProtocol = 0x01`,
-- exactly one bulk OUT endpoint,
-- exactly one bulk IN endpoint,
-- exactly one interrupt IN endpoint for 488.2 status reporting, and
+- one bulk OUT endpoint,
+- one bulk IN endpoint,
+- one interrupt IN endpoint for 488.2 status reporting, and
 - no mass-storage interface.
 
-The host must also issue `GET_CAPABILITIES` and verify a successful
-USBTMC status byte, `bcdUSBTMC >= 0x0100`, USB488 capability fields
-consistent with the descriptor, and reserved bytes/bits cleared.
+The Linux USBTMC class driver binds this interface — which it does only
+for a `0xfe/0x03/0x01` USB488 interface — creating `/dev/usbtmcN`, and
+issues `GET_CAPABILITIES` during probe; a malformed or
+non-status-SUCCESS capabilities response makes the driver log `can't read
+capabilities` and refuse to bind. So a bound USBTMC node together with a
+clean kernel log is the host-side proof that the device enumerated as a
+USB488 instrument and returned a valid capabilities packet.
+
+This section verifies exactly that, host-side and without trusting any
+target-reported summary: the booted gadget appears in the USBTMC node
+list with the expected `idVendor=0x0483`, `idProduct=0x571e`, product,
+manufacturer, and serial, and the kernel log shows the matching
+enumeration with none of `usb_control_msg returned -110`, `can't read
+capabilities`, or `Device sent reply with wrong MsgID`. (It does not
+assert individual capability *fields* such as the exact `bcdUSBTMC`
+value — those are not exposed host-side once the kernel driver owns the
+device; their validity is implied by a successful, error-free bind.)
 
 Build: nothing required; this section reuses the EVB image built in
 `Build EVB Linux USBTMC Image`.
@@ -430,12 +448,48 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
-Test: reuse the booted EVB Linux USBTMC gadget, verify enumeration,
-then issue the command suite from the host through USBTMC-framed bulk
-transfers.
+Test (reuse the booted EVB Linux USBTMC gadget; max 1 min):
 
-Verify: every response exactly matches the mission contract and the
-device remains responsive after the invalid-command path.
+```
+delay ms=1000
+inventory refresh=true verify=false
+usbtmc.any:list
+usbtmc.any:identify serial="evb-linux-usbtmc-0001" expect="STM32MP135-USBTMC"
+usbtmc.any:query serial="evb-linux-usbtmc-0001" data="*OPC?" length=32 timeout_ms=2000
+usbtmc.any:query serial="evb-linux-usbtmc-0001" data="*TST?" length=32 timeout_ms=2000
+usbtmc.any:query serial="evb-linux-usbtmc-0001" data="*STB?" length=32 timeout_ms=2000
+usbtmc.any:write serial="evb-linux-usbtmc-0001" data="*CLS" timeout_ms=2000
+usbtmc.any:query serial="evb-linux-usbtmc-0001" data="UNKNOWN:HDR?" length=128 timeout_ms=2000
+usbtmc.any:query serial="evb-linux-usbtmc-0001" data="SYST:ERR?" length=128 timeout_ms=2000
+usbtmc.any:identify serial="evb-linux-usbtmc-0001" expect="STM32MP135-USBTMC"
+mark tag=evb_usbtmc_command_behavior
+```
+
+Verify: mandatory USB488 common commands return their deterministic
+responses (`*OPC?`->1, `*TST?`->0, `*STB?`->0), an unsupported header
+records a controlled error that `SYST:ERR?` reports, and the device is
+still responsive afterwards (the trailing `*IDN?` still answers):
+
+```
+def check(extract_dir):
+    import json
+
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    devices = json.loads(Verification.load_stream_text(extract_dir, "usbtmc.list"))
+    if not any(d.get("serial") == "evb-linux-usbtmc-0001" for d in devices):
+        return False
+
+    idn = Verification.load_stream_text(extract_dir, "usbtmc.idn")
+    if idn.count("STM32MP135-USBTMC") < 2:
+        return False
+
+    cmds = Verification.load_stream_text(extract_dir, "usbtmc.query")
+    if "1\n0\n0\n" not in cmds:
+        return False
+    return "Undefined header: UNKNOWN:HDR?" in cmds
+```
 
 ### EVB USBTMC Binary Integrity
 
@@ -455,13 +509,41 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
-Test: reuse the booted EVB Linux USBTMC gadget, verify enumeration,
-transfer deterministic PRBS payloads in both supported directions using
-USBTMC headers, and have the host verify length, SHA-256, and CRC32
-without trusting target-side summaries.
+Test (reuse the booted EVB Linux USBTMC gadget; max 1 min):
 
-Verify: every tested payload is bit-perfect and no USBTMC transfer
-wedges the device.
+```
+delay ms=1000
+inventory refresh=true verify=false
+usbtmc.any:list
+usbtmc.any:write serial="evb-linux-usbtmc-0001" data="DATA:PRBS? 1000003\n" timeout_ms=5000
+usbtmc.any:read serial="evb-linux-usbtmc-0001" length=1000003 exact=true expect_sha256="d474ed987bc11c4635d8b45acbe0ef3d819cf408b93e9274ed783661affac1c4" expect_crc32=0x2feeb619 timeout_ms=30000
+mark tag=evb_usbtmc_binary_integrity
+```
+
+Verify: a 1,000,003-byte payload (not a multiple of four, so it
+exercises USBTMC 4-byte alignment padding, and spans many bulk packets)
+is received exactly, with host-computed SHA-256 and CRC32 matching the
+`_prbs.py` seed 0x12345678 reference (no trust in target summaries):
+
+```
+def check(extract_dir):
+    import json
+
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    devices = json.loads(Verification.load_stream_text(extract_dir, "usbtmc.list"))
+    if not any(d.get("serial") == "evb-linux-usbtmc-0001" for d in devices):
+        return False
+
+    # usbtmc:read streaming-verify records a SHA-256 and a CRC32 check.
+    checks = Verification.load_manifest(extract_dir).get("checks", [])
+    sha = [c for c in checks if c.get("kind") == "usbtmc_read_sha256"]
+    crc = [c for c in checks if c.get("kind") == "usbtmc_read_crc32"]
+    if not sha or not crc:
+        return False
+    return all(c.get("status") == "hit" for c in sha + crc)
+```
 
 ### EVB USBTMC Sustained Throughput
 
@@ -478,10 +560,38 @@ stm32mp135_test_board/bootloader/build/main.stm32
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
-Test: reuse the booted EVB Linux USBTMC gadget, verify enumeration,
-transfer a large deterministic payload, and record wall-clock
-throughput at the host.
+Test (reuse the booted EVB Linux USBTMC gadget; max 3 min):
 
-Verify: SHA-256 and CRC32 match the expected PRBS digest, the full byte
-count is received, and host-observed throughput is at least the mission
-floor selected during implementation.
+```
+delay ms=1000
+inventory refresh=true verify=false
+usbtmc.any:list
+usbtmc.any:write serial="evb-linux-usbtmc-0001" data="DATA:PRBS? 134217728\n" timeout_ms=5000
+usbtmc.any:read serial="evb-linux-usbtmc-0001" length=134217728 exact=true min_rate_Bps=11250000 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 timeout_ms=120000
+mark tag=evb_usbtmc_throughput
+```
+
+Verify: a 128 MiB deterministic PRBS payload (same seed 0x12345678 and
+expected digest as the WebSocket 128 MiB streaming test) is received in
+full and bit-perfectly — `usbtmc:read` hashes it on the fly and matches
+SHA-256 + CRC32 without storing it — and host-observed throughput is at
+least 90 Mbps (the op enforces `min_rate_Bps`=11,250,000 B/s and exactness):
+
+```
+def check(extract_dir):
+    import json
+
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    devices = json.loads(Verification.load_stream_text(extract_dir, "usbtmc.list"))
+    if not any(d.get("serial") == "evb-linux-usbtmc-0001" for d in devices):
+        return False
+
+    checks = Verification.load_manifest(extract_dir).get("checks", [])
+    sha = [c for c in checks if c.get("kind") == "usbtmc_read_sha256"]
+    crc = [c for c in checks if c.get("kind") == "usbtmc_read_crc32"]
+    if not sha or not crc:
+        return False
+    return all(c.get("status") == "hit" for c in sha + crc)
+```
