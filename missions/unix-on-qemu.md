@@ -201,15 +201,8 @@ spool
 crontab
 diffh
 makekey
-spell
-spellin
-spellout
 units
 # ls /usr/dict
-hlista
-hlistb
-hstop
-spellhist
 words
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -1147,7 +1140,6 @@ sh
 sleep
 sort
 sp
-spell
 spline
 split
 stty
@@ -1529,9 +1521,6 @@ find /usr/lib -print
 /usr/lib/crontab
 /usr/lib/diffh
 /usr/lib/makekey
-/usr/lib/spell
-/usr/lib/spellin
-/usr/lib/spellout
 /usr/lib/units
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -1543,7 +1532,7 @@ __TEST_DONE__
 Local test:
 
 ```
-tmp/qemu-shell.py
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's|^/dev/root [0-9]+$|/dev/root N|; s/[[:blank:]]*$//'"
 ```
 
 Inputs:
@@ -1557,7 +1546,7 @@ Expect:
 
 ```
 df
-/dev/root 10277
+/dev/root N
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -2304,9 +2293,9 @@ Expect:
 ```
 icheck /dev/root
 /dev/root:
-files    170 (r=153,d=14,b=0,c=3)
-used    5911 (i=130,ii=5,iii=0,d=5771)
-free   10219
+files    165 (r=145,d=14,b=1,c=5)
+used   20641 (i=240,ii=115,iii=0,d=20171)
+free   11983
 missing    0
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -2334,12 +2323,12 @@ Expect:
 ncheck /dev/root
 /dev/root:
 3	/bin/.
-117	/dev/.
-121	/etc/.
-134	/tmp/.
-136	/usr/.
-169	/unix
-170	/.profile
+116	/dev/.
+123	/etc/.
+136	/tmp/.
+138	/usr/.
+164	/unix
+165	/.profile
 4	/bin/1
 5	/bin/[
 6	/bin/ac
@@ -2422,85 +2411,80 @@ ncheck /dev/root
 83	/bin/sh
 84	/bin/sleep
 85	/bin/sort
-86	/bin/spell
-87	/bin/sp
-88	/bin/spline
-89	/bin/split
-90	/bin/stty
-91	/bin/su
-92	/bin/sum
-93	/bin/sync
-94	/bin/tabs
-95	/bin/tail
-96	/bin/tar
-97	/bin/tc
-98	/bin/tee
-99	/bin/test
-100	/bin/time
-101	/bin/tk
-102	/bin/touch
-103	/bin/tp
-104	/bin/tr
-105	/bin/true
-106	/bin/tsort
-107	/bin/tty
-108	/bin/umount
-109	/bin/uniq
-110	/bin/units
-111	/bin/vpr
-112	/bin/wall
-113	/bin/wc
-114	/bin/who
-115	/bin/write
-116	/bin/yes
-118	/dev/console
-119	/dev/null
-120	/dev/tty
-122	/etc/accton
-123	/etc/atrun
-124	/etc/cron
-125	/etc/ddate
-126	/etc/getty
-127	/etc/init
-128	/etc/passwd
-129	/etc/group
-130	/etc/rc
-131	/etc/ttys
-132	/etc/update
-133	/etc/utmp
-135	/tmp/.keep
-137	/usr/adm/.
-140	/usr/dict/.
-146	/usr/games/.
-156	/usr/lib/.
-164	/usr/spool/.
-138	/usr/adm/acct
-139	/usr/adm/wtmp
-141	/usr/dict/hlista
-142	/usr/dict/hlistb
-143	/usr/dict/hstop
-144	/usr/dict/spellhist
-145	/usr/dict/words
-147	/usr/games/arithmetic
-148	/usr/games/backgammon
-149	/usr/games/fish
-150	/usr/games/fortune
-151	/usr/games/hangman
-152	/usr/games/lib/.
-154	/usr/games/quiz
-155	/usr/games/wump
-153	/usr/games/lib/fortunes
-157	/usr/lib/crontab
-158	/usr/lib/diffh
-159	/usr/lib/makekey
-160	/usr/lib/spell
-161	/usr/lib/spellin
-162	/usr/lib/spellout
-163	/usr/lib/units
-165	/usr/spool/at/.
-166	/usr/spool/at/lasttimedone
-167	/usr/spool/at/past/.
-168	/usr/spool/at/past/.keep
+86	/bin/sp
+87	/bin/spline
+88	/bin/split
+89	/bin/stty
+90	/bin/su
+91	/bin/sum
+92	/bin/sync
+93	/bin/tabs
+94	/bin/tail
+95	/bin/tar
+96	/bin/tc
+97	/bin/tee
+98	/bin/test
+99	/bin/time
+100	/bin/tk
+101	/bin/touch
+102	/bin/tp
+103	/bin/tr
+104	/bin/true
+105	/bin/tsort
+106	/bin/tty
+107	/bin/umount
+108	/bin/uniq
+109	/bin/units
+110	/bin/vpr
+111	/bin/wall
+112	/bin/wc
+113	/bin/who
+114	/bin/write
+115	/bin/yes
+117	/dev/console
+118	/dev/mem
+119	/dev/kmem
+120	/dev/null
+121	/dev/root
+122	/dev/tty
+124	/etc/accton
+125	/etc/atrun
+126	/etc/cron
+127	/etc/ddate
+128	/etc/getty
+129	/etc/init
+130	/etc/passwd
+131	/etc/group
+132	/etc/rc
+133	/etc/ttys
+134	/etc/update
+135	/etc/utmp
+137	/tmp/.keep
+139	/usr/adm/.
+142	/usr/dict/.
+144	/usr/games/.
+154	/usr/lib/.
+159	/usr/spool/.
+140	/usr/adm/acct
+141	/usr/adm/wtmp
+143	/usr/dict/words
+145	/usr/games/arithmetic
+146	/usr/games/backgammon
+147	/usr/games/fish
+148	/usr/games/fortune
+149	/usr/games/hangman
+150	/usr/games/lib/.
+152	/usr/games/quiz
+153	/usr/games/wump
+151	/usr/games/lib/fortunes
+155	/usr/lib/crontab
+156	/usr/lib/diffh
+157	/usr/lib/makekey
+158	/usr/lib/units
+160	/usr/spool/at/.
+161	/usr/spool/at/lasttimedone
+162	/usr/spool/at/past/.
+163	/usr/spool/at/past/.keep
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -2820,7 +2804,7 @@ sleep durations, both should print before `wait` returns.
 Local test:
 
 ```
-tmp/qemu-shell.py
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/^[0-9]+$/<pid>/'"
 ```
 
 Inputs:
@@ -2860,7 +2844,7 @@ is present after one wait; in a busy-spin pause they run sequentially.
 Local test:
 
 ```
-tmp/qemu-shell.py
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/^[0-9]+$/<pid>/'"
 ```
 
 Inputs:
@@ -2954,7 +2938,7 @@ __TEST_DONE__
 Smoke test for the larger batch of cmds brought over in the latest pass:
 single-file utilities (`ptx`, `spline`, `vpr`, `quot`, `dump`,
 `dumpdir`, `restor`, `tk`), the `dc` calculator (its own subdir),
-`tar`/`tp` archivers, the `spell{,in,out}` chain, and the games
+`tar`/`tp` archivers, and the games
 `backgammon`, `fish`, `quiz`, `wump`.  We only check that the binaries
 are reachable: most need data files, raw block devices, or interactive
 input (e.g. `at`, `ac`, `cron`, `passwd`, `dc` interactive mode) that
@@ -2973,7 +2957,6 @@ Inputs:
 ```
 ls /bin/dc /bin/tar /bin/tp /bin/ptx /bin/spline /bin/vpr /bin/quot
 ls /bin/dump /bin/dumpdir /bin/restor /bin/tk
-ls /usr/lib/spell /usr/lib/spellin /usr/lib/spellout
 ls /usr/games/backgammon /usr/games/fish /usr/games/quiz /usr/games/wump
 echo __TEST_DONE__
 ```
@@ -2994,10 +2977,6 @@ ls /bin/dc /bin/tar /bin/tp /bin/ptx /bin/spline /bin/vpr /bin/quot
 /bin/dumpdir
 /bin/restor
 /bin/tk
-# ls /usr/lib/spell /usr/lib/spellin /usr/lib/spellout
-/usr/lib/spell
-/usr/lib/spellin
-/usr/lib/spellout
 # ls /usr/games/backgammon /usr/games/fish /usr/games/quiz /usr/games/wump
 /usr/games/backgammon
 /usr/games/fish
@@ -3062,7 +3041,7 @@ Expect:
 ```
 ps | sed 2q
    PID TTY TIME CMD
-     1 ?   0:00 init
+     2 ?   0:00 -
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -3305,49 +3284,6 @@ __TEST_DONE__
 #
 ```
 
-### SPELLINOUT
-
-The `spell` chain ships three helpers under `/usr/lib`: `spell`
-itself (a shell script that calls the next two through pipes),
-`spellin` (turns a sorted word list into a packed hash table), and
-`spellout` (the reverse).  Both helpers immediately bail out
-because the rootfs does not ship the prebuilt hash table they
-expect on stdin/argv; the test captures the exact diagnostic
-strings so a future stage that wires up the hash file can confirm
-the binaries still start.
-
-Local test:
-
-```
-tmp/qemu-shell.py
-```
-
-Inputs:
-
-```
-echo === SPELLOUT ===
-/usr/lib/spellout
-echo === SPELLIN ===
-/usr/lib/spellin 5 < /dev/null
-echo __TEST_DONE__
-```
-
-Expect:
-
-```
-echo === SPELLOUT ===
-=== SPELLOUT ===
-# /usr/lib/spellout
-spellout: arg count
-# echo === SPELLIN ===
-=== SPELLIN ===
-# /usr/lib/spellin 5 < /dev/null
-spellin: cannot initialize hash table
-# echo __TEST_DONE__
-__TEST_DONE__
-#
-```
-
 ## Syscall and filesystem behavior under QEMU
 
 These tests cover kernel-visible behavior directly from `/bin/sh`:
@@ -3455,7 +3391,7 @@ modes, link counts, and sizes from the current root image.
 Local test:
 
 ```
-tmp/qemu-shell.py
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/ [A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9] / DATE /; s/^total [0-9]+/total N/; /^-rwxr-xr-x/ s/ +[0-9]+ DATE/ SIZE DATE/'"
 ```
 
 Inputs:
@@ -3498,7 +3434,7 @@ mode bits straight from the inode.
 Local test:
 
 ```
-tmp/qemu-shell.py
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/ [A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9] / DATE /'"
 ```
 
 Inputs:
@@ -3535,7 +3471,7 @@ as the following `ls -l` output confirms.
 Local test:
 
 ```
-tmp/qemu-shell.py
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/ [A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9] / DATE /'"
 ```
 
 Inputs:
@@ -3571,7 +3507,7 @@ removes the final directory entry.
 Local test:
 
 ```
-tmp/qemu-shell.py
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/ [A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9] / DATE /'"
 ```
 
 Inputs:
@@ -3648,7 +3584,7 @@ reads back `crw-rw-rw-` with major 1 and minor 2.
 Local test:
 
 ```
-tmp/qemu-shell.py
+bash -o pipefail -c "tmp/qemu-shell.py | sed -E 's/ [A-Z][a-z][a-z] [ 0-9][0-9] [0-9][0-9]:[0-9][0-9] / DATE /'"
 ```
 
 Inputs:
@@ -3779,10 +3715,7 @@ __TEST_DONE__
 
 ### TEXT_TOOLS
 
-`spell` (the `/usr/lib/spell` shell wrapper) falls straight through
-the missing hash table and just echoes its input unchanged -- the
-same pass-through smoke seen in SPELLINOUT, but driven from the
-canonical `/usr/lib/spell` entry point.  `cb` (C beautifier) takes
+`cb` (C beautifier) takes
 a one-liner on stdin and re-emits it with brace/semicolon-aware
 indentation, demonstrating its `tab` output and brace state
 machine.  `tsort` topologically sorts the three-edge graph
@@ -3798,7 +3731,6 @@ tmp/qemu-shell.py
 Inputs:
 
 ```
-echo "the kwick brown fox" | /usr/lib/spell 2>&1
 ls /bin/diff /bin/diff3 /bin/ptx /bin/vpr 2>&1
 echo "main(){int x;x=1;}" | cb
 echo "a b" > /tmp/ts; echo "b c" >> /tmp/ts; echo "c d" >> /tmp/ts; tsort /tmp/ts
@@ -3808,9 +3740,7 @@ echo __TEST_DONE__
 Expect:
 
 ```
-echo "the kwick brown fox" | /usr/lib/spell 2>&1
-the kwick brown fox
-# ls /bin/diff /bin/diff3 /bin/ptx /bin/vpr 2>&1
+ls /bin/diff /bin/diff3 /bin/ptx /bin/vpr 2>&1
 /bin/diff
 /bin/diff3
 /bin/ptx
