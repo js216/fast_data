@@ -89,7 +89,6 @@ usr/sys/conf/arm_qemu.ld
 usr/sys/conf/c.c
 usr/sys/conf/l.s
 usr/sys/conf/mch.s
-usr/sys/dev/mem.c
 usr/sys/dev/pl011.c
 usr/sys/dev/virtio_blk.c
 usr/sys/sys/machdep.c
@@ -3589,6 +3588,10 @@ Expect:
 < 		struct tc;
 ---
 > 		struct tc tc;
+64c64
+< #define	tun	tp->t_un
+---
+> #define	tun	tp->t_un.tc
 ```
 
 ### usr/sys/sys/acct.c
@@ -4323,46 +4326,49 @@ Expect:
 ---
 > void
 > exec(void)
-28c70,80
+28c70,82
 < exece()
 ---
 > /*
 >  * exece: load and run a new program image.
 >  *
->  * Args/environment are collected (NUL-separated) into a kernel buffer
->  * from the old user image, then -- after getxfile() builds the new
->  * image -- written as the initial stack frame (see below).  This Armv7
->  * image has ample RAM, so no swap round-trip is needed for the arg list.
+>  * Args/environment are collected (NUL-separated) into e_argbuf from the
+>  * old user image, then -- after getxfile() builds the new image -- written
+>  * as the initial stack frame (see below).  This Armv7 image has ample RAM,
+>  * so no swap round-trip is needed for the arg list.  e_argbuf is a per-
+>  * process kernel-stack local rather than a shared global: getxfile() sleeps
+>  * on its (interrupt-driven) disk read, so a global buffer would be clobbered
+>  * by a second process exec-ing concurrently (e.g. both ends of a pipe).
 >  */
-> static char e_argbuf[UARGLEN];
 > void
 > exece(void)
-30,32d81
+30,32d83
 < 	register nc;
 < 	register char *cp;
 < 	register struct buf *bp;
-34c83
+34c85
 < 	int na, ne, bno, ucp, ap, c;
 ---
 > 	register int nc, c, ap;
-35a85
+35a87,88
 > 	int i;
-39,40d88
+> 	char e_argbuf[UARGLEN];
+39,40d91
 < 	bno = 0;
 < 	bp = 0;
-48,53d95
+48,53d98
 < 	/*
 < 	 * Collect arguments on "file" in swap space.
 < 	 */
 < 	na = 0;
 < 	ne = 0;
 < 	nc = 0;
-55,56c97
+55,56c100
 < 	if ((bno = malloc(swapmap,(NCARGS+BSIZE-1)/BSIZE)) == 0)
 < 		panic("Out of swap");
 ---
 > 	nc = 0;
-58,70c99,101
+58,70c102,104
 < 		ap = NULL;
 < 		if (uap->argp) {
 < 			ap = fuword((caddr_t)uap->argp);
@@ -4380,15 +4386,15 @@ Expect:
 > 		ap = fuword((caddr_t)uap->argp);
 > 		uap->argp++;
 > 		if (ap == 0)
-72,73c103
+72,73c106
 < 		na++;
 < 		if(ap == -1)
 ---
 > 		if (ap == -1) {
-74a105,106
+74a108,109
 > 			goto bad;
 > 		}
-76c108,112
+76c111,115
 < 			if (nc >= NCARGS-1)
 ---
 > 			if ((c = fubyte((caddr_t)ap++)) < 0) {
@@ -4396,7 +4402,7 @@ Expect:
 > 				goto bad;
 > 			}
 > 			if (nc >= UARGLEN-2) {
-78c114,130
+78c117,133
 < 			if ((c = fubyte((caddr_t)ap++)) < 0)
 ---
 > 				goto bad;
@@ -4416,15 +4422,15 @@ Expect:
 > 		}
 > 		do {
 > 			if ((c = fubyte((caddr_t)ap++)) < 0) {
-80d131
+80d134
 < 			if (u.u_error)
-82,86d132
+82,86d135
 < 			if ((nc&BMASK) == 0) {
 < 				if (bp)
 < 					bawrite(bp);
 < 				bp = getblk(swapdev, swplo+bno+(nc>>BSHIFT));
 < 				cp = bp->b_un.b_addr;
-88,95c134,141
+88,95c137,144
 < 			nc++;
 < 			*cp++ = c;
 < 		} while (c>0);
@@ -4442,11 +4448,11 @@ Expect:
 > 		} while (c);
 > 	}
 > 	e_argbuf[nc++] = 0;		/* empty string terminates env list */
-100c146
+100c149
 < 	 * copy back arglist
 ---
 > 	 * set SUID/SGID protections, if no tracing
-103,122c149,153
+103,122c152,156
 < 	ucp = -nc - NBPW;
 < 	ap = ucp - na*NBPW - 3*NBPW;
 < 	u.u_ar0[R6] = ap;
@@ -4473,7 +4479,7 @@ Expect:
 > 			if(u.u_uid != 0) {
 > 				u.u_uid = ip->i_uid;
 > 				u.u_procp->p_uid = ip->i_uid;
-124,130c155,216
+124,130c158,219
 < 			subyte((caddr_t)ucp++, (c = *cp++));
 < 			nc++;
 < 		} while(c&0377);
@@ -4544,19 +4550,19 @@ Expect:
 > 		setregs();
 > 		u.u_ar0[R6] = (int)sp;	/* user stack pointer */
 > 	}
-132,135d217
+132,135d220
 < 	if (bp)
 < 		brelse(bp);
 < 	if(bno)
 < 		mfree(swapmap, (NCARGS+BSIZE-1)/BSIZE, bno);
-140,142c222,223
+140,142c225,226
 <  * Read in and set up memory for executed file.
 <  * Zero return is normal;
 <  * non-zero means only the text is being replaced
 ---
 >  * ELF32 header / program-header subset (the Armv7 toolchain emits ELF;
 >  * this replaces the PDP-11 a.out reader).
-144,151c225,240
+144,151c228,243
 < getxfile(ip, nargc)
 < register struct inode *ip;
 < {
@@ -4582,7 +4588,7 @@ Expect:
 > 	unsigned short e_shnum;
 > 	unsigned short e_shstrndx;
 > };
-153,162c242,252
+153,162c245,255
 < 	/*
 < 	 * read in first few bytes
 < 	 * of file for segment
@@ -4605,7 +4611,7 @@ Expect:
 > 	unsigned int p_align;
 > };
 > #define	PT_LOAD	1
-164,166c254,259
+164,166c257,262
 < 	u.u_base = (caddr_t)&u.u_exdata;
 < 	u.u_count = sizeof(u.u_exdata);
 < 	u.u_offset = 0;
@@ -4616,7 +4622,7 @@ Expect:
 > 	u.u_base = kbuf;
 > 	u.u_count = n;
 > 	u.u_offset = off;
-169a263,279
+169a266,282
 > }
 > /*
 >  * Read in and set up memory for an ELF executable.
@@ -4634,12 +4640,12 @@ Expect:
 > 	int n;
 > 	(void)nargc;
 > 	readbytes(ip, (caddr_t)&eh, 0, sizeof(eh));
-172c282,283
+172c285,286
 < 	if (u.u_count!=0) {
 ---
 > 	if(eh.e_ident[0] != 0x7f || eh.e_ident[1] != 'E' ||
 > 	   eh.e_ident[2] != 'L' || eh.e_ident[3] != 'F' || eh.e_type != 2) {
-176,197d286
+176,197d289
 < 	sep = 0;
 < 	overlay = 0;
 < 	if(u.u_exdata.ux_mag == 0407) {
@@ -4662,14 +4668,14 @@ Expect:
 < 		u.u_error = ETXTBSY;
 < 		goto bad;
 < 	}
-200,202c289,290
+200,202c292,293
 < 	 * find text and data sizes
 < 	 * try them out for possible
 < 	 * overflow of max sizes
 ---
 > 	 * Commit to the new image: release old text, allocate and clear
 > 	 * the full user image, and map it.
-204,207c292,302
+204,207c295,305
 < 	ts = btoc(u.u_exdata.ux_tsize);
 < 	lsize = (long)u.u_exdata.ux_dsize + u.u_exdata.ux_bsize;
 < 	if (lsize != (unsigned)lsize) {
@@ -4686,7 +4692,7 @@ Expect:
 > 	u.u_ssize = SSIZE;
 > 	u.u_sep = 0;
 > 	if(estabur(0, u.u_dsize, u.u_ssize, 0, RO))
-209,213c304,314
+209,213c307,317
 < 	}
 < 	ds = btoc(lsize);
 < 	ss = SSIZE + btoc(nargc);
@@ -4704,7 +4710,7 @@ Expect:
 > 		if(ph.p_type != PT_LOAD || ph.p_filesz == 0)
 > 			continue;
 > 		if(ph.p_vaddr >= USERSIZE || ph.p_filesz > USERSIZE - ph.p_vaddr) {
-217,248c318,321
+217,248c321,324
 < 		ds = u.u_dsize;
 < 		ss = u.u_ssize;
 < 		sep = u.u_sep;
@@ -4742,7 +4748,7 @@ Expect:
 > 		u.u_count = ph.p_filesz;
 > 		u.u_offset = ph.p_offset;
 > 		u.u_segflg = 0;
-250,268c323,327
+250,268c326,330
 < 		/*
 < 		 * set SUID/SGID protections, if no tracing
 < 		 */
@@ -4768,73 +4774,73 @@ Expect:
 > 	}
 > 	u.u_exdata.ux_entloc = eh.e_entry;
 > 	arm_sync_icache();
-270c329
+270c332
 < 	return(overlay);
 ---
 > 	return(0);
-276c335,336
+276c338,339
 < setregs()
 ---
 > void
 > setregs(void)
-280c340
+280c343
 < 	register i;
 ---
 > 	register int i;
-286c346
+286c349
 < 		u.u_ar0[*cp++] = 0;
 ---
 > 		u.u_ar0[(int)*cp++] = 0;
-296a357
+296a360
 > 	u.u_acflag &= ~AFORK;
-300d360
+300d363
 < 	u.u_acflag &= ~AFORK;
-308c368,369
+308c371,372
 < rexit()
 ---
 > void
 > rexit(void)
-325c386,387
+325c389,390
 < exit(rv)
 ---
 > void
 > exit(int rv)
-377c439,440
+377c442,443
 < wait()
 ---
 > void
 > wait(void)
-379c442
+379c445
 < 	register f;
 ---
 > 	register int f;
-422c485,486
+422c488,489
 < fork()
 ---
 > void
 > fork(void)
-425c489
+425c492
 < 	register a;
 ---
 > 	register int a;
-456d519
+456d522
 < 	p1 = u.u_procp;
-458c521,522
+458c524,525
 < 		u.u_r.r_val1 = p1->p_pid;
 ---
 > 		/* child: fork() returns 0 */
 > 		u.u_r.r_val1 = 0;
-469,470c533
+469,470c536
 < out:
 < 	u.u_ar0[R7] += NBPW;
 ---
 > out:	;
-477c540,541
+477c543,544
 < sbreak()
 ---
 > void
 > sbreak(void)
-482c546
+482c549
 < 	register a, n, d;
 ---
 > 	register int a, n, d;
@@ -10886,6 +10892,10 @@ Expect:
 > #ifndef NULL
 85a87
 > #endif
+94c96
+< #define	CBSIZE	14		/* number of chars in a clist block */
+---
+> #define	CBSIZE	12		/* number of chars in a clist block */
 120c122
 < #define	major(x)	(int)(((unsigned)x>>8))
 ---
@@ -11230,7 +11240,7 @@ diff unix-v7-c99/v7/usr/sys/sys/main.c unix-v7-c99/usr/sys/sys/main.c || true
 Expect:
 
 ```
-12a13,32
+13a14,26
 > void startup(void);
 > void brelse(struct buf *bp);
 > void binit(void);
@@ -11244,30 +11254,23 @@ Expect:
 > int estabur(unsigned nt, unsigned nd, unsigned ns, int sep, int xrw);
 > void sched(void);
 > void arm_sync_icache(void);
-> void cinit(void)
-> {
-> 	register struct cdevsw *cdp;
-> 	nchrdev = 0;
-> 	for(cdp = cdevsw; cdp->d_open; cdp++)
-> 		nchrdev++;
-> }
-30c50,51
+30c43,44
 < main()
 ---
 > void
 > main(void)
-38c59
+38c52
 < 	proc[0].p_addr = ka6->r[0];
 ---
 > 	proc[0].p_addr = 64;
-70a92
+70a85
 > 		arm_sync_icache();
-90c112,113
+90c105,106
 < iinit()
 ---
 > void
 > iinit(void)
-125c148
+125c141
 < binit()
 ---
 > void binit(void)
@@ -23081,12 +23084,12 @@ Expect:
 < caddr_t arg;
 ---
 > void
-> timeout(int (*fun)(caddr_t), caddr_t arg, int tim)
+> timeout(int (*fun)(), caddr_t arg, int tim)
 164c164
 < 	s = spl7();
 ---
 > 	s = intr_disable();
-184c184,246
+184c184,269
 < 	splx(s);
 ---
 > 	intr_restore(s);
@@ -23101,10 +23104,14 @@ Expect:
 > #define GICC_IAR	(*(volatile unsigned int *)(GICC_BASE + 0x00c))
 > #define GICC_EOIR	(*(volatile unsigned int *)(GICC_BASE + 0x010))
 > #define TIMER_IRQ	27
+> #define UART_IRQ	33		/* PL011 console: SPI 1 -> GIC INTID 33 */
 > #define TIMER_HZ	HZ
 > extern unsigned int cntfrq_get(void);
 > extern void cntv_tval_set(unsigned int v), cntv_ctl_set(unsigned int v);
 > extern void irq_enable(void);
+> extern int pl011intr(void);
+> extern int virtio_intr(void);
+> extern int virtio_irq;
 > static unsigned int timer_reload;
 > int irq_ready;
 > caddr_t waitloc;	/* pc of the idle wait, for cpu-time accounting */
@@ -23128,7 +23135,10 @@ Expect:
 > 		if(u.u_procp != NULL)
 > 			clock(0, 0, 0, 0, 0, (caddr_t)tf[15],
 > 			    usermode ? 0xf000 : 0);
-> 	}
+> 	} else if(intid == UART_IRQ)
+> 		pl011intr();
+> 	else if(virtio_irq && intid == (unsigned int)virtio_irq)
+> 		virtio_intr();
 > 	GICC_EOIR = iar;
 > }
 > void
@@ -23145,6 +23155,22 @@ Expect:
 > 	prio_val |=  (0x80U << prio_off);
 > 	GICD_IPRIORITYR(prio_reg) = prio_val;
 > 	GICD_ISENABLER(TIMER_IRQ / 32) = 1U << (TIMER_IRQ % 32);
+> 	prio_reg = UART_IRQ / 4;
+> 	prio_off = (UART_IRQ % 4) * 8;
+> 	prio_val = GICD_IPRIORITYR(prio_reg);
+> 	prio_val &= ~(0xffU << prio_off);
+> 	prio_val |=  (0x80U << prio_off);
+> 	GICD_IPRIORITYR(prio_reg) = prio_val;
+> 	GICD_ISENABLER(UART_IRQ / 32) = 1U << (UART_IRQ % 32);
+> 	if(virtio_irq) {
+> 		prio_reg = virtio_irq / 4;
+> 		prio_off = (virtio_irq % 4) * 8;
+> 		prio_val = GICD_IPRIORITYR(prio_reg);
+> 		prio_val &= ~(0xffU << prio_off);
+> 		prio_val |=  (0x80U << prio_off);
+> 		GICD_IPRIORITYR(prio_reg) = prio_val;
+> 		GICD_ISENABLER(virtio_irq / 32) = 1U << (virtio_irq % 32);
+> 	}
 > 	GICD_CTLR = 1;
 > 	GICC_PMR  = 0xff;
 > 	GICC_CTLR = 1;
@@ -23224,6 +23250,608 @@ Expect:
 > #define PG_KRW		0x00000012U	/* L2 small page, kernel-only rw */
 > #define PGSHIFT		12
 > #define PGSIZE		0x1000U
+```
+
+### usr/sys/dev/mem.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/dev/mem.c unix-v7-c99/usr/sys/dev/mem.c || true
+```
+
+Expect:
+
+```
+15,16c15,17
+< #include "../h/conf.h"
+< #include "../h/seg.h"
+---
+> int passc(int c);
+> int cpass(void);
+> int arm_mem_read(unsigned int off, char *buf, unsigned int n);
+18c19,20
+< mmread(dev)
+---
+> int
+> mmread(dev_t dev)
+20,21c22,24
+< 	register c, bn, on;
+< 	int a, d;
+---
+> 	register int c;
+> 	char buf[64];
+> 	unsigned int n, off;
+24c27
+< 		return;
+---
+> 		return(0);
+26,40c29,41
+< 		bn = u.u_offset >> 6;
+< 		on = u.u_offset & 077;
+< 		a = UISA->r[0];
+< 		d = UISD->r[0];
+< 		spl7();
+< 		UISA->r[0] = bn;
+< 		UISD->r[0] = 077406;
+< 		if(minor(dev) == 1)
+< 			UISA->r[0] = (ka6-6)->r[(bn>>7)&07] + (bn & 0177);
+< 		if ((c = fuibyte((caddr_t)on)) < 0)
+< 			u.u_error = ENXIO;
+< 		UISA->r[0] = a;
+< 		UISD->r[0] = d;
+< 		spl0();
+< 	} while(u.u_error==0 && passc(c)>=0);
+---
+> 		off = (unsigned int)u.u_offset;
+> 		n = u.u_count;
+> 		if(n > sizeof(buf))
+> 			n = sizeof(buf);
+> 		if(arm_mem_read(off, buf, n) <= 0)
+> 			break;
+> 		for(unsigned int i = 0; i < n; i++) {
+> 			c = buf[i];
+> 			if(passc(c) < 0 || u.u_error != 0)
+> 				return(0);
+> 		}
+> 	} while(u.u_count != 0 && u.u_error == 0);
+> 	return(0);
+43c44,45
+< mmwrite(dev)
+---
+> int
+> mmwrite(dev_t dev)
+45,46c47
+< 	register c, bn, on;
+< 	int a, d;
+---
+> 	register int c;
+50c51
+< 		return;
+---
+> 		return(0);
+53,55c54
+< 		bn = u.u_offset >> 6;
+< 		on = u.u_offset & 077;
+< 		if ((c=cpass())<0 || u.u_error!=0)
+---
+> 		if((c = cpass()) < 0 || u.u_error != 0)
+57,68c56
+< 		a = UISA->r[0];
+< 		d = UISD->r[0];
+< 		spl7();
+< 		UISA->r[0] = bn;
+< 		UISD->r[0] = 077406;
+< 		if(minor(dev) == 1)
+< 			UISA->r[0] = (ka6-6)->r[(bn>>7)&07] + (bn & 0177);
+< 		if (suibyte((caddr_t)on, c) < 0)
+< 			u.u_error = ENXIO;
+< 		UISA->r[0] = a;
+< 		UISD->r[0] = d;
+< 		spl0();
+---
+> 		*(char *)(unsigned int)(u.u_offset-1) = c;
+69a58
+> 	return(0);
+```
+
+### usr/sys/sys/prim.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/sys/prim.c unix-v7-c99/usr/sys/sys/prim.c || true
+```
+
+Expect:
+
+```
+5a6,7
+> int intr_disable(void);
+> void intr_restore(int s);
+19,20c21,22
+< getc(p)
+< register struct clist *p;
+---
+> int
+> getc(register struct clist *p)
+25c27
+< 	s = spl6();
+---
+> 	s = intr_disable();
+47c49
+< 	splx(s);
+---
+> 	intr_restore(s);
+55,57c57,58
+< q_to_b(q, cp, cc)
+< register struct clist *q;
+< register char *cp;
+---
+> int
+> q_to_b(register struct clist *q, register char *cp, int cc)
+65c66
+< 	s = spl6();
+---
+> 	s = intr_disable();
+92c93
+< 	splx(s);
+---
+> 	intr_restore(s);
+102,103c103,104
+< ndqb(q, flag)
+< register struct clist *q;
+---
+> int
+> ndqb(register struct clist *q, int flag)
+105c106
+< register cc;
+---
+> register int cc;
+108c109
+< 	s = spl6();
+---
+> 	s = intr_disable();
+133c134
+< 	splx(s);
+---
+> 	intr_restore(s);
+143,145c144,145
+< ndflush(q, cc)
+< register struct clist *q;
+< register cc;
+---
+> void
+> ndflush(register struct clist *q, register int cc)
+147c147
+< register s;
+---
+> register int s;
+149c149
+< 	s = spl6();
+---
+> 	s = intr_disable();
+189c189
+< 	splx(s);
+---
+> 	intr_restore(s);
+191,192c191,192
+< putc(c, p)
+< register struct clist *p;
+---
+> int
+> putc(int c, register struct clist *p)
+196c196
+< 	register s;
+---
+> 	register int s;
+198c198
+< 	s = spl6();
+---
+> 	s = intr_disable();
+201c201
+< 			splx(s);
+---
+> 			intr_restore(s);
+210c210
+< 			splx(s);
+---
+> 			intr_restore(s);
+221c221
+< 	splx(s);
+---
+> 	intr_restore(s);
+231,234c231,232
+< b_to_q(cp, cc, q)
+< register char *cp;
+< struct clist *q;
+< register int cc;
+---
+> int
+> b_to_q(register char *cp, register int cc, struct clist *q)
+238c236
+< 	register s, acc;
+---
+> 	register int s, acc;
+245c243
+< 	s = spl6();
+---
+> 	s = intr_disable();
+270c268
+< 	splx(s);
+---
+> 	intr_restore(s);
+278c276,277
+< cinit()
+---
+> void
+> cinit(void)
+301,302c300,301
+< getw(p)
+< register struct clist *p;
+---
+> int
+> getw(register struct clist *p)
+312,313c311,312
+< putw(c, p)
+< register struct clist *p;
+---
+> int
+> putw(int c, register struct clist *p)
+315c314
+< 	register s;
+---
+> 	register int s;
+317c316
+< 	s = spl6();
+---
+> 	s = intr_disable();
+319c318
+< 		splx(s);
+---
+> 		intr_restore(s);
+324c323
+< 	splx(s);
+---
+> 	intr_restore(s);
+```
+
+### usr/sys/dev/tty.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/dev/tty.c unix-v7-c99/usr/sys/dev/tty.c || true
+```
+
+Expect:
+
+```
+11d10
+< #include "../h/mx.h"
+17c16
+< char	partab[];
+---
+> extern char	partab[];
+18a18,47
+> int intr_enable(void);
+> int intr_disable(void);
+> void intr_restore(int s);
+> int getc(struct clist *p);
+> int putc(int c, struct clist *p);
+> int b_to_q(char *cp, int cc, struct clist *q);
+> void sleep(caddr_t chan, int pri);
+> void wakeup(caddr_t chan);
+> void signal(int pgrp, int sig);
+> int copyin(caddr_t f, caddr_t t, unsigned int n);
+> int copyout(caddr_t f, caddr_t t, unsigned int n);
+> unsigned max(unsigned a, unsigned b);
+> void ttyopen(dev_t dev, struct tty *tp);
+> void ttychars(struct tty *tp);
+> void ttyclose(struct tty *tp);
+> void stty(void);
+> void gtty(void);
+> void ioctl(void);
+> int ttioccomm(int com, struct tty *tp, caddr_t addr, dev_t dev);
+> void wflushtty(struct tty *tp);
+> void flushtty(struct tty *tp);
+> int canon(struct tty *tp);
+> void ttyrend(struct tty *tp, char *pb, char *pe);
+> void ttyinput(int c, struct tty *tp);
+> void ttyblock(struct tty *tp);
+> void ttyoutput(int c, struct tty *tp);
+> int ttrstrt(struct tty *tp);
+> void ttstart(struct tty *tp);
+> int ttread(struct tty *tp);
+> caddr_t ttwrite(struct tty *tp);
+61,63c90,91
+< ttyopen(dev, tp)
+< dev_t dev;
+< register struct tty *tp;
+---
+> void
+> ttyopen(dev_t dev, register struct tty *tp)
+84,85c112,113
+< ttychars(tp)
+< register struct tty *tp;
+---
+> void
+> ttychars(register struct tty *tp)
+100,101c128,129
+< ttyclose(tp)
+< register struct tty *tp;
+---
+> void
+> ttyclose(register struct tty *tp)
+112c140,141
+< stty()
+---
+> void
+> stty(void)
+119c148,149
+< gtty()
+---
+> void
+> gtty(void)
+131c161,162
+< ioctl()
+---
+> void
+> ioctl(void)
+141c172
+< 	register fmt;
+---
+> 	register int fmt;
+167,169c198,199
+< ttioccomm(com, tp, addr, dev)
+< register struct tty *tp;
+< caddr_t addr;
+---
+> int
+> ttioccomm(int com, register struct tty *tp, caddr_t addr, dev_t dev)
+194c224
+< 		if (t >= nldisp) {
+---
+> 		if (t >= (unsigned)nldisp) {
+199c229
+< 			(*linesw[tp->t_line].l_close)(tp);
+---
+> 			(*linesw[(int)tp->t_line].l_close)(tp);
+220a251
+> 		/* fallthrough */
+263c294
+< 		(*linesw[tp->t_line].l_ioctl)(com, tp, addr);
+---
+> 		(*linesw[(int)tp->t_line].l_ioctl)(com, tp, addr);
+288,289c319,320
+< wflushtty(tp)
+< register struct tty *tp;
+---
+> void
+> wflushtty(register struct tty *tp)
+292c323
+< 	spl5();
+---
+> 	intr_disable();
+299c330
+< 	spl0();
+---
+> 	intr_enable();
+305,306c336,337
+< flushtty(tp)
+< register struct tty *tp;
+---
+> void
+> flushtty(register struct tty *tp)
+308c339
+< 	register s;
+---
+> 	register int s;
+314c345
+< 	s = spl6();
+---
+> 	s = intr_disable();
+322c353
+< 	splx(s);
+---
+> 	intr_restore(s);
+333,334c364,365
+< canon(tp)
+< register struct tty *tp;
+---
+> int
+> canon(register struct tty *tp)
+341,344c372,375
+< 	spl5();
+< 	while ((tp->t_flags&(RAW|CBREAK))==0 && tp->t_delct==0
+< 	    || (tp->t_flags&(RAW|CBREAK))!=0 && tp->t_rawq.c_cc==0) {
+< 		if ((tp->t_state&CARR_ON)==0 || tp->t_chan!=NULL) {
+---
+> 	intr_disable();
+> 	while (((tp->t_flags&(RAW|CBREAK))==0 && tp->t_delct==0)
+> 	    || ((tp->t_flags&(RAW|CBREAK))!=0 && tp->t_rawq.c_cc==0)) {
+> 		if ((tp->t_state&CARR_ON)==0) {
+349c380
+< 	spl0();
+---
+> 	intr_enable();
+401,403c432,433
+< ttyrend(tp, pb, pe)
+< register struct tty *tp;
+< register char *pb, *pe;
+---
+> void
+> ttyrend(register struct tty *tp, register char *pb, register char *pe)
+410,412c440
+< 		if (tp->t_chan)
+< 			sdata(tp->t_chan); else
+< 			wakeup((caddr_t)&tp->t_rawq);
+---
+> 		wakeup((caddr_t)&tp->t_rawq);
+430,432c458,459
+< ttyinput(c, tp)
+< register c;
+< register struct tty *tp;
+---
+> void
+> ttyinput(register int c, register struct tty *tp)
+435d461
+< 	register struct chan *cp;
+466,469c492
+< 			if (tp->t_chan)
+< 				scontrol(tp->t_chan, M_SIG, c);
+< 			else
+< 				signal(tp->t_pgrp, c);
+---
+> 			signal(tp->t_pgrp, c);
+485,487c508
+< 		if ((cp=tp->t_chan)!=NULL)
+< 			sdata(cp); else
+< 			wakeup((caddr_t)&tp->t_rawq);
+---
+> 		wakeup((caddr_t)&tp->t_rawq);
+501,502c522,523
+< ttyblock(tp)
+< register struct tty *tp;
+---
+> void
+> ttyblock(register struct tty *tp)
+504c525
+< register x;
+---
+> register int x;
+526,528c547,548
+< ttyoutput(c, tp)
+< register c;
+< register struct tty *tp;
+---
+> void
+> ttyoutput(register int c, register struct tty *tp)
+531c551
+< 	register ctype;
+---
+> 	register int ctype;
+595a616
+> 		/* fallthrough */
+658,659c679,680
+< ttrstrt(tp)
+< register struct tty *tp;
+---
+> int
+> ttrstrt(register struct tty *tp)
+663a685
+> 	return(0);
+672,673c694,695
+< ttstart(tp)
+< register struct tty *tp;
+---
+> void
+> ttstart(register struct tty *tp)
+675c697
+< 	register s;
+---
+> 	register int s;
+677c699
+< 	s = spl5();
+---
+> 	s = intr_disable();
+680c702
+< 	splx(s);
+---
+> 	intr_restore(s);
+687,688c709,710
+< ttread(tp)
+< register struct tty *tp;
+---
+> int
+> ttread(register struct tty *tp)
+704,705c726
+< ttwrite(tp)
+< register struct tty *tp;
+---
+> ttwrite(register struct tty *tp)
+707c728
+< 	register c;
+---
+> 	register int c;
+712c733
+< 		spl5();
+---
+> 		intr_disable();
+716,717d736
+< 			if (tp->t_chan) 
+< 				return((caddr_t)&tp->t_outq);
+720c739
+< 		spl0();
+---
+> 		intr_enable();
+```
+
+### usr/sys/dev/partab.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/dev/partab.c unix-v7-c99/usr/sys/dev/partab.c || true
+```
+
+Expect:
+
+```
+```
+
+### usr/sys/dev/sys.c
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/dev/sys.c unix-v7-c99/usr/sys/dev/sys.c || true
+```
+
+Expect:
+
+```
+11c11,12
+< syopen(dev, flag)
+---
+> int
+> syopen(dev_t dev, int flag)
+13a15
+> 	(void)dev;
+16c18
+< 		return;
+---
+> 		return(0);
+18a21
+> 	return(0);
+21c24,25
+< syread(dev)
+---
+> int
+> syread(dev_t dev)
+23a28
+> 	(void)dev;
+24a30
+> 	return(0);
+27c33,34
+< sywrite(dev)
+---
+> int
+> sywrite(dev_t dev)
+29a37
+> 	(void)dev;
+30a39
+> 	return(0);
+33,34c42,43
+< sysioctl(dev, cmd, addr, flag)
+< caddr_t addr;
+---
+> int
+> sysioctl(dev_t dev, int cmd, caddr_t addr, int flag)
+36a46
+> 	(void)dev;
+37a48
+> 	return(0);
 ```
 
 ### usr/sys/sys/sys4.c
@@ -24463,7 +25091,7 @@ diff unix-v7-c99/v7/usr/sys/sys/sysent.c unix-v7-c99/usr/sys/sys/sysent.c || tru
 Expect:
 
 ```
-2a3,34
+2a3,31
 > #include "../h/dir.h"
 > #include "../h/user.h"
 > #include "../h/proc.h"
@@ -24493,13 +25121,10 @@ Expect:
 > void printf(char *fmt, ...);
 > int save(int *lp) __attribute__((returns_twice));
 > void bcopy(char *from, char *to, unsigned int n);
-> struct ttiocb console_sgtty = {
-> 	13, 13, '#', '@', EVENP|ODDP|ECHO|CRMOD|XTABS
-> };
-8a41,42
+8a38,39
 >  * On Armv7 all arguments arrive in registers, so
 >  * sy_nrarg == sy_narg for every entry.
-10,63d43
+10,63d40
 < int	alarm();
 < int	mpxchan();
 < int	chdir();
@@ -24554,7 +25179,7 @@ Expect:
 < int	utime();
 < int	wait();
 < int	write();
-67,130c47,110
+67,130c44,107
 < 	0, 0, nullsys,			/*  0 = indir */
 < 	1, 1, rexit,			/*  1 = exit */
 < 	0, 0, fork,			/*  2 = fork */
@@ -24684,7 +25309,7 @@ Expect:
 > 	{1, 1, chroot},			/* 61 = chroot */
 > 	{0, 0, nosys},			/* 62 = x */
 > 	{0, 0, sigreturn}		/* 63 = sigreturn (Armv7 signal trampoline) */
-131a112,253
+131a109,183
 > char	regloc[9] = { R0, R1, R2, R3, R4, R5, R6, R7, RPS };
 > /*
 >  * Called from svc_entry (conf/l.s) on a system call.  r is the 17-int
@@ -24760,71 +25385,5 @@ Expect:
 > }
 > void nosys(void)   { u.u_error = EINVAL; }
 > void nullsys(void) { }
-> /*
->  * Console line discipline control (stty/gtty/ioctl).  This port has a
->  * single console and no general tty layer, so these operate on the
->  * console_sgtty block.
->  */
-> static int
-> is_tty_fd(int fd)
-> {
-> 	struct file *fp;
-> 	if(fd < 0 || fd >= NOFILE)
-> 		return(0);
-> 	fp = u.u_ofile[fd];
-> 	if(fp == NULL || fp->f_inode == NULL)
-> 		return(0);
-> 	return((fp->f_inode->i_mode & IFMT) == IFCHR);
-> }
-> void
-> stty(void)
-> {
-> 	u.u_r.r_val1 = 0;
-> 	if(!is_tty_fd(u.u_arg[0]) || u.u_arg[1] == 0) {
-> 		u.u_error = ENOTTY;
-> 		return;
-> 	}
-> 	bcopy((char *)u.u_arg[1], (char *)&console_sgtty, sizeof(console_sgtty));
-> }
-> void
-> gtty(void)
-> {
-> 	u.u_r.r_val1 = 0;
-> 	if(!is_tty_fd(u.u_arg[0]) || u.u_arg[1] == 0) {
-> 		u.u_error = ENOTTY;
-> 		return;
-> 	}
-> 	bcopy((char *)&console_sgtty, (char *)u.u_arg[1], sizeof(console_sgtty));
-> }
-> void
-> ioctl(void)
-> {
-> 	int fd = u.u_arg[0], cmd = u.u_arg[1];
-> 	char *arg = (char *)u.u_arg[2];
-> 	u.u_r.r_val1 = 0;
-> 	if(fd < 0 || fd >= NOFILE || u.u_ofile[fd] == NULL) {
-> 		u.u_error = EBADF;
-> 		return;
-> 	}
-> 	switch(cmd) {
-> 	case FIOCLEX:
-> 		u.u_pofile[fd] |= EXCLOSE;
-> 		return;
-> 	case FIONCLEX:
-> 		u.u_pofile[fd] &= ~EXCLOSE;
-> 		return;
-> 	case TIOCGETP:
-> 	case TIOCSETP:
-> 		if(!is_tty_fd(fd) || arg == 0) {
-> 			u.u_error = ENOTTY;
-> 			return;
-> 		}
-> 		if(cmd == TIOCGETP)
-> 			bcopy((char *)&console_sgtty, arg, sizeof(console_sgtty));
-> 		else
-> 			bcopy(arg, (char *)&console_sgtty, sizeof(console_sgtty));
-> 		return;
-> 	}
-> 	u.u_error = ENOTTY;
-> }
 ```
+

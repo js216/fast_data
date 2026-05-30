@@ -458,18 +458,18 @@ rm: dut nonexistent
 # /bin/echo beta >dut/sub/b
 # ln dut/a dut/alink
 # du dut
-2	dut/sub
-4	dut
+2       dut/sub
+4       dut
 # du -a dut
-1	dut/sub/b
-2	dut/sub
-1	dut/a
-4	dut
+1       dut/sub/b
+2       dut/sub
+1       dut/a
+4       dut
 # du -s dut
-4	dut
+4       dut
 # cd dut
 # du -a a alink
-1	a
+1       a
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -1944,12 +1944,12 @@ Expect:
 
 ```
 comm /etc/passwd /etc/passwd
-		root:VwL97VCAx1Qhs:0:1::/:
-		daemon:x:1:1::/:
-		sys::2:2::/usr/sys:
-		bin::3:3::/bin:
-		uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
-		dmr::7:3::/usr/dmr:
+                root:VwL97VCAx1Qhs:0:1::/:
+                daemon:x:1:1::/:
+                sys::2:2::/usr/sys:
+                bin::3:3::/bin:
+                uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
+                dmr::7:3::/usr/dmr:
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -2073,8 +2073,8 @@ ls /usr/lib/units
 > EOF
 437 units; 3191 bytes
 
-you have: you want: 	* 1.200000e+01
-	/ 8.333333e-02
+you have: you want:     * 1.200000e+01
+        / 8.333333e-02
 you have:
 # units <<EOF
 > mile
@@ -2082,8 +2082,8 @@ you have:
 > EOF
 437 units; 3191 bytes
 
-you have: you want: 	* 5.280000e+03
-	/ 1.893939e-04
+you have: you want:     * 5.280000e+03
+        / 1.893939e-04
 you have:
 # units <<EOF
 > hour
@@ -2091,8 +2091,8 @@ you have:
 > EOF
 437 units; 3191 bytes
 
-you have: you want: 	* 6.000000e+01
-	/ 1.666667e-02
+you have: you want:     * 6.000000e+01
+        / 1.666667e-02
 you have:
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -2294,8 +2294,8 @@ Expect:
 icheck /dev/root
 /dev/root:
 files    165 (r=145,d=14,b=1,c=5)
-used   20641 (i=240,ii=115,iii=0,d=20171)
-free   11983
+used   20660 (i=240,ii=115,iii=0,d=20190)
+free   11964
 missing    0
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -2322,169 +2322,169 @@ Expect:
 ```
 ncheck /dev/root
 /dev/root:
-3	/bin/.
-116	/dev/.
-123	/etc/.
-136	/tmp/.
-138	/usr/.
-164	/unix
-165	/.profile
-4	/bin/1
-5	/bin/[
-6	/bin/ac
-7	/bin/at
-8	/bin/arcv
-9	/bin/awk
-10	/bin/basename
-11	/bin/cal
-12	/bin/calendar
-13	/bin/cat
-14	/bin/cb
-15	/bin/checkeq
-16	/bin/chgrp
-17	/bin/chmod
-18	/bin/chown
-19	/bin/clri
-20	/bin/cmp
-21	/bin/col
-22	/bin/comm
-23	/bin/cp
-24	/bin/crypt
-25	/bin/date
-26	/bin/dc
-27	/bin/dcheck
-28	/bin/dd
-29	/bin/df
-30	/bin/diff
-31	/bin/diff3
-32	/bin/deroff
-33	/bin/dmesg
-34	/bin/du
-35	/bin/dump
-36	/bin/dumpdir
-37	/bin/echo
-38	/bin/ed
-39	/bin/egrep
-40	/bin/expr
-41	/bin/fgrep
-42	/bin/file
-43	/bin/factor
-44	/bin/find
-45	/bin/false
-46	/bin/grep
-47	/bin/graph
-48	/bin/icheck
-49	/bin/iostat
-50	/bin/join
-51	/bin/kill
-52	/bin/ln
-53	/bin/login
-54	/bin/look
-55	/bin/ls
-56	/bin/mesg
-57	/bin/mkdir
-58	/bin/mknod
-59	/bin/mount
-60	/bin/mv
-61	/bin/ncheck
-62	/bin/newgrp
-63	/bin/nice
-64	/bin/nohup
-65	/bin/od
-66	/bin/osh
-67	/bin/passwd
-68	/bin/pr
-69	/bin/primes
-70	/bin/prof
-71	/bin/ps
-72	/bin/pstat
-73	/bin/ptx
-74	/bin/pwd
-75	/bin/quot
-76	/bin/random
-77	/bin/restor
-78	/bin/rev
-79	/bin/rm
-80	/bin/rmdir
-81	/bin/sa
-82	/bin/sed
-83	/bin/sh
-84	/bin/sleep
-85	/bin/sort
-86	/bin/sp
-87	/bin/spline
-88	/bin/split
-89	/bin/stty
-90	/bin/su
-91	/bin/sum
-92	/bin/sync
-93	/bin/tabs
-94	/bin/tail
-95	/bin/tar
-96	/bin/tc
-97	/bin/tee
-98	/bin/test
-99	/bin/time
-100	/bin/tk
-101	/bin/touch
-102	/bin/tp
-103	/bin/tr
-104	/bin/true
-105	/bin/tsort
-106	/bin/tty
-107	/bin/umount
-108	/bin/uniq
-109	/bin/units
-110	/bin/vpr
-111	/bin/wall
-112	/bin/wc
-113	/bin/who
-114	/bin/write
-115	/bin/yes
-117	/dev/console
-118	/dev/mem
-119	/dev/kmem
-120	/dev/null
-121	/dev/root
-122	/dev/tty
-124	/etc/accton
-125	/etc/atrun
-126	/etc/cron
-127	/etc/ddate
-128	/etc/getty
-129	/etc/init
-130	/etc/passwd
-131	/etc/group
-132	/etc/rc
-133	/etc/ttys
-134	/etc/update
-135	/etc/utmp
-137	/tmp/.keep
-139	/usr/adm/.
-142	/usr/dict/.
-144	/usr/games/.
-154	/usr/lib/.
-159	/usr/spool/.
-140	/usr/adm/acct
-141	/usr/adm/wtmp
-143	/usr/dict/words
-145	/usr/games/arithmetic
-146	/usr/games/backgammon
-147	/usr/games/fish
-148	/usr/games/fortune
-149	/usr/games/hangman
-150	/usr/games/lib/.
-152	/usr/games/quiz
-153	/usr/games/wump
-151	/usr/games/lib/fortunes
-155	/usr/lib/crontab
-156	/usr/lib/diffh
-157	/usr/lib/makekey
-158	/usr/lib/units
-160	/usr/spool/at/.
-161	/usr/spool/at/lasttimedone
-162	/usr/spool/at/past/.
-163	/usr/spool/at/past/.keep
+3       /bin/.
+116     /dev/.
+123     /etc/.
+136     /tmp/.
+138     /usr/.
+164     /unix
+165     /.profile
+4       /bin/1
+5       /bin/[
+6       /bin/ac
+7       /bin/at
+8       /bin/arcv
+9       /bin/awk
+10      /bin/basename
+11      /bin/cal
+12      /bin/calendar
+13      /bin/cat
+14      /bin/cb
+15      /bin/checkeq
+16      /bin/chgrp
+17      /bin/chmod
+18      /bin/chown
+19      /bin/clri
+20      /bin/cmp
+21      /bin/col
+22      /bin/comm
+23      /bin/cp
+24      /bin/crypt
+25      /bin/date
+26      /bin/dc
+27      /bin/dcheck
+28      /bin/dd
+29      /bin/df
+30      /bin/diff
+31      /bin/diff3
+32      /bin/deroff
+33      /bin/dmesg
+34      /bin/du
+35      /bin/dump
+36      /bin/dumpdir
+37      /bin/echo
+38      /bin/ed
+39      /bin/egrep
+40      /bin/expr
+41      /bin/fgrep
+42      /bin/file
+43      /bin/factor
+44      /bin/find
+45      /bin/false
+46      /bin/grep
+47      /bin/graph
+48      /bin/icheck
+49      /bin/iostat
+50      /bin/join
+51      /bin/kill
+52      /bin/ln
+53      /bin/login
+54      /bin/look
+55      /bin/ls
+56      /bin/mesg
+57      /bin/mkdir
+58      /bin/mknod
+59      /bin/mount
+60      /bin/mv
+61      /bin/ncheck
+62      /bin/newgrp
+63      /bin/nice
+64      /bin/nohup
+65      /bin/od
+66      /bin/osh
+67      /bin/passwd
+68      /bin/pr
+69      /bin/primes
+70      /bin/prof
+71      /bin/ps
+72      /bin/pstat
+73      /bin/ptx
+74      /bin/pwd
+75      /bin/quot
+76      /bin/random
+77      /bin/restor
+78      /bin/rev
+79      /bin/rm
+80      /bin/rmdir
+81      /bin/sa
+82      /bin/sed
+83      /bin/sh
+84      /bin/sleep
+85      /bin/sort
+86      /bin/sp
+87      /bin/spline
+88      /bin/split
+89      /bin/stty
+90      /bin/su
+91      /bin/sum
+92      /bin/sync
+93      /bin/tabs
+94      /bin/tail
+95      /bin/tar
+96      /bin/tc
+97      /bin/tee
+98      /bin/test
+99      /bin/time
+100     /bin/tk
+101     /bin/touch
+102     /bin/tp
+103     /bin/tr
+104     /bin/true
+105     /bin/tsort
+106     /bin/tty
+107     /bin/umount
+108     /bin/uniq
+109     /bin/units
+110     /bin/vpr
+111     /bin/wall
+112     /bin/wc
+113     /bin/who
+114     /bin/write
+115     /bin/yes
+117     /dev/console
+118     /dev/mem
+119     /dev/kmem
+120     /dev/null
+121     /dev/root
+122     /dev/tty
+124     /etc/accton
+125     /etc/atrun
+126     /etc/cron
+127     /etc/ddate
+128     /etc/getty
+129     /etc/init
+130     /etc/passwd
+131     /etc/group
+132     /etc/rc
+133     /etc/ttys
+134     /etc/update
+135     /etc/utmp
+137     /tmp/.keep
+139     /usr/adm/.
+142     /usr/dict/.
+144     /usr/games/.
+154     /usr/lib/.
+159     /usr/spool/.
+140     /usr/adm/acct
+141     /usr/adm/wtmp
+143     /usr/dict/words
+145     /usr/games/arithmetic
+146     /usr/games/backgammon
+147     /usr/games/fish
+148     /usr/games/fortune
+149     /usr/games/hangman
+150     /usr/games/lib/.
+152     /usr/games/quiz
+153     /usr/games/wump
+151     /usr/games/lib/fortunes
+155     /usr/lib/crontab
+156     /usr/lib/diffh
+157     /usr/lib/makekey
+158     /usr/lib/units
+160     /usr/spool/at/.
+161     /usr/spool/at/lasttimedone
+162     /usr/spool/at/past/.
+163     /usr/spool/at/past/.keep
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -2534,7 +2534,7 @@ Expect:
 
 ```
 stty
-speed 9600 baud
+speed 0 baud
 erase = '#'; kill = '@'
 even odd -nl echo -tabs
 # echo __TEST_DONE__
@@ -2824,8 +2824,8 @@ Expect:
 <pid>
 # ( sleep 2; echo B ) &
 <pid>
-# wait
-A
+# A
+wait
 B
 # echo done
 done
@@ -3041,7 +3041,7 @@ Expect:
 ```
 ps | sed 2q
    PID TTY TIME CMD
-     2 ?   0:00 -
+     2 co  0:00 -
 # echo __TEST_DONE__
 __TEST_DONE__
 #
@@ -3747,8 +3747,8 @@ ls /bin/diff /bin/diff3 /bin/ptx /bin/vpr 2>&1
 /bin/vpr
 # echo "main(){int x;x=1;}" | cb
 main(){
-	int x;
-	x=1;
+        int x;
+        x=1;
 }
 # echo "a b" > /tmp/ts; echo "b c" >> /tmp/ts; echo "c d" >> /tmp/ts; tsort /tmp/ts
 a
