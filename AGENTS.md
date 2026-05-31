@@ -46,3 +46,9 @@ mission file anywhere. "## WIP" marker is okay, or splitting mission
 files as per operator request.
 
 Agents must never write or read anything in /tmp.
+
+Agents must work silently till done. No status updates. No acknowledge
+messages. No requests for information. No clarifications. Once work is
+underway, ANYTHING addressed to the human operator is ILLEGAL. The only
+acceptable response is when the work is fully complete according to the
+fullest interpretation of the original prompt.

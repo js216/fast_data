@@ -16,7 +16,7 @@ Foreach:
 ldr in selache/xtest/build/drafts/cces/cctest_*.0x*.ldr
 ```
 
-Test (max 2 min):
+Test (max 60 sec):
 
 ```
 dsp:reset
