@@ -86,10 +86,17 @@ usr/src/libc/syscall.s
 usr/src/libc/ttyname.c
 usr/src/libc/u.ld
 usr/sys/conf/arm_qemu.ld
-usr/sys/conf/c.c
-usr/sys/conf/l.s
+usr/sys/conf/conf.c
+usr/sys/conf/low.s
 usr/sys/conf/mch.s
+usr/sys/conf/mp135.c
+usr/sys/conf/mp135/memmap.h
+usr/sys/conf/qemu.c
+usr/sys/conf/qemu/memmap.h
+usr/sys/conf/sysram.ld
 usr/sys/dev/pl011.c
+usr/sys/dev/stm32sd.c
+usr/sys/dev/stm32usart.c
 usr/sys/dev/virtio_blk.c
 usr/sys/sys/machdep.c
 ```
@@ -10973,11 +10980,6 @@ diff unix-v7-c99/v7/usr/include/ctype.h unix-v7-c99/usr/include/ctype.h || true
 Expect:
 
 ```
-```
-
-### usr/include/errno.h
-
-Local test:
 
 ```
 diff unix-v7-c99/v7/usr/include/errno.h unix-v7-c99/usr/include/errno.h || true
@@ -11270,7 +11272,15 @@ Expect:
 ---
 > void
 > iinit(void)
-125c141
+119c135,139
+< char	buffers[NBUF][BSIZE+BSLOP];
+---
+> /* Each buffer must be word-aligned: the STM32 SDMMC internal DMA requires a
+>  * 32-bit-aligned IDMABASER, so the per-buffer stride is rounded up to a
+>  * multiple of 4 (BSIZE+BSLOP=514 would leave odd buffers 2-byte aligned and
+>  * the DMA would corrupt those transfers). */
+> char	buffers[NBUF][(BSIZE+BSLOP+3)&~3] __attribute__((aligned(4), section(KTABLES_SECTION)));
+125c145
 < binit()
 ---
 > void binit(void)
@@ -23045,57 +23055,58 @@ Expect:
 ```
 4d3
 < #include "../h/seg.h"
-8c7,11
+8c7,12
 < #include "../h/reg.h"
 ---
+> #include "../h/seg.h"		/* GIC_DIST_BASE/GIC_CPU_BASE (board memmap.h) */
 > extern void addupc(caddr_t pc, void *prof, int inc);
 > int intr_disable(void);
 > void intr_restore(int s);
 > void wakeup(caddr_t chan);
 > void panic(char *s);
-28,30c31,32
+28,30c32,33
 < clock(dev, sp, r1, nps, r0, pc, ps)
 < dev_t dev;
 < caddr_t pc;
 ---
 > void
 > clock(dev_t dev, int sp, int r1, int nps, int r0, caddr_t pc, int ps)
-35a38
+35a39
 > 	(void)dev; (void)sp; (void)r1; (void)nps; (void)r0;
-41d43
+41d44
 < 	lks->r[0] = 0115;
-47d48
+47d49
 < 	display();
-71c72
+71c73
 < 	spl5();
 ---
 > 	intr_disable();
-79c80
+79c81
 < 		while(p2->c_func = p1->c_func) {
 ---
 > 		while((p2->c_func = p1->c_func) != 0) {
-114c115
+114c116
 < 		spl1();
 ---
 > 		intr_disable();
-154,156c155,156
+154,156c156,157
 < timeout(fun, arg, tim)
 < int (*fun)();
 < caddr_t arg;
 ---
 > void
 > timeout(int (*fun)(), caddr_t arg, int tim)
-164c164
+164c165
 < 	s = spl7();
 ---
 > 	s = intr_disable();
-184c184,269
+184c185,272
 < 	splx(s);
 ---
 > 	intr_restore(s);
 > }
-> #define GICD_BASE	0x08000000U
-> #define GICC_BASE	0x08010000U
+> #define GICD_BASE	GIC_DIST_BASE	/* board-specific (conf/<board>/memmap.h) */
+> #define GICC_BASE	GIC_CPU_BASE
 > #define GICD_CTLR	(*(volatile unsigned int *)(GICD_BASE + 0x000))
 > #define GICD_ISENABLER(n) (*(volatile unsigned int *)(GICD_BASE + 0x100 + 4*(n)))
 > #define GICD_IPRIORITYR(n) (*(volatile unsigned int *)(GICD_BASE + 0x400 + 4*(n)))
@@ -23104,14 +23115,14 @@ Expect:
 > #define GICC_IAR	(*(volatile unsigned int *)(GICC_BASE + 0x00c))
 > #define GICC_EOIR	(*(volatile unsigned int *)(GICC_BASE + 0x010))
 > #define TIMER_IRQ	27
-> #define UART_IRQ	33		/* PL011 console: SPI 1 -> GIC INTID 33 */
 > #define TIMER_HZ	HZ
 > extern unsigned int cntfrq_get(void);
 > extern void cntv_tval_set(unsigned int v), cntv_ctl_set(unsigned int v);
 > extern void irq_enable(void);
-> extern int pl011intr(void);
-> extern int virtio_intr(void);
-> extern int virtio_irq;
+> extern int cnintr(void);	/* console interrupt (board console driver) */
+> extern int cn_irq;		/* console GIC INTID, set by the console driver */
+> extern int bdintr(void);	/* block-device interrupt (board block driver) */
+> extern int bd_irq;		/* block-device GIC INTID, set by the driver */
 > static unsigned int timer_reload;
 > int irq_ready;
 > caddr_t waitloc;	/* pc of the idle wait, for cpu-time accounting */
@@ -23135,10 +23146,10 @@ Expect:
 > 		if(u.u_procp != NULL)
 > 			clock(0, 0, 0, 0, 0, (caddr_t)tf[15],
 > 			    usermode ? 0xf000 : 0);
-> 	} else if(intid == UART_IRQ)
-> 		pl011intr();
-> 	else if(virtio_irq && intid == (unsigned int)virtio_irq)
-> 		virtio_intr();
+> 	} else if(cn_irq && intid == (unsigned int)cn_irq)
+> 		cnintr();
+> 	else if(bd_irq && intid == (unsigned int)bd_irq)
+> 		bdintr();
 > 	GICC_EOIR = iar;
 > }
 > void
@@ -23155,21 +23166,23 @@ Expect:
 > 	prio_val |=  (0x80U << prio_off);
 > 	GICD_IPRIORITYR(prio_reg) = prio_val;
 > 	GICD_ISENABLER(TIMER_IRQ / 32) = 1U << (TIMER_IRQ % 32);
-> 	prio_reg = UART_IRQ / 4;
-> 	prio_off = (UART_IRQ % 4) * 8;
-> 	prio_val = GICD_IPRIORITYR(prio_reg);
-> 	prio_val &= ~(0xffU << prio_off);
-> 	prio_val |=  (0x80U << prio_off);
-> 	GICD_IPRIORITYR(prio_reg) = prio_val;
-> 	GICD_ISENABLER(UART_IRQ / 32) = 1U << (UART_IRQ % 32);
-> 	if(virtio_irq) {
-> 		prio_reg = virtio_irq / 4;
-> 		prio_off = (virtio_irq % 4) * 8;
+> 	if(cn_irq) {
+> 		prio_reg = cn_irq / 4;
+> 		prio_off = (cn_irq % 4) * 8;
 > 		prio_val = GICD_IPRIORITYR(prio_reg);
 > 		prio_val &= ~(0xffU << prio_off);
 > 		prio_val |=  (0x80U << prio_off);
 > 		GICD_IPRIORITYR(prio_reg) = prio_val;
-> 		GICD_ISENABLER(virtio_irq / 32) = 1U << (virtio_irq % 32);
+> 		GICD_ISENABLER(cn_irq / 32) = 1U << (cn_irq % 32);
+> 	}
+> 	if(bd_irq) {
+> 		prio_reg = bd_irq / 4;
+> 		prio_off = (bd_irq % 4) * 8;
+> 		prio_val = GICD_IPRIORITYR(prio_reg);
+> 		prio_val &= ~(0xffU << prio_off);
+> 		prio_val |=  (0x80U << prio_off);
+> 		GICD_IPRIORITYR(prio_reg) = prio_val;
+> 		GICD_ISENABLER(bd_irq / 32) = 1U << (bd_irq % 32);
 > 	}
 > 	GICD_CTLR = 1;
 > 	GICC_PMR  = 0xff;
@@ -23199,22 +23212,24 @@ Expect:
 < #define	UISD	((physadr)0177600)	/* first user I-space descriptor register */
 < #define	UISA	((physadr)0177640)	/* first user I-space address register */
 < #define	UDSA	((physadr)0177660)	/* first user D-space address register */
-15,16c12
+15,16c12,14
 <  * structure used to address
 <  * a sequence of integers.
 ---
->  * User virtual memory layout.
-18c14,39
+>  * Physical memory layout (KERNBASE, COREBASE, CORETOP) is board-specific and
+>  * comes from conf/<board>/memmap.h, selected by the Makefile -I path -- so the
+>  * kernel sources are identical across boards (no conditional compilation).
+18c16
 < physadr	ka6;		/* 11/40 KISA6; 11/45 KDSA6 */
 ---
-> #define KERNBASE	0x40000000U	/* physical RAM base (QEMU virt) */
-> /*
->  * Configured machine memory size.  QEMU virt exposes no firmware memory
->  * map to probe, so -- as v7 itself fixed MAXMEM/NSWAP at config time --
->  * the kernel is built for a known machine: set MEMSIZE to match the qemu
->  * '-m' value (default 128 MB).  CORETOP is derived from it.
->  */
-> #define MEMSIZE		0x08000000U	/* 128 MB */
+> #include "memmap.h"
+21c19
+<  * address to access 11/70 UNIBUS map
+---
+>  * User virtual memory layout.
+23c21,61
+< #define	UBMAP	((physadr)0170200)
+---
 > #define USERBASE	0x00000000U
 > #define USERSIZE	0x00100000U	/* 1 MB user virtual window (VA 0..) */
 > #define UENTRY		0x00010000U
@@ -23229,27 +23244,33 @@ Expect:
 >  * "clicks" (64 bytes) within [COREBASE, CORETOP); click c is at CLKADDR(c).
 >  * Click 0 is reserved (malloc returns 0 to mean "no core").
 >  */
-> #define COREBASE	0x44000000U
-> #define CORETOP		(KERNBASE + MEMSIZE)
 > #define NCLICK		((CORETOP-COREBASE)>>6)		/* clicks of user core */
 > #define CLKADDR(c)	((char *)(COREBASE + ((unsigned)(c) << 6)))
-21c42,44
-<  * address to access 11/70 UNIBUS map
----
->  * Armv7 short-descriptor page-table bits.  User pages are mapped
->  * strongly-ordered (uncached) to match the proven device-style user
->  * mapping and sidestep I/D cache aliasing for now.
-23c46,53
-< #define	UBMAP	((physadr)0170200)
----
-> #define SEC_KERN	0x00000402U	/* L1 1 MB section, kernel rw */
-> #define SEC_DEV		0x00000c02U	/* L1 1 MB section, device */
+> /*
+>  * Section/page attributes.  Normal memory (kernel, user, DDR) is Normal
+>  * Write-Back/Write-Allocate, shareable -- CACHED (TEX=001,C=1,B=1,S=1) -- so
+>  * the CPU runs at full speed instead of stalling on every uncached access.
+>  * Device memory (MMIO) stays strongly ordered.  mmu_on() enables the L1
+>  * I/D caches; resume() invalidates the I-cache on context switch because the
+>  * per-process user region shares VA 0 (VIPT I-cache aliasing); DMA buffers
+>  * are flushed by the block driver (dcflush) on cache-incoherent hardware.
+>  */
+> #define SEC_KERN	0x0001140eU	/* L1 1 MB section, kernel rw, cached */
+> #define SEC_DEV		0x00000c02U	/* L1 1 MB section, device (uncached) */
 > #define PTE_PT		0x00000001U	/* L1 entry -> L2 coarse table */
-> #define PG_RW		0x00000032U	/* L2 small page, PL0 read/write */
-> #define PG_RO		0x00000022U	/* L2 small page, PL0 read-only */
-> #define PG_KRW		0x00000012U	/* L2 small page, kernel-only rw */
+> #define PG_RW		0x0000047eU	/* L2 small page, PL0 read/write, cached */
+> #define PG_RO		0x0000046eU	/* L2 small page, PL0 read-only, cached */
+> #define PG_KRW		0x0000045eU	/* L2 small page, kernel-only rw, cached */
 > #define PGSHIFT		12
 > #define PGSIZE		0x1000U
+> /*
+>  * Physical memory map, one entry per [start,end) 1 MB-section range with its
+>  * L1 attribute (SEC_KERN cached, SEC_DEV device).  The board file supplies a
+>  * board_map[] terminated by a zero entry; machine_init() (machdep.c) walks it
+>  * to build the section table -- identical code on every board, so QEMU
+>  * exercises the same machine_init() the MP135 runs.
+>  */
+> struct memregion { unsigned int start, end, attr; };
 ```
 
 ### usr/sys/dev/mem.c
@@ -23798,11 +23819,6 @@ diff unix-v7-c99/v7/usr/sys/dev/partab.c unix-v7-c99/usr/sys/dev/partab.c || tru
 Expect:
 
 ```
-```
-
-### usr/sys/dev/sys.c
-
-Local test:
 
 ```
 diff unix-v7-c99/v7/usr/sys/dev/sys.c unix-v7-c99/usr/sys/dev/sys.c || true
@@ -25042,35 +25058,33 @@ Expect:
 < 	spl0();
 ---
 > 	intr_enable();
-417a453
-> 	u.u_procp = p;
-426c462,463
+426c461,462
 < newproc()
 ---
 > int
 > newproc(void)
-431c468
+431c467
 < 	register n;
 ---
 > 	register int n;
-447c484
+447c483
 < 		if(rpp->p_stat == NULL && p==NULL)
 ---
 > 		if(rpp->p_stat == 0 && p==NULL)
-545c582,583
+545c581,582
 < expand(newsize)
 ---
 > void
 > expand(int newsize)
-547c585
+547c584
 < 	register i, n;
 ---
 > 	register int i, n;
-549c587
+549c586
 < 	register a1, a2;
 ---
 > 	register int a1, a2;
-550a589,595
+550a588,594
 > 	/*
 > 	 * Armv7: a process image must start on a page boundary because the
 > 	 * u-area is mapped as whole pages (UBASE window).  Round the image
@@ -25312,7 +25326,7 @@ Expect:
 131a109,183
 > char	regloc[9] = { R0, R1, R2, R3, R4, R5, R6, R7, RPS };
 > /*
->  * Called from svc_entry (conf/l.s) on a system call.  r is the 17-int
+>  * Called from svc_entry (conf/low.s) on a system call.  r is the 17-int
 >  * trap frame; the syscall number is in r7 (Armv7 ABI), arguments in
 >  * r0..r5.  Adapted from v7 trap.c case 6+USER plus the out: tail.
 >  */
@@ -25358,7 +25372,7 @@ Expect:
 > 		qswtch();
 > }
 > /*
->  * Called from the undef/abort entry stubs (conf/l.s) for a hardware
+>  * Called from the undef/abort entry stubs (conf/low.s) for a hardware
 >  * fault.  signo is the signal it maps to; r is the trap frame.  A fault
 >  * taken in kernel mode is fatal.
 >  */

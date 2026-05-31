@@ -2294,8 +2294,8 @@ Expect:
 icheck /dev/root
 /dev/root:
 files    165 (r=145,d=14,b=1,c=5)
-used   20660 (i=240,ii=115,iii=0,d=20190)
-free   11964
+used   20662 (i=240,ii=115,iii=0,d=20192)
+free   11962
 missing    0
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -2763,13 +2763,18 @@ __TEST_DONE__
 ### MT_BIG_PIPE
 
 Send a generated stream larger than PIPESIZ (64 KB) through a pipeline.
-In a multitasking kernel the producer and consumers run concurrently;
-wc drains the pipe as the upstream stages fill it, and the line count
-matches the full stream.
-Without multitasking cat is the only runnable process while it
-streams, hits the full pipe at 64 KB, ``write`` returns 0 forever,
-the stdio loop eventually gives up and exits, and wc only sees the
-first ~7800 lines that fit in the buffer.
+This kernel is preemptively multitasking (V7 swtch/sleep/wakeup, runrun
+reschedule on the clock tick), so the producer and consumers run
+concurrently: wc drains the pipe as the upstream stages fill it, and the
+line count matches the full 40000-line stream.
+The test exists to catch a regression *to* single-tasking -- in that
+broken case cat would be the only runnable process, fill the 64 KB pipe,
+``write`` would return 0 forever, the stdio loop would give up, and wc
+would see only the first ~7800 lines that fit in the buffer (count=~7800).
+The count is captured with backticks so it reaches the tty as one
+deterministic line: the byte-interleave of two concurrent tty writers
+(wc's output vs the shell's prompt newline) is legitimately
+nondeterministic and not what this test means to assert.
 
 Local test:
 
@@ -2780,16 +2785,15 @@ tmp/qemu-shell.py
 Inputs:
 
 ```
-yes x | sed 40000q | wc -l
+echo count=`yes x | sed 40000q | wc -l`
 echo __TEST_DONE__
 ```
 
 Expect:
 
 ```
-yes x | sed 40000q | wc -l
-  40000
-
+echo count=`yes x | sed 40000q | wc -l`
+count= 40000
 # echo __TEST_DONE__
 __TEST_DONE__
 #
