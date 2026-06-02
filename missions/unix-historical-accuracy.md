@@ -4629,13 +4629,13 @@ Expect:
 > 	u.u_base = kbuf;
 > 	u.u_count = n;
 > 	u.u_offset = off;
-169a266,282
+169a266,283
 > }
 > /*
 >  * Read in and set up memory for an ELF executable.
 >  * The Armv7 user image is a flat 1 MB window; arm_sureg maps it, so we
->  * allocate the full image, zero it, then read each PT_LOAD segment to
->  * its virtual address.  Entry goes through u_exdata.ux_entloc (used by
+>  * allocate the image, zero it, then read each PT_LOAD segment to its
+>  * virtual address.  Entry goes through u_exdata.ux_entloc (used by
 >  * setregs).  Zero return is normal.
 >  */
 > int
@@ -4644,24 +4644,37 @@ Expect:
 > 	struct elf32_ehdr eh;
 > 	struct elf32_phdr ph;
 > 	register int i;
-> 	int n;
+> 	int n, low, stack;
+> 	unsigned int end, maxend;
 > 	(void)nargc;
 > 	readbytes(ip, (caddr_t)&eh, 0, sizeof(eh));
-172c285,286
+172c286,287
 < 	if (u.u_count!=0) {
 ---
 > 	if(eh.e_ident[0] != 0x7f || eh.e_ident[1] != 'E' ||
 > 	   eh.e_ident[2] != 'L' || eh.e_ident[3] != 'F' || eh.e_type != 2) {
-176,197d289
+176,181c291,303
 < 	sep = 0;
 < 	overlay = 0;
 < 	if(u.u_exdata.ux_mag == 0407) {
 < 		lsize = (long)u.u_exdata.ux_dsize + u.u_exdata.ux_tsize;
 < 		u.u_exdata.ux_dsize = lsize;
 < 		if (lsize != u.u_exdata.ux_dsize) {	/* check overflow */
-< 			u.u_error = ENOMEM;
-< 			goto bad;
-< 		}
+---
+> 	/*
+> 	 * Find text and data sizes, and try them out for possible overflow.
+> 	 */
+> 	maxend = 0;
+> 	for(i = 0; i < (int)eh.e_phnum; i++) {
+> 		readbytes(ip, (caddr_t)&ph, eh.e_phoff + i*eh.e_phentsize,
+> 		    sizeof(ph));
+> 		if(u.u_error)
+> 			goto bad;
+> 		if(ph.p_type != PT_LOAD)
+> 			continue;
+> 		if(ph.p_vaddr >= USERSIZE || ph.p_memsz > USERSIZE - ph.p_vaddr ||
+> 		   ph.p_filesz > ph.p_memsz) {
+185,196c307,309
 < 		u.u_exdata.ux_tsize = 0;
 < 	} else if (u.u_exdata.ux_mag == 0411)
 < 		sep++;
@@ -4674,50 +4687,47 @@ Expect:
 < 	if(u.u_exdata.ux_tsize!=0 && (ip->i_flag&ITEXT)==0 && ip->i_count!=1) {
 < 		u.u_error = ETXTBSY;
 < 		goto bad;
-< 	}
-200,202c292,293
-< 	 * find text and data sizes
-< 	 * try them out for possible
-< 	 * overflow of max sizes
 ---
-> 	 * Commit to the new image: release old text, allocate and clear
-> 	 * the full user image, and map it.
-204,207c295,305
-< 	ts = btoc(u.u_exdata.ux_tsize);
-< 	lsize = (long)u.u_exdata.ux_dsize + u.u_exdata.ux_bsize;
-< 	if (lsize != (unsigned)lsize) {
-< 		u.u_error = ENOMEM;
----
+> 		end = ph.p_vaddr + ph.p_memsz;
+> 		if(end > maxend)
+> 			maxend = end;
+198a312,327
 > 	u.u_prof.pr_scale = 0;
 > 	xfree();
 > 	n = USIZE + (int)(USERSIZE >> 6);
 > 	expand(n);
-> 	for(i = USIZE; i < n; i++)
-> 		clearseg(u.u_procp->p_addr + i);
+> 	low = (int)btoc(maxend);
+> 	for(i = 0; i < low; i++)
+> 		clearseg(u.u_procp->p_addr + USIZE + i);
+> 	stack = (int)(USERSIZE >> 6) - SSIZE;
+> 	for(i = stack; i < (int)(USERSIZE >> 6); i++)
+> 		clearseg(u.u_procp->p_addr + USIZE + i);
 > 	u.u_tsize = 0;
-> 	u.u_dsize = (USERSIZE >> 6) - SSIZE;
+> 	u.u_dsize = (unsigned)low;
 > 	u.u_ssize = SSIZE;
 > 	u.u_sep = 0;
 > 	if(estabur(0, u.u_dsize, u.u_ssize, 0, RO))
-209,213c307,317
+> 		goto bad;
+200,202c329
+< 	 * find text and data sizes
+< 	 * try them out for possible
+< 	 * overflow of max sizes
+---
+> 	 * Load each PT_LOAD segment to its virtual address.
+204,224c331,334
+< 	ts = btoc(u.u_exdata.ux_tsize);
+< 	lsize = (long)u.u_exdata.ux_dsize + u.u_exdata.ux_bsize;
+< 	if (lsize != (unsigned)lsize) {
+< 		u.u_error = ENOMEM;
+< 		goto bad;
 < 	}
 < 	ds = btoc(lsize);
 < 	ss = SSIZE + btoc(nargc);
 < 	if (overlay) {
 < 		if (u.u_sep==0 && ctos(ts) != ctos(u.u_tsize) || nargc) {
----
-> 	/*
-> 	 * Load each PT_LOAD segment to its virtual address.
-> 	 */
-> 	for(i = 0; i < (int)eh.e_phnum; i++) {
-> 		readbytes(ip, (caddr_t)&ph, eh.e_phoff + i*eh.e_phentsize,
-> 		    sizeof(ph));
-> 		if(u.u_error)
-> 			goto bad;
-> 		if(ph.p_type != PT_LOAD || ph.p_filesz == 0)
-> 			continue;
-> 		if(ph.p_vaddr >= USERSIZE || ph.p_filesz > USERSIZE - ph.p_vaddr) {
-217,248c321,324
+< 			u.u_error = ENOMEM;
+< 			goto bad;
+< 		}
 < 		ds = u.u_dsize;
 < 		ss = u.u_ssize;
 < 		sep = u.u_sep;
@@ -4726,7 +4736,12 @@ Expect:
 < 		u.u_ar0[PC] = u.u_exdata.ux_entloc & ~01;
 < 	} else {
 < 		if(estabur(ts, ds, ss, sep, RO))
-< 			goto bad;
+---
+> 	for(i = 0; i < (int)eh.e_phnum; i++) {
+> 		readbytes(ip, (caddr_t)&ph, eh.e_phoff + i*eh.e_phentsize,
+> 		    sizeof(ph));
+> 		if(u.u_error)
+226,248c336,341
 < 	
 < 		/*
 < 		 * allocate and clear core
@@ -4751,11 +4766,13 @@ Expect:
 < 		u.u_offset = sizeof(u.u_exdata)+u.u_exdata.ux_tsize;
 < 		u.u_count = u.u_exdata.ux_dsize;
 ---
+> 		if(ph.p_type != PT_LOAD || ph.p_filesz == 0)
+> 			continue;
 > 		u.u_base = (caddr_t)ph.p_vaddr;
 > 		u.u_count = ph.p_filesz;
 > 		u.u_offset = ph.p_offset;
 > 		u.u_segflg = 0;
-250,268c326,330
+250,268c343,347
 < 		/*
 < 		 * set SUID/SGID protections, if no tracing
 < 		 */
@@ -4781,76 +4798,114 @@ Expect:
 > 	}
 > 	u.u_exdata.ux_entloc = eh.e_entry;
 > 	arm_sync_icache();
-270c332
+270c349
 < 	return(overlay);
 ---
 > 	return(0);
-276c338,339
+276c355,356
 < setregs()
 ---
 > void
 > setregs(void)
-280c343
+280c360
 < 	register i;
 ---
 > 	register int i;
-286c349
+286c366
 < 		u.u_ar0[*cp++] = 0;
 ---
 > 		u.u_ar0[(int)*cp++] = 0;
-296a360
+296a377
 > 	u.u_acflag &= ~AFORK;
-300d363
+300d380
 < 	u.u_acflag &= ~AFORK;
-308c371,372
+308c388,389
 < rexit()
 ---
 > void
 > rexit(void)
-325c389,390
+325c406,407
 < exit(rv)
 ---
 > void
 > exit(int rv)
-377c442,443
+377c459,460
 < wait()
 ---
 > void
 > wait(void)
-379c445
+379c462
 < 	register f;
 ---
 > 	register int f;
-422c488,489
+422c505,506
 < fork()
 ---
 > void
 > fork(void)
-425c492
+425c509
 < 	register a;
 ---
 > 	register int a;
-456d522
+456d539
 < 	p1 = u.u_procp;
-458c524,525
+458c541,542
 < 		u.u_r.r_val1 = p1->p_pid;
 ---
 > 		/* child: fork() returns 0 */
 > 		u.u_r.r_val1 = 0;
-469,470c536
+469,470c553
 < out:
 < 	u.u_ar0[R7] += NBPW;
 ---
 > out:	;
-477c543,544
+477c560,561
 < sbreak()
 ---
 > void
 > sbreak(void)
-482c549
+482c566
 < 	register a, n, d;
 ---
 > 	register int a, n, d;
+497d580
+< 	n += USIZE+u.u_ssize;
+500,508c583,585
+< 	u.u_dsize += d;
+< 	if(d > 0)
+< 		goto bigger;
+< 	a = u.u_procp->p_addr + n - u.u_ssize;
+< 	i = n;
+< 	n = u.u_ssize;
+< 	while(n--) {
+< 		copyseg(a-d, a);
+< 		a++;
+---
+> 	if((unsigned)n > (USERSIZE >> 6) - u.u_ssize) {
+> 		u.u_error = ENOMEM;
+> 		return;
+510,511d586
+< 	expand(i);
+< 	return;
+513,519c588,591
+< bigger:
+< 	expand(n);
+< 	a = u.u_procp->p_addr + n;
+< 	n = u.u_ssize;
+< 	while(n--) {
+< 		a--;
+< 		copyseg(a-d, a);
+---
+> 	if(d > 0) {
+> 		a = u.u_procp->p_addr + USIZE + (int)u.u_dsize;
+> 		for(i = 0; i < d; i++)
+> 			clearseg(a + i);
+521,522c593,594
+< 	while(d--)
+< 		clearseg(--a);
+---
+> 	u.u_dsize += d;
+> 	return;
 ```
 
 ### usr/sys/sys/sys2.c
@@ -6951,40 +7006,90 @@ diff unix-v7-c99/v7/usr/src/cmd/dmesg.c unix-v7-c99/usr/src/cmd/dmesg.c || true
 Expect:
 
 ```
-20,21c20,21
+12a13
+> #define KMSGBASE	0x7fff0000U
+20,21c21,22
 < 	{"_msgbuf"},
 < 	{"_msgbufp"}
 ---
 > 	{"_msgbuf",  0, 0},
 > 	{"_msgbufp", 0, 0}
-24,25c24,27
+24,25c25,29
 < main(argc, argv)
 < char **argv;
 ---
 > int done(char *);
 > int pdate(void);
+> int readlive(int);
 > int
 > main(int argc, char **argv)
-84,85c86,87
+29a34
+> 	int live;
+45a51
+> 	live = 0;
+47,52c53,73
+< 	read(mem, msgbuf, MSGBUFS);
+< 	lseek(mem, (long)nl[1].n_value, 0);
+< 	read(mem, (char *)&msgbufp, sizeof(msgbufp));
+< 	if (msgbufp < (char *)nl[0].n_value || msgbufp >= (char *)nl[0].n_value+MSGBUFS)
+< 		done("Namelist mismatch\n");
+< 	msgbufp += msgbuf - (char *)nl[0].n_value;
+---
+> 	if (read(mem, msgbuf, MSGBUFS) != MSGBUFS) {
+> 		if (readlive(mem) < 0)
+> 			done("Namelist mismatch\n");
+> 		live = 1;
+> 	}
+> 	if (!live) {
+> 		lseek(mem, (long)nl[1].n_value, 0);
+> 		if (read(mem, (char *)&msgbufp, sizeof(msgbufp)) != sizeof(msgbufp)) {
+> 			if (readlive(mem) < 0)
+> 				done("Namelist mismatch\n");
+> 			live = 1;
+> 		}
+> 	}
+> 	if (!live &&
+> 	    (msgbufp < (char *)nl[0].n_value || msgbufp >= (char *)nl[0].n_value+MSGBUFS)) {
+> 		if (readlive(mem) < 0)
+> 			done("Namelist mismatch\n");
+> 		live = 1;
+> 	}
+> 	if (!live)
+> 		msgbufp += msgbuf - (char *)nl[0].n_value;
+84,85c105,120
 < done(s)
 < char *s;
 ---
 > int
-> done(char *s)
-99a102
+> readlive(int mem)
+> {
+> 	unsigned int idx;
+> 	lseek(mem, (long)KMSGBASE, 0);
+> 	if (read(mem, (char *)&idx, sizeof(idx)) != sizeof(idx))
+> 		return(-1);
+> 	if (idx >= MSGBUFS)
+> 		return(-1);
+> 	if (read(mem, msgbuf, MSGBUFS) != MSGBUFS)
+> 		return(-1);
+> 	msgbufp = &msgbuf[idx];
 > 	return(0);
-102c105,106
+> }
+> int
+> done(char *s)
+99a135
+> 	return(0);
+102c138,139
 < pdate()
 ---
 > int
 > pdate(void)
-104,105c108,109
+104,105c141,142
 < 	extern char *ctime();
 < 	static firstime;
 ---
 > 	extern char *ctime(long *t);
 > 	static int firstime;
-112a117
+112a150
 > 	return(0);
 ```
 
@@ -9434,7 +9539,9 @@ diff unix-v7-c99/v7/usr/sys/h/systm.h unix-v7-c99/usr/sys/h/systm.h || true
 Expect:
 
 ```
-48,63c48,89
+41a42
+> extern	char	*msgbufp;	/* next saved printf character */
+48,63c49,90
 < dev_t getmdev();
 < daddr_t	bmap();
 < struct inode *ialloc();
@@ -9494,7 +9601,7 @@ Expect:
 > void	bcopy(char *f, char *t, unsigned int n);
 > int	copyin(caddr_t f, caddr_t t, unsigned int n);
 > int	copyout(caddr_t f, caddr_t t, unsigned int n);
-80c106
+80c107
 < 	int	(*sy_call)();		/* handler */
 ---
 > 	void	(*sy_call)(void);	/* handler (Armv7/C99: void(void)) */
@@ -11265,14 +11372,23 @@ Expect:
 < 	proc[0].p_addr = ka6->r[0];
 ---
 > 	proc[0].p_addr = 64;
-70a85
+68,69c82,86
+< 		expand(USIZE + (int)btoc(szicode));
+< 		estabur((unsigned)0, btoc(szicode), (unsigned)0, 0, RO);
+---
+> 		int dclicks = ((int)btoc(szicode) + 63) & ~63;
+> 		expand(USIZE + dclicks);
+> 		u.u_dsize = dclicks;
+> 		u.u_ssize = 0;
+> 		estabur((unsigned)0, (unsigned)dclicks, (unsigned)0, 0, RO);
+70a88
 > 		arm_sync_icache();
-90c105,106
+90c108,109
 < iinit()
 ---
 > void
 > iinit(void)
-119c135,139
+119c138,142
 < char	buffers[NBUF][BSIZE+BSLOP];
 ---
 > /* Each buffer must be word-aligned: the STM32 SDMMC internal DMA requires a
@@ -11280,7 +11396,7 @@ Expect:
 >  * multiple of 4 (BSIZE+BSLOP=514 would leave odd buffers 2-byte aligned and
 >  * the DMA would corrupt those transfers). */
 > char	buffers[NBUF][(BSIZE+BSLOP+3)&~3] __attribute__((aligned(4), section(KTABLES_SECTION)));
-125c145
+125c148
 < binit()
 ---
 > void binit(void)
@@ -19500,21 +19616,28 @@ Expect:
 ---
 > int
 > main(int argc, char *argv[])
-103c127
+59c83,86
+< 	time(&utime);
+---
+> 	if ((fsys = getenv("V7_MKFS_TIME")) != NULL)
+> 		utime = atol(fsys);
+> 	else
+> 		time(&utime);
+103c130
 < 		for(f=0; c=proto[f]; f++) {
 ---
 > 		for(f=0; (c=proto[f]); f++) {
-114c138
+114c141
 < 		if(n > 65500/NIPB)
 ---
 > 		if((unsigned long)n > 65500/NIPB)
-117c141
+117c144
 < 		printf("isize = %D\n", n*NIPB);
 ---
 > 		printf("isize = %ld\n", n*NIPB);
-125d148
+125d151
 < 	 * and read onto block 0
-130,145c153,155
+130,145c156,158
 < 	if(f < 0) {
 < 		printf("%s: cannot  open init\n", string);
 < 		goto f2;
@@ -19535,82 +19658,82 @@ Expect:
 > 	if(f < 0)
 > 		printf("%s: cannot open init\n", string);
 > 	else
-147d156
+147d159
 < f1:
-155d163
+155d166
 < f2:
-175c183
+175c186
 < 		printf("%ld/%ld: bad ratio\n", filsys.s_fsize, filsys.s_isize-2);
 ---
 > 		printf("%ld/%d: bad ratio\n", filsys.s_fsize, filsys.s_isize-2);
-197,198c205,206
+197,198c208,209
 < cfile(par)
 < struct inode *par;
 ---
 > void
 > cfile(struct inode *par)
-203c211
+203c214
 < 	daddr_t ib[NINDIR];
 ---
 > 	daddr_t ib[MAXFILEBLK];
-235c243
+235c246
 < 	for(i=0; i<NINDIR; i++)
 ---
 > 	for(i=0; (unsigned)i<MAXFILEBLK; i++)
-309,310c317,318
+309,310c320,321
 < gmode(c, s, m0, m1, m2, m3)
 < char c, *s;
 ---
 > int
 > gmode(int c, char *s, int m0, int m1, int m2, int m3)
-312a321
+312a324
 > 	int m[4] = {m0, m1, m2, m3};
-316c325
+316c328
 < 			return((&m0)[i]);
 ---
 > 			return(m[i]);
-323c332
+323c335
 < getnum()
 ---
 > getnum(void)
-331c340
+331c343
 < 	for(i=0; c=string[i]; i++) {
 ---
 > 	for(i=0; (c=string[i]) != 0; i++) {
-342c351,352
+342c354,355
 < getstr()
 ---
 > void
 > getstr(void)
-372,374c382,383
+372,374c385,386
 < rdfs(bno, bf)
 < daddr_t bno;
 < char *bf;
 ---
 > void
 > rdfs(daddr_t bno, char *bf)
-386,388c395,396
+386,388c398,399
 < wtfs(bno, bf)
 < daddr_t bno;
 < char *bf;
 ---
 > void
 > wtfs(daddr_t bno, char *bf)
-395c403
+395c406
 < 		printf("write error: %D\n", bno);
 ---
 > 		printf("write error: %ld\n", bno);
-401c409
+401c412
 < alloc()
 ---
 > alloc(void)
-421,422c429,430
+421,422c432,433
 < bfree(bno)
 < daddr_t bno;
 ---
 > void
 > bfree(daddr_t bno)
-437,442c445,446
+437,442c448,449
 < entry(inum, str, adbc, db, aibc, ib)
 < ino_t inum;
 < char *str;
@@ -19620,11 +19743,11 @@ Expect:
 ---
 > void
 > entry(ino_t inum, char *str, int *adbc, char *db, int *aibc, daddr_t *ib)
-456c460
+456c463
 < 	if(*adbc >= NDIRECT)
 ---
 > 	if((unsigned)*adbc >= NDIRECT)
-460,463c464,465
+460,463c467,468
 < newblk(adbc, db, aibc, ib)
 < int *adbc, *aibc;
 < char *db;
@@ -19632,43 +19755,43 @@ Expect:
 ---
 > void
 > newblk(int *adbc, char *db, int *aibc, daddr_t *ib)
-467a470,474
+467a473,477
 > 	if((unsigned)*aibc >= MAXFILEBLK) {
 > 		printf("indirect block full\n");
 > 		error = 1;
 > 		return;
 > 	}
-475,479d481
+475,479d484
 < 	if(*aibc >= NINDIR) {
 < 		printf("indirect block full\n");
 < 		error = 1;
 < 		*aibc = 0;
 < 	}
-482c484,485
+482c487,488
 < getch()
 ---
 > int
 > getch(void)
-494c497,498
+494c500,501
 < bflist()
 ---
 > void
 > bflist(void)
-525c529
+525c532
 < 	for(i=0; i<NINDIR; i++)
 ---
 > 	for(i=0; (unsigned)i<NINDIR; i++)
-535c539
+535c542
 < 		if(f < filsys.s_fsize && f >= filsys.s_isize)
 ---
 > 		if(f < filsys.s_fsize && f >= filsys.s_isize) {
-537c541
+537c544
 < 				if(ibc >= NINDIR) {
 ---
 > 				if((unsigned)ibc >= NINDIR) {
-545a550
+545a553
 > 		}
-550,553c555,556
+550,553c558,559
 < iput(ip, aibc, ib)
 < struct inode *ip;
 < int *aibc;
@@ -19676,13 +19799,13 @@ Expect:
 ---
 > void
 > iput(struct inode *ip, int *aibc, daddr_t *ib)
-556,557c559,560
+556,557c562,563
 < 	daddr_t d;
 < 	int i;
 ---
 > 	daddr_t d, single[NINDIR], dbl[NINDIR];
 > 	int i, j, k, n;
-584,587c587,589
+584,587c590,592
 < 		for(i=0; i<*aibc; i++) {
 < 			if(i >= LADDR)
 < 				break;
@@ -19691,7 +19814,7 @@ Expect:
 > 		for(i=0; (unsigned)i<NINDIR; i++) {
 > 			single[i] = (daddr_t)0;
 > 			dbl[i] = (daddr_t)0;
-589c591,598
+589c594,601
 < 		if(*aibc >= LADDR) {
 ---
 > 		for(i=0; i<*aibc && i<LADDR; i++)
@@ -19702,7 +19825,7 @@ Expect:
 > 				n = (int)NINDIR;
 > 			for(i=0; i<n; i++)
 > 				single[i] = ib[LADDR+i];
-591,593c600,619
+591,593c603,622
 < 			for(i=0; i<NINDIR-LADDR; i++) {
 < 				ib[i] = ib[i+LADDR];
 < 				ib[i+LADDR] = (daddr_t)0;
@@ -19727,19 +19850,19 @@ Expect:
 > 				}
 > 				dbl[i] = alloc();
 > 				wtfs(dbl[i], (char *)single);
-595c621
+595c624
 < 			wtfs(ip->i_un.i_addr[LADDR], (char *)ib);
 ---
 > 			wtfs(ip->i_un.i_addr[LADDR+1], (char *)dbl);
-596a623
+596a626
 > 		/* fall through */
-610,611c637,638
+610,611c640,641
 < badblk(bno)
 < daddr_t bno;
 ---
 > int
 > badblk(daddr_t bno)
-613a641
+613a644
 > 	(void)bno;
 ```
 
@@ -23232,7 +23355,7 @@ Expect:
 ---
 > #define USERBASE	0x00000000U
 > #define USERSIZE	0x00100000U	/* 1 MB user virtual window (VA 0..) */
-> #define UENTRY		0x00010000U
+> #define UENTRY		0x00000010U
 > #define USTACK		0x000f0000U
 > #define UARGV		0x0000f000U
 > #define UARGLEN		3072
@@ -24872,8 +24995,9 @@ diff unix-v7-c99/v7/usr/sys/sys/slp.c unix-v7-c99/usr/sys/sys/slp.c || true
 Expect:
 
 ```
-10a11,40
+10a11,41
 > #include "../h/seg.h"
+> #include "../h/reg.h"
 > void sleep(caddr_t chan, int pri);
 > void wakeup(caddr_t chan);
 > void setrq(struct proc *p);
@@ -24903,188 +25027,222 @@ Expect:
 > void xunlock(struct text *xp);
 > void swap(daddr_t blkno, int coreaddr, int count, int rdflg);
 > void copyseg(int from, int to);
-27,28c57,58
+13a45
+> #define ARM_FORK_STACK_COPY 1024	/* fallback high-stack band */
+27,28c59,60
 < sleep(chan, pri)
 < caddr_t chan;
 ---
 > void
 > sleep(caddr_t chan, int pri)
-31c61
+31c63
 < 	register s, h;
 ---
 > 	register int s, h;
-34c64
+34c66
 < 	s = spl6();
 ---
 > 	s = intr_disable();
-50c80
+50c82
 < 			spl0();
 ---
 > 			intr_enable();
-53c83
+53c85
 < 		spl0();
 ---
 > 		intr_enable();
-62c92
+62c94
 < 		spl0();
 ---
 > 		intr_enable();
-65c95
+65c97
 < 	splx(s);
 ---
 > 	intr_restore(s);
-82,83c112,113
+82,83c114,115
 < wakeup(chan)
 < register caddr_t chan;
 ---
 > void
 > wakeup(caddr_t chan)
-86c116
+86c118
 < 	register i;
 ---
 > 	register int i;
-89c119
+89c121
 < 	s = spl6();
 ---
 > 	s = intr_disable();
-109c139
+109c141
 < 	splx(s);
 ---
 > 	intr_restore(s);
-118,119c148,149
+118,119c150,151
 < setrq(p)
 < struct proc *p;
 ---
 > void
 > setrq(struct proc *p)
-122c152
+122c154
 < 	register s;
 ---
 > 	register int s;
-124c154
+124c156
 < 	s = spl6();
 ---
 > 	s = intr_disable();
-133c163
+133c165
 < 	splx(s);
 ---
 > 	intr_restore(s);
-140,141c170,171
+140,141c172,173
 < setrun(p)
 < register struct proc *p;
 ---
 > void
 > setrun(struct proc *p)
-151c181
+151c183
 < 	if (w = p->p_wchan) {
 ---
 > 	if ((w = p->p_wchan) != 0) {
-171,172c201,202
+171,172c203,204
 < setpri(pp)
 < register struct proc *pp;
 ---
 > int
 > setpri(struct proc *pp)
-174c204
+174c206
 < 	register p;
 ---
 > 	register int p;
-202c232,233
+202c234,235
 < sched()
 ---
 > void
 > sched(void)
-205c236
+205c238
 < 	register outage, inage;
 ---
 > 	register int outage, inage;
-214c245
+214c247
 < 	spl6();
 ---
 > 	intr_disable();
-215a247
+215a249
 > 	p = NULL;
-230c262
+230c264
 < 	spl0();
 ---
 > 	intr_enable();
-247c279
+247c281
 < 	spl6();
 ---
 > 	intr_disable();
-257c289
+257c291
 < 		if (rp->p_stat==SSLEEP&&rp->p_pri>=PZERO || rp->p_stat==SSTOP) {
 ---
 > 		if ((rp->p_stat==SSLEEP&&rp->p_pri>=PZERO) || rp->p_stat==SSTOP) {
-269c301
+269c303
 < 	spl0();
 ---
 > 	intr_enable();
-281c313
+281c315
 < 	spl6();
 ---
 > 	intr_disable();
-292,293c324,325
+292,293c326,327
 < swapin(p)
 < register struct proc *p;
 ---
 > int
 > swapin(struct proc *p)
-301c333
+301c335
 < 	if (xp = p->p_textp) {
 ---
 > 	if ((xp = p->p_textp) != 0) {
-329c361,362
+329c363,364
 < qswtch()
 ---
 > void
 > qswtch(void)
-347c380,381
+347c382,383
 < swtch()
 ---
 > void
 > swtch(void)
-349c383
+349c385
 < 	register n;
 ---
 > 	register int n;
-380c414
+380c416
 < 	spl6();
 ---
 > 	intr_disable();
-383a418
+383a420
 > 	pq = NULL;
-412c447
+412c449
 < 	spl0();
 ---
 > 	intr_enable();
-426c461,462
+426c463,464
 < newproc()
 ---
 > int
 > newproc(void)
-431c467
+431c469
 < 	register n;
 ---
 > 	register int n;
-447c483
+447c485
 < 		if(rpp->p_stat == NULL && p==NULL)
 ---
 > 		if(rpp->p_stat == 0 && p==NULL)
-545c581,582
+520c558
+< 		 * There is core, so just copy.
+---
+> 		 * Copy the u-area, live low image, and high stack.
+521a560
+> 		register int low, stack;
+523,524c562,583
+< 		while(n--)
+< 			copyseg(a1++, a2++);
+---
+> 		low = (int)u.u_dsize;
+> 		stack = (int)u.u_ssize;
+> 		if(stack < ARM_FORK_STACK_COPY)
+> 			stack = ARM_FORK_STACK_COPY;
+> 		stack = USIZE + (int)(USERSIZE >> 6) - stack;
+> 		if(u.u_ar0 != NULL) {
+> 			unsigned usp;
+> 			int spclick;
+> 			usp = (unsigned)u.u_ar0[R6];
+> 			spclick = USIZE + (int)(usp >> 6);
+> 			if(usp < USERSIZE && spclick < stack)
+> 				stack = spclick;
+> 		}
+> 		if(low <= 0 || low > stack - USIZE) {
+> 			while(n--)
+> 				copyseg(a1++, a2++);
+> 		} else {
+> 			for(n = 0; n < USIZE + low; n++)
+> 				copyseg(a1 + n, a2 + n);
+> 			for(n = stack; n < rpp->p_size; n++)
+> 				copyseg(a1 + n, a2 + n);
+> 		}
+545c604,605
 < expand(newsize)
 ---
 > void
 > expand(int newsize)
-547c584
+547c607
 < 	register i, n;
 ---
 > 	register int i, n;
-549c586
+549c609
 < 	register a1, a2;
 ---
 > 	register int a1, a2;
-550a588,594
+550a611,617
 > 	/*
 > 	 * Armv7: a process image must start on a page boundary because the
 > 	 * u-area is mapped as whole pages (UBASE window).  Round the image
@@ -25400,4 +25558,3 @@ Expect:
 > void nosys(void)   { u.u_error = EINVAL; }
 > void nullsys(void) { }
 ```
-
