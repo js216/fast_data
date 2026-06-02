@@ -116,11 +116,9 @@ diff unix-v7-c99/v7/usr/include/sys/ino.h unix-v7-c99/usr/include/sys/ino.h || t
 diff unix-v7-c99/v7/usr/include/tp_defs.h unix-v7-c99/usr/include/tp_defs.h || true
 diff unix-v7-c99/v7/usr/include/utmp.h unix-v7-c99/usr/include/utmp.h || true
 diff unix-v7-c99/v7/usr/sys/h/callo.h unix-v7-c99/usr/sys/h/callo.h || true
-diff unix-v7-c99/v7/usr/src/cmd/awk/awk.lx.l unix-v7-c99/usr/src/cmd/awk/awk.lx.l || true
 diff unix-v7-c99/v7/usr/src/cmd/sh/brkincr.h unix-v7-c99/usr/src/cmd/sh/brkincr.h || true
 diff unix-v7-c99/v7/usr/src/cmd/sh/dup.h unix-v7-c99/usr/src/cmd/sh/dup.h || true
 diff unix-v7-c99/v7/usr/src/cmd/sh/mac.h unix-v7-c99/usr/src/cmd/sh/mac.h || true
-diff unix-v7-c99/v7/usr/src/cmd/sh/makefile unix-v7-c99/usr/src/cmd/sh/makefile || true
 diff unix-v7-c99/v7/usr/src/cmd/sh/name.h unix-v7-c99/usr/src/cmd/sh/name.h || true
 diff unix-v7-c99/v7/usr/src/cmd/sh/stak.h unix-v7-c99/usr/src/cmd/sh/stak.h || true
 diff unix-v7-c99/v7/usr/src/cmd/sh/sym.h unix-v7-c99/usr/src/cmd/sh/sym.h || true
@@ -134,9 +132,7 @@ diff unix-v7-c99/v7/usr/sys/h/fblk.h unix-v7-c99/usr/sys/h/fblk.h || true
 diff unix-v7-c99/v7/usr/sys/h/filsys.h unix-v7-c99/usr/sys/h/filsys.h || true
 diff unix-v7-c99/v7/usr/sys/h/ino.h unix-v7-c99/usr/sys/h/ino.h || true
 diff unix-v7-c99/v7/usr/sys/h/mount.h unix-v7-c99/usr/sys/h/mount.h || true
-diff unix-v7-c99/v7/usr/sys/h/reg.h unix-v7-c99/usr/sys/h/reg.h || true
 diff unix-v7-c99/v7/usr/sys/h/stat.h unix-v7-c99/usr/sys/h/stat.h || true
-diff unix-v7-c99/v7/usr/sys/h/text.h unix-v7-c99/usr/sys/h/text.h || true
 diff unix-v7-c99/v7/usr/sys/h/timeb.h unix-v7-c99/usr/sys/h/timeb.h || true
 diff unix-v7-c99/v7/etc/group unix-v7-c99/etc/group || true
 diff unix-v7-c99/v7/etc/passwd unix-v7-c99/etc/passwd || true
@@ -1025,6 +1021,10 @@ Expect:
 ---
 > long
 > otoi(char *s)
+118c118
+< 	while(isdigit(*s))
+---
+> 	while(isdigit((unsigned char)*s))
 ```
 
 ### usr/src/cmd/comm.c
@@ -1390,15 +1390,27 @@ Expect:
 ---
 > int
 > dotname(char *s)
-130,131c134,135
+119,120c123,124
+< 	if(s[0] == '.')
+< 		if(s[1] == '.')
+---
+> 	if(s[0] == '.') {
+> 		if(s[1] == '.') {
+125c129
+< 		else if(s[1] == '\0')
+---
+> 		} else if(s[1] == '\0')
+126a131
+> 	}
+130,131c135,136
 < rmdir(f, iflg)
 < char *f;
 ---
 > int
 > rmdir(char *f, int iflg)
-151a156
+151a157
 > 	return(1);
-154c159,160
+154c160,161
 < yes()
 ---
 > int
@@ -1505,37 +1517,41 @@ diff unix-v7-c99/v7/usr/src/cmd/tee.c unix-v7-c99/usr/src/cmd/tee.c || true
 Expect:
 
 ```
-18,19c18,24
+18,19c18,28
 < extern errno;
 < long	lseek();
 ---
 > extern int errno;
 > long	lseek(int fd, long offset, int ptrname);
 > int	creat(char *path, int mode);
+> int	fstat(int fd, struct stat *buf);
+> int	open(char *path, int mode);
+> int	read(int fd, char *buf, int n);
 > int	stat(char *path, struct stat *buf);
+> int	write(int fd, char *buf, int n);
 > int	signal(int sig, int fun);
 > void	stash(int p);
 > void	puts(char *s);
-21,22c26,27
+21,22c30,31
 < main(argc,argv)
 < char **argv;
 ---
 > int
 > main(int argc, char **argv)
-24c29
+24c33
 < 	int register r,w,p;
 ---
 > 	register int r,w,p;
-70c75
+70c79
 < 					return;
 ---
 > 					return(0);
-79c84,85
+79c88,89
 < stash(p)
 ---
 > void
 > stash(int p)
-90,91c96,97
+90,91c100,101
 < puts(s)
 < char *s;
 ---
@@ -1569,6 +1585,10 @@ Expect:
 ---
 > int
 > main(int argc, char *argv[])
+21c24
+< 			if (isdigit(argv[1][1]))
+---
+> 			if (isdigit((unsigned char)argv[1][1]))
 65,66c68,69
 < gline(buf)
 < register char buf[];
@@ -2330,7 +2350,276 @@ diff unix-v7-c99/v7/usr/src/cmd/stty.c unix-v7-c99/usr/src/cmd/stty.c || true
 Expect:
 
 ```
-180,181c180,185
+13,30c13,30
+< 	"0",	B0,
+< 	"50",	B50,
+< 	"75",	B75,
+< 	"110",	B110,
+< 	"134",	B134,
+< 	"134.5",B134,
+< 	"150",	B150,
+< 	"200",	B200,
+< 	"300",	B300,
+< 	"600",	B600,
+< 	"1200",	B1200,
+< 	"1800",	B1800,
+< 	"2400",	B2400,
+< 	"4800",	B4800,
+< 	"9600",	B9600,
+< 	"exta",	EXTA,
+< 	"extb",	EXTB,
+< 	0,
+---
+> 	{ "0",	B0 },
+> 	{ "50",	B50 },
+> 	{ "75",	B75 },
+> 	{ "110",	B110 },
+> 	{ "134",	B134 },
+> 	{ "134.5",B134 },
+> 	{ "150",	B150 },
+> 	{ "200",	B200 },
+> 	{ "300",	B300 },
+> 	{ "600",	B600 },
+> 	{ "1200",	B1200 },
+> 	{ "1800",	B1800 },
+> 	{ "2400",	B2400 },
+> 	{ "4800",	B4800 },
+> 	{ "9600",	B9600 },
+> 	{ "exta",	EXTA },
+> 	{ "extb",	EXTB },
+> 	{ 0,	0 },
+38,39c38
+< 	"even",
+< 	EVENP, 0,
+---
+> 	{ "even",	EVENP, 0 },
+41,42c40
+< 	"-even",
+< 	0, EVENP,
+---
+> 	{ "-even",	0, EVENP },
+44,45c42
+< 	"odd",
+< 	ODDP, 0,
+---
+> 	{ "odd",	ODDP, 0 },
+47,48c44
+< 	"-odd",
+< 	0, ODDP,
+---
+> 	{ "-odd",	0, ODDP },
+50,51c46
+< 	"raw",
+< 	RAW, 0,
+---
+> 	{ "raw",	RAW, 0 },
+53,54c48
+< 	"-raw",
+< 	0, RAW,
+---
+> 	{ "-raw",	0, RAW },
+56,57c50
+< 	"cooked",
+< 	0, RAW,
+---
+> 	{ "cooked",	0, RAW },
+59,60c52
+< 	"-nl",
+< 	CRMOD, 0,
+---
+> 	{ "-nl",	CRMOD, 0 },
+62,63c54
+< 	"nl",
+< 	0, CRMOD,
+---
+> 	{ "nl",		0, CRMOD },
+65,66c56
+< 	"echo",
+< 	ECHO, 0,
+---
+> 	{ "echo",	ECHO, 0 },
+68,69c58
+< 	"-echo",
+< 	0, ECHO,
+---
+> 	{ "-echo",	0, ECHO },
+71,72c60
+< 	"LCASE",
+< 	LCASE, 0,
+---
+> 	{ "LCASE",	LCASE, 0 },
+74,75c62
+< 	"lcase",
+< 	LCASE, 0,
+---
+> 	{ "lcase",	LCASE, 0 },
+77,78c64
+< 	"-LCASE",
+< 	0, LCASE,
+---
+> 	{ "-LCASE",	0, LCASE },
+80,81c66
+< 	"-lcase",
+< 	0, LCASE,
+---
+> 	{ "-lcase",	0, LCASE },
+83,84c68
+< 	"-tabs",
+< 	XTABS, 0,
+---
+> 	{ "-tabs",	XTABS, 0 },
+86,87c70
+< 	"tabs",
+< 	0, XTABS,
+---
+> 	{ "tabs",	0, XTABS },
+90,91c73
+< 	"cbreak",
+< 	CBREAK, 0,
+---
+> 	{ "cbreak",	CBREAK, 0 },
+93,94c75
+< 	"-cbreak",
+< 	0, CBREAK,
+---
+> 	{ "-cbreak",	0, CBREAK },
+96,97c77
+< 	"cr0",
+< 	CR0, CR3,
+---
+> 	{ "cr0",	CR0, CR3 },
+99,100c79
+< 	"cr1",
+< 	CR1, CR3,
+---
+> 	{ "cr1",	CR1, CR3 },
+102,103c81
+< 	"cr2",
+< 	CR2, CR3,
+---
+> 	{ "cr2",	CR2, CR3 },
+105,106c83
+< 	"cr3",
+< 	CR3, CR3,
+---
+> 	{ "cr3",	CR3, CR3 },
+108,109c85
+< 	"tab0",
+< 	TAB0, XTABS,
+---
+> 	{ "tab0",	TAB0, XTABS },
+111,112c87
+< 	"tab1",
+< 	TAB1, XTABS,
+---
+> 	{ "tab1",	TAB1, XTABS },
+114,115c89
+< 	"tab2",
+< 	TAB2, XTABS,
+---
+> 	{ "tab2",	TAB2, XTABS },
+117,118c91
+< 	"nl0",
+< 	NL0, NL3,
+---
+> 	{ "nl0",	NL0, NL3 },
+120,121c93
+< 	"nl1",
+< 	NL1, NL3,
+---
+> 	{ "nl1",	NL1, NL3 },
+123,124c95
+< 	"nl2",
+< 	NL2, NL3,
+---
+> 	{ "nl2",	NL2, NL3 },
+126,127c97
+< 	"nl3",
+< 	NL3, NL3,
+---
+> 	{ "nl3",	NL3, NL3 },
+129,130c99
+< 	"ff0",
+< 	FF0, FF1,
+---
+> 	{ "ff0",	FF0, FF1 },
+132,133c101
+< 	"ff1",
+< 	FF1, FF1,
+---
+> 	{ "ff1",	FF1, FF1 },
+135,136c103
+< 	"bs0",
+< 	BS0, BS1,
+---
+> 	{ "bs0",	BS0, BS1 },
+138,139c105
+< 	"bs1",
+< 	BS1, BS1,
+---
+> 	{ "bs1",	BS1, BS1 },
+141,142c107
+< 	"33",
+< 	CR1, ALLDELAY,
+---
+> 	{ "33",		CR1, ALLDELAY },
+144,145c109
+< 	"tty33",
+< 	CR1, ALLDELAY,
+---
+> 	{ "tty33",	CR1, ALLDELAY },
+147,148c111
+< 	"37",
+< 	FF1+CR2+TAB1+NL1, ALLDELAY,
+---
+> 	{ "37",		FF1+CR2+TAB1+NL1, ALLDELAY },
+150,151c113
+< 	"tty37",
+< 	FF1+CR2+TAB1+NL1, ALLDELAY,
+---
+> 	{ "tty37",	FF1+CR2+TAB1+NL1, ALLDELAY },
+153,154c115
+< 	"05",
+< 	NL2, ALLDELAY,
+---
+> 	{ "05",		NL2, ALLDELAY },
+156,157c117
+< 	"vt05",
+< 	NL2, ALLDELAY,
+---
+> 	{ "vt05",	NL2, ALLDELAY },
+159,160c119
+< 	"tn",
+< 	CR1, ALLDELAY,
+---
+> 	{ "tn",		CR1, ALLDELAY },
+162,163c121
+< 	"tn300",
+< 	CR1, ALLDELAY,
+---
+> 	{ "tn300",	CR1, ALLDELAY },
+165,166c123
+< 	"ti",
+< 	CR2, ALLDELAY,
+---
+> 	{ "ti",		CR2, ALLDELAY },
+168,169c125
+< 	"ti700",
+< 	CR2, ALLDELAY,
+---
+> 	{ "ti700",	CR2, ALLDELAY },
+171,172c127
+< 	"tek",
+< 	FF1, ALLDELAY,
+---
+> 	{ "tek",	FF1, ALLDELAY },
+174,175c129,130
+< 	0,
+< 	};
+---
+> 	{ 0,		0, 0 },
+> };
+180,181c135,140
 < main(argc, argv)
 < char	*argv[];
 ---
@@ -2340,28 +2629,28 @@ Expect:
 > void	prspeed(char *c, int s);
 > int
 > main(int argc, char *argv[])
-232,233c236,237
+232,233c191,192
 < eq(string)
 < char *string;
 ---
 > int
 > eq(char *string)
-249c253,254
+249c208,209
 < prmodes()
 ---
 > void
 > prmodes(void)
-251c256
+251c211
 < 	register m;
 ---
 > 	register int m;
-284,285c289,290
+284,285c244,245
 < delay(m, s)
 < char *s;
 ---
 > void
 > delay(int m, char *s)
-296,297c301,302
+296,297c256,257
 < prspeed(c, s)
 < char *c;
 ---
@@ -6504,6 +6793,14 @@ Expect:
 > void errexit(char *s, char *f);
 > int
 > main(int argc, char *argv[])
+119c125
+< 			} else if (islower(*p)) {
+---
+> 			} else if (islower((unsigned char)*p)) {
+121c127
+< 				*s++ = toupper(*p);
+---
+> 				*s++ = toupper((unsigned char)*p);
 145,146c151,152
 < compile(astr)
 < char *astr;
@@ -7280,6 +7577,14 @@ Expect:
 > type(char *file)
 104a110
 > 		/* fallthrough */
+184c190
+< 		else if(buf[j] == '\n' && isalpha(buf[j+2])){
+---
+> 		else if(buf[j] == '\n' && isalpha((unsigned char)buf[j+2])){
+201c207
+< 			else if(buf[j] == '\n' && isalpha(buf[j+2])){
+---
+> 			else if(buf[j] == '\n' && isalpha((unsigned char)buf[j+2])){
 238c244
 < 		/*.... */
 ---
@@ -11061,19 +11366,14 @@ Expect:
 41a42,43
 > #define	r_val1	u_pair.r_val1
 > #define	r_val2	u_pair.r_val2
-98a101,110
+99c101,105
+< extern struct user u;
+---
 > /*
->  * The u-area is not a fixed kernel object on Armv7; it lives at the base
->  * of each process's core image and is made current by remapping the UBASE
->  * window in resume() (the KISA6 trick).  `u` therefore names the window.
->  * Userland (no KERNEL) keeps the plain declaration so it can read the
->  * u-area layout via /dev/mem.
+>  * The u-area lives at the base of each process's core image.  On Armv7,
+>  * resume() maps the current process there, so `u` names that window.
 >  */
-> #ifdef KERNEL
 > #define	u	(*(struct user *)UBASE)
-> #else
-99a112
-> #endif
 ```
 
 ### usr/include/ctype.h
@@ -11980,7 +12280,7 @@ Expect:
 < register char *s;
 ---
 > int
-> strlen(register char *s)
+> strlen(register const char *s)
 9c9
 < 	register n;
 ---
@@ -13233,6 +13533,110 @@ Expect:
 > int getname(void);
 > void puts(char *as);
 > void putchr(int cc);
+26c35
+< 	'0', 1,
+---
+> 	{ '0', 1,
+29c38
+< 	"\n\r\033;\007login: ",
+---
+> 	"\n\r\033;\007login: " },
+31c40
+< 	1, 2,
+---
+> 	{ 1, 2,
+34c43
+< 	"\n\r\033;login: ",
+---
+> 	"\n\r\033;login: " },
+36c45
+< 	2, 3,
+---
+> 	{ 2, 3,
+39c48
+< 	"\n\r\033:\006\006\017login: ",
+---
+> 	"\n\r\033:\006\006\017login: " },
+41c50
+< 	3, '0',
+---
+> 	{ 3, '0',
+44c53
+< 	"\n\rlogin: ",
+---
+> 	"\n\rlogin: " },
+47c56
+< 	'-', '-',
+---
+> 	{ '-', '-',
+50c59
+< 	"\n\rlogin: ",
+---
+> 	"\n\rlogin: " },
+53c62
+< 	'1', '1',
+---
+> 	{ '1', '1',
+56c65
+< 	"\n\r\033:\006\006\017login: ",
+---
+> 	"\n\r\033:\006\006\017login: " },
+59c68
+< 	'2', '2',
+---
+> 	{ '2', '2',
+62c71
+< 	"\n\r\033;login: ",
+---
+> 	"\n\r\033;login: " },
+65c74
+< 	'3', '5',
+---
+> 	{ '3', '5',
+68c77
+< 	"\n\r\033;login: ",
+---
+> 	"\n\r\033;login: " },
+71c80
+< 	'5', '3',
+---
+> 	{ '5', '3',
+74c83
+< 	"\n\r\033;\007login: ",
+---
+> 	"\n\r\033;\007login: " },
+77c86
+< 	'4', '4',
+---
+> 	{ '4', '4',
+80c89
+< 	"\n\rlogin: ",
+---
+> 	"\n\rlogin: " },
+83c92
+< 	'i', 'i',
+---
+> 	{ 'i', 'i',
+86c95
+< 	"\n\rlogin: ",
+---
+> 	"\n\rlogin: " },
+89c98
+< 	'l', 'l',
+---
+> 	{ 'l', 'l',
+92c101
+< 	"*",
+---
+> 	"*" },
+94c103
+< 	'6', '6',
+---
+> 	{ '6', '6',
+97c106
+< 	"\n\rlogin: ",
+---
+> 	"\n\rlogin: " },
 128,129c137,138
 < main(argc, argv)
 < char **argv;
@@ -15430,6 +15834,10 @@ Expect:
 < 				if (i = atoi(&argv[0][2]))
 ---
 > 				if ((i = atoi(&argv[0][2])))
+49c49
+< 					yyll = MAXY + 1 - pl;
+---
+> 				yyll = MAXY + 1 - pl;
 52c52
 < 				if (i = atoi(&argv[0][1])) {
 ---
@@ -15603,6 +16011,10 @@ Expect:
 ---
 > int
 > pu(int u, int i, int f)
+140c146
+< 			return(2);
+---
+> 		return(2);
 147,148c153,154
 < convr(up)
 < struct unit *up;
@@ -15784,12 +16196,20 @@ Expect:
 < 	register c;
 ---
 > 	register int c;
+291c299
+< 				while(isspace(*--linep));
+---
+> 				while(isspace((unsigned char)*--linep));
 302,303c310,311
 < cmpline(pend)
 < char *pend;
 ---
 > int
 > cmpline(char *pend)
+312c320
+< 		while(pchar<pend&&!isspace(*pchar))
+---
+> 		while(pchar<pend&&!isspace((unsigned char)*pchar))
 316c324
 < 		if(isabreak(*pchar++))
 ---
@@ -15810,6 +16230,10 @@ Expect:
 ---
 > int
 > cmpword(char *cpp, char *pend, char *hpp)
+356c365
+< 		if((isupper(c)?tolower(c):c) != *hpp++)
+---
+> 		if((isupper((unsigned char)c)?tolower(c):c) != *hpp++)
 363,364c372,373
 < putline(strt, end)
 < char *strt, *end;
@@ -15831,6 +16255,22 @@ Expect:
 < 	char *rtrim(), *ltrim();
 ---
 > 	char *rtrim(char *a, char *c, int d), *ltrim(char *c, char *b, int d);
+400c411
+< 			while(isspace(linep[-1]))
+---
+> 			while(isspace((unsigned char)linep[-1]))
+404c415
+< 				while(ref<linep&&!isspace(*ref))
+---
+> 				while(ref<linep&&!isspace((unsigned char)*ref))
+416c427
+< 			p1b = rtrim(p1a=p3b+(isspace(p3b[0])!=0),tilde,
+---
+> 			p1b = rtrim(p1a=p3b+(isspace((unsigned char)p3b[0])!=0),tilde,
+420c431
+< 			p4a = ltrim(ref,p4b=p2a-(isspace(p2a[-1])!=0),
+---
+> 			p4a = ltrim(ref,p4b=p2a-(isspace((unsigned char)p2a[-1])!=0),
 452a464
 > 			/* fallthrough */
 456a469
@@ -15840,11 +16280,27 @@ Expect:
 < char *a,*c;
 ---
 > char *rtrim(char *a, char *c, int d)
+465c477
+< 		if((x==c||isspace(x[0]))&&!isspace(x[-1]))
+---
+> 		if((x==c||isspace((unsigned char)x[0]))&&!isspace((unsigned char)x[-1]))
+467c479
+< 	if(b<c&&!isspace(b[0]))
+---
+> 	if(b<c&&!isspace((unsigned char)b[0]))
 472,473c484
 < char *ltrim(c,b,d)
 < char *c,*b;
 ---
 > char *ltrim(char *c, char *b, int d)
+478c489
+< 		if(!isspace(x[0])&&(x==c||isspace(x[-1])))
+---
+> 		if(!isspace((unsigned char)x[0])&&(x==c||isspace((unsigned char)x[-1])))
+480c491
+< 	if(a>c&&!isspace(a[-1]))
+---
+> 	if(a>c&&!isspace((unsigned char)a[-1]))
 485,486c496,497
 < putout(strt,end)
 < char *strt, *end;
@@ -15868,6 +16324,22 @@ Expect:
 ---
 > int
 > hash(char *strtp, char *endp)
+517c532
+< 	i = (isupper(c)?tolower(c):c);
+---
+> 	i = (isupper((unsigned char)c)?tolower(c):c);
+519c534
+< 	j = (isupper(c)?tolower(c):c);
+---
+> 	j = (isupper((unsigned char)c)?tolower(c):c);
+523c538
+< 	k = (isupper(c)?tolower(c):c);
+---
+> 	k = (isupper((unsigned char)c)?tolower(c):c);
+525c540
+< 	j = (isupper(c)?tolower(c):c);
+---
+> 	j = (isupper((unsigned char)c)?tolower(c):c);
 532,534c547,548
 < storeh(num,strtp)
 < int num;
@@ -16417,7 +16889,7 @@ Expect:
 230c318
 < 	if(!(isdigit(c) || c=='-'&&(*argvp)[1][1]<'A' || c=='.'))
 ---
-> 	if(!(isdigit(c) || (c=='-' && (*argvp)[1][1]<'A') || c=='.'))
+> 	if(!(isdigit((unsigned char)c) || (c=='-' && (*argvp)[1][1]<'A') || c=='.'))
 238c326,327
 < readin()
 ---
@@ -16599,6 +17071,10 @@ Expect:
 < 	register i;
 ---
 > 	register int i;
+628c718
+< 		if(!isdigit(*labbuf)) {
+---
+> 		if(!isdigit((unsigned char)*labbuf)) {
 632a723
 > 		/* fallthrough */
 649c740,741
@@ -19541,12 +20017,12 @@ Expect:
 > 	return(0);
 ```
 
-### usr/src/tools/mkfs.c
+### usr/src/cmd/mkfs.c
 
 Local test:
 
 ```
-diff unix-v7-c99/v7/usr/src/cmd/mkfs.c unix-v7-c99/usr/src/tools/mkfs.c || true
+diff unix-v7-c99/v7/usr/src/cmd/mkfs.c unix-v7-c99/usr/src/cmd/mkfs.c || true
 ```
 
 Expect:
@@ -20009,12 +20485,84 @@ diff unix-v7-c99/v7/usr/src/cmd/awk/awk.g.y unix-v7-c99/usr/src/cmd/awk/awk.g.y 
 Expect:
 
 ```
-166a167,169
+0a1
+> %define api.value.type {long}
+33a35,51
+> int	yylex(void);
+> void	yyerror(char *s);
+> int	startreg(void);
+> long	stat3();
+> long	stat2();
+> long	stat4();
+> long	op1();
+> long	op2();
+> long	op3();
+> long	valtonode();
+> long	makedfa();
+> long	genprint(void);
+> long	pa2stat();
+> long	linkum();
+> long	exptostat();
+> long	genjump(int a);
+> char	*cclenter();
+41c59
+< 	  begin pa_stats end	{ if (errorflag==0) winner = stat3(PROGRAM, $1, $2, $3); }
+---
+> 	  begin pa_stats end	{ if (errorflag==0) winner = (node *)stat3(PROGRAM, $1, $2, $3); }
+48c66
+< 	| 	{ PUTS("empty XBEGIN"); $$ = nullstat; }
+---
+> 	| 	{ PUTS("empty XBEGIN"); $$ = (long)nullstat; }
+54c72
+< 	|	{ PUTS("empty END"); $$ = nullstat; }
+---
+> 	|	{ PUTS("empty END"); $$ = (long)nullstat; }
+116c134
+< 			{ PUTS("substr(e,e,e)"); $$ = op3(SUBSTR, $3, $5, nullstat); }
+---
+> 			{ PUTS("substr(e,e,e)"); $$ = op3(SUBSTR, $3, $5, (long)nullstat); }
+120c138
+< 			{ PUTS("split(e,e,e)"); $$ = op3(SPLIT, $3, $5, nullstat); }
+---
+> 			{ PUTS("split(e,e,e)"); $$ = op3(SPLIT, $3, $5, (long)nullstat); }
+154c172
+< 	| '{' stat_list '}'	{ PUTS("null pattern {...}"); $$ = stat2(PASTAT, nullstat, $2); }
+---
+> 	| '{' stat_list '}'	{ PUTS("null pattern {...}"); $$ = stat2(PASTAT, (long)nullstat, $2); }
+159c177
+< 	|	{ PUTS("null pa_stat"); $$ = nullstat; }
+---
+> 	|	{ PUTS("null pa_stat"); $$ = (long)nullstat; }
+166a185,187
 > 	| expr	{ PUTS("expr");
 > 		$$ = op2(NE, $1, valtonode(lookup("0", symtab), CCON));
 > 		}
-175d177
+175d195
 < 	|		{ PUTS("null print_list"); $$ = valtonode(lookup("$record", symtab), CFLD); }
+227c247
+< 		{ PUTS("print list"); $$ = stat3($1, $2, nullstat, nullstat); }
+---
+> 		{ PUTS("print list"); $$ = stat3($1, $2, (long)nullstat, (long)nullstat); }
+231c251
+< 		{ PUTS("printf list"); $$ = stat3($1, $2, nullstat, nullstat); }
+---
+> 		{ PUTS("printf list"); $$ = stat3($1, $2, (long)nullstat, (long)nullstat); }
+233c253
+< 	|		{ PUTS("null simple statement"); $$ = nullstat; }
+---
+> 	|		{ PUTS("null simple statement"); $$ = (long)nullstat; }
+239c259
+< 	| if statement		{ PUTS("if stat"); $$ = stat3(IF, $1, $2, nullstat); }
+---
+> 	| if statement		{ PUTS("if stat"); $$ = stat3(IF, $1, $2, (long)nullstat); }
+253c273
+< 	|			{ PUTS("null stat list"); $$ = nullstat; }
+---
+> 	|			{ PUTS("null stat list"); $$ = (long)nullstat; }
+264c284
+< 		{ PUTS("for(e;e;e)"); $$ = stat4(FOR, $3, nullstat, $6, $9); }
+---
+> 		{ PUTS("for(e;e;e)"); $$ = stat4(FOR, $3, (long)nullstat, $6, $9); }
 ```
 
 ### usr/src/cmd/deroff.c
@@ -20212,74 +20760,218 @@ Expect:
 < int nxtchar 0;
 ---
 > int nxtchar = 0;
-58c58
+58c58,75
 < int	fname;
 ---
 > char	*fname;
-63c63
+> int	yylex(void);
+> int	yyerror(char *s);
+> int	nextch(void);
+> void	synerror(void);
+> int	enter(int x);
+> int	cclenter(int x);
+> int	node(int x, int l, int r);
+> int	unary(int x, int d);
+> void	overflo(void);
+> void	cfoll(int v);
+> void	cgotofn(void);
+> int	cstate(int v);
+> int	member(int symb, int set, int torf);
+> int	notin(int n);
+> void	add(int *array, int n);
+> void	follow(int v);
+> void	execute(char *file);
+63c80
 < 		={ unary(FINAL, $1);
 ---
 > 		{ unary(FINAL, $1);
-68c68
+68c85
 < 		={ $$ = node(CAT, $1, $2); }
 ---
 > 		{ $$ = node(CAT, $1, $2); }
-70c70
+70c87
 < 		={ $$ = node(CAT, $2, $3); }
 ---
 > 		{ $$ = node(CAT, $2, $3); }
-72c72
+72c89
 < 		={ $$ = node(CAT, $2, $3); }
 ---
 > 		{ $$ = node(CAT, $2, $3); }
-74c74
+74c91
 < 		={ $$ = node(CAT, $1, $2); }
 ---
 > 		{ $$ = node(CAT, $1, $2); }
-77c77
+77c94
 < 		={ $$ = enter(DOT);
 ---
 > 		{ $$ = enter(DOT);
-81c81
+81c98
 < 		={ $$ = enter($1); }
 ---
 > 		{ $$ = enter($1); }
-83c83
+83c100
 < 		={ $$ = enter(DOT); }
 ---
 > 		{ $$ = enter(DOT); }
-85c85
+85c102
 < 		={ $$ = cclenter(CCL); }
 ---
 > 		{ $$ = cclenter(CCL); }
-87c87
+87c104
 < 		={ $$ = cclenter(NCCL); }
 ---
 > 		{ $$ = cclenter(NCCL); }
-91c91
+91c108
 < 		={ $$ = node(OR, $1, $3); }
 ---
 > 		{ $$ = node(OR, $1, $3); }
-93c93
+93c110
 < 		={ $$ = node(CAT, $1, $2); }
 ---
 > 		{ $$ = node(CAT, $1, $2); }
-95c95
+95c112
 < 		={ $$ = unary(STAR, $1); }
 ---
 > 		{ $$ = unary(STAR, $1); }
-97c97
+97c114
 < 		={ $$ = unary(PLUS, $1); }
 ---
 > 		{ $$ = unary(PLUS, $1); }
-99c99
+99c116
 < 		={ $$ = unary(QUEST, $1); }
 ---
 > 		{ $$ = unary(QUEST, $1); }
-101c101
+101c118
 < 		={ $$ = $2; }
 ---
 > 		{ $$ = $2; }
+106c123,124
+< yyerror(s) {
+---
+> int
+> yyerror(char *s) {
+108a127
+> 	return(0);
+111c130,131
+< yylex() {
+---
+> int
+> yylex(void) {
+114c134
+< 	register char c, d;
+---
+> 	register int c, d;
+156a177,178
+> 			yylval = c;
+> 			return (CHAR);
+161,162c183,185
+< nextch() {
+< 	register char c;
+---
+> int
+> nextch(void) {
+> 	register int c;
+170c193,194
+< synerror() {
+---
+> void
+> synerror(void) {
+175c199,200
+< enter(x) int x; {
+---
+> int
+> enter(int x) {
+183,184c208,210
+< cclenter(x) int x; {
+< 	register linno;
+---
+> int
+> cclenter(int x) {
+> 	register int linno;
+190c216,217
+< node(x, l, r) {
+---
+> int
+> node(int x, int l, int r) {
+200c227,228
+< unary(x, d) {
+---
+> int
+> unary(int x, int d) {
+208c236,237
+< overflo() {
+---
+> void
+> overflo(void) {
+213,214c242,244
+< cfoll(v) {
+< 	register i;
+---
+> void
+> cfoll(int v) {
+> 	register int i;
+227,228c257,259
+< cgotofn() {
+< 	register c, i, k;
+---
+> void
+> cgotofn(void) {
+> 	register int c, i, k;
+265c296
+< 					for (k=0; k<nc; k++) symbol[chars[pc++]] = 1;
+---
+> 					for (k=0; k<nc; k++) symbol[(unsigned char)chars[pc++]] = 1;
+321,322c352,354
+< cstate(v) {
+< 	register b;
+---
+> int
+> cstate(int v) {
+> 	register int b;
+347,348c379,381
+< member(symb, set, torf) {
+< 	register i, num, pos;
+---
+> int
+> member(int symb, int set, int torf) {
+> 	register int i, num, pos;
+356,357c389,391
+< notin(n) {
+< 	register i, j, pos;
+---
+> int
+> notin(int n) {
+> 	register int i, j, pos;
+371,372c405,407
+< add(array, n) int *array; {
+< 	register i;
+---
+> void
+> add(int *array, int n) {
+> 	register int i;
+383c418,419
+< follow(v) int v; {
+---
+> void
+> follow(int v) {
+414,415c450,451
+< main(argc, argv)
+< char **argv;
+---
+> int
+> main(int argc, char **argv)
+490,491c526,527
+< execute(file)
+< char *file;
+---
+> void
+> execute(char *file)
+494,495c530,531
+< 	register cstat;
+< 	register ccount;
+---
+> 	register int cstat;
+> 	register int ccount;
 ```
 
 ### usr/src/cmd/expr.y
@@ -20293,17 +20985,34 @@ diff unix-v7-c99/v7/usr/src/cmd/expr.y unix-v7-c99/usr/src/cmd/expr.y || true
 Expect:
 
 ```
-15a16,20
+2a3
+> %define api.value.type {char *}
+15a17,36
 > %{
 > #include <stdio.h>
 > #define index expr_index
-> char *rel(), *arith(), *conj(), *substr(), *length(), *index(), *match();
+> long	atol();
+> int	yylex(void);
+> int	yyerror(char *s);
+> char	*rel(int op, char *r1, char *r2);
+> char	*arith(int op, char *r1, char *r2);
+> char	*conj(int op, char *r1, char *r2);
+> char	*substr(char *v, char *s, char *w);
+> char	*length(char *s);
+> char	*index(char *s, char *t);
+> char	*match(char *s, char *p);
+> int	ematch(char *s, char *p);
+> void	errxx(int c);
+> char	*compile(char *instring, char *ep, char *endbuf, int seof);
+> int	advance(char *lp, char *ep);
+> int	getrnge(char *str);
+> int	ecmp(char *a, char *b, int count);
 > %}
-20c25
+20c41
 < expression:	expr NOARG = {
 ---
 > expression:	expr NOARG {
-27,45c32,50
+27,45c48,66
 < expr:	'(' expr ')' = { $$ = $2; }
 < 	| expr OR expr   = { $$ = conj(OR, $1, $3); }
 < 	| expr AND expr   = { $$ = conj(AND, $1, $3); }
@@ -20343,18 +21052,182 @@ Expect:
 > 	| SUBSTR expr expr expr { $$ = substr($2, $3, $4); }
 > 	| LENGTH expr       { $$ = length($2); }
 > 	| INDEX expr expr { $$ = index($2, $3); }
-50d54
+50d70
 < #include <stdio.h>
-86,87c90,91
+54d73
+< long atol();
+63c82,83
+< main(argc, argv) char **argv; {
+---
+> int
+> main(int argc, char **argv) {
+67a88
+> 	return(0);
+76c97,98
+< yylex() {
+---
+> int
+> yylex(void) {
+78c100
+< 	register i;
+---
+> 	register int i;
+86,87c108,109
 < 	for(i = 0; *operator[i]; ++i)
 < 		if(EQL(operator[i], p))
 ---
 > 	for(i = 0; *operators[i]; ++i)
 > 		if(EQL(operators[i], p))
-129c133
+94,95c116,118
+< char *rel(op, r1, r2) register char *r1, *r2; {
+< 	register i;
+---
+> char *
+> rel(int op, register char *r1, register char *r2) {
+> 	register int i;
+112c135,136
+< char *arith(op, r1, r2) char *r1, *r2; {
+---
+> char *
+> arith(int op, char *r1, char *r2) {
+129c153
 < 	sprintf(rv, "%D", i1);
 ---
 > 	sprintf(rv, "%ld", i1);
+132c156,157
+< char *conj(op, r1, r2) char *r1, *r2; {
+---
+> char *
+> conj(int op, char *r1, char *r2) {
+162,163c187,189
+< char *substr(v, s, w) char *v, *s, *w; {
+< register si, wi;
+---
+> char *
+> substr(char *v, char *s, char *w) {
+> register int si, wi;
+178,179c204,206
+< char *length(s) register char *s; {
+< 	register i = 0;
+---
+> char *
+> length(register char *s) {
+> 	register int i = 0;
+189,190c216,218
+< char *index(s, t) char *s, *t; {
+< 	register i, j;
+---
+> char *
+> index(char *s, char *t) {
+> 	register int i, j;
+202c230,231
+< char *match(s, p)
+---
+> char *
+> match(char *s, char *p)
+218,219c247,248
+< #define RETURN(c)	return
+< #define ERROR(c)	errxx(c)
+---
+> #define RETURN(c)	return(c)
+> #define ERROR(c)	do { errxx(c); return(0); } while (0)
+222,224c251,252
+< ematch(s, p)
+< char *s;
+< register char *p;
+---
+> int
+> ematch(char *s, register char *p)
+227,228c255
+< 	char *compile();
+< 	register num;
+---
+> 	register int num;
+246c273,274
+< errxx(c)
+---
+> void
+> errxx(int c)
+247a276
+> 	(void)c;
+290,292c319
+< compile(instring, ep, endbuf, seof)
+< register char *ep;
+< char *instring, *endbuf;
+---
+> compile(char *instring, register char *ep, char *endbuf, int seof)
+295,296c322,323
+< 	register c;
+< 	register eof = seof;
+---
+> 	register int c;
+> 	register int eof = seof;
+457c484
+< 			/* Drop through to default to use \ to turn off special chars */
+---
+> 			/* fallthrough */
+468,469c495,496
+< step(p1, p2)
+< register char *p1, *p2;
+---
+> int
+> step(register char *p1, register char *p2)
+471c498
+< 	register c;
+---
+> 	register int c;
+500,501c527,528
+< advance(lp, ep)
+< register char *lp, *ep;
+---
+> int
+> advance(register char *lp, register char *ep)
+504c531
+< 	char c;
+---
+> 	int c;
+537c564
+< 		braslist[*ep++] = lp;
+---
+> 		braslist[(unsigned char)*ep++] = lp;
+541c568
+< 		braelist[*ep++] = lp;
+---
+> 		braelist[(unsigned char)*ep++] = lp;
+592,593c619,620
+< 		bbeg = braslist[*ep];
+< 		ct = braelist[*ep++] - bbeg;
+---
+> 		bbeg = braslist[(unsigned char)*ep];
+> 		ct = braelist[(unsigned char)*ep++] - bbeg;
+602,603c629,630
+< 		bbeg = braslist[*ep];
+< 		ct = braelist[*ep++] - bbeg;
+---
+> 		bbeg = braslist[(unsigned char)*ep];
+> 		ct = braelist[(unsigned char)*ep++] - bbeg;
+646,647c673,674
+< getrnge(str)
+< register char *str;
+---
+> int
+> getrnge(register char *str)
+650a678
+> 	return(0);
+653,655c681,682
+< ecmp(a, b, count)
+< register char	*a, *b;
+< register	count;
+---
+> int
+> ecmp(register char *a, register char *b, register int count)
+664c691,692
+< yyerror(s)
+---
+> int
+> yyerror(char *s)
+668a697
+> 	return(0);
 ```
 
 ### usr/include/a.out.h
@@ -20545,7 +21418,7 @@ Expect:
 > char *crypt(char *key, char *salt);
 > char *strncat(char *s1, char *s2, int n);
 > int ttyslot(void);
-> int strlen(char *s);
+> int strlen(const char *s);
 > int strcmp(char *a, char *b);
 > char *strcpy(char *a, char *b);
 > char *strcat(char *a, char *b);
@@ -21242,12 +22115,13 @@ Expect:
 ---
 > #include "../../sys/h/proc.h"
 > struct tty;
-13c15,16
+13c15,17
 < #include <sys/user.h>
 ---
 > #include <sys/stat.h>
 > #include "../../sys/h/user.h"
-16,19c19,22
+> #undef u
+16,19c20,23
 < 	{ "_proc" },
 < 	{ "_swapdev" },
 < 	{ "_swplo" },
@@ -21257,7 +22131,7 @@ Expect:
 > 	{ "_swapdev", 0, 0 },
 > 	{ "_swplo",   0, 0 },
 > 	{ "",         0, 0 },
-32,35c35,41
+32,35c36,42
 < long	lseek();
 < char	*gettty();
 < char	*getptr();
@@ -21270,103 +22144,103 @@ Expect:
 > int	prcom(int puid);
 > int	getbyte(char *adr);
 > int	within(char *adr, long lbd, long ubd);
-50,51c56,57
+50,51c57,58
 < main(argc, argv)
 < char **argv;
 ---
 > int
 > main(int argc, char **argv)
-154c160,161
+154c161,162
 < getdev()
 ---
 > int
 > getdev(void)
-156d162
+156d163
 < #include <sys/stat.h>
-157a164
+157a165
 > 	register int i;
-159a167
+159a168
 > 	char dpath[DIRSIZ+1];
-169c177,180
+169c178,181
 < 		if(stat(dbuf.d_name, &sbuf) < 0)
 ---
 > 		for (i=0; i<DIRSIZ; i++)
 > 			dpath[i] = dbuf.d_name[i];
 > 		dpath[DIRSIZ] = '\0';
 > 		if(stat(dpath, &sbuf) < 0)
-173c184,185
+173c185,186
 < 		strcpy(devl[ndev].dname, dbuf.d_name);
 ---
 > 		for (i=0; i<DIRSIZ; i++)
 > 			devl[ndev].dname[i] = dbuf.d_name[i];
-179,180c191
+179,180c192
 < 		fprintf(stderr, "Can't open /dev/swap\n");
 < 		exit(1);
 ---
 > 		swap = -1;
-181a193
+181a194
 > 	return(0);
-185,186c197
+185,186c198
 < round(a, b)
 < 	long		a, b;
 ---
 > round(long a, long b)
-199c210,211
+199c211,212
 < prcom(puid)
 ---
 > int
 > prcom(int puid)
-201c213
+201c214
 < 	char abuf[512];
 ---
 > 	int abuf[128];
-241c253
+241c254
 < 			"0SWRIZT"[mproc.p_stat], puid);
 ---
 > 			"0SWRIZT"[(unsigned char)mproc.p_stat], puid);
-304c316
+304c317
 < 	if (read(file, abuf, sizeof(abuf)) != sizeof(abuf))
 ---
 > 	if (read(file, (char *)abuf, sizeof(abuf)) != sizeof(abuf))
-306c318
+306c319
 < 	for (ip = (int *)&abuf[512]-2; ip > (int *)abuf; ) {
 ---
 > 	for (ip = &abuf[128]-2; ip > abuf; ) {
-312c324
+312c325
 < 			for (cp1 = cp; cp1 < &abuf[512]; cp1++) {
 ---
 > 			for (cp1 = cp; cp1 < (char *)abuf + sizeof(abuf); cp1++) {
-339c351
+339c352
 < gettty()
 ---
 > gettty(void)
-341c353
+341c354
 < 	register i;
 ---
 > 	register int i;
-358,359c370
+358,359c371
 < getptr(adr)
 < char **adr;
 ---
 > getptr(char **adr)
-363c374
+363c375
 < 	register i;
 ---
 > 	register unsigned int i;
-373,374c384,385
+373,374c385,386
 < getbyte(adr)
 < char *adr;
 ---
 > int
 > getbyte(char *adr)
-395,397c406,407
+395,397c407,408
 < within(adr,lbd,ubd)
 < char *adr;
 < long lbd, ubd;
 ---
 > int
 > within(char *adr, long lbd, long ubd)
-399c409
+399c410
 < 	return((unsigned)adr>=lbd && (unsigned)adr<ubd);
 ---
 > 	return((unsigned long)adr>=(unsigned long)lbd && (unsigned long)adr<(unsigned long)ubd);
@@ -25189,10 +26063,12 @@ Expect:
 ---
 > int
 > newproc(void)
-431c469
+430,431c468,469
+< 	register struct proc *rpp, *rip;
 < 	register n;
 ---
-> 	register int n;
+> 	struct proc *rpp, *rip;
+> 	int n;
 447c485
 < 		if(rpp->p_stat == NULL && p==NULL)
 ---
@@ -25557,4 +26433,384 @@ Expect:
 > }
 > void nosys(void)   { u.u_error = EINVAL; }
 > void nullsys(void) { }
+```
+
+### usr/src/cmd/awk/makefile
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/makefile unix-v7-c99/usr/src/cmd/awk/makefile || true
+```
+
+Expect:
+
+```
+2a3,9
+> LDFLAGS =
+> CRT =
+> LDLIBS = -lm
+> YACC = bison -y
+> LEX = flex
+> HOSTCC = cc
+> HOSTCFLAGS = -std=gnu89 -w
+17a25
+> GEN=awk.g.c awk.h awk.lx.c proc proc-token.o proctab.c
+20c28
+< 	cc -i -s $(CFLAGS) awk.g.o $(FILES) -lm -o awk
+---
+> 	$(CC) $(CFLAGS) $(LDFLAGS) -o awk $(CRT) awk.g.o $(FILES) $(LDLIBS)
+22c30,33
+< y.tab.h:	awk.g.o
+---
+> awk.g.c awk.h:	awk.g.y
+> 	$(YACC) $(YFLAGS) awk.g.y
+> 	mv y.tab.c awk.g.c
+> 	mv y.tab.h awk.h
+24,25c35,36
+< awk.h:	y.tab.h
+< 	-cmp -s y.tab.h awk.h || cp y.tab.h awk.h
+---
+> awk.g.o:	awk.g.c awk.h awk.def
+> 	$(CC) $(CFLAGS) -c awk.g.c
+29,31c40,41
+< token.c:	awk.h
+< 	ed - <tokenscript
+< 	rm temp
+---
+> awk.lx.c:	awk.lx.l
+> 	$(LEX) -o awk.lx.c awk.lx.l
+38c48
+< 	cc -p -i awk.g.o $(FILES) -lm
+---
+> 	$(CC) -p $(CFLAGS) awk.g.o $(FILES) $(LDLIBS)
+51,53c61,66
+< 	proc > proctab.c
+< proc:	awk.h proc.o token.o
+< 	cc -o proc proc.c token.o
+---
+> 	./proc > proctab.c
+> proc:	awk.h proc.c token.c
+> 	$(HOSTCC) $(HOSTCFLAGS) -c token.c -o proc-token.o
+> 	$(HOSTCC) $(HOSTCFLAGS) -o proc proc.c proc-token.o
+> clean:
+> 	rm -f awk *.o $(GEN) y.tab.c y.tab.h
+```
+
+### usr/src/cmd/awk/awk.lx.l
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/awk/awk.lx.l unix-v7-c99/usr/src/cmd/awk/awk.lx.l || true
+```
+
+Expect:
+
+```
+0a1
+> %option noyywrap noinput nounistd
+2a4,8
+> %top{
+> #include <stddef.h>
+> #define	_STRING_H_
+> #define	_STDLIB_H_
+> }
+7c13
+< extern int	yylval;
+---
+> extern YYSTYPE	yylval;
+8a15,26
+> cell	*fieldadr(int n);
+> void	yyerror(char *s);
+> int	input(void);
+> int	startreg(void);
+> void	*memset(void *s, int c, unsigned int n);
+> #undef	YY_INPUT
+> #define	YY_INPUT(buf,result,max_size) \
+> do { \
+> 	int c = input(); \
+> 	if (c == 0) result = YY_NULL; \
+> 	else { buf[0] = c; result = 1; } \
+> } while (0)
+10c28
+< int	lineno	1;
+---
+> int	lineno = 1;
+16c34
+< #define	CADD	cbuf[clen++]=yytext[0]; if(clen>=CBUFLEN-1) {yyerror("string too long", cbuf); BEGIN A;}
+---
+> #define	CADD	cbuf[clen++]=yytext[0]; if(clen>=CBUFLEN-1) {yyerror("string too long"); BEGIN A;}
+28c46
+< 	switch (yybgin-yysvec-1) {	/* witchcraft */
+---
+> 	switch (YY_START) {	/* witchcraft */
+66c84
+< 				yylval = lookup("$record", symtab);
+---
+> 				yylval = (YYSTYPE)lookup("$record", symtab);
+69c87
+< 				yylval = fieldadr(atoi(yytext+1));
+---
+> 				yylval = (YYSTYPE)fieldadr(atoi(yytext+1));
+74c92
+< <A>NF		{ mustfld=1; yylval = setsymtab(yytext, NULL, 0.0, NUM, symtab); RETURN(VAR); }
+---
+> <A>NF		{ mustfld=1; yylval = (YYSTYPE)setsymtab(yytext, NULL, 0.0, NUM, symtab); RETURN(VAR); }
+76c94
+< 		yylval = setsymtab(yytext, NULL, atof(yytext), CON|NUM, symtab); RETURN(NUMBER); }
+---
+> 		yylval = (YYSTYPE)setsymtab(yytext, NULL, atof(yytext), CON|NUM, symtab); RETURN(NUMBER); }
+101c119
+< <A>{A}{B}*	{ yylval = setsymtab(yytext, tostring(""), 0.0, STR, symtab); RETURN(VAR); }
+---
+> <A>{A}{B}*	{ yylval = (YYSTYPE)setsymtab(yytext, tostring(""), 0.0, STR, symtab); RETURN(VAR); }
+131c149
+< <str>\"		{ BEGIN A; cbuf[clen]=0; yylval = setsymtab(cbuf, tostring(cbuf), 0.0, CON|STR, symtab); RETURN(STRING); }
+---
+> <str>\"		{ BEGIN A; cbuf[clen]=0; yylval = (YYSTYPE)setsymtab(cbuf, tostring(cbuf), 0.0, CON|STR, symtab); RETURN(STRING); }
+140c158
+< <chc>"]"	{ BEGIN reg; cbuf[clen]=0; yylval = tostring(cbuf);
+---
+> <chc>"]"	{ BEGIN reg; cbuf[clen]=0; yylval = (YYSTYPE)tostring(cbuf);
+148c166,167
+< input()
+---
+> int
+> input(void)
+150c169
+< 	register c;
+---
+> 	register int c;
+153,155c172
+< 	if (yysptr > yysbuf)
+< 		c = U(*--yysptr);
+< 	else if (yyin == NULL)
+---
+> 	if (lexprog != NULL)
+166c183,184
+< startreg()
+---
+> int
+> startreg(void)
+168a187
+> 	return(0);
+```
+
+### usr/src/cmd/sed/makefile
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/sed/makefile unix-v7-c99/usr/src/cmd/sed/makefile || true
+```
+
+Expect:
+
+```
+1a2,4
+> LDFLAGS =
+> CRT =
+> LDLIBS =
+14c17
+< sed:	sed0.o sed1.o; cc -s -o sed -n *.o
+---
+> sed:	sed0.o sed1.o; $(CC) $(CFLAGS) $(LDFLAGS) -o sed $(CRT) *.o $(LDLIBS)
+```
+
+### usr/src/cmd/sh/makefile
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/sh/makefile unix-v7-c99/usr/src/cmd/sh/makefile || true
+```
+
+Expect:
+
+```
+1a2,4
+> LDFLAGS =
+> CRT =
+> LDLIBS =
+25c28
+< sh:;		cc -o sh -n -s *.o
+---
+> sh:;		$(CC) $(CFLAGS) $(LDFLAGS) -o sh $(CRT) *.o $(LDLIBS)
+32c35
+< .c.o:;	cc -O -c $<
+---
+> .c.o:;	$(CC) $(CFLAGS) -c $<
+```
+
+### usr/src/cmd/dc/makefile
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/dc/makefile unix-v7-c99/usr/src/cmd/dc/makefile || true
+```
+
+Expect:
+
+```
+0a1,3
+> LDFLAGS =
+> CRT =
+> LDLIBS =
+12c15
+< 	cc -n -s -O dc.c -o dc
+---
+> 	$(CC) $(CFLAGS) $(LDFLAGS) dc.c -o dc $(CRT) $(LDLIBS)
+```
+
+### usr/src/cmd/tar/makefile
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/tar/makefile unix-v7-c99/usr/src/cmd/tar/makefile || true
+```
+
+Expect:
+
+```
+2a3,5
+> LDFLAGS =
+> CRT =
+> LDLIBS =
+15c18
+< 	cc -i -s -O tar.c -o tar
+---
+> 	$(CC) $(CFLAGS) $(LDFLAGS) tar.c -o tar $(CRT) $(LDLIBS)
+18c21
+< 	cc -i -s -O *.o -o v6tar
+---
+> 	$(CC) $(CFLAGS) $(LDFLAGS) *.o -o v6tar $(LDLIBS)
+21c24
+< 	cc -c -O $?
+---
+> 	$(CC) $(CFLAGS) -c $?
+24c27
+< 	cc -c -O $?
+---
+> 	$(CC) $(CFLAGS) -c $?
+27c30
+< 	cc -c -O $?
+---
+> 	$(CC) $(CFLAGS) -c $?
+30c33
+< 	cc -c -O $?
+---
+> 	$(CC) $(CFLAGS) -c $?
+33c36
+< 	cc -c -O $?
+---
+> 	$(CC) $(CFLAGS) -c $?
+36c39
+< 	cc -c -O $?
+---
+> 	$(CC) $(CFLAGS) -c $?
+39c42
+< 	cc -c -O $?
+---
+> 	$(CC) $(CFLAGS) -c $?
+42c45
+< 	cc -c -O $?
+---
+> 	$(CC) $(CFLAGS) -c $?
+45c48
+< 	cc -c -O $?
+---
+> 	$(CC) $(CFLAGS) -c $?
+```
+
+### usr/src/cmd/tp/makefile
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/src/cmd/tp/makefile unix-v7-c99/usr/src/cmd/tp/makefile || true
+```
+
+Expect:
+
+```
+1a2,4
+> LDFLAGS =
+> CRT =
+> LDLIBS =
+15c18
+< 	cc $(CFLAGS) tp0.o tp1.o tp2.o tp3.o -o tp
+---
+> 	$(CC) $(CFLAGS) $(LDFLAGS) tp0.o tp1.o tp2.o tp3.o -o tp $(CRT) $(LDLIBS)
+```
+
+### usr/sys/h/reg.h
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/h/reg.h unix-v7-c99/usr/sys/h/reg.h || true
+```
+
+Expect:
+
+```
+2,3c2
+<  * Location of the users' stored
+<  * registers relative to R0.
+---
+>  * Location of the users' stored registers relative to R0.
+4a4,8
+>  *
+>  * Armv7: the trap frame built by svc_entry (conf/low.s) is 17 ints --
+>  * r0..r12, then sp=r[13], lr=r[14], pc=r[15], cpsr=r[16].  u.u_ar0
+>  * points at r[0].  PDP-11 register numbering does not apply, so these
+>  * indices are the Armv7 frame slots (required for Armv7).
+7,15c11,19
+< #define	R1	(-2)
+< #define	R2	(-9)
+< #define	R3	(-8)
+< #define	R4	(-7)
+< #define	R5	(-6)
+< #define	R6	(-3)
+< #define	R7	(1)
+< #define	PC	(1)
+< #define	RPS	(2)
+---
+> #define	R1	(1)
+> #define	R2	(2)
+> #define	R3	(3)
+> #define	R4	(4)
+> #define	R5	(5)
+> #define	R6	(13)		/* user stack pointer */
+> #define	R7	(15)		/* user program counter */
+> #define	PC	(15)
+> #define	RPS	(16)		/* saved cpsr */
+17c21
+< #define	TBIT	020		/* PS trace bit */
+---
+> #define	TBIT	0		/* no PDP-11 trace bit on Arm */
+```
+
+### usr/sys/h/text.h
+
+Local test:
+
+```
+diff unix-v7-c99/v7/usr/sys/h/text.h unix-v7-c99/usr/sys/h/text.h || true
+```
+
+Expect:
+
+```
+9,11c9,11
+< 	short	x_daddr;	/* disk address of segment (relative to swplo) */
+< 	short	x_caddr;	/* core address, if loaded */
+< 	short	x_size;		/* size (clicks) */
+---
+> 	int	x_daddr;	/* disk address of segment (relative to swplo) */
+> 	int	x_caddr;	/* core address, if loaded (Armv7: 32-bit click) */
+> 	int	x_size;		/* size (clicks) */
 ```

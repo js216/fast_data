@@ -26,12 +26,14 @@ cat >"$SERVER" <<'PY'
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 import os
+import signal
 import socket
 import sys
 import time
 from pathlib import Path
 
 import pexpect
+from pexpect.popen_spawn import PopenSpawn
 
 SENTINEL = '__TEST_DONE__'
 PROMPTS = [b'# ', br'(?m)^> ', b'New password:', b'Retype new password:',
@@ -77,9 +79,8 @@ def final_drain(qemu):
 
 def spawn_qemu():
     root = ROOT / 'unix-v7-c99'
-    return pexpect.spawn(
-        'qemu-system-arm',
-        ['-machine', 'virt', '-cpu', 'cortex-a7', '-nographic',
+    return PopenSpawn(
+        ['qemu-system-arm', '-machine', 'virt', '-cpu', 'cortex-a7', '-nographic',
          '-no-reboot', '-snapshot', '-kernel', str(root / 'boot' / 'unix'),
          '-drive', f'if=none,file={root / "boot" / "rootfs.img"},format=raw,id=hd0',
          '-device', 'virtio-blk-device,drive=hd0'],
@@ -108,7 +109,8 @@ def boot_qemu():
     qemu.expect(b'# ')
     for setup in [b'PATH=/bin:/usr/bin; export PATH; cd /\r',
                   b'/bin/test -d /tmp || /bin/mkdir /tmp\r',
-                  b'/bin/chmod 777 /tmp\r']:
+                  b'/bin/chmod 777 /tmp\r',
+                  b'stty nl\r']:
         qemu.send(setup)
         qemu.expect(b'# ')
     return qemu
@@ -118,7 +120,7 @@ def run_lines(qemu, lines):
     sent_b = SENTINEL.encode()
     captured = b''
     for line in lines:
-        qemu.send((line + '\r').encode())
+        qemu.send((line + '\n').encode())
         old_timeout = qemu.timeout
         qemu.timeout = COMMAND_TIMEOUT
         qemu.expect(PROMPTS)
@@ -132,11 +134,6 @@ def run_lines(qemu, lines):
     if any(trap in captured for trap in GUEST_TRAPS):
         raise pexpect.TIMEOUT('guest trap')
     return captured
-
-
-def normalize(captured):
-    captured = captured.replace(b'\r', b'').replace(b'\x08', b'')
-    return b'\n'.join(line.rstrip() for line in captured.splitlines()) + b'\n'
 
 
 def read_all(conn):
@@ -177,7 +174,7 @@ def server():
                     send_response(conn, 0, b'')
                     break
                 try:
-                    out = normalize(run_lines(qemu, request.splitlines()))
+                    out = run_lines(qemu, request.splitlines())
                     send_response(conn, 0, out)
                 except Exception as e:
                     send_response(conn, 1, (str(e) + '\n').encode())
@@ -189,7 +186,7 @@ def server():
                 SOCK.unlink()
             except FileNotFoundError:
                 pass
-            qemu.terminate(force=True)
+            qemu.kill(signal.SIGKILL)
 
 
 if __name__ == '__main__':
@@ -408,7 +405,7 @@ units
 words
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### UPDATE_DAEMON
@@ -443,8 +440,7 @@ UPDATE_STATUS:0
 POST_UPDATE_OK
 # echo __TEST_DONE__
 __TEST_DONE__
-#
-```
+# ```
 
 ### AT_SPOOL
 
@@ -488,7 +484,7 @@ PATH=/bin:/usr/bin
 echo AT_STDIN >/tmp/at.stdin
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CRON_STARTUP
@@ -529,7 +525,7 @@ CRON_STATUS:0
 CRON_OK
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### PASSWD_CHANGE
@@ -592,7 +588,7 @@ PLAINTEXT_STATUS:1
 dmr::7:3::/usr/dmr:
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### DMESG
@@ -629,7 +625,7 @@ DMESG_STATUS:0
 DMESG_NONEMPTY:0
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### DU
@@ -687,7 +683,7 @@ rm: dut nonexistent
 # cd /
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CONSOLE_SINGLE_USER_PATH
@@ -757,7 +753,7 @@ who am i
 getty-login-path-ok
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### JOIN_OPTIONS
@@ -829,7 +825,7 @@ a 1 A
 b 2 B
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### KILL_DIAGNOSTICS
@@ -883,7 +879,7 @@ KILL_SIG9_STATUS:1
 KILL_ZERO_STATUS:0
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### LN_DIAGNOSTICS
@@ -943,7 +939,7 @@ ln: d is a directory
 DIR_STATUS:1
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### MKDIR_DIAGNOSTICS
@@ -1007,7 +1003,7 @@ DUP_STATUS:1
 CLEANUP_STATUS:0
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### DIFF3_MERGE
@@ -1071,7 +1067,7 @@ b
 DIFF3_E_STATUS:0
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### COMPARE
@@ -1110,7 +1106,7 @@ b
 # rm /tmp/j1 /tmp/j2
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### TEST
@@ -1152,7 +1148,7 @@ TEST_MISSING_STATUS:1
 TEST_READ_STATUS:0
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### FOR
@@ -1185,7 +1181,7 @@ loop 2
 loop 3
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CASE
@@ -1216,7 +1212,7 @@ case foo in
 matched
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### IF
@@ -1247,7 +1243,7 @@ if test -f /etc/passwd
 passwd_exists
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### GLOB
@@ -1386,7 +1382,7 @@ write
 yes
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CAL
@@ -1428,7 +1424,7 @@ cal 1 1970
 
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ## WIP
@@ -1467,7 +1463,7 @@ pwd
 # cd /
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### TEXT
@@ -1567,7 +1563,7 @@ uucp::4:4::/usr/lib/uucp:/usr/lib/uucico
 dmr::7:3::/usr/dmr:
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 The sed lines above supersede an older transcript that showed
@@ -1631,7 +1627,7 @@ VARS_STATUS:0
 A B
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### EXPAND
@@ -1665,7 +1661,7 @@ double quote
 3
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### ED
@@ -1710,7 +1706,7 @@ cat: can't open /tmp/edtest
 rm: /tmp/edtest nonexistent
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### FIND
@@ -1739,7 +1735,7 @@ find /usr/lib -print
 /usr/lib/units
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### DF
@@ -1761,11 +1757,10 @@ Expect:
 
 ```
 df
-/dev/root 5719
+/dev/root 5644
 # echo __TEST_DONE__
 __TEST_DONE__
-#
-```
+# ```
 
 ### GREP
 
@@ -1804,7 +1799,7 @@ dmr::7:3::/usr/dmr:
 root:VwL97VCAx1Qhs:0:1::/:
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### SED
@@ -1844,7 +1839,7 @@ y
 y
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### AWK
@@ -1893,7 +1888,7 @@ start
 b
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CP
@@ -1932,7 +1927,7 @@ srcB
 cp: cannot copy file to itself.
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### MV
@@ -1972,7 +1967,7 @@ mv: /tmp/mvsrc and /tmp/mvsrc are identical
 data
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### TOUCH
@@ -2012,7 +2007,7 @@ touch: file /tmp/tabsent does not exist.
 /tmp/tabsent not found
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### TR
@@ -2042,7 +2037,7 @@ AB
 # echo Hello123 | tr -cd 0-9
 123# echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### SPLIT
@@ -2081,7 +2076,7 @@ line2
 line3
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### TSORT
@@ -2112,7 +2107,7 @@ b
 c
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### WRITE
@@ -2137,7 +2132,7 @@ write
 usage: write user [ttyname]
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### COMM
@@ -2167,7 +2162,7 @@ comm /etc/passwd /etc/passwd
                 dmr::7:3::/usr/dmr:
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CRYPT
@@ -2192,7 +2187,7 @@ echo hello | crypt key | crypt key
 hello
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### TIME
@@ -2216,7 +2211,7 @@ Expect:
 time
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### OSH
@@ -2247,7 +2242,7 @@ OSH_OK
 hi
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### UNITS
@@ -2278,23 +2273,22 @@ ls /usr/lib/units
 
 you have: you want:     * 1.200000e+01
         / 8.333333e-02
-you have:
+you have: 
 # (echo mile; echo foot) | units
 437 units; 3191 bytes
 
 you have: you want:     * 5.280000e+03
         / 1.893939e-04
-you have:
+you have: 
 # (echo hour; echo minute) | units
 437 units; 3191 bytes
 
 you have: you want:     * 6.000000e+01
         / 1.666667e-02
-you have:
+you have: 
 # echo __TEST_DONE__
 __TEST_DONE__
-#
-```
+# ```
 
 ### MKNOD
 
@@ -2319,7 +2313,7 @@ arg count
 usage: mknod name b/c major minor
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### NEWGRP
@@ -2344,7 +2338,7 @@ newgrp
 usage: newgrp groupname
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CLRI
@@ -2369,7 +2363,7 @@ clri
 usage: clri filsys inumber ...
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CHECKEQ
@@ -2393,7 +2387,7 @@ Expect:
 echo hello | checkeq
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### MOUNT
@@ -2417,7 +2411,7 @@ Expect:
 mount
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### UMOUNT
@@ -2442,7 +2436,7 @@ umount
 arg count
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### DCHECK
@@ -2467,7 +2461,7 @@ dcheck /dev/root
 /dev/root:
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### ICHECK
@@ -2491,13 +2485,12 @@ Expect:
 icheck /dev/root
 /dev/root:
 files    204 (r=177,d=21,b=1,c=5)
-used    5564 (i=125,ii=4,iii=0,d=5431)
-free    5701
+used    5639 (i=125,ii=4,iii=0,d=5506)
+free    5626
 missing    0
 # echo __TEST_DONE__
 __TEST_DONE__
-#
-```
+# ```
 
 ### NCHECK
 
@@ -2930,7 +2923,7 @@ ncheck /dev/root | sed 's/^[0-9][0-9]*/<ino>/' | grep -v '/usr/spool/at/70[.]'
 <ino>   /dut/alink
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### RANDOM
@@ -2955,7 +2948,7 @@ echo hi | random 0
 hi
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### STTY
@@ -2979,11 +2972,10 @@ Expect:
 stty
 speed 0 baud
 erase = '#'; kill = '@'
-even odd -nl echo -tabs
+even odd echo -tabs 
 # echo __TEST_DONE__
 __TEST_DONE__
-#
-```
+# ```
 
 ### SU
 
@@ -3007,7 +2999,7 @@ su nosuchuser
 Unknown id: nosuchuser
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### TABS
@@ -3034,7 +3026,7 @@ tabs
 TABS_STATUS:0
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### WALL
@@ -3058,7 +3050,7 @@ Expect:
 wall </dev/null
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### PID
@@ -3086,7 +3078,7 @@ top: numeric
 subshell: numeric
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### DEVNULL
@@ -3121,7 +3113,7 @@ write_rc=0
 cat_rc=0
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### MT_BG_KILL
@@ -3163,7 +3155,7 @@ done
 done
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### MT_PIPE_INFINITE
@@ -3200,7 +3192,7 @@ alphabet
 done
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### MT_BIG_PIPE
@@ -3239,7 +3231,7 @@ echo count=`yes x | sed 40000q | wc -l`
 count= 40000
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### MT_WAIT_ALL_BG
@@ -3272,7 +3264,7 @@ B
 done
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### MT_CONCURRENT_SLEEP
@@ -3307,7 +3299,7 @@ before
 after
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### NEWCMDS
@@ -3366,7 +3358,7 @@ diff3: arg count
 fortunes
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### NEWCMDS2
@@ -3420,7 +3412,7 @@ ls /bin/dc /bin/tar /bin/tp /bin/ptx /bin/spline /bin/vpr /bin/quot
 /usr/games/wump
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### NEWCMDS4
@@ -3454,7 +3446,7 @@ ls /usr/games/hangman /usr/games/quiz /bin/spline /bin/tk
 /usr/games/quiz
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### PS
@@ -3479,7 +3471,7 @@ ps | sed 1q
    PID TTY TIME CMD
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### PSTAT
@@ -3510,7 +3502,7 @@ N active inodes
 N open files
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### PROF
@@ -3535,7 +3527,7 @@ prof
 a.out: not found
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### TC
@@ -3566,7 +3558,7 @@ tc < /dev/null | od -c
 0000035
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### GRAPH
@@ -3601,7 +3593,7 @@ ls /bin/graph
 0000045
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### TAR
@@ -3716,7 +3708,7 @@ tarout/tarin
 tarout/tarin/sub
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ## Syscall and filesystem behavior under QEMU
@@ -3749,7 +3741,7 @@ test $$ -gt 0 && echo pid: numeric
 pid: numeric
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### DATE_CLOCK
@@ -3780,7 +3772,7 @@ date: format
 # rm /tmp/date.out
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### UMASK_ROUNDTRIP
@@ -3814,7 +3806,7 @@ umask 077
 0022
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### STAT_METADATA
@@ -3858,7 +3850,7 @@ total 127
 -rw-r--r-- 1 root        0 Dec 31 19:00 utmp
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CHMOD_METADATA
@@ -3893,7 +3885,7 @@ chmod 755 /etc/passwd
 -rw-r--r-- 1 root      141 Jan  1 00:00 /etc/passwd
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CHOWN_METADATA
@@ -3930,7 +3922,7 @@ chown 1 /etc/passwd
 -rw-r--r-- 1 root      141 Jan  1 00:00 /etc/passwd
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### HARD_LINK_METADATA
@@ -3971,7 +3963,7 @@ echo hi > /tmp/link_x
 # rm /tmp/link_y
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CHDIR_PWD_PATHS
@@ -4007,7 +3999,7 @@ cd /etc
 /
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### MKNOD_CHAR_DEVICE
@@ -4040,7 +4032,7 @@ crw-r--r-- 1 root    1,  2 Jan  1 00:01 /tmp/cdev
 # rm /tmp/cdev
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### TEST_FILE_OPERATOR
@@ -4076,7 +4068,7 @@ test: argument expected
 absent
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### EDITORS
@@ -4110,7 +4102,7 @@ hello
 hello
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### CALC
@@ -4145,7 +4137,7 @@ ls /bin/dc /bin/bc 2>&1
 14
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### TEXT_TOOLS
@@ -4192,7 +4184,7 @@ c
 d
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### FILE_TOOLS
@@ -4244,7 +4236,7 @@ read error 1
 done
 # echo __TEST_DONE__
 __TEST_DONE__
-#
+# 
 ```
 
 ### Stop QEMU session

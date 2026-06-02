@@ -219,7 +219,7 @@ class Runner:
                           'Foreach', 'Local test', 'Inputs', 'Expect'):
                 key = label.lower().replace(' ', '_')
                 m = re.search(
-                    rf'^{label}\s*(?:\(([^)]+)\))?\s*:\s*\n+```\n(.*?)\n```',
+                    rf'^{label}\s*(?:\(([^)]+)\))?\s*:\s*\n+```\n(.*?)^```',
                     body, re.M | re.S)
                 blocks[key] = m.group(2) if m else None
                 specs[key] = m.group(1) if m else None

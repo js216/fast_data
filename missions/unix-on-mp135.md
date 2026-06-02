@@ -4,8 +4,12 @@ Build:
 
 ```
 rm -f unix-v7-c99/boot/unix
-TMPDIR=$PWD/tmp make -C unix-v7-c99 BOARD=qemu boot/rootfs.img
-make -C unix-v7-c99 BOARD=mp135 boot/unix
+TMPDIR=$PWD/tmp make -C unix-v7-c99 BOARD=qemu \
+    KFEATURES="-DQEMU -DPL011 -DVIRTIO" \
+    KLDSCRIPT=usr/sys/conf/arm_qemu.ld boot/rootfs.img
+make -C unix-v7-c99 BOARD=mp135 \
+    KFEATURES="-DMP135 -DSTM32USART -DSTM32SD" \
+    KLDSCRIPT=usr/sys/conf/sysram.ld boot/unix
 arm-none-eabi-objcopy -O binary unix-v7-c99/boot/unix unix-v7-c99/boot/unix.bin
 python3 stm32mp135_test_board/bootloader/scripts/stm32_header.py \
     -e unix-v7-c99/boot/unix -b unix-v7-c99/boot/unix.bin \
@@ -1680,7 +1684,7 @@ Test (max 20 s):
 ```
 mp135.custom:uart_open
 mp135.custom:uart_write data="df\r"
-mp135.custom:uart_expect sentinel="df\r\n/dev/root 3621\r\n# " timeout_ms=10000
+mp135.custom:uart_expect sentinel="df\r\n/dev/root 5644\r\n# " timeout_ms=10000
 mp135.custom:uart_write data="echo __TEST_DONE__\r"
 mp135.custom:uart_expect sentinel="# echo __TEST_DONE__\r\n__TEST_DONE__\r\n# " timeout_ms=10000
 mp135.custom:uart_close
@@ -1691,7 +1695,7 @@ Verify:
 
 ```
 expected = """df
-/dev/root 3621
+/dev/root 5644
 # echo __TEST_DONE__
 __TEST_DONE__
 #"""
@@ -2502,7 +2506,7 @@ Test (max 20 s):
 ```
 mp135.custom:uart_open
 mp135.custom:uart_write data="icheck /dev/root\r"
-mp135.custom:uart_expect sentinel="icheck /dev/root\r\n/dev/root:\r\nfiles    205 (r=178,d=21,b=1,c=5)\r\nused    7678 (i=127,ii=20,iii=0,d=7511)\r\nfree    3603\r\nmissing    0\r\n# " timeout_ms=10000
+mp135.custom:uart_expect sentinel="icheck /dev/root\r\n/dev/root:\r\nfiles    204 (r=177,d=21,b=1,c=5)\r\nused    5639 (i=125,ii=4,iii=0,d=5506)\r\nfree    5626\r\nmissing    0\r\n# " timeout_ms=10000
 mp135.custom:uart_write data="echo __TEST_DONE__\r"
 mp135.custom:uart_expect sentinel="# echo __TEST_DONE__\r\n__TEST_DONE__\r\n# " timeout_ms=10000
 mp135.custom:uart_close
@@ -2514,9 +2518,9 @@ Verify:
 ```
 expected = """icheck /dev/root
 /dev/root:
-files    205 (r=178,d=21,b=1,c=5)
-used    7678 (i=127,ii=20,iii=0,d=7511)
-free    3603
+files    204 (r=177,d=21,b=1,c=5)
+used    5639 (i=125,ii=4,iii=0,d=5506)
+free    5626
 missing    0
 # echo __TEST_DONE__
 __TEST_DONE__
@@ -2560,8 +2564,6 @@ expected = """ncheck /dev/root | sed 's/^[0-9][0-9]*/<ino>/' | grep -v '/usr/spo
 <ino>	/unix
 <ino>	/.profile
 <ino>	/.profile
-<ino>	/core
-<ino>	/core
 <ino>	/dut/.
 <ino>	/dut/.
 <ino>	/j1
@@ -2958,7 +2960,7 @@ expected = """ncheck /dev/root | sed 's/^[0-9][0-9]*/<ino>/' | grep -v '/usr/spo
 <ino>	/dut/alink
 # echo __TEST_DONE__
 __TEST_DONE__
-#"""
+# """
 
 def check(extract_dir):
     return Verification.uart_golden(extract_dir, expected)
