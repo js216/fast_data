@@ -514,6 +514,17 @@ class Runner:
             return bool(fn(str(extract_dir), item))
         return bool(fn(str(extract_dir)))
 
+    def _manifest_has_errors(self, extract_dir):
+        """True if a submitted attempt's manifest reports op-level errors.
+        Harness-level backstop so a step whose bench session errored can
+        never be accepted as PASS regardless of what its check() returns.
+        Missing/unreadable manifest -> False (defer to check())."""
+        try:
+            m = json.loads((Path(extract_dir) / 'manifest.json').read_text())
+        except (OSError, ValueError):
+            return False
+        return m.get('n_errors', 0) != 0 or m.get('status') == 'errors'
+
     def _watch_submit(self, proc, log_fh, description, max_s, line_prefix):
         """Block until ``proc`` exits, polling ``GET /jobs`` once a
         second to find our submission (matched by description). When
@@ -912,8 +923,17 @@ class Runner:
                     break
                 attempt += 1
                 continue
-            if not ok:
-                last_reason = '   verify check() returned False'
+            # Defense in depth against a false PASS: submit.py exits 0 even
+            # when the bench session recorded op-level errors, so run.py
+            # relies on check() to notice them via manifest_clean(). A check()
+            # that forgets manifest_clean (or a transient artefact mismatch)
+            # must never be allowed to report PASS over a manifest the bench
+            # itself flagged as errored. Treat that as a failed attempt.
+            errored = ok and self._manifest_has_errors(extract)
+            if not ok or errored:
+                last_reason = (
+                    '   verify check() returned False' if not ok else
+                    '   verify check() True but manifest reports op errors')
                 self._release_failed_attempt_lease(extract, test)
                 if (self._lease_released_in_attempt(extract)
                         and self.LEASE_PLACEHOLDER in test):

@@ -273,17 +273,21 @@ mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="Password:" timeout_ms=10000
 mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=15000
+delay ms=4000
 mp135.custom:uart_write data="dmesg -n 1 2>/dev/null; true\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=3000
 mp135.custom:uart_write data="test -s /run/usbtmc_gadget.ready && echo USBTMC_READY_OK\r"
 mp135.custom:uart_expect sentinel="USBTMC_READY_OK" timeout_ms=5000
-mp135.custom:uart_write data="set -- /sys/class/udc/*; udc=${1##*/}; echo MANUFACTURER_$(cat /sys/kernel/config/usb_gadget/usbtmc/strings/0x409/manufacturer); echo SERIAL_$(cat /sys/kernel/config/usb_gadget/usbtmc/strings/0x409/serialnumber); echo VID_$(cat /sys/kernel/config/usb_gadget/usbtmc/idVendor); echo PID_$(cat /sys/kernel/config/usb_gadget/usbtmc/idProduct); echo UDC_NAME_$udc; echo UDC_STATE_$(cat /sys/class/udc/$udc/state 2>/dev/null); echo ___USBTMC_CUSTOM_SYSFS_DONE___\r"
-mp135.custom:uart_expect sentinel="STMicroelectronics" timeout_ms=5000
+mp135.custom:uart_write data="echo MANUFACTURER_$(cat /sys/kernel/config/usb_gadget/usbtmc/strings/0x409/manufacturer)\r"
+mp135.custom:uart_expect sentinel="MANUFACTURER_STMicroelectronics" timeout_ms=5000
+mp135.custom:uart_write data="echo SERIAL_$(cat /sys/kernel/config/usb_gadget/usbtmc/strings/0x409/serialnumber)\r"
 mp135.custom:uart_expect sentinel="SERIAL_custom-linux-usbtmc-0001" timeout_ms=5000
+mp135.custom:uart_write data="echo VID_$(cat /sys/kernel/config/usb_gadget/usbtmc/idVendor)\r"
 mp135.custom:uart_expect sentinel="VID_0x0483" timeout_ms=5000
+mp135.custom:uart_write data="echo PID_$(cat /sys/kernel/config/usb_gadget/usbtmc/idProduct)\r"
 mp135.custom:uart_expect sentinel="PID_0x571e" timeout_ms=5000
+mp135.custom:uart_write data="echo UDC_STATE_$(cat /sys/class/udc/*/state)\r"
 mp135.custom:uart_expect sentinel="UDC_STATE_configured" timeout_ms=5000
-mp135.custom:uart_expect sentinel="___USBTMC_CUSTOM_SYSFS_DONE___" timeout_ms=5000
 mp135.custom:uart_close
 delay ms=8000
 inventory refresh=true verify=false
@@ -365,10 +369,66 @@ sustained throughput checks on the already-booted custom board.
 
 Build: nothing required.
 
-Test: reuse the booted custom Linux USBTMC gadget, verify host-side
-USBTMC enumeration, run the command suite, run binary integrity
-transfers, and run the sustained throughput transfer.
+Test (reuse the booted custom Linux USBTMC gadget; max 4 min):
 
-Verify: descriptor enumeration passes, all command responses match,
-binary transfers are bit-perfect, throughput meets the selected floor,
-and the UART transcript contains no USB gadget, UDC, or endpoint errors.
+```
+delay ms=1500
+inventory refresh=true verify=false
+usbtmc.any:list
+usbtmc.any:identify serial="custom-linux-usbtmc-0001" expect="STM32MP135-USBTMC"
+usbtmc.any:query serial="custom-linux-usbtmc-0001" data="*OPC?" length=32 timeout_ms=2000
+usbtmc.any:query serial="custom-linux-usbtmc-0001" data="*TST?" length=32 timeout_ms=2000
+usbtmc.any:query serial="custom-linux-usbtmc-0001" data="*STB?" length=32 timeout_ms=2000
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="*CLS" timeout_ms=2000
+usbtmc.any:query serial="custom-linux-usbtmc-0001" data="UNKNOWN:HDR?" length=128 timeout_ms=2000
+usbtmc.any:query serial="custom-linux-usbtmc-0001" data="SYST:ERR?" length=128 timeout_ms=2000
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 1000003\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=1000003 exact=true expect_sha256="d474ed987bc11c4635d8b45acbe0ef3d819cf408b93e9274ed783661affac1c4" expect_crc32=0x2feeb619 timeout_ms=30000
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 134217728\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=134217728 exact=true min_rate_Bps=11250000 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 timeout_ms=120000
+mark tag=usbtmc_custom_data_parity
+```
+
+Verify: the custom board (addressed by serial, never by `/dev/usbtmcN`
+index) identifies and answers the USB488 common commands deterministically
+(`*OPC?`->1, `*TST?`->0, `*STB?`->0), an unknown header is reported via
+`SYST:ERR?`, a 1,000,003-byte payload (exercises USBTMC 4-byte alignment
+padding) and a 128 MiB payload are streamed host-side and verified
+bit-perfect (SHA-256 + CRC32 vs the `_prbs.py` seed 0x12345678 reference,
+hashed on the fly and discarded by `usbtmc:read`), and the 128 MiB transfer
+sustains at least 90 Mbps (the op enforces `min_rate_Bps` and exactness and
+records each integrity check):
+
+```
+def check(extract_dir):
+    import json
+
+    if not Verification.manifest_clean(extract_dir):
+        return False
+
+    idn = Verification.load_stream_text(extract_dir, "usbtmc.idn")
+    if "STM32MP135-USBTMC" not in idn:
+        return False
+
+    # USB488 common-command responses (concatenated in usbtmc.query):
+    # *OPC?->1, *TST?->0, *STB?->0, then an unknown header records a
+    # controlled error that SYST:ERR? reports back.
+    cmds = Verification.load_stream_text(extract_dir, "usbtmc.query")
+    if "1\n0\n0\n" not in cmds:
+        return False
+    if "Undefined header: UNKNOWN:HDR?" not in cmds:
+        return False
+
+    devices = json.loads(Verification.load_stream_text(extract_dir, "usbtmc.list"))
+    if not any(d.get("serial") == "custom-linux-usbtmc-0001" for d in devices):
+        return False
+
+    # The two usbtmc:read transfers (1,000,003 B + 128 MiB) each record a
+    # host-side SHA-256 and CRC32 streaming-verify check; all must hit.
+    checks = Verification.load_manifest(extract_dir).get("checks", [])
+    sha = [c for c in checks if c.get("kind") == "usbtmc_read_sha256"]
+    crc = [c for c in checks if c.get("kind") == "usbtmc_read_crc32"]
+    if len(sha) < 2 or len(crc) < 2:
+        return False
+    return all(c.get("status") == "hit" for c in sha + crc)
+```
