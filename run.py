@@ -60,6 +60,12 @@ class Verification:
         return Verification.load_stream(extract_dir, stream_name).decode(
             encoding, 'replace')
 
+    def uart_golden(extract_dir, expected, stream='mp135.uart'):
+        if not Verification.manifest_clean(extract_dir):
+            return False
+        actual = Verification.load_stream_text(extract_dir, stream, 'utf-8')
+        return expected.replace('\n', '\r\n') in actual
+
     def op_succeeded(ops, device, verb):
         """True iff `device:verb` appears in `ops` with status='ok'."""
         return any(o.get('device') == device and o.get('verb') == verb
@@ -213,7 +219,7 @@ class Runner:
                           'Foreach', 'Local test', 'Inputs', 'Expect'):
                 key = label.lower().replace(' ', '_')
                 m = re.search(
-                    rf'^{label}\s*(?:\(([^)]+)\))?\s*:\s*\n+```\n(.*?)\n```',
+                    rf'^{label}\s*(?:\(([^)]+)\))?\s*:\s*\n+```\n(.*?)^```',
                     body, re.M | re.S)
                 blocks[key] = m.group(2) if m else None
                 specs[key] = m.group(1) if m else None
@@ -253,6 +259,10 @@ class Runner:
         if not m:
             raise RuntimeError(f'invalid Foreach block: {text!r}')
         return m.group(1), m.group(2)
+
+    @staticmethod
+    def fmt_seconds(seconds):
+        return f'{seconds:g}s'
 
     def parse_artifacts(self, text):
         """Parse Artifacts block into {basename: relative_path}."""
@@ -503,6 +513,17 @@ class Runner:
         if fn.__code__.co_argcount >= 2:
             return bool(fn(str(extract_dir), item))
         return bool(fn(str(extract_dir)))
+
+    def _manifest_has_errors(self, extract_dir):
+        """True if a submitted attempt's manifest reports op-level errors.
+        Harness-level backstop so a step whose bench session errored can
+        never be accepted as PASS regardless of what its check() returns.
+        Missing/unreadable manifest -> False (defer to check())."""
+        try:
+            m = json.loads((Path(extract_dir) / 'manifest.json').read_text())
+        except (OSError, ValueError):
+            return False
+        return m.get('n_errors', 0) != 0 or m.get('status') == 'errors'
 
     def _watch_submit(self, proc, log_fh, description, max_s, line_prefix):
         """Block until ``proc`` exits, polling ``GET /jobs`` once a
@@ -804,6 +825,17 @@ class Runner:
                     item_arg, verify))
             el = time.monotonic() - sub_t0
             if ok:
+                if test_max_s is not None and el > test_max_s:
+                    sys.stdout.write(f'{colored("FAIL")} (+{el:.1f}s)\n')
+                    sys.stdout.flush()
+                    msg = (f'   exceeded Test (max {self.fmt_seconds(test_max_s)}) '
+                           f'hard budget: +{el:.1f}s actual')
+                    print(msg); self._log(msg)
+                    self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
+                              f'{colored("FAIL")} {label} (+{el:.1f}s)')
+                    if fail_log is not None:
+                        dump(fail_log, fail_extract)
+                    return False
                 sys.stdout.write(f'(+{el:.1f}s)\n')
                 sys.stdout.flush()
                 self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
@@ -891,8 +923,17 @@ class Runner:
                     break
                 attempt += 1
                 continue
-            if not ok:
-                last_reason = '   verify check() returned False'
+            # Defense in depth against a false PASS: submit.py exits 0 even
+            # when the bench session recorded op-level errors, so run.py
+            # relies on check() to notice them via manifest_clean(). A check()
+            # that forgets manifest_clean (or a transient artefact mismatch)
+            # must never be allowed to report PASS over a manifest the bench
+            # itself flagged as errored. Treat that as a failed attempt.
+            errored = ok and self._manifest_has_errors(extract)
+            if not ok or errored:
+                last_reason = (
+                    '   verify check() returned False' if not ok else
+                    '   verify check() True but manifest reports op errors')
                 self._release_failed_attempt_lease(extract, test)
                 if (self._lease_released_in_attempt(extract)
                         and self.LEASE_PLACEHOLDER in test):
@@ -1122,6 +1163,16 @@ class Runner:
             self._log(f'[{i:>{w}}/{total}] [{started}] {colored(label)} {title} '
                       f'(<={budget:.0f}s budget, +{elapsed:.1f}s actual)')
 
+        def pass_or_timeout(i, title, started, budget, test_max_s, elapsed):
+            if test_max_s is not None and elapsed > test_max_s:
+                result(i, 'FAIL', title, elapsed, started, budget)
+                msg = (f'   exceeded Test (max {self.fmt_seconds(test_max_s)}) '
+                       f'hard budget: +{elapsed:.1f}s actual')
+                print(msg); self._log(msg)
+                return False
+            result(i, 'PASS', title, elapsed, started, budget)
+            return True
+
         def dump(log, extract_dir=None):
             for src in (log, (extract_dir / 'errors.log') if extract_dir
                         else None):
@@ -1172,7 +1223,9 @@ class Runner:
                             for ln in diff.splitlines():
                                 print(f'   {ln}'); self._log(f'   {ln}')
                             return 1
-                    result(i, 'PASS', title, el(), started, budget)
+                    if not pass_or_timeout(
+                            i, title, started, budget, test_max_s, el()):
+                        return 1
                     continue
                 foreach = self.parse_foreach(foreach_text)
                 if foreach is not None:
@@ -1204,7 +1257,9 @@ class Runner:
                         print(msg); self._log(msg)
                         dump(log, extract_dir)
                         return 1
-                    result(i, 'PASS', title, el(), started, budget)
+                    if not pass_or_timeout(
+                            i, title, started, budget, test_max_s, el()):
+                        return 1
                     continue
                 if test is None:
                     if build is not None and not build.strip().lower(
@@ -1227,7 +1282,9 @@ class Runner:
                     return 1
                 self.capture_lease_token(fail_extract, test)
                 self.delete_outputs(digest)
-                result(i, 'PASS', title, el(), started, budget)
+                if not pass_or_timeout(
+                        i, title, started, budget, test_max_s, el()):
+                    return 1
 
             print(colored('PASS'))
             self._log(f'{colored("PASS")} {total - skipped}/{total}')
