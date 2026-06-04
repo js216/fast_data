@@ -23,14 +23,14 @@ before using the bench.
 Build:
 
 ```
-mkdir -p logs/local-bin
-gcc -O2 -Wall -Wextra -o logs/local-bin/stream_ws_prbs_stream stm32mp135_test_board/tools/stream_ws_prbs_stream.c
+mkdir -p tmp/local-bin
+gcc -O2 -Wall -Wextra -o tmp/local-bin/stream_ws_prbs_stream stm32mp135_test_board/tools/stream_ws_prbs_stream.c
 ```
 
 Local test:
 
 ```
-logs/local-bin/stream_ws_prbs_stream --port 18765 --bytes 1048576 --seed 0x12345678 --frame-bytes 131072 >logs/local-stream-1m.out 2>&1 & srv=$!; sleep 0.2; python3 logs/stream_ws_receive.py --host 127.0.0.1 --port 18765 --bytes 1048576 --min-rate-Bps 1 --expect-sha256 5b64b12ad6e657f403f9e3e57e4ad6fbd1d8fb14c53a0c7e1dc5dbd2257166b1 --expect-crc32 0xe6568d53 >logs/local-recv-1m.out 2>&1; rc=$?; wait $srv || true; cat logs/local-stream-1m.out logs/local-recv-1m.out; exit $rc
+tmp/local-bin/stream_ws_prbs_stream --port 18765 --bytes 1048576 --seed 0x12345678 --frame-bytes 131072 >tmp/local-stream-1m.out 2>&1 & srv=$!; sleep 0.2; python3 stm32mp135_test_board/tools/stream_ws_receive.py --host 127.0.0.1 --port 18765 --bytes 1048576 --min-rate-Bps 1 --expect-sha256 5b64b12ad6e657f403f9e3e57e4ad6fbd1d8fb14c53a0c7e1dc5dbd2257166b1 --expect-crc32 0xe6568d53 >tmp/local-recv-1m.out 2>&1; rc=$?; kill $srv 2>/dev/null; wait $srv 2>/dev/null || true; cat tmp/local-stream-1m.out tmp/local-recv-1m.out; exit $rc
 ```
 
 ### Inventory exposes required custom streaming control surface
