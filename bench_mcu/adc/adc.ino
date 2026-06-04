@@ -173,14 +173,12 @@ static void print_help(void)
   Serial.println("  i        - I2C bus scan");
 }
 
-static void handle_line(char *s)
+// Dispatch one command. Single-char commands fire immediately the moment the
+// byte arrives -- no terminator required -- matching the original reset.ino
+// API that test_serv relies on (it sends bare '?','r','R' with no newline).
+// Argument-taking commands (w/g/e/P) collect until newline; see loop().
+static void run_cmd(char cmd, char *arg)
 {
-  while (*s == ' ' || *s == '\t')
-    s++;
-  char cmd = *s;
-  if (cmd == 0)
-    return;
-  char *arg = s + 1;
   while (*arg == ' ' || *arg == '\t')
     arg++;
 
@@ -274,21 +272,40 @@ void setup(void)
   print_help();
 }
 
+static bool cmd_takes_arg(char c)
+{
+  return c == 'w' || c == 'g' || c == 'e' || c == 'P';
+}
+
 void loop(void)
 {
-  static char line[64];
-  static size_t len = 0;
+  static char arg[32];
+  static size_t arglen = 0;
+  static char pending = 0;  // arg-taking command awaiting its argument
 
   while (Serial.available() > 0) {
     char c = Serial.read();
-    if (c == '\n' || c == '\r') {
-      if (len > 0) {
-        line[len] = 0;
-        handle_line(line);
-        len = 0;
+
+    if (pending) {
+      if (c == '\n' || c == '\r') {
+        arg[arglen] = 0;
+        run_cmd(pending, arg);
+        pending = 0;
+        arglen = 0;
+      } else if (arglen < sizeof(arg) - 1) {
+        arg[arglen++] = c;
       }
-    } else if (len < sizeof(line) - 1) {
-      line[len++] = c;
+      continue;
+    }
+
+    if (c == '\n' || c == '\r' || c == ' ' || c == '\t')
+      continue;  // ignore whitespace between commands
+
+    if (cmd_takes_arg(c)) {
+      pending = c;  // begin collecting its argument until newline
+      arglen = 0;
+    } else {
+      run_cmd(c, (char *)"");  // single-char command: act now, no terminator
     }
   }
 }
