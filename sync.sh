@@ -8,4 +8,5 @@ git -C selache pull && git -C selache push
 git -C test_serv pull && git -C test_serv push
 git -C stm32mp135_test_board/bootloader pull && git -C stm32mp135_test_board/bootloader push
 git -C stm32mp135_test_board pull && git -C stm32mp135_test_board push
+git -C stm32mp257_test_board pull && git -C stm32mp257_test_board push
 git -c submodule.recurse=false pull && git push
