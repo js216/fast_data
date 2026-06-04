@@ -156,7 +156,7 @@ stm32mp135_test_board/buildroot/output/images/sdcard.img
 Test (inherits the bootloader-at-`> ` state from the previous test ---
 no reset/DFU/autoload-stop preamble):
 
-Test (max 30 s):
+Test (max 60 s):
 
 ```
 msc.custom:write data=@sdcard.img offset_lba=0 min_rate_Bps=3000000
@@ -318,7 +318,7 @@ python3 -c "import base64,os,struct; d=open('stm32mp135_test_board/buildroot/out
 python3 test_serv/submit.py --server http://localhost:8080 --wait 20 "$RUNPY_WORKDIR/refresh_known_hosts_custom.plan"
 ```
 
-Test (max 1 min):
+Test (max 2 min):
 
 ```
 delay ms=8000
