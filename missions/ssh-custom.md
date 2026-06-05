@@ -28,7 +28,7 @@ Verify:
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    needed = {'mp135.custom', 'bench_mcu.0', 'ssh.custom'}
+    needed = {'mp135.custom', 'bench_mcu.0', 'ssh.any'}
     devs = Verification.load_devices(extract_dir)
     return needed.issubset({d['id'] for d in devs})
 ```
@@ -123,12 +123,12 @@ def check(extract_dir):
     return len(data) == 1048576
 ```
 
-### SD image write
+### SD image build
 
 Confirms the build instructions actually produce a usable SD image.
-Builds a fresh `sdcard.img` and writes it to the card via MSC. The next
-sections verify and read it back separately so slow/failing media ops
-are isolated.
+Builds a fresh `sdcard.img` for the custom board. The next sections
+write, verify, and read it back separately so slow/failing media ops are
+isolated.
 
 Build (apply `config/patch.linux` if not already in the tree ---
 without it the kernel boots silently and never reaches userspace ---
@@ -153,10 +153,34 @@ Artifacts:
 stm32mp135_test_board/buildroot/output/images/sdcard.img
 ```
 
+Test: no hardware.
+
+Verify:
+
+```
+from pathlib import Path
+
+def check(_extract_dir):
+    sd = Path("stm32mp135_test_board/buildroot/output/images/sdcard.img")
+    return sd.is_file() and sd.stat().st_size > 0
+```
+
+### SD image write
+
+Writes the prepared custom-board SD image to the card via MSC.
+
+Build: nothing required.
+
+Artifacts:
+
+```
+stm32mp135_test_board/buildroot/output/images/sdcard.img
+```
+
 Test (inherits the bootloader-at-`> ` state from the previous test ---
 no reset/DFU/autoload-stop preamble):
 
-Test (max 60 s):
+Test (max 30 s):
 
 ```
 msc.custom:write data=@sdcard.img offset_lba=0 min_rate_Bps=3000000
@@ -220,7 +244,7 @@ stm32mp135_test_board/buildroot/output/images/sdcard.img
 
 Test (inherits the written SD image from the previous sections):
 
-Test (max 30 s):
+Test (max 60 s):
 
 ```
 msc.custom:read n=41943040 offset_lba=0 min_rate_Bps=3000000
@@ -309,12 +333,14 @@ no boot. Waits a few seconds for DHCP, derives the dropbear host key
 from the buildroot target tree at Build time, registers it via a
 side plan, and runs `ssh:exec` for IP + uname. Quick check that the
 bench SSH path reaches the live system. Key rotations don't require
-editing this mission.
+editing this mission. `ssh.custom` was removed from the bench; `ssh.any`
+is the only ssh device and needs an explicit target, so set `ip=` to
+the board's DHCP lease (placeholder `172.25.0.46`).
 
 Build (the refresh plan registers the SSH host key directly):
 
 ```
-python3 -c "import base64,os,struct; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/refresh_known_hosts_custom.plan','w').write('description \"refresh ssh.custom known_hosts\"'+chr(10)+'ssh.custom:trust_host_key key=\"'+line+'\"'+chr(10))"
+python3 -c "import base64,os,struct; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/refresh_known_hosts_custom.plan','w').write('description \"refresh ssh.any known_hosts\"'+chr(10)+'ssh.any:trust_host_key key=\"'+line+'\" ip=\"172.25.0.46\"'+chr(10))"
 python3 test_serv/submit.py --server http://localhost:8080 --wait 20 "$RUNPY_WORKDIR/refresh_known_hosts_custom.plan"
 ```
 
@@ -322,7 +348,7 @@ Test (max 2 min):
 
 ```
 delay ms=8000
-ssh.custom:exec command="ip -4 -o addr show dev eth0; uname -a"
+ssh.any:exec command="ip -4 -o addr show dev eth0; uname -a" ip="172.25.0.46"
 mark tag=ssh_smoke
 ```
 

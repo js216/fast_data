@@ -30,7 +30,7 @@ Verify:
 def check(extract_dir):
     if not Verification.manifest_clean(extract_dir):
         return False
-    needed = {'mp135.evb', 'bench_mcu.0', 'ssh.evb'}
+    needed = {'mp135.evb', 'bench_mcu.0', 'ssh.any'}
     devs = Verification.load_devices(extract_dir)
     return needed.issubset({d['id'] for d in devs})
 ```
@@ -316,12 +316,14 @@ no boot. Waits a few seconds for DHCP, derives the dropbear host key
 from the buildroot target tree at Build time, registers it via a
 side plan, and runs `ssh:exec` for IP + uname. Quick check that the
 bench SSH path reaches the live system. Key rotations don't require
-editing this mission.
+editing this mission. `ssh.evb` was removed from the bench; `ssh.any`
+is the only ssh device and needs an explicit target, so set `ip=` to
+the board's DHCP lease (placeholder `172.25.0.NNN`).
 
 Build:
 
 ```
-python3 -c "import base64,os,struct; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/refresh_known_hosts.plan','w').write('description \"refresh ssh.evb known_hosts\"'+chr(10)+'ssh.evb:trust_host_key key=\"'+line+'\"'+chr(10))"
+python3 -c "import base64,os,struct; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/refresh_known_hosts.plan','w').write('description \"refresh ssh.any known_hosts\"'+chr(10)+'ssh.any:trust_host_key key=\"'+line+'\" ip=\"172.25.0.NNN\"'+chr(10))"
 python3 test_serv/submit.py --server http://localhost:8080 --wait 20 "$RUNPY_WORKDIR/refresh_known_hosts.plan"
 ```
 
@@ -329,7 +331,7 @@ Test (max 1 min):
 
 ```
 delay ms=8000
-ssh.evb:exec command="ip -4 -o addr show dev eth0; uname -a"
+ssh.any:exec command="ip -4 -o addr show dev eth0; uname -a" ip="172.25.0.NNN"
 mark tag=ssh_smoke
 ```
 
