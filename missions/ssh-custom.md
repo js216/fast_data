@@ -313,6 +313,8 @@ mp135.custom:uart_expect sentinel="Jumping to address" timeout_ms=5000
 mp135.custom:uart_expect sentinel="Linux version" timeout_ms=10000
 mp135.custom:uart_expect sentinel="login:" timeout_ms=15000
 mp135.custom:uart_write data="root\r"
+mp135.custom:uart_expect sentinel="Password:" timeout_ms=5000
+mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=10000
 mp135.custom:uart_write data="ip -4 -o addr show dev eth0\r"
 mp135.custom:uart_expect sentinel="inet 172.25.0.115/" timeout_ms=10000

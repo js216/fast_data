@@ -99,6 +99,39 @@ def check(extract_dir):
     return Verification.manifest_clean(extract_dir)
 ```
 
+### Verify both A35 cores are online
+
+Inherits the root shell. Read `/proc/cpuinfo` and require both Cortex-A35
+cores to appear as online Linux processors before continuing to network tests.
+
+Build: nothing required.
+
+Test (max 20 s):
+
+```
+mp257.evb-uart1:uart_open
+mp257.evb-uart1:uart_write data="\r"
+mp257.evb-uart1:uart_expect sentinel="~ #" timeout_ms=10000
+mp257.evb-uart1:uart_write data="awk '/^processor/{n++} END{print \"CPUINFO_CORES:\" n}' /proc/cpuinfo; cat /proc/cpuinfo\r"
+mp257.evb-uart1:uart_expect sentinel="CPUINFO_CORES:2" timeout_ms=5000
+mp257.evb-uart1:uart_expect sentinel="~ #" timeout_ms=5000
+mp257.evb-uart1:uart_close
+mark tag=cpuinfo_dual_core
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import re
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    t = Verification.load_stream_text(extract_dir, 'mp257.evb-uart1.uart', 'utf-8')
+    return (
+        'CPUINFO_CORES:2' in t
+        and len(re.findall(r'^processor\\s*:', t, flags=re.M)) >= 2)
+```
+
 ### Verify the board has network + internet
 
 Inherits the root shell. Confirm `eth0` has a bench DHCP address and can ping
