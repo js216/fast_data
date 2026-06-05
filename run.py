@@ -8,6 +8,7 @@ section, print a PASS/FAIL line for each.
 Usage: python3 run.py ssh.md
 """
 import argparse
+import csv
 import datetime
 import getpass
 import json
@@ -20,6 +21,14 @@ import threading
 import time
 import urllib.request
 from pathlib import Path
+
+
+class HardFail(Exception):
+    """Raised inside a verify `check()` to signal a deterministic FAIL
+    that must NOT be retried. `_submit_with_retries` catches it and
+    fails the section immediately instead of burning the transient-error
+    backoff sequence. Use for verdicts that re-running cannot change
+    (e.g. the DSP is in a fault state)."""
 
 
 class Verification:
@@ -59,6 +68,41 @@ class Verification:
         """Decoded text of streams/<stream_name>.bin (errors='replace')."""
         return Verification.load_stream(extract_dir, stream_name).decode(
             encoding, 'replace')
+
+    def scope_columns(extract_dir):
+        """Parse streams/scope.csv into {channel: [float, ...]} keyed by
+        CSV header, so a verify block can read a captured trace by
+        channel name without caring about column order. Returns {} when
+        the trace has no rows."""
+        rows = list(csv.reader(
+            Verification.load_stream_text(
+                extract_dir, 'scope.csv').splitlines()))
+        if not rows:
+            return {}
+        header = rows[0]
+        cols = {name: [] for name in header}
+        for r in rows[1:]:
+            for i, name in enumerate(header):
+                if i < len(r):
+                    try:
+                        cols[name].append(float(r[i]))
+                    except ValueError:
+                        pass
+        return cols
+
+    def dsp_fault_gate(extract_dir, chan='C2', active_below=150.0):
+        """Gate every DSP test on the fault line before trusting any
+        later check. The DSP fault LED (scope C2 = DSP_FAULT, see
+        config.json scope.signals) idles above `active_below` on a
+        healthy board and is pinned low when faulted. A fault is a
+        deterministic verdict, so this prints 'DSP FAULT' in red and
+        raises HardFail -- run.py then fails the section immediately
+        instead of burning the transient-retry backoff. No-op if the
+        channel wasn't captured."""
+        col = Verification.scope_columns(extract_dir).get(chan, [])
+        if col and sum(col) / len(col) < active_below:
+            sys.stderr.write('\033[1;31mDSP FAULT\033[0m\n')
+            raise HardFail('DSP FAULT')
 
     def uart_golden(extract_dir, expected, stream='mp135.uart'):
         if not Verification.manifest_clean(extract_dir):
@@ -505,7 +549,7 @@ class Runner:
         abs_artifacts = {n: str(self.FAST_DATA / r)
                          for n, r in artifacts.items()}
         ns = {'Verification': Verification, 'artifacts': abs_artifacts,
-              're': re}
+              're': re, 'HardFail': HardFail}
         exec(verify_text, ns)
         if 'check' not in ns:
             raise RuntimeError("verify block defines no check()")
@@ -907,6 +951,10 @@ class Runner:
                 continue
             try:
                 ok = self.run_verify(verify, artifacts, extract, item)
+            except HardFail as e:
+                last_reason = f'   {e}'
+                self._release_failed_attempt_lease(extract, test)
+                break
             except Exception as e:
                 last_reason = f'   verify {type(e).__name__}: {e}'
                 self._release_failed_attempt_lease(extract, test)
