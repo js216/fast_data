@@ -40,6 +40,7 @@ dsp:uart_open
 dsp:boot ldr=@ldr timeout_ms=2500
 dsp:uart_expect sentinel="start\r\n" timeout_ms=2500
 dsp:uart_expect sentinel="got " timeout_ms=60000
+scope:capture chans="C2"
 dsp:uart_close
 mark tag=cctest_core_run
 ```
@@ -48,6 +49,7 @@ Verify:
 
 ```
 def check(extract_dir, ldr):
+    Verification.dsp_fault_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     name = ldr.split('/')[-1]
