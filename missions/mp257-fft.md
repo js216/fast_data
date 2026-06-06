@@ -3,7 +3,8 @@
 Build a lean STM32MP257F-DK image, flash it over DFU without changing boot
 switches, boot from the flashed SD card, and confirm `fft_cpu` renders on LVDS.
 
-The image carries the local TF-A/kernel PSCI workarounds needed for this board.
+The image follows the upstream STM32MP257F-DK Buildroot setup with only the
+extra packages and assets needed for this FFT demo.
 
 ### Compile the SD-card image
 
@@ -53,7 +54,7 @@ stm32mp257_test_board/buildroot/output/images/sdcard.img
 stm32mp257_test_board/config/mp257-flash.tsv
 ```
 
-Test (max 60 s):
+Test (max 120 s):
 
 ```
 bench_mcu:reset_dut
@@ -112,7 +113,7 @@ Test (max 20 s):
 mp257.evb-uart1:uart_open
 mp257.evb-uart1:uart_write data="\r"
 mp257.evb-uart1:uart_expect sentinel="~ #" timeout_ms=10000
-mp257.evb-uart1:uart_write data="awk '/^processor/{n++} END{print \"CPUINFO_CORES:\" n}' /proc/cpuinfo; cat /proc/cpuinfo\r"
+mp257.evb-uart1:uart_write data="n=$(grep -c '^processor' /proc/cpuinfo); echo CPUINFO_CORES:$n; cat /proc/cpuinfo\r"
 mp257.evb-uart1:uart_expect sentinel="CPUINFO_CORES:2" timeout_ms=5000
 mp257.evb-uart1:uart_expect sentinel="~ #" timeout_ms=5000
 mp257.evb-uart1:uart_close
@@ -129,7 +130,7 @@ def check(extract_dir):
     t = Verification.load_stream_text(extract_dir, 'mp257.evb-uart1.uart', 'utf-8')
     return (
         'CPUINFO_CORES:2' in t
-        and len(re.findall(r'^processor\\s*:', t, flags=re.M)) >= 2)
+        and len(re.findall(r'^processor\s*:', t, flags=re.M)) >= 2)
 ```
 
 ### Verify the board has network + internet
