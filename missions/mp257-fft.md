@@ -18,6 +18,7 @@ make -C stm32mp257_test_board/buildroot \
   BR2_EXTERNAL=$PWD/stm32mp257_test_board/buildroot-external-st \
   BR2_DEFCONFIG=$PWD/stm32mp257_test_board/config/mp257f_dk_fft_defconfig \
   defconfig
+make -C stm32mp257_test_board/buildroot linux-rebuild
 make -C stm32mp257_test_board/buildroot
 ```
 
