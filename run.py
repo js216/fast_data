@@ -450,7 +450,7 @@ class Runner:
         bench session at that budget; the agent backstops with a
         slightly larger subprocess timeout in case the bench fails to
         enforce. When ``line_prefix`` is given and stdout is a TTY,
-        in-place \\r updates show queued/running status with a
+        in-place \\r updates show submitted/running status with a
         countdown against ``max_s`` while submit.py runs."""
         nonce = time.time_ns()
         description = f'{self.user}: {description} [{nonce}]'
@@ -572,7 +572,7 @@ class Runner:
     def _watch_submit(self, proc, log_fh, description, max_s, line_prefix):
         """Block until ``proc`` exits, polling ``GET /jobs`` once a
         second to find our submission (matched by description). When
-        stdout is a TTY, render a queued/running countdown on the line
+        stdout is a TTY, render a submitted/running countdown on the line
         BELOW the head so the head never wraps; the countdown line is
         cleared and the cursor restored to end-of-head before
         returning. Enforces an agent-side watchdog just beyond
@@ -635,14 +635,10 @@ class Runner:
                     elif not waiting_for_locks:
                         waiting_for_locks = True
                         log_fh.write(
-                            b'  (agent watchdog: waiting for bench locks; '
-                            b'test runtime budget starts after locks are '
-                            b'acquired)\n')
+                            b'  (agent watchdog: submitting to test_serv)\n')
                         log_fh.flush()
                         self._log(
-                            '  (agent watchdog: waiting for bench locks; '
-                            'test runtime budget starts after locks are '
-                            'acquired)')
+                            '  (agent watchdog: submitting to test_serv)')
             if (run_deadline and running_since is not None
                     and (time.time() - running_since) > run_deadline):
                 digest = self._find_active_job_digest(description)
@@ -661,7 +657,9 @@ class Runner:
             if live:
                 if hit and hit['status'] == 'queued':
                     elapsed = int(time.monotonic() - started_at)
-                    msg = f'\033[33mqueued ({elapsed}s)\033[0m'
+                    msg = (
+                        f'\033[33msubmitted to test_serv '
+                        f'({elapsed}s)\033[0m')
                 elif hit and hit['status'] == 'running':
                     if running_since is None:
                         elapsed = int(time.monotonic() - started_at)
@@ -781,7 +779,7 @@ class Runner:
                 self.lease_state_file.write_text(tok)
 
     def _find_active_job_digest(self, description):
-        """Return the queued/running job digest matching a description."""
+        """Return the submitted/running job digest matching a description."""
         try:
             with urllib.request.urlopen(f'{self.SERVER}/jobs',
                                         timeout=5) as r:

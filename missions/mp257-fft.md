@@ -18,6 +18,8 @@ make -C stm32mp257_test_board/buildroot \
   BR2_EXTERNAL=$PWD/stm32mp257_test_board/buildroot-external-st \
   BR2_DEFCONFIG=$PWD/stm32mp257_test_board/config/mp257f_dk_fft_defconfig \
   defconfig
+make -C stm32mp257_test_board/buildroot optee-os-dirclean
+make -C stm32mp257_test_board/buildroot uboot-dirclean
 make -C stm32mp257_test_board/buildroot linux-rebuild
 make -C stm32mp257_test_board/buildroot
 ```
@@ -63,6 +65,9 @@ mp257.evb-uart1:uart_open
 delay ms=6000
 inventory
 dfu.mp257:flash_layout layout=@mp257-flash.tsv
+mp257.evb-uart1:uart_expect sentinel="NOTICE:  CPU: STM32MP257" timeout_ms=3000
+mp257.evb-uart1:uart_expect sentinel="Boot over usb0!" timeout_ms=3000
+mp257.evb-uart1:uart_expect sentinel="Phase=END" timeout_ms=3000
 mp257.evb-uart1:uart_close
 mark tag=flash
 ```
