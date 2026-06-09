@@ -20,7 +20,7 @@ make -C stm32mp257_test_board/buildroot \
   defconfig
 make -C stm32mp257_test_board/buildroot optee-os-dirclean
 make -C stm32mp257_test_board/buildroot uboot-dirclean
-make -C stm32mp257_test_board/buildroot linux-rebuild
+make -C stm32mp257_test_board/buildroot linux-dirclean
 make -C stm32mp257_test_board/buildroot
 ```
 
