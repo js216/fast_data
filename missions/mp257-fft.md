@@ -199,9 +199,9 @@ stm32mp257_test_board/tools/build/fft_cpu
 Test (max 30 s):
 
 ```
-ssh.any:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH7w8Lo6ZZnmCgaHoE8IUnEgupawdkSdh0rfPmhyjjjV mp257-fft" ip="172.25.0.131"
-ssh.any:put data=@fft_cpu path="/usr/bin/fft_cpu" ip="172.25.0.131"
-ssh.any:exec command="chmod +x /usr/bin/fft_cpu; setsid /usr/bin/fft_cpu >/tmp/fft_cpu.log 2>&1 </dev/null & sleep 3; uname -a; echo FFTPID=$(pidof fft_cpu); echo SSH_LOGIN_OK; head -8 /tmp/fft_cpu.log" ip="172.25.0.131" timeout_ms=15000
+ssh.any:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH7w8Lo6ZZnmCgaHoE8IUnEgupawdkSdh0rfPmhyjjjV mp257-fft" ip="172.25.0.28"
+ssh.any:put data=@fft_cpu path="/usr/bin/fft_cpu" ip="172.25.0.28"
+ssh.any:exec command="chmod +x /usr/bin/fft_cpu; setsid /usr/bin/fft_cpu >/tmp/fft_cpu.log 2>&1 </dev/null & sleep 3; uname -a; echo FFTPID=$(pidof fft_cpu); echo SSH_LOGIN_OK; head -8 /tmp/fft_cpu.log" ip="172.25.0.28" timeout_ms=15000
 mark tag=ssh_fft
 ```
 
