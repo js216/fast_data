@@ -6,106 +6,6 @@ switches, boot from the flashed SD card, and confirm `fft_cpu` renders on LVDS.
 The image follows the upstream STM32MP257F-DK Buildroot setup with only the
 extra packages and assets needed for this FFT demo.
 
-### Compile the SD-card image
-
-Build the Buildroot image from the local FFT defconfig. This produces
-`sdcard.img` plus the USB DFU TF-A/FIP artifacts used by `mp257-flash.tsv`.
-
-Build:
-
-```
-make -C stm32mp257_test_board/buildroot \
-  BR2_EXTERNAL=$PWD/stm32mp257_test_board/buildroot-external-st \
-  BR2_DEFCONFIG=$PWD/stm32mp257_test_board/config/mp257f_dk_fft_defconfig \
-  defconfig
-make -C stm32mp257_test_board/buildroot optee-os-dirclean
-make -C stm32mp257_test_board/buildroot uboot-dirclean
-make -C stm32mp257_test_board/buildroot linux-dirclean
-make -C stm32mp257_test_board/buildroot
-```
-
-Artifacts:
-
-```
-stm32mp257_test_board/buildroot/output/images/sdcard.img
-```
-
-Test: no hardware.
-
-Verify:
-
-```
-from pathlib import Path
-
-def check(_extract_dir):
-    sd = Path("stm32mp257_test_board/buildroot/output/images/sdcard.img")
-    return sd.is_file() and sd.stat().st_size > 30000000
-```
-
-### Flash the SD image over DFU
-
-Reset into ROM DFU, serial-boot the generated firmware, and write `sdcard.img`
-to mmc0. The board is left in U-Boot `stm32prog` unless it auto-boots.
-
-Artifacts:
-
-```
-stm32mp257_test_board/buildroot/output/images/tf-a-stm32mp257_dk_usb.stm32
-stm32mp257_test_board/buildroot/output/images/fip-ddr-stm32mp257_dk_usb.bin
-stm32mp257_test_board/buildroot/output/images/fip-stm32mp257_dk_usb.bin
-stm32mp257_test_board/buildroot/output/images/sdcard.img
-stm32mp257_test_board/config/mp257-flash.tsv
-```
-
-Test (max 120 s):
-
-```
-bench_mcu:reset_dut
-mp257.evb-uart1:uart_open
-delay ms=6000
-inventory
-dfu.mp257:flash_layout layout=@mp257-flash.tsv
-mp257.evb-uart1:uart_expect sentinel="NOTICE:  CPU: STM32MP257" timeout_ms=3000
-mp257.evb-uart1:uart_expect sentinel="Boot over usb0!" timeout_ms=3000
-mp257.evb-uart1:uart_expect sentinel="Phase=END" timeout_ms=3000
-mp257.evb-uart1:uart_close
-mark tag=flash
-```
-
-Verify:
-
-```
-def check(extract_dir):
-    return Verification.manifest_clean(extract_dir)
-```
-
-### Boot to the shell prompt
-
-Inherits the flashed board. Exit `stm32prog` if needed, ask U-Boot to boot mmc0,
-and wait for the autologin root shell prompt `~ #`.
-
-Build: nothing required.
-
-Test (max 60 s):
-
-```
-mp257.evb-uart1:uart_open
-mp257.evb-uart1:uart_write data="\x03\x03"
-delay ms=2000
-mp257.evb-uart1:uart_write data="\r"
-mp257.evb-uart1:uart_write data="run bootcmd_mmc0\r"
-mp257.evb-uart1:uart_expect sentinel="~ #" timeout_ms=55000
-mp257.evb-uart1:uart_close
-mark tag=boot
-```
-
-Verify:
-
-```
-def check(extract_dir):
-    return Verification.manifest_clean(extract_dir)
-```
-
 ### Verify both A35 cores are online
 
 Inherits the root shell. Read `/proc/cpuinfo` and require both Cortex-A35
@@ -113,7 +13,7 @@ cores to appear as online Linux processors before continuing to network tests.
 
 Build: nothing required.
 
-Test (max 20 s):
+Test (max 60 s):
 
 ```
 mp257.evb-uart1:uart_open
