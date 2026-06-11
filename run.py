@@ -501,8 +501,8 @@ class Runner:
                 args=(proc.stdout, log_fh),
                 daemon=True)
             tee_thread.start()
-        rc = self._watch_submit(proc, log_fh, description, max_s,
-                                line_prefix)
+        rc, queue_lock_wait_s = self._watch_submit(
+            proc, log_fh, description, max_s, line_prefix)
         if tee_thread is not None:
             tee_thread.join()
         log_fh.close()
@@ -511,7 +511,7 @@ class Runner:
             tars = list(extract_dir.glob('*.tar'))
             if tars:
                 digest = tars[0].stem
-        return rc, digest
+        return rc, digest, queue_lock_wait_s
 
     @classmethod
     def _submit_time_budgets(cls, max_s):
@@ -581,12 +581,14 @@ class Runner:
         subprocess return code."""
         live = (line_prefix is not None and sys.stdout.isatty())
         started_at = time.monotonic()
+        started_wall = time.time()
         run_deadline = (max_s + self.RUNTIME_GRACE_S) if max_s else None
         running_since = None
         job_running_since = None
         unresolved_inflight_since = None
         last_inflight_elapsed_s = None
         waiting_for_locks = False
+        queue_lock_wait_s = 0.0
         countdown_open = False
         rc = None
         while True:
@@ -613,6 +615,8 @@ class Runner:
                     elapsed_s = float(active.get('elapsed_s') or 0.0)
                     running_since = time.time() - max(
                         0.0, elapsed_s - acquired_t)
+                    queue_lock_wait_s = max(
+                        queue_lock_wait_s, running_since - started_wall)
                     waiting_for_locks = False
                 else:
                     state = self._inflight_wait_state(
@@ -691,7 +695,7 @@ class Runner:
         if rc != 0:
             digest = self._find_active_job_digest(description)
             self.cancel_job(digest)
-        return rc
+        return rc, queue_lock_wait_s
 
     def _find_inflight_job(self, digest):
         """Return the live /inflight entry for ``digest``, if present."""
@@ -860,34 +864,45 @@ class Runner:
             sys.stdout.write(sub_head)
             sys.stdout.flush()
 
-            ok, digest, fail_reason, fail_extract, fail_log = (
+            (ok, digest, fail_reason, fail_extract, fail_log,
+             queue_lock_wait_s) = (
                 self._submit_with_retries(
                     test, sub_artifacts, sub_dir,
                     f'{title} :: {label}', test_max_s,
                     item_arg, verify))
             el = time.monotonic() - sub_t0
+            charged_el = max(0.0, el - queue_lock_wait_s)
+            elapsed_text = (
+                f'+{charged_el:.1f}s'
+                if queue_lock_wait_s <= 0 else
+                f'+{charged_el:.1f}s + {queue_lock_wait_s:.1f}s')
             if ok:
-                if test_max_s is not None and el > test_max_s:
-                    sys.stdout.write(f'{colored("FAIL")} (+{el:.1f}s)\n')
+                if test_max_s is not None and charged_el > test_max_s:
+                    sys.stdout.write(
+                        f'{colored("FAIL")} ({elapsed_text})\n')
                     sys.stdout.flush()
                     msg = (f'   exceeded Test (max {self.fmt_seconds(test_max_s)}) '
-                           f'hard budget: +{el:.1f}s actual')
+                           f'hard budget: +{charged_el:.1f}s actual')
+                    if queue_lock_wait_s > 0:
+                        msg += (f' ({queue_lock_wait_s:.1f}s '
+                                f'queue/bench-lock wait excluded)')
                     print(msg); self._log(msg)
                     self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
-                              f'{colored("FAIL")} {label} (+{el:.1f}s)')
+                              f'{colored("FAIL")} {label} '
+                              f'({elapsed_text})')
                     if fail_log is not None:
                         dump(fail_log, fail_extract)
                     return False
-                sys.stdout.write(f'(+{el:.1f}s)\n')
+                sys.stdout.write(f'({elapsed_text})\n')
                 sys.stdout.flush()
                 self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
-                          f'{colored("PASS")} {label} (+{el:.1f}s)')
+                          f'{colored("PASS")} {label} ({elapsed_text})')
                 self.delete_outputs(digest)
                 continue
-            sys.stdout.write(f'{colored("FAIL")} (+{el:.1f}s)\n')
+            sys.stdout.write(f'{colored("FAIL")} ({elapsed_text})\n')
             sys.stdout.flush()
             self._log(f'  [{j:>{sub_w}}/{sub_total}] [{sub_started}] '
-                      f'{colored("FAIL")} {label} (+{el:.1f}s)')
+                      f'{colored("FAIL")} {label} ({elapsed_text})')
             if fail_reason:
                 print(fail_reason); self._log(fail_reason)
             if fail_log is not None:
@@ -908,7 +923,8 @@ class Runner:
         For deterministic mismatches the cost is the cumulative
         backoff before we conclude. Returns (ok, digest, reason,
         extract, log) -- extract/log point at the LAST attempt's
-        artefact directory and run log for dump()."""
+        artefact directory and run log for dump(). Also returns the
+        accumulated queue/bench-lock wait to exclude from hard budgets."""
         last_reason = None
         last_extract = None
         last_log = None
@@ -918,6 +934,7 @@ class Runner:
         busy_retries = 0
         busy_started = None
         self._busy_retry_holder = None
+        queue_lock_wait_total_s = 0.0
         while attempt < len(self.RETRY_BACKOFF_S):
             backoff = self.RETRY_BACKOFF_S[attempt]
             if backoff:
@@ -928,8 +945,9 @@ class Runner:
             extract = attempt_dir / 'artefact'
             log = attempt_dir / 'run.log'
             last_extract, last_log = extract, log
-            rc, digest = self.submit_plan(
+            rc, digest, queue_lock_wait_s = self.submit_plan(
                 test, artifacts, extract, log, description, max_s)
+            queue_lock_wait_total_s += queue_lock_wait_s
             busy_before_ops = self._failed_before_ops_due_to_busy(extract)
             if rc != 0:
                 last_reason = f'   submit.py rc={rc}'
@@ -994,8 +1012,10 @@ class Runner:
                     break
                 attempt += 1
                 continue
-            return True, digest, None, extract, log
-        return False, digest, last_reason, last_extract, last_log
+            return (True, digest, None, extract, log,
+                    queue_lock_wait_total_s)
+        return (False, digest, last_reason, last_extract, last_log,
+                queue_lock_wait_total_s)
 
     def _retry_after_busy_before_ops(self, extract_dir, busy_started,
                                      busy_retries):
@@ -1200,14 +1220,18 @@ class Runner:
             code = {'PASS': '32', 'FAIL': '31', 'SKIP': '33'}[label]
             return f'\033[{code}m{label}\033[0m'
 
-        def result(i, label, title, elapsed, started, budget):
+        def result(i, label, title, elapsed, started, budget, excluded=0.0):
+            elapsed_text = (
+                f'+{elapsed:.1f}s'
+                if excluded <= 0 else
+                f'+{elapsed:.1f}s + {excluded:.1f}s')
             if label == 'PASS':
-                sys.stdout.write(f'(+{elapsed:.1f}s)\n')
+                sys.stdout.write(f'({elapsed_text})\n')
             else:
-                sys.stdout.write(f'{colored(label)} (+{elapsed:.1f}s)\n')
+                sys.stdout.write(f'{colored(label)} ({elapsed_text})\n')
             sys.stdout.flush()
             self._log(f'[{i:>{w}}/{total}] [{started}] {colored(label)} {title} '
-                      f'(<={budget:.0f}s budget, +{elapsed:.1f}s actual)')
+                      f'(<={budget:.0f}s budget, {elapsed_text})')
 
         def pass_or_timeout(i, title, started, budget, test_max_s, elapsed):
             if test_max_s is not None and elapsed > test_max_s:
@@ -1217,6 +1241,23 @@ class Runner:
                 print(msg); self._log(msg)
                 return False
             result(i, 'PASS', title, elapsed, started, budget)
+            return True
+
+        def charged_elapsed(elapsed, excluded):
+            return max(0.0, elapsed - excluded)
+
+        def pass_or_timeout_excluding_wait(
+                i, title, started, budget, test_max_s, elapsed, excluded):
+            charged = charged_elapsed(elapsed, excluded)
+            if test_max_s is not None and charged > test_max_s:
+                result(i, 'FAIL', title, charged, started, budget, excluded)
+                msg = (f'   exceeded Test (max {self.fmt_seconds(test_max_s)}) '
+                       f'hard budget: +{charged:.1f}s actual')
+                if excluded > 0:
+                    msg += f' ({excluded:.1f}s queue/bench-lock wait excluded)'
+                print(msg); self._log(msg)
+                return False
+            result(i, 'PASS', title, charged, started, budget, excluded)
             return True
 
         def dump(log, extract_dir=None):
@@ -1315,12 +1356,15 @@ class Runner:
                         result(i, 'SKIP', title, el(), started, budget)
                         skipped += 1
                     continue
-                ok, digest, fail_reason, fail_extract, fail_log = (
+                (ok, digest, fail_reason, fail_extract, fail_log,
+                 queue_lock_wait_s) = (
                     self._submit_with_retries(
                         test, artifacts, section_dir, title, test_max_s,
                         None, verify))
                 if not ok:
-                    result(i, 'FAIL', title, el(), started, budget)
+                    result(i, 'FAIL', title,
+                           charged_elapsed(el(), queue_lock_wait_s),
+                           started, budget, queue_lock_wait_s)
                     if fail_reason:
                         print(fail_reason); self._log(fail_reason)
                     if fail_log is not None:
@@ -1328,8 +1372,9 @@ class Runner:
                     return 1
                 self.capture_lease_token(fail_extract, test)
                 self.delete_outputs(digest)
-                if not pass_or_timeout(
-                        i, title, started, budget, test_max_s, el()):
+                if not pass_or_timeout_excluding_wait(
+                        i, title, started, budget, test_max_s, el(),
+                        queue_lock_wait_s):
                     return 1
 
             print(colored('PASS'))
