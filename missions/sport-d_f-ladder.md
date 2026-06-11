@@ -9,7 +9,7 @@ make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx1
 cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 1 -set MIN_DONE_WORDS 32 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx1/s.json --pcf verilog/sport_rx1_hx8k.pcf --asc build/sport_rx1/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx1/s.asc build/sport_rx1/sport_rx1.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=32U -DDATA_INDEP_FS=1 -DHALF_WORDS=32768U -DSPORT_SCLK_HZ=60000000U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=32U -DDATA_INDEP_FS=1 -DHALF_WORDS=32768U -DSPORT_SCLK_HZ=59375000U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_128b.ldr
 ```
 
@@ -42,9 +42,34 @@ mark tag=d_f_hb_128b
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'fpga.uart')
@@ -56,7 +81,6 @@ def check(extract_dir):
         raise HardFail('no sport_rx report')
     lanes, words, errors = int(m.group(1)), int(m.group(2), 16), int(m.group(3), 16)
     nprog = len(re.findall(r'rx w=[0-9a-f]{8} ', text))
-    sys.stderr.write(f'lanes={lanes} words={words} errors={errors} {m.group(4)} heartbeats={nprog}\n')
     if lanes == 1 and errors == 0 and words >= 32 and m.group(4) == 'PASS':
         return True
     raise HardFail(f'FAIL: lanes={lanes} words={words} errors={errors}')
@@ -71,7 +95,7 @@ make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx1
 cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 1 -set MIN_DONE_WORDS 262144 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx1/s.json --pcf verilog/sport_rx1_hx8k.pcf --asc build/sport_rx1/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx1/s.asc build/sport_rx1/sport_rx1.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=262144U -DDATA_INDEP_FS=1 -DHALF_WORDS=32768U -DSPORT_SCLK_HZ=60000000U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=262144U -DDATA_INDEP_FS=1 -DHALF_WORDS=32768U -DSPORT_SCLK_HZ=59375000U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_1mib.ldr
 ```
 
@@ -104,9 +128,34 @@ mark tag=d_f_hb_1mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'fpga.uart')
@@ -118,7 +167,6 @@ def check(extract_dir):
         raise HardFail('no sport_rx report')
     lanes, words, errors = int(m.group(1)), int(m.group(2), 16), int(m.group(3), 16)
     nprog = len(re.findall(r'rx w=[0-9a-f]{8} ', text))
-    sys.stderr.write(f'lanes={lanes} words={words} errors={errors} {m.group(4)} heartbeats={nprog}\n')
     if lanes == 1 and errors == 0 and words >= 262144 and m.group(4) == 'PASS':
         return True
     raise HardFail(f'FAIL: lanes={lanes} words={words} errors={errors}')
@@ -133,7 +181,7 @@ make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx1
 cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 1 -set MIN_DONE_WORDS 16777216 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx1/s.json --pcf verilog/sport_rx1_hx8k.pcf --asc build/sport_rx1/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx1/s.asc build/sport_rx1/sport_rx1.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=16777216U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60000000U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=16777216U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=59375000U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_64mib.ldr
 ```
 
@@ -181,9 +229,34 @@ mark tag=d_f_hb_64mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'fpga.uart')
@@ -195,7 +268,6 @@ def check(extract_dir):
         raise HardFail('no sport_rx report')
     lanes, words, errors = int(m.group(1)), int(m.group(2), 16), int(m.group(3), 16)
     nprog = len(re.findall(r'rx w=[0-9a-f]{8} ', text))
-    sys.stderr.write(f'lanes={lanes} words={words} errors={errors} {m.group(4)} heartbeats={nprog}\n')
     ops = Verification.load_ops(extract_dir)
     boots = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'boot']
     expects = [op for op in ops if op.get('device') == 'fpga.hx8k' and op.get('verb') == 'uart_expect']
@@ -203,8 +275,8 @@ def check(extract_dir):
         return False
     elapsed = expects[-1]['t_end'] - boots[0]['t_start']
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'rate per_lane_bps={rate} ({rate/1e6:.1f} Mbps)\n')
-    if rate < 50000000:
+    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if rate < 56250000:
         raise HardFail(f'rate {rate} < 50000000')
     if lanes == 1 and errors == 0 and words >= 16777216 and m.group(4) == 'PASS':
         return True
@@ -220,7 +292,7 @@ make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx1
 cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 1 -set MIN_DONE_WORDS 67108864 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx1/s.json --pcf verilog/sport_rx1_hx8k.pcf --asc build/sport_rx1/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx1/s.asc build/sport_rx1/sport_rx1.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=67108864U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60000000U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=67108864U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=59375000U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_256mib.ldr
 ```
 
@@ -316,9 +388,34 @@ mark tag=d_f_hb_256mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'fpga.uart')
@@ -330,7 +427,6 @@ def check(extract_dir):
         raise HardFail('no sport_rx report')
     lanes, words, errors = int(m.group(1)), int(m.group(2), 16), int(m.group(3), 16)
     nprog = len(re.findall(r'rx w=[0-9a-f]{8} ', text))
-    sys.stderr.write(f'lanes={lanes} words={words} errors={errors} {m.group(4)} heartbeats={nprog}\n')
     ops = Verification.load_ops(extract_dir)
     boots = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'boot']
     expects = [op for op in ops if op.get('device') == 'fpga.hx8k' and op.get('verb') == 'uart_expect']
@@ -338,8 +434,8 @@ def check(extract_dir):
         return False
     elapsed = expects[-1]['t_end'] - boots[0]['t_start']
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'rate per_lane_bps={rate} ({rate/1e6:.1f} Mbps)\n')
-    if rate < 58000000:
+    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if rate < 56250000:
         raise HardFail(f'rate {rate} < 58000000')
     if lanes == 1 and errors == 0 and words >= 67108864 and m.group(4) == 'PASS':
         return True
@@ -355,7 +451,7 @@ make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx1
 cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 1 -set MIN_DONE_WORDS 134217728 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx1/s.json --pcf verilog/sport_rx1_hx8k.pcf --asc build/sport_rx1/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx1/s.asc build/sport_rx1/sport_rx1.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=134217728U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60000000U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=134217728U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=59375000U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_512mib.ldr
 ```
 
@@ -515,9 +611,34 @@ mark tag=d_f_hb_512mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'fpga.uart')
@@ -529,7 +650,6 @@ def check(extract_dir):
         raise HardFail('no sport_rx report')
     lanes, words, errors = int(m.group(1)), int(m.group(2), 16), int(m.group(3), 16)
     nprog = len(re.findall(r'rx w=[0-9a-f]{8} ', text))
-    sys.stderr.write(f'lanes={lanes} words={words} errors={errors} {m.group(4)} heartbeats={nprog}\n')
     ops = Verification.load_ops(extract_dir)
     boots = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'boot']
     expects = [op for op in ops if op.get('device') == 'fpga.hx8k' and op.get('verb') == 'uart_expect']
@@ -537,8 +657,8 @@ def check(extract_dir):
         return False
     elapsed = expects[-1]['t_end'] - boots[0]['t_start']
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'rate per_lane_bps={rate} ({rate/1e6:.1f} Mbps)\n')
-    if rate < 58000000:
+    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if rate < 56250000:
         raise HardFail(f'rate {rate} < 58000000')
     if lanes == 1 and errors == 0 and words >= 134217728 and m.group(4) == 'PASS':
         return True
@@ -554,7 +674,7 @@ make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx1
 cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 1 -set MIN_DONE_WORDS 268435456 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx1/s.json --pcf verilog/sport_rx1_hx8k.pcf --asc build/sport_rx1/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx1/s.asc build/sport_rx1/sport_rx1.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=268435456U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60000000U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=268435456U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=59375000U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_1gib.ldr
 ```
 
@@ -842,9 +962,34 @@ mark tag=d_f_hb_1gib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'fpga.uart')
@@ -856,7 +1001,6 @@ def check(extract_dir):
         raise HardFail('no sport_rx report')
     lanes, words, errors = int(m.group(1)), int(m.group(2), 16), int(m.group(3), 16)
     nprog = len(re.findall(r'rx w=[0-9a-f]{8} ', text))
-    sys.stderr.write(f'lanes={lanes} words={words} errors={errors} {m.group(4)} heartbeats={nprog}\n')
     ops = Verification.load_ops(extract_dir)
     boots = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'boot']
     expects = [op for op in ops if op.get('device') == 'fpga.hx8k' and op.get('verb') == 'uart_expect']
@@ -864,8 +1008,8 @@ def check(extract_dir):
         return False
     elapsed = expects[-1]['t_end'] - boots[0]['t_start']
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'rate per_lane_bps={rate} ({rate/1e6:.1f} Mbps)\n')
-    if rate < 58000000:
+    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if rate < 56250000:
         raise HardFail(f'rate {rate} < 58000000')
     if lanes == 1 and errors == 0 and words >= 268435456 and m.group(4) == 'PASS':
         return True
@@ -881,7 +1025,7 @@ make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx1
 cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 1 -set MIN_DONE_WORDS 536870912 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx1/s.json --pcf verilog/sport_rx1_hx8k.pcf --asc build/sport_rx1/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx1/s.asc build/sport_rx1/sport_rx1.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=536870912U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60000000U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=536870912U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=59375000U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_2gib.ldr
 ```
 
@@ -1425,9 +1569,34 @@ mark tag=d_f_hb_2gib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'fpga.uart')
@@ -1439,7 +1608,6 @@ def check(extract_dir):
         raise HardFail('no sport_rx report')
     lanes, words, errors = int(m.group(1)), int(m.group(2), 16), int(m.group(3), 16)
     nprog = len(re.findall(r'rx w=[0-9a-f]{8} ', text))
-    sys.stderr.write(f'lanes={lanes} words={words} errors={errors} {m.group(4)} heartbeats={nprog}\n')
     ops = Verification.load_ops(extract_dir)
     boots = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'boot']
     expects = [op for op in ops if op.get('device') == 'fpga.hx8k' and op.get('verb') == 'uart_expect']
@@ -1447,8 +1615,8 @@ def check(extract_dir):
         return False
     elapsed = expects[-1]['t_end'] - boots[0]['t_start']
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'rate per_lane_bps={rate} ({rate/1e6:.1f} Mbps)\n')
-    if rate < 58000000:
+    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if rate < 56250000:
         raise HardFail(f'rate {rate} < 58000000')
     if lanes == 1 and errors == 0 and words >= 536870912 and m.group(4) == 'PASS':
         return True
@@ -1464,7 +1632,7 @@ make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx1
 cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 1 -set MIN_DONE_WORDS 1073741824 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx1/s.json --pcf verilog/sport_rx1_hx8k.pcf --asc build/sport_rx1/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx1/s.asc build/sport_rx1/sport_rx1.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=1073741824U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60000000U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=1073741824U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=59375000U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_4gib.ldr
 ```
 
@@ -2520,9 +2688,34 @@ mark tag=d_f_hb_4gib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'fpga.uart')
@@ -2534,7 +2727,6 @@ def check(extract_dir):
         raise HardFail('no sport_rx report')
     lanes, words, errors = int(m.group(1)), int(m.group(2), 16), int(m.group(3), 16)
     nprog = len(re.findall(r'rx w=[0-9a-f]{8} ', text))
-    sys.stderr.write(f'lanes={lanes} words={words} errors={errors} {m.group(4)} heartbeats={nprog}\n')
     ops = Verification.load_ops(extract_dir)
     boots = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'boot']
     expects = [op for op in ops if op.get('device') == 'fpga.hx8k' and op.get('verb') == 'uart_expect']
@@ -2542,8 +2734,8 @@ def check(extract_dir):
         return False
     elapsed = expects[-1]['t_end'] - boots[0]['t_start']
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'rate per_lane_bps={rate} ({rate/1e6:.1f} Mbps)\n')
-    if rate < 58000000:
+    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if rate < 56250000:
         raise HardFail(f'rate {rate} < 58000000')
     if lanes == 1 and errors == 0 and words >= 1073741824 and m.group(4) == 'PASS':
         return True

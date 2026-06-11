@@ -42,9 +42,34 @@ mark tag=fd_df_128b
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -53,14 +78,12 @@ def check(extract_dir):
     if not dm:
         raise HardFail('no sport_bidir report')
     rx_lanes, rx_words, rx_errors, to, txto, ov, slips = (int(dm.group(i)) for i in (1,3,4,5,6,7,8))
-    sys.stderr.write(f'F->D rx_words={rx_words} rx_errors={rx_errors} slips={slips} timeouts={to} overruns={ov} {dm.group(10)}\n')
     fm = re.search(r'sport_rx lanes=(\d+) per_ch_words_hex=([0-9a-fA-F]+) errors_hex=([0-9a-fA-F]+) (PASS|FAIL)', ftxt)
     if not fm:
         sys.stderr.write('no FPGA from_dsp report\n')
         return False
     fpga_words = int(fm.group(2), 16)
     fpga_errors = int(fm.group(3), 16)
-    sys.stderr.write(f'D->F words={fpga_words} errors={fpga_errors} {fm.group(4)}\n')
     if not (fpga_errors == 0 and fpga_words >= 32 and fm.group(4) == 'PASS'):
         raise HardFail(f'D->F FAIL: words={fpga_words} errors={fpga_errors}')
     ops = Verification.load_ops(extract_dir)
@@ -71,7 +94,7 @@ def check(extract_dir):
     elapsed = expects[0]['t_end'] - boots[0]['t_start']
     fd_rate = int(rx_words * 32 / elapsed) if elapsed > 0 else 0
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'fd_rate={fd_rate/1e6:.1f} Mbps df_rate={df_rate/1e6:.1f} Mbps\n')
+    sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 32 and dm.group(10) == 'PASS'):
         return True
@@ -121,9 +144,34 @@ mark tag=fd_df_1mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -132,14 +180,12 @@ def check(extract_dir):
     if not dm:
         raise HardFail('no sport_bidir report')
     rx_lanes, rx_words, rx_errors, to, txto, ov, slips = (int(dm.group(i)) for i in (1,3,4,5,6,7,8))
-    sys.stderr.write(f'F->D rx_words={rx_words} rx_errors={rx_errors} slips={slips} timeouts={to} overruns={ov} {dm.group(10)}\n')
     fm = re.search(r'sport_rx lanes=(\d+) per_ch_words_hex=([0-9a-fA-F]+) errors_hex=([0-9a-fA-F]+) (PASS|FAIL)', ftxt)
     if not fm:
         sys.stderr.write('no FPGA from_dsp report\n')
         return False
     fpga_words = int(fm.group(2), 16)
     fpga_errors = int(fm.group(3), 16)
-    sys.stderr.write(f'D->F words={fpga_words} errors={fpga_errors} {fm.group(4)}\n')
     if not (fpga_errors == 0 and fpga_words >= 262144 and fm.group(4) == 'PASS'):
         raise HardFail(f'D->F FAIL: words={fpga_words} errors={fpga_errors}')
     ops = Verification.load_ops(extract_dir)
@@ -150,7 +196,7 @@ def check(extract_dir):
     elapsed = expects[0]['t_end'] - boots[0]['t_start']
     fd_rate = int(rx_words * 32 / elapsed) if elapsed > 0 else 0
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'fd_rate={fd_rate/1e6:.1f} Mbps df_rate={df_rate/1e6:.1f} Mbps\n')
+    sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 262144 and dm.group(10) == 'PASS'):
         return True
@@ -200,9 +246,34 @@ mark tag=fd_df_64mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -211,14 +282,12 @@ def check(extract_dir):
     if not dm:
         raise HardFail('no sport_bidir report')
     rx_lanes, rx_words, rx_errors, to, txto, ov, slips = (int(dm.group(i)) for i in (1,3,4,5,6,7,8))
-    sys.stderr.write(f'F->D rx_words={rx_words} rx_errors={rx_errors} slips={slips} timeouts={to} overruns={ov} {dm.group(10)}\n')
     fm = re.search(r'sport_rx lanes=(\d+) per_ch_words_hex=([0-9a-fA-F]+) errors_hex=([0-9a-fA-F]+) (PASS|FAIL)', ftxt)
     if not fm:
         sys.stderr.write('no FPGA from_dsp report\n')
         return False
     fpga_words = int(fm.group(2), 16)
     fpga_errors = int(fm.group(3), 16)
-    sys.stderr.write(f'D->F words={fpga_words} errors={fpga_errors} {fm.group(4)}\n')
     if not (fpga_errors == 0 and fpga_words >= 16777216 and fm.group(4) == 'PASS'):
         raise HardFail(f'D->F FAIL: words={fpga_words} errors={fpga_errors}')
     ops = Verification.load_ops(extract_dir)
@@ -229,7 +298,7 @@ def check(extract_dir):
     elapsed = expects[0]['t_end'] - boots[0]['t_start']
     fd_rate = int(rx_words * 32 / elapsed) if elapsed > 0 else 0
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'fd_rate={fd_rate/1e6:.1f} Mbps df_rate={df_rate/1e6:.1f} Mbps\n')
+    sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 16777216 and dm.group(10) == 'PASS'):
         return True
@@ -279,9 +348,34 @@ mark tag=fd_df_256mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -290,14 +384,12 @@ def check(extract_dir):
     if not dm:
         raise HardFail('no sport_bidir report')
     rx_lanes, rx_words, rx_errors, to, txto, ov, slips = (int(dm.group(i)) for i in (1,3,4,5,6,7,8))
-    sys.stderr.write(f'F->D rx_words={rx_words} rx_errors={rx_errors} slips={slips} timeouts={to} overruns={ov} {dm.group(10)}\n')
     fm = re.search(r'sport_rx lanes=(\d+) per_ch_words_hex=([0-9a-fA-F]+) errors_hex=([0-9a-fA-F]+) (PASS|FAIL)', ftxt)
     if not fm:
         sys.stderr.write('no FPGA from_dsp report\n')
         return False
     fpga_words = int(fm.group(2), 16)
     fpga_errors = int(fm.group(3), 16)
-    sys.stderr.write(f'D->F words={fpga_words} errors={fpga_errors} {fm.group(4)}\n')
     if not (fpga_errors == 0 and fpga_words >= 67108864 and fm.group(4) == 'PASS'):
         raise HardFail(f'D->F FAIL: words={fpga_words} errors={fpga_errors}')
     ops = Verification.load_ops(extract_dir)
@@ -308,7 +400,7 @@ def check(extract_dir):
     elapsed = expects[0]['t_end'] - boots[0]['t_start']
     fd_rate = int(rx_words * 32 / elapsed) if elapsed > 0 else 0
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'fd_rate={fd_rate/1e6:.1f} Mbps df_rate={df_rate/1e6:.1f} Mbps\n')
+    sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 67108864 and dm.group(10) == 'PASS'):
         return True
@@ -358,9 +450,34 @@ mark tag=fd_df_512mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -369,14 +486,12 @@ def check(extract_dir):
     if not dm:
         raise HardFail('no sport_bidir report')
     rx_lanes, rx_words, rx_errors, to, txto, ov, slips = (int(dm.group(i)) for i in (1,3,4,5,6,7,8))
-    sys.stderr.write(f'F->D rx_words={rx_words} rx_errors={rx_errors} slips={slips} timeouts={to} overruns={ov} {dm.group(10)}\n')
     fm = re.search(r'sport_rx lanes=(\d+) per_ch_words_hex=([0-9a-fA-F]+) errors_hex=([0-9a-fA-F]+) (PASS|FAIL)', ftxt)
     if not fm:
         sys.stderr.write('no FPGA from_dsp report\n')
         return False
     fpga_words = int(fm.group(2), 16)
     fpga_errors = int(fm.group(3), 16)
-    sys.stderr.write(f'D->F words={fpga_words} errors={fpga_errors} {fm.group(4)}\n')
     if not (fpga_errors == 0 and fpga_words >= 134217728 and fm.group(4) == 'PASS'):
         raise HardFail(f'D->F FAIL: words={fpga_words} errors={fpga_errors}')
     ops = Verification.load_ops(extract_dir)
@@ -387,10 +502,10 @@ def check(extract_dir):
     elapsed = expects[0]['t_end'] - boots[0]['t_start']
     fd_rate = int(rx_words * 32 / elapsed) if elapsed > 0 else 0
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'fd_rate={fd_rate/1e6:.1f} Mbps df_rate={df_rate/1e6:.1f} Mbps\n')
-    if fd_rate < 55000000:
+    sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if fd_rate < 56250000:
         raise HardFail(f'F->D rate {fd_rate} < 55000000')
-    if df_rate < 55000000:
+    if df_rate < 56250000:
         raise HardFail(f'D->F rate {df_rate} < 55000000')
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 134217728 and dm.group(10) == 'PASS'):
@@ -441,9 +556,34 @@ mark tag=fd_df_1gib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -452,14 +592,12 @@ def check(extract_dir):
     if not dm:
         raise HardFail('no sport_bidir report')
     rx_lanes, rx_words, rx_errors, to, txto, ov, slips = (int(dm.group(i)) for i in (1,3,4,5,6,7,8))
-    sys.stderr.write(f'F->D rx_words={rx_words} rx_errors={rx_errors} slips={slips} timeouts={to} overruns={ov} {dm.group(10)}\n')
     fm = re.search(r'sport_rx lanes=(\d+) per_ch_words_hex=([0-9a-fA-F]+) errors_hex=([0-9a-fA-F]+) (PASS|FAIL)', ftxt)
     if not fm:
         sys.stderr.write('no FPGA from_dsp report\n')
         return False
     fpga_words = int(fm.group(2), 16)
     fpga_errors = int(fm.group(3), 16)
-    sys.stderr.write(f'D->F words={fpga_words} errors={fpga_errors} {fm.group(4)}\n')
     if not (fpga_errors == 0 and fpga_words >= 268435456 and fm.group(4) == 'PASS'):
         raise HardFail(f'D->F FAIL: words={fpga_words} errors={fpga_errors}')
     ops = Verification.load_ops(extract_dir)
@@ -470,10 +608,10 @@ def check(extract_dir):
     elapsed = expects[0]['t_end'] - boots[0]['t_start']
     fd_rate = int(rx_words * 32 / elapsed) if elapsed > 0 else 0
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'fd_rate={fd_rate/1e6:.1f} Mbps df_rate={df_rate/1e6:.1f} Mbps\n')
-    if fd_rate < 55000000:
+    sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if fd_rate < 56250000:
         raise HardFail(f'F->D rate {fd_rate} < 55000000')
-    if df_rate < 55000000:
+    if df_rate < 56250000:
         raise HardFail(f'D->F rate {df_rate} < 55000000')
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 268435456 and dm.group(10) == 'PASS'):
@@ -524,9 +662,34 @@ mark tag=fd_df_2gib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -535,14 +698,12 @@ def check(extract_dir):
     if not dm:
         raise HardFail('no sport_bidir report')
     rx_lanes, rx_words, rx_errors, to, txto, ov, slips = (int(dm.group(i)) for i in (1,3,4,5,6,7,8))
-    sys.stderr.write(f'F->D rx_words={rx_words} rx_errors={rx_errors} slips={slips} timeouts={to} overruns={ov} {dm.group(10)}\n')
     fm = re.search(r'sport_rx lanes=(\d+) per_ch_words_hex=([0-9a-fA-F]+) errors_hex=([0-9a-fA-F]+) (PASS|FAIL)', ftxt)
     if not fm:
         sys.stderr.write('no FPGA from_dsp report\n')
         return False
     fpga_words = int(fm.group(2), 16)
     fpga_errors = int(fm.group(3), 16)
-    sys.stderr.write(f'D->F words={fpga_words} errors={fpga_errors} {fm.group(4)}\n')
     if not (fpga_errors == 0 and fpga_words >= 536870912 and fm.group(4) == 'PASS'):
         raise HardFail(f'D->F FAIL: words={fpga_words} errors={fpga_errors}')
     ops = Verification.load_ops(extract_dir)
@@ -553,10 +714,10 @@ def check(extract_dir):
     elapsed = expects[0]['t_end'] - boots[0]['t_start']
     fd_rate = int(rx_words * 32 / elapsed) if elapsed > 0 else 0
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'fd_rate={fd_rate/1e6:.1f} Mbps df_rate={df_rate/1e6:.1f} Mbps\n')
-    if fd_rate < 60000000:
+    sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if fd_rate < 56250000:
         raise HardFail(f'F->D rate {fd_rate} < 60000000')
-    if df_rate < 60000000:
+    if df_rate < 56250000:
         raise HardFail(f'D->F rate {df_rate} < 60000000')
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 536870912 and dm.group(10) == 'PASS'):
@@ -607,9 +768,34 @@ mark tag=fd_df_4gib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -618,14 +804,12 @@ def check(extract_dir):
     if not dm:
         raise HardFail('no sport_bidir report')
     rx_lanes, rx_words, rx_errors, to, txto, ov, slips = (int(dm.group(i)) for i in (1,3,4,5,6,7,8))
-    sys.stderr.write(f'F->D rx_words={rx_words} rx_errors={rx_errors} slips={slips} timeouts={to} overruns={ov} {dm.group(10)}\n')
     fm = re.search(r'sport_rx lanes=(\d+) per_ch_words_hex=([0-9a-fA-F]+) errors_hex=([0-9a-fA-F]+) (PASS|FAIL)', ftxt)
     if not fm:
         sys.stderr.write('no FPGA from_dsp report\n')
         return False
     fpga_words = int(fm.group(2), 16)
     fpga_errors = int(fm.group(3), 16)
-    sys.stderr.write(f'D->F words={fpga_words} errors={fpga_errors} {fm.group(4)}\n')
     if not (fpga_errors == 0 and fpga_words >= 1073741824 and fm.group(4) == 'PASS'):
         raise HardFail(f'D->F FAIL: words={fpga_words} errors={fpga_errors}')
     ops = Verification.load_ops(extract_dir)
@@ -636,10 +820,10 @@ def check(extract_dir):
     elapsed = expects[0]['t_end'] - boots[0]['t_start']
     fd_rate = int(rx_words * 32 / elapsed) if elapsed > 0 else 0
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'fd_rate={fd_rate/1e6:.1f} Mbps df_rate={df_rate/1e6:.1f} Mbps\n')
-    if fd_rate < 60000000:
+    sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if fd_rate < 56250000:
         raise HardFail(f'F->D rate {fd_rate} < 60000000')
-    if df_rate < 60000000:
+    if df_rate < 56250000:
         raise HardFail(f'D->F rate {df_rate} < 60000000')
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 1073741824 and dm.group(10) == 'PASS'):

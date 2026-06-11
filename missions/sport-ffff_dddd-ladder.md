@@ -40,9 +40,34 @@ mark tag=ffff_dddd_128b
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -50,7 +75,6 @@ def check(extract_dir):
     if not m:
         raise HardFail('no sport_4x report')
     agg, pc, e0, e1, e2, e3, to, ov = (int(x) for x in m.groups()[:8])
-    sys.stderr.write(f'per_ch_bytes={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to} overruns={ov} {m.group(9)}\n')
     if (pc >= 128 and e0 == e1 == e2 == e3 == 0 and to == 0 and ov == 0 and m.group(9) == 'PASS'):
         return True
     raise HardFail(f'FAIL: per_ch={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to}')
@@ -97,9 +121,34 @@ mark tag=ffff_dddd_1mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -107,7 +156,6 @@ def check(extract_dir):
     if not m:
         raise HardFail('no sport_4x report')
     agg, pc, e0, e1, e2, e3, to, ov = (int(x) for x in m.groups()[:8])
-    sys.stderr.write(f'per_ch_bytes={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to} overruns={ov} {m.group(9)}\n')
     if (pc >= 1048576 and e0 == e1 == e2 == e3 == 0 and to == 0 and ov == 0 and m.group(9) == 'PASS'):
         return True
     raise HardFail(f'FAIL: per_ch={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to}')
@@ -154,9 +202,34 @@ mark tag=ffff_dddd_64mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -164,7 +237,6 @@ def check(extract_dir):
     if not m:
         raise HardFail('no sport_4x report')
     agg, pc, e0, e1, e2, e3, to, ov = (int(x) for x in m.groups()[:8])
-    sys.stderr.write(f'per_ch_bytes={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to} overruns={ov} {m.group(9)}\n')
     if (pc >= 67108864 and e0 == e1 == e2 == e3 == 0 and to == 0 and ov == 0 and m.group(9) == 'PASS'):
         return True
     raise HardFail(f'FAIL: per_ch={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to}')
@@ -211,9 +283,34 @@ mark tag=ffff_dddd_256mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -221,7 +318,6 @@ def check(extract_dir):
     if not m:
         raise HardFail('no sport_4x report')
     agg, pc, e0, e1, e2, e3, to, ov = (int(x) for x in m.groups()[:8])
-    sys.stderr.write(f'per_ch_bytes={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to} overruns={ov} {m.group(9)}\n')
     if (pc >= 268435456 and e0 == e1 == e2 == e3 == 0 and to == 0 and ov == 0 and m.group(9) == 'PASS'):
         return True
     raise HardFail(f'FAIL: per_ch={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to}')
@@ -268,9 +364,34 @@ mark tag=ffff_dddd_512mib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -278,7 +399,6 @@ def check(extract_dir):
     if not m:
         raise HardFail('no sport_4x report')
     agg, pc, e0, e1, e2, e3, to, ov = (int(x) for x in m.groups()[:8])
-    sys.stderr.write(f'per_ch_bytes={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to} overruns={ov} {m.group(9)}\n')
     ops = Verification.load_ops(extract_dir)
     boots = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'boot']
     expects = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'uart_expect']
@@ -286,8 +406,8 @@ def check(extract_dir):
         return False
     elapsed = expects[0]['t_end'] - boots[0]['t_start']
     rate = int(pc * 8 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'per_lane bps={rate} ({rate/1e6:.1f} Mbps)\n')
-    if rate < 28000000:
+    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if rate < 56250000:
         raise HardFail(f'rate {rate} < 28000000')
     if (pc >= 536870912 and e0 == e1 == e2 == e3 == 0 and to == 0 and ov == 0 and m.group(9) == 'PASS'):
         return True
@@ -335,9 +455,34 @@ mark tag=ffff_dddd_1gib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -345,7 +490,6 @@ def check(extract_dir):
     if not m:
         raise HardFail('no sport_4x report')
     agg, pc, e0, e1, e2, e3, to, ov = (int(x) for x in m.groups()[:8])
-    sys.stderr.write(f'per_ch_bytes={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to} overruns={ov} {m.group(9)}\n')
     ops = Verification.load_ops(extract_dir)
     boots = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'boot']
     expects = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'uart_expect']
@@ -353,8 +497,8 @@ def check(extract_dir):
         return False
     elapsed = expects[0]['t_end'] - boots[0]['t_start']
     rate = int(pc * 8 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'per_lane bps={rate} ({rate/1e6:.1f} Mbps)\n')
-    if rate < 28000000:
+    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if rate < 56250000:
         raise HardFail(f'rate {rate} < 28000000')
     if (pc >= 1073741824 and e0 == e1 == e2 == e3 == 0 and to == 0 and ov == 0 and m.group(9) == 'PASS'):
         return True
@@ -371,7 +515,7 @@ make -C adsp2156/sport_fpga_bidir clean
 make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=4U -DTX_N=2U -DTOTAL_WORDS=536870912U -DTX_NO_REFILL"
 cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/ffff2gib.ldr
 mkdir -p fpga/build/sport_bidir_4x
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 4 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set SHARE_PAIRS 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_4x/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_4x/s.json --pcf verilog/sport_bidir_4x_hx8k.pcf --asc build/sport_bidir_4x/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_4x/s.asc build/sport_bidir_4x/sport_bidir_4x.bin
+cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 4 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set SHARE_PAIRS 1 -set FROM_DSP_EN 0 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_4x/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_4x/s.json --pcf verilog/sport_bidir_4x_hx8k.pcf --asc build/sport_bidir_4x/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_4x/s.asc build/sport_bidir_4x/sport_bidir_4x.bin
 ```
 
 Artifacts:
@@ -403,9 +547,34 @@ mark tag=ffff_dddd_2gib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -418,9 +587,9 @@ def check(extract_dir):
     expects = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'uart_expect']
     elapsed = expects[0]['t_end'] - boots[0]['t_start'] if boots and expects else 0
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'FFFF->DDDD lanes={lanes} words={words} errors={errs} ov={ov} slips={slips} per_lane_rate={rate/1e6:.1f} Mbps\n')
+    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if (lanes == 4 and words == 536870912 and errs == 0 and to == 0
-            and txto == 0 and ov == 0 and rate >= 30000000):
+            and txto == 0 and ov == 0 and rate >= 56250000):
         return True
     raise HardFail(f'FFFF-DDDD: errors={errs} ov={ov} words={words}')
 ```
@@ -466,9 +635,34 @@ mark tag=ffff_dddd_4gib
 Verify:
 
 ```
+def _corruption_gate(extract_dir):
+    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
+    # a corrupted word is a real defect, never a bench transient, so
+    # retrying would only hide it. Scans the raw streams so it fires
+    # even when the op timed out before the final report line.
+    import sys
+    for stream, pats in (
+            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
+            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
+                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
+        try:
+            txt = Verification.load_stream_text(extract_dir, stream)
+        except Exception:
+            continue
+        for pat in pats:
+            for m in re.finditer(pat, txt):
+                v = m.group(1)
+                if v == 'ERR' or int(v, 16) != 0:
+                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
+                                     + stream + ': ' + m.group(0) + '\n')
+                    raise HardFail('data corruption: '
+                                   + stream + ' ' + m.group(0))
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
+    _corruption_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -476,7 +670,6 @@ def check(extract_dir):
     if not m:
         raise HardFail('no sport_4x report')
     agg, pc, e0, e1, e2, e3, to, ov = (int(x) for x in m.groups()[:8])
-    sys.stderr.write(f'per_ch_bytes={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to} overruns={ov} {m.group(9)}\n')
     ops = Verification.load_ops(extract_dir)
     boots = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'boot']
     expects = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'uart_expect']
@@ -484,8 +677,8 @@ def check(extract_dir):
         return False
     elapsed = expects[0]['t_end'] - boots[0]['t_start']
     rate = int(pc * 8 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'per_lane bps={rate} ({rate/1e6:.1f} Mbps)\n')
-    if rate < 30000000:
+    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if rate < 56250000:
         raise HardFail(f'rate {rate} < 30000000')
     if (pc >= 4294967296 and e0 == e1 == e2 == e3 == 0 and to == 0 and ov == 0 and m.group(9) == 'PASS'):
         return True
