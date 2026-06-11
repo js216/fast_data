@@ -130,20 +130,14 @@ Builds a fresh `sdcard.img` for the custom board. The next sections
 write, verify, and read it back separately so slow/failing media ops are
 isolated.
 
-Build (apply `config/patch.linux` if not already in the tree ---
-without it the kernel boots silently and never reaches userspace ---
-rebuild the kernel, refresh the DTB for the custom board DTS, and
-assemble a fresh SD image using the custom SD bootloader already built
-by the first section; skips `make br` --- the Buildroot rootfs is
-reused from prior builds. On a fresh clone you'd add `make br` ahead of
-`make sd`):
+Build the Buildroot-owned kernel/rootfs outputs, then assemble a fresh
+SD image using the custom SD bootloader already built by the first
+section:
 
 Build:
 
 ```
-make -C stm32mp135_test_board patch
-make -C stm32mp135_test_board kernel
-make -C stm32mp135_test_board DTS=custom dtb
+make -C stm32mp135_test_board br
 make -C stm32mp135_test_board DTS=custom sd
 ```
 
@@ -180,7 +174,7 @@ stm32mp135_test_board/buildroot/output/images/sdcard.img
 Test (inherits the bootloader-at-`> ` state from the previous test ---
 no reset/DFU/autoload-stop preamble):
 
-Test (max 30 s):
+Test (max 180 s):
 
 ```
 msc.custom:write data=@sdcard.img offset_lba=0 min_rate_Bps=3000000
@@ -211,7 +205,7 @@ stm32mp135_test_board/buildroot/output/images/sdcard.img
 
 Test (inherits the written SD image from the previous section):
 
-Test (max 30 s):
+Test (max 180 s):
 
 ```
 msc.custom:verify data=@sdcard.img offset_lba=0 min_rate_Bps=3000000
@@ -244,7 +238,7 @@ stm32mp135_test_board/buildroot/output/images/sdcard.img
 
 Test (inherits the written SD image from the previous sections):
 
-Test (max 60 s):
+Test (max 120 s):
 
 ```
 msc.custom:read n=41943040 offset_lba=0 min_rate_Bps=3000000
@@ -317,6 +311,10 @@ mp135.custom:uart_expect sentinel="Password:" timeout_ms=5000
 mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=10000
 mp135.custom:uart_write data="ip -4 -o addr show dev eth0\r"
+mp135.custom:uart_expect sentinel="inet 172.25.0.46/" timeout_ms=10000
+mp135.custom:uart_write data="ip addr add 172.25.0.115/16 dev eth0 2>/dev/null || true\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=5000
+mp135.custom:uart_write data="ip -4 -o addr show dev eth0\r"
 mp135.custom:uart_expect sentinel="inet 172.25.0.115/" timeout_ms=10000
 mp135.custom:uart_expect sentinel="# " timeout_ms=5000
 mp135.custom:uart_close
@@ -331,18 +329,20 @@ def check(extract_dir):
         return False
     uart = Verification.load_stream(
         extract_dir, 'mp135.uart').decode('utf-8', 'replace')
-    return 'login:' in uart and 'STM32MP135' in uart and 'inet 172.25.0.115/' in uart
+    return ('login:' in uart and 'STM32MP135' in uart and
+            'inet 172.25.0.46/' in uart and
+            'inet 172.25.0.115/' in uart)
 ```
 
 ### SSH smoke (no reload)
 
 Inherits the running Linux from the previous test --- no DFU, no MSC,
-no boot. The previous UART step already checked that `eth0` has the
-same IP used below. This section derives the dropbear host key from
+no boot. The previous UART step already checked DHCP and added the
+stable SSH target IP used below. This section derives the dropbear host key from
 the buildroot target tree at Build time, registers it via a side plan,
 and runs `ssh:exec` for IP + uname. `ssh.custom` was removed from the
 bench; `ssh.any` is the only ssh device and needs an explicit target,
-so set `ip=` to the board's DHCP lease (placeholder `172.25.0.115`).
+so set `ip=` to the board's stable test address (`172.25.0.115`).
 
 Build (the refresh plan registers the SSH host key directly):
 

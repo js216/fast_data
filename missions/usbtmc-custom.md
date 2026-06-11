@@ -65,14 +65,13 @@ def check(extract_dir):
 
 ### Build Custom Base USBTMC Inputs
 
-Prepare the custom-board kernel tree, Buildroot output, and custom
-bootloader input needed by the final image packaging step. This section
-does not touch hardware.
+Prepare the Buildroot output, including the custom-board kernel and
+device trees, plus the custom bootloader input needed by the final image
+packaging step. This section does not touch hardware.
 
 Build:
 
 ```
-make -C stm32mp135_test_board patch
 make -C stm32mp135_test_board br
 make -C stm32mp135_test_board/bootloader clean
 make -C stm32mp135_test_board/bootloader -j$(nproc)
@@ -101,15 +100,13 @@ def check(_extract_dir):
 
 ### Package Custom Linux USBTMC Image
 
-Build the custom-board kernel image, install the USBTMC gadget daemon in
-the rootfs, and package the final SD image. This section does not touch
-hardware.
+Install the USBTMC gadget daemon in the rootfs and package the final SD
+image using Buildroot's kernel and DTB outputs. This section does not
+touch hardware.
 
 Build:
 
 ```
-make -C stm32mp135_test_board kernel
-make -C stm32mp135_test_board DTS=custom dtb
 make -C stm32mp135_test_board usbtmc-gadget
 make -C stm32mp135_test_board rootfs
 make -C stm32mp135_test_board DTS=custom sd
