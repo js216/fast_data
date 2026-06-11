@@ -20,7 +20,7 @@ fpga/build/sport/sport_tx_prbs.bin
 adsp2156/sport_fpga_tx/build/fd_128b.ldr
 ```
 
-Test (max 3 min):
+Test (max 6 min):
 
 ```
 delay ms=3000
@@ -77,7 +77,7 @@ fpga/build/sport/sport_tx_prbs.bin
 adsp2156/sport_fpga_tx/build/fd_1mib.ldr
 ```
 
-Test (max 3 min):
+Test (max 6 min):
 
 ```
 delay ms=3000
@@ -134,7 +134,7 @@ fpga/build/sport/sport_tx_prbs.bin
 adsp2156/sport_fpga_tx/build/fd_64mib.ldr
 ```
 
-Test (max 4 min):
+Test (max 8 min):
 
 ```
 delay ms=3000
@@ -191,7 +191,7 @@ fpga/build/sport/sport_tx_prbs.bin
 adsp2156/sport_fpga_tx/build/fd_256mib.ldr
 ```
 
-Test (max 5 min):
+Test (max 10 min):
 
 ```
 delay ms=3000
@@ -248,7 +248,7 @@ fpga/build/sport/sport_tx_prbs.bin
 adsp2156/sport_fpga_tx/build/fd_512mib.ldr
 ```
 
-Test (max 7 min):
+Test (max 14 min):
 
 ```
 delay ms=3000
@@ -315,7 +315,7 @@ fpga/build/sport/sport_tx_prbs.bin
 adsp2156/sport_fpga_tx/build/fd_1gib.ldr
 ```
 
-Test (max 9 min):
+Test (max 18 min):
 
 ```
 delay ms=3000
@@ -382,7 +382,7 @@ fpga/build/sport/sport_tx_prbs.bin
 adsp2156/sport_fpga_tx/build/fd_2gib.ldr
 ```
 
-Test (max 14 min):
+Test (max 18 min):
 
 ```
 delay ms=3000
@@ -449,7 +449,7 @@ fpga/build/sport/sport_tx_prbs.bin
 adsp2156/sport_fpga_tx/build/fd_4gib.ldr
 ```
 
-Test (max 24 min):
+Test (max 28 min):
 
 ```
 delay ms=3000

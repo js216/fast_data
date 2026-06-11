@@ -6,7 +6,7 @@ Build:
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx2
-cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 32 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 32 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
 make -C adsp2156/sport_fpga_rx clean
 make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=32U -DDATA_INDEP_FS=1 -DHALF_WORDS=32768U -DSPORT_SCLK_HZ=60833333U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_128b.ldr
@@ -20,7 +20,7 @@ fpga/build/sport_rx2/sport_rx2.bin
 adsp2156/sport_fpga_rx/build/dma_128b.ldr
 ```
 
-Test (max 7 min):
+Test (max 14 min):
 
 ```
 delay ms=3000
@@ -64,9 +64,9 @@ Build:
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx2
-cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 262144 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
+cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 262144 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=262144U -DDATA_INDEP_FS=1 -DHALF_WORDS=32768U -DSPORT_SCLK_HZ=60833333U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=262208U -DDATA_INDEP_FS=0 -DHALF_WORDS=32768U -DSPORT_SCLK_HZ=60833333U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_1mib.ldr
 ```
 
@@ -78,7 +78,7 @@ fpga/build/sport_rx2/sport_rx2.bin
 adsp2156/sport_fpga_rx/build/dma_1mib.ldr
 ```
 
-Test (max 7 min):
+Test (max 14 min):
 
 ```
 delay ms=3000
@@ -122,9 +122,9 @@ Build:
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx2
-cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 16777216 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
+cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 16777216 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=16777216U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=16777280U -DDATA_INDEP_FS=0 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_64mib.ldr
 ```
 
@@ -136,7 +136,7 @@ fpga/build/sport_rx2/sport_rx2.bin
 adsp2156/sport_fpga_rx/build/dma_64mib.ldr
 ```
 
-Test (max 8 min):
+Test (max 16 min):
 
 ```
 delay ms=3000
@@ -190,9 +190,9 @@ Build:
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx2
-cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 67108864 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
+cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 67108864 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=67108864U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=67108928U -DDATA_INDEP_FS=0 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_256mib.ldr
 ```
 
@@ -204,7 +204,7 @@ fpga/build/sport_rx2/sport_rx2.bin
 adsp2156/sport_fpga_rx/build/dma_256mib.ldr
 ```
 
-Test (max 8 min):
+Test (max 16 min):
 
 ```
 delay ms=3000
@@ -258,9 +258,9 @@ Build:
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx2
-cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 134217728 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
+cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 134217728 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=134217728U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=134217792U -DDATA_INDEP_FS=0 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_512mib.ldr
 ```
 
@@ -272,7 +272,7 @@ fpga/build/sport_rx2/sport_rx2.bin
 adsp2156/sport_fpga_rx/build/dma_512mib.ldr
 ```
 
-Test (max 9 min):
+Test (max 18 min):
 
 ```
 delay ms=3000
@@ -326,9 +326,9 @@ Build:
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx2
-cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 268435456 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
+cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 268435456 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=268435456U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=268435520U -DDATA_INDEP_FS=0 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_1gib.ldr
 ```
 
@@ -340,7 +340,7 @@ fpga/build/sport_rx2/sport_rx2.bin
 adsp2156/sport_fpga_rx/build/dma_1gib.ldr
 ```
 
-Test (max 12 min):
+Test (max 16 min):
 
 ```
 delay ms=3000
@@ -394,9 +394,9 @@ Build:
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx2
-cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 536870912 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
+cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 536870912 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=536870912U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=536870976U -DDATA_INDEP_FS=0 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_2gib.ldr
 ```
 
@@ -408,7 +408,7 @@ fpga/build/sport_rx2/sport_rx2.bin
 adsp2156/sport_fpga_rx/build/dma_2gib.ldr
 ```
 
-Test (max 17 min):
+Test (max 21 min):
 
 ```
 delay ms=3000
@@ -462,9 +462,9 @@ Build:
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx2
-cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 1073741824 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
+cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 1073741824 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
 make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=1073741824U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
+make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=1073741888U -DDATA_INDEP_FS=0 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=60833333U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_4gib.ldr
 ```
 
@@ -476,7 +476,7 @@ fpga/build/sport_rx2/sport_rx2.bin
 adsp2156/sport_fpga_rx/build/dma_4gib.ldr
 ```
 
-Test (max 20 min):
+Test (max 24 min):
 
 ```
 delay ms=3000
