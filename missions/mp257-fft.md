@@ -3,7 +3,8 @@
 Build a lean STM32MP257F-DK image, flash it over DFU without changing boot
 switches, boot from the flashed SD card, and confirm `fft_cpu` renders on LVDS.
 
-The image carries the local TF-A/kernel PSCI workarounds needed for this board.
+The image follows the upstream STM32MP257F-DK Buildroot setup with only the
+extra packages and assets needed for this FFT demo.
 
 ### Compile the SD-card image
 
@@ -17,6 +18,9 @@ make -C stm32mp257_test_board/buildroot \
   BR2_EXTERNAL=$PWD/stm32mp257_test_board/buildroot-external-st \
   BR2_DEFCONFIG=$PWD/stm32mp257_test_board/config/mp257f_dk_fft_defconfig \
   defconfig
+make -C stm32mp257_test_board/buildroot optee-os-dirclean
+make -C stm32mp257_test_board/buildroot uboot-dirclean
+make -C stm32mp257_test_board/buildroot linux-dirclean
 make -C stm32mp257_test_board/buildroot
 ```
 
@@ -53,7 +57,7 @@ stm32mp257_test_board/buildroot/output/images/sdcard.img
 stm32mp257_test_board/config/mp257-flash.tsv
 ```
 
-Test (max 60 s):
+Test (max 120 s):
 
 ```
 bench_mcu:reset_dut
@@ -61,6 +65,9 @@ mp257.evb-uart1:uart_open
 delay ms=6000
 inventory
 dfu.mp257:flash_layout layout=@mp257-flash.tsv
+mp257.evb-uart1:uart_expect sentinel="NOTICE:  CPU: STM32MP257" timeout_ms=3000
+mp257.evb-uart1:uart_expect sentinel="Boot over usb0!" timeout_ms=3000
+mp257.evb-uart1:uart_expect sentinel="Phase=END" timeout_ms=3000
 mp257.evb-uart1:uart_close
 mark tag=flash
 ```
@@ -97,6 +104,39 @@ Verify:
 ```
 def check(extract_dir):
     return Verification.manifest_clean(extract_dir)
+```
+
+### Verify both A35 cores are online
+
+Inherits the root shell. Read `/proc/cpuinfo` and require both Cortex-A35
+cores to appear as online Linux processors before continuing to network tests.
+
+Build: nothing required.
+
+Test (max 20 s):
+
+```
+mp257.evb-uart1:uart_open
+mp257.evb-uart1:uart_write data="\r"
+mp257.evb-uart1:uart_expect sentinel="~ #" timeout_ms=10000
+mp257.evb-uart1:uart_write data="n=$(grep -c '^processor' /proc/cpuinfo); echo CPUINFO_CORES:$n; cat /proc/cpuinfo\r"
+mp257.evb-uart1:uart_expect sentinel="CPUINFO_CORES:2" timeout_ms=5000
+mp257.evb-uart1:uart_expect sentinel="~ #" timeout_ms=5000
+mp257.evb-uart1:uart_close
+mark tag=cpuinfo_dual_core
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import re
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    t = Verification.load_stream_text(extract_dir, 'mp257.evb-uart1.uart', 'utf-8')
+    return (
+        'CPUINFO_CORES:2' in t
+        and len(re.findall(r'^processor\s*:', t, flags=re.M)) >= 2)
 ```
 
 ### Verify the board has network + internet
@@ -159,9 +199,9 @@ stm32mp257_test_board/tools/build/fft_cpu
 Test (max 30 s):
 
 ```
-ssh.any:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH7w8Lo6ZZnmCgaHoE8IUnEgupawdkSdh0rfPmhyjjjV mp257-fft" ip="172.25.0.131"
-ssh.any:put data=@fft_cpu path="/usr/bin/fft_cpu" ip="172.25.0.131"
-ssh.any:exec command="chmod +x /usr/bin/fft_cpu; setsid /usr/bin/fft_cpu >/tmp/fft_cpu.log 2>&1 </dev/null & sleep 3; uname -a; echo FFTPID=$(pidof fft_cpu); echo SSH_LOGIN_OK; head -8 /tmp/fft_cpu.log" ip="172.25.0.131" timeout_ms=15000
+ssh.any:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH7w8Lo6ZZnmCgaHoE8IUnEgupawdkSdh0rfPmhyjjjV mp257-fft" ip="172.25.0.28"
+ssh.any:put data=@fft_cpu path="/usr/bin/fft_cpu" ip="172.25.0.28"
+ssh.any:exec command="chmod +x /usr/bin/fft_cpu; setsid /usr/bin/fft_cpu >/tmp/fft_cpu.log 2>&1 </dev/null & sleep 3; uname -a; echo FFTPID=$(pidof fft_cpu); echo SSH_LOGIN_OK; head -8 /tmp/fft_cpu.log" ip="172.25.0.28" timeout_ms=15000
 mark tag=ssh_fft
 ```
 
