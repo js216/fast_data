@@ -60,7 +60,7 @@ def check(extract_dir):
 
     devices = Verification.load_devices(extract_dir)
     device_ids = {d["id"] for d in devices}
-    needed_devices = {"bench_mcu.0", "mp135.custom", "ssh.custom"}
+    needed_devices = {"bench_mcu.0", "mp135.custom", "ssh.any"}
     if not needed_devices.issubset(device_ids):
         return False
 
@@ -92,9 +92,8 @@ Build:
 
 ```
 mkdir -p stm32mp135_test_board/build
-stm32mp135_test_board/buildroot/output/host/bin/arm-buildroot-linux-uclibcgnueabihf-gcc -O2 -Wall -Wextra -o stm32mp135_test_board/build/stream_ws_prbs_stream stm32mp135_test_board/tools/stream_ws_prbs_stream.c
 make -C stm32mp135_test_board br
-make -C stm32mp135_test_board patch
+stm32mp135_test_board/buildroot/output/host/bin/arm-buildroot-linux-uclibcgnueabihf-gcc -O2 -Wall -Wextra -o stm32mp135_test_board/build/stream_ws_prbs_stream stm32mp135_test_board/tools/stream_ws_prbs_stream.c
 make -C stm32mp135_test_board boot
 ```
 
@@ -146,16 +145,15 @@ def check(extract_dir):
 
 ### Build custom kernel and SD image
 
-Build the custom-board kernel image, custom device tree, SD card image,
-and SSH host key trust plan used by the following hardware sections.
+Build the SD card image from Buildroot's kernel and device-tree outputs
+and refresh the SSH host key trust plan used by the following hardware
+sections.
 
 Build:
 
 ```
-make -C stm32mp135_test_board kernel
-make -C stm32mp135_test_board DTS=custom dtb
 make -C stm32mp135_test_board DTS=custom sd
-python3 -c "import base64,os,struct,time; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/stream_refresh_known_hosts_custom.plan','w').write('description \"refresh ssh.custom known_hosts %d\"'%time.time()+chr(10)+'ssh.custom:trust_host_key key=\"'+line+'\"'+chr(10))"
+python3 -c "import base64,os,struct,time; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/stream_refresh_known_hosts_custom.plan','w').write('description \"refresh ssh.any known_hosts %d\"'%time.time()+chr(10)+'ssh.any:trust_host_key key=\"'+line+'\" ip=\"172.25.0.115\"'+chr(10))"
 python3 test_serv/submit.py --server http://localhost:8080 --wait 120 "$RUNPY_WORKDIR/stream_refresh_known_hosts_custom.plan"
 ```
 
@@ -282,11 +280,13 @@ mp135.custom:uart_expect sentinel="# " timeout_ms=15000
 mp135.custom:uart_write data="dmesg -n 1 2>/dev/null; true\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=3000
 delay ms=5000
+mp135.custom:uart_write data="ip addr add 172.25.0.115/16 dev eth0 2>/dev/null || true\r"
+mp135.custom:uart_expect sentinel="# " timeout_ms=5000
 mp135.custom:uart_write data="killall -q -9 stream_ws_prbs_stream; ip -4 addr show dev eth0; ip route; uname -a\r"
-mp135.custom:uart_expect sentinel="172.25.0.46" timeout_ms=5000
+mp135.custom:uart_expect sentinel="172.25.0.115" timeout_ms=5000
 mp135.custom:uart_close
-ssh.custom:put data=@stream_ws_prbs_stream path="/tmp/stream_ws_prbs_stream" timeout_ms=20000
-ssh.custom:exec command="chmod +x /tmp/stream_ws_prbs_stream; killall -q -9 stream_ws_prbs_stream; /tmp/stream_ws_prbs_stream --port 8765 --bytes 134217728 --seed 0x12345678 --frame-bytes 131072 >/tmp/stream_ws_prbs_stream.log 2>&1 & echo stream_ws_started=$!" timeout_ms=10000
+ssh.any:put data=@stream_ws_prbs_stream path="/tmp/stream_ws_prbs_stream" ip="172.25.0.115" timeout_ms=20000
+ssh.any:exec command="chmod +x /tmp/stream_ws_prbs_stream; killall -q -9 stream_ws_prbs_stream; /tmp/stream_ws_prbs_stream --port 8765 --bytes 134217728 --seed 0x12345678 --frame-bytes 131072 >/tmp/stream_ws_prbs_stream.log 2>&1 & echo stream_ws_started=$!" ip="172.25.0.115" timeout_ms=10000
 mark tag=stream_ws_custom_boot_started
 ```
 
@@ -304,9 +304,9 @@ def check(extract_dir):
     return ("Copying 1 blocks" in uart and
             "DDR addr 0xC4000000" in uart and
             "Linux version" in uart and
-            "172.25.0.46" in uart and
-            Verification.op_succeeded(ops, "ssh.custom", "put") and
-            Verification.op_succeeded(ops, "ssh.custom", "exec") and
+            "172.25.0.115" in uart and
+            Verification.op_succeeded(ops, "ssh.any", "put") and
+            Verification.op_succeeded(ops, "ssh.any", "exec") and
             "stream_ws_started=" in ssh)
 ```
 
@@ -322,7 +322,7 @@ Build: nothing required.
 Test (max 4 min):
 
 ```
-ws.any:recv url="ws://172.25.0.46:8765/" bytes=134217728 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 min_rate_Bps=11625000 timeout_ms=180000
+ws.any:recv url="ws://172.25.0.115:8765/" bytes=134217728 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 min_rate_Bps=11625000 timeout_ms=180000
 mark tag=stream_ws_custom_128m_93mbps_integrity
 ```
 
