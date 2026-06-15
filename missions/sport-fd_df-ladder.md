@@ -401,6 +401,10 @@ def check(extract_dir):
     fd_rate = int(rx_words * 32 / elapsed) if elapsed > 0 else 0
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
     sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
+    if fd_rate < 56250000:
+        raise HardFail(f'F->D rate {fd_rate} < 56250000')
+    if df_rate < 56250000:
+        raise HardFail(f'D->F rate {df_rate} < 56250000')
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 67108864 and dm.group(10) == 'PASS'):
         return True
@@ -504,9 +508,9 @@ def check(extract_dir):
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
     sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if fd_rate < 56250000:
-        raise HardFail(f'F->D rate {fd_rate} < 55000000')
+        raise HardFail(f'F->D rate {fd_rate} < 56250000')
     if df_rate < 56250000:
-        raise HardFail(f'D->F rate {df_rate} < 55000000')
+        raise HardFail(f'D->F rate {df_rate} < 56250000')
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 134217728 and dm.group(10) == 'PASS'):
         return True
@@ -610,9 +614,9 @@ def check(extract_dir):
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
     sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if fd_rate < 56250000:
-        raise HardFail(f'F->D rate {fd_rate} < 55000000')
+        raise HardFail(f'F->D rate {fd_rate} < 56250000')
     if df_rate < 56250000:
-        raise HardFail(f'D->F rate {df_rate} < 55000000')
+        raise HardFail(f'D->F rate {df_rate} < 56250000')
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 268435456 and dm.group(10) == 'PASS'):
         return True
@@ -716,9 +720,9 @@ def check(extract_dir):
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
     sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if fd_rate < 56250000:
-        raise HardFail(f'F->D rate {fd_rate} < 60000000')
+        raise HardFail(f'F->D rate {fd_rate} < 56250000')
     if df_rate < 56250000:
-        raise HardFail(f'D->F rate {df_rate} < 60000000')
+        raise HardFail(f'D->F rate {df_rate} < 56250000')
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 536870912 and dm.group(10) == 'PASS'):
         return True
@@ -822,9 +826,9 @@ def check(extract_dir):
     df_rate = int(fpga_words * 32 / elapsed) if elapsed > 0 else 0
     sys.stderr.write(f'fd={fd_rate/1e6:.1f}Mbps df={df_rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if fd_rate < 56250000:
-        raise HardFail(f'F->D rate {fd_rate} < 60000000')
+        raise HardFail(f'F->D rate {fd_rate} < 56250000')
     if df_rate < 56250000:
-        raise HardFail(f'D->F rate {df_rate} < 60000000')
+        raise HardFail(f'D->F rate {df_rate} < 56250000')
     if (rx_lanes == 1 and rx_errors == 0 and to == 0 and txto == 0 and ov == 0
             and slips == 0 and rx_words >= 1073741824 and dm.group(10) == 'PASS'):
         return True

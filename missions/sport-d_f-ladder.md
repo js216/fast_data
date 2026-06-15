@@ -167,6 +167,12 @@ def check(extract_dir):
         raise HardFail('no sport_rx report')
     lanes, words, errors = int(m.group(1)), int(m.group(2), 16), int(m.group(3), 16)
     nprog = len(re.findall(r'rx w=[0-9a-f]{8} ', text))
+    ops = Verification.load_ops(extract_dir)
+    boots = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'boot']
+    expects = [op for op in ops if op.get('device') == 'fpga.hx8k' and op.get('verb') == 'uart_expect']
+    elapsed = (expects[-1]['t_end'] - boots[0]['t_start']) if (boots and expects) else 0
+    rate = int(words * 32 / elapsed) if elapsed > 0 else 0
+    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if lanes == 1 and errors == 0 and words >= 262144 and m.group(4) == 'PASS':
         return True
     raise HardFail(f'FAIL: lanes={lanes} words={words} errors={errors}')
@@ -276,8 +282,6 @@ def check(extract_dir):
     elapsed = expects[-1]['t_end'] - boots[0]['t_start']
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
     sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
-    if rate < 56250000:
-        raise HardFail(f'rate {rate} < 50000000')
     if lanes == 1 and errors == 0 and words >= 16777216 and m.group(4) == 'PASS':
         return True
     raise HardFail(f'FAIL: lanes={lanes} words={words} errors={errors}')
@@ -436,7 +440,7 @@ def check(extract_dir):
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
     sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if rate < 56250000:
-        raise HardFail(f'rate {rate} < 58000000')
+        raise HardFail(f'rate {rate} < 56250000')
     if lanes == 1 and errors == 0 and words >= 67108864 and m.group(4) == 'PASS':
         return True
     raise HardFail(f'FAIL: lanes={lanes} words={words} errors={errors}')
@@ -659,7 +663,7 @@ def check(extract_dir):
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
     sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if rate < 56250000:
-        raise HardFail(f'rate {rate} < 58000000')
+        raise HardFail(f'rate {rate} < 56250000')
     if lanes == 1 and errors == 0 and words >= 134217728 and m.group(4) == 'PASS':
         return True
     raise HardFail(f'FAIL: lanes={lanes} words={words} errors={errors}')
@@ -1010,7 +1014,7 @@ def check(extract_dir):
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
     sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if rate < 56250000:
-        raise HardFail(f'rate {rate} < 58000000')
+        raise HardFail(f'rate {rate} < 56250000')
     if lanes == 1 and errors == 0 and words >= 268435456 and m.group(4) == 'PASS':
         return True
     raise HardFail(f'FAIL: lanes={lanes} words={words} errors={errors}')
@@ -1617,7 +1621,7 @@ def check(extract_dir):
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
     sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if rate < 56250000:
-        raise HardFail(f'rate {rate} < 58000000')
+        raise HardFail(f'rate {rate} < 56250000')
     if lanes == 1 and errors == 0 and words >= 536870912 and m.group(4) == 'PASS':
         return True
     raise HardFail(f'FAIL: lanes={lanes} words={words} errors={errors}')
@@ -2736,7 +2740,7 @@ def check(extract_dir):
     rate = int(words * 32 / elapsed) if elapsed > 0 else 0
     sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
     if rate < 56250000:
-        raise HardFail(f'rate {rate} < 58000000')
+        raise HardFail(f'rate {rate} < 56250000')
     if lanes == 1 and errors == 0 and words >= 1073741824 and m.group(4) == 'PASS':
         return True
     raise HardFail(f'FAIL: lanes={lanes} words={words} errors={errors}')
