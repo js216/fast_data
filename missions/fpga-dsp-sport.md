@@ -650,7 +650,7 @@ Build:
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx2
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 536870912 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 536870912 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
 make -C adsp2156/sport_fpga_rx clean
 make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=536870976U -DDATA_INDEP_FS=0 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=59375000U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_2gib.ldr
@@ -742,7 +742,7 @@ Build:
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
 mkdir -p fpga/build/sport_rx4
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 4 -set MIN_DONE_WORDS 536870912 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx4/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx4/s.json --pcf verilog/sport_rx4_hx8k.pcf --asc build/sport_rx4/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx4/s.asc build/sport_rx4/sport_rx4.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 4 -set MIN_DONE_WORDS 536870912 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx4/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx4/s.json --pcf verilog/sport_rx4_hx8k.pcf --asc build/sport_rx4/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx4/s.asc build/sport_rx4/sport_rx4.bin
 make -C adsp2156/sport_fpga_rx clean
 make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=4U -DN_WORDS=536870976U -DDATA_INDEP_FS=0 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=59375000U"
 cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_2gib.ldr
@@ -837,7 +837,7 @@ make -C adsp2156/sport_fpga_bidir clean
 make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=536870912U -DTX_FIRST"
 cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_2gib.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -943,7 +943,7 @@ make -C adsp2156/sport_fpga_bidir clean
 make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=2U -DTX_N=2U -DTOTAL_WORDS=536870912U -DTX_FIRST"
 cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir2x2_2gib.ldr
 mkdir -p fpga/build/sport_bidir_2x2
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 2 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_2x2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_2x2/s.json --pcf verilog/sport_bidir_2x2_hx8k.pcf --asc build/sport_bidir_2x2/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_2x2/s.asc build/sport_bidir_2x2/sport_bidir_2x2.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 2 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_2x2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_2x2/s.json --pcf verilog/sport_bidir_2x2_hx8k.pcf --asc build/sport_bidir_2x2/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_2x2/s.asc build/sport_bidir_2x2/sport_bidir_2x2.bin
 ```
 
 Artifacts:
@@ -1049,7 +1049,7 @@ make -C adsp2156/sport_fpga_bidir clean
 make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=4U -DTX_N=2U -DTOTAL_WORDS=536870912U -DTX_NO_REFILL"
 cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/ffff2gib.ldr
 mkdir -p fpga/build/sport_bidir_4x
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 4 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set SHARE_PAIRS 1 -set FROM_DSP_EN 0 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_4x/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_4x/s.json --pcf verilog/sport_bidir_4x_hx8k.pcf --asc build/sport_bidir_4x/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_4x/s.asc build/sport_bidir_4x/sport_bidir_4x.bin
+cd fpga && yosys -q -p "read_verilog -D SHARE_COPIES verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 4 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set SHARE_PAIRS 1 -set FROM_DSP_EN 0 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_4x/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_4x/s.json --pcf verilog/sport_bidir_4x_hx8k.pcf --asc build/sport_bidir_4x/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_4x/s.asc build/sport_bidir_4x/sport_bidir_4x.bin
 ```
 
 Artifacts:
@@ -1229,7 +1229,7 @@ make -C adsp2156/sport_fpga_bidir clean
 make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=536870912U -DTX_FIRST"
 cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_2gib.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -1335,7 +1335,7 @@ make -C adsp2156/sport_fpga_bidir clean
 make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=2U -DTX_N=2U -DTOTAL_WORDS=536870912U -DTX_FIRST"
 cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir2x2_2gib.ldr
 mkdir -p fpga/build/sport_bidir_2x2
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 2 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_2x2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_2x2/s.json --pcf verilog/sport_bidir_2x2_hx8k.pcf --asc build/sport_bidir_2x2/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_2x2/s.asc build/sport_bidir_2x2/sport_bidir_2x2.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 2 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_2x2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_2x2/s.json --pcf verilog/sport_bidir_2x2_hx8k.pcf --asc build/sport_bidir_2x2/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_2x2/s.asc build/sport_bidir_2x2/sport_bidir_2x2.bin
 ```
 
 Artifacts:
