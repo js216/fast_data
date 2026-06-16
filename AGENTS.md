@@ -5,6 +5,6 @@ explicitly requires it.
 
 Agents should not make any commits and have no push/pull access.
 
-Agents must never write or read anything in /tmp.
+Agents must never write anything in /tmp, but they *can* read from there.
 
 Agents need special permission to edit run.py every single time.

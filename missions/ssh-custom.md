@@ -311,14 +311,16 @@ mp135.custom:uart_expect sentinel="Password:" timeout_ms=5000
 mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=10000
 mp135.custom:uart_write data="ip -4 -o addr show dev eth0\r"
-mp135.custom:uart_expect sentinel="inet 172.25.0.46/" timeout_ms=10000
-mp135.custom:uart_write data="ip addr add 172.25.0.115/16 dev eth0 2>/dev/null || true\r"
-mp135.custom:uart_expect sentinel="# " timeout_ms=5000
-mp135.custom:uart_write data="ip -4 -o addr show dev eth0\r"
-mp135.custom:uart_expect sentinel="inet 172.25.0.115/" timeout_ms=10000
+mp135.custom:uart_expect sentinel="inet 172.25.0." timeout_ms=10000
 mp135.custom:uart_expect sentinel="# " timeout_ms=5000
 mp135.custom:uart_close
 mark tag=boot_linux
+```
+
+Capture:
+
+```
+BOARD_IP = mp135.uart /inet (172\.25\.0\.\d+)/
 ```
 
 Verify:
@@ -330,24 +332,24 @@ def check(extract_dir):
     uart = Verification.load_stream(
         extract_dir, 'mp135.uart').decode('utf-8', 'replace')
     return ('login:' in uart and 'STM32MP135' in uart and
-            'inet 172.25.0.46/' in uart and
-            'inet 172.25.0.115/' in uart)
+            'inet 172.25.0.' in uart)
 ```
 
 ### SSH smoke (no reload)
 
 Inherits the running Linux from the previous test --- no DFU, no MSC,
-no boot. The previous UART step already checked DHCP and added the
-stable SSH target IP used below. This section derives the dropbear host key from
-the buildroot target tree at Build time, registers it via a side plan,
-and runs `ssh:exec` for IP + uname. `ssh.custom` was removed from the
-bench; `ssh.any` is the only ssh device and needs an explicit target,
-so set `ip=` to the board's stable test address (`172.25.0.115`).
+no boot. The previous UART step captured the board's DHCP address as
+`{{BOARD_IP}}`. This section derives the dropbear host key from the
+buildroot target tree at Build time, registers it for the captured IP
+(exported as `$RUNPY_BOARD_IP`) via a side plan, and runs `ssh:exec`
+for IP + uname. `ssh.custom` was removed from the bench; `ssh.any` is
+the only ssh device and needs an explicit target, so set `ip=` to
+`{{BOARD_IP}}`.
 
 Build (the refresh plan registers the SSH host key directly):
 
 ```
-python3 -c "import base64,os,struct; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; wire=struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub; line='ssh-ed25519 '+base64.b64encode(wire).decode()+' root@buildroot'; open('stm32mp135_test_board/buildroot/output/images/hostkey.pub','w').write(line+chr(10)); open(os.environ['RUNPY_WORKDIR']+'/refresh_known_hosts_custom.plan','w').write('description \"refresh ssh.any known_hosts\"'+chr(10)+'ssh.any:trust_host_key key=\"'+line+'\" ip=\"172.25.0.115\"'+chr(10))"
+python3 -c "import base64,os,struct; d=open('stm32mp135_test_board/buildroot/output/target/etc/dropbear/dropbear_ed25519_host_key.bin','rb').read(); i=0; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; assert d[i:i+n]==b'ssh-ed25519','unexpected key type'; i+=n; n=struct.unpack('>I',d[i:i+4])[0]; i+=4; pub=d[i:i+n][-32:]; line='ssh-ed25519 '+base64.b64encode(struct.pack('>I',11)+b'ssh-ed25519'+struct.pack('>I',32)+pub).decode()+' root@buildroot'; ip=os.environ['RUNPY_BOARD_IP']; open(os.environ['RUNPY_WORKDIR']+'/refresh_known_hosts_custom.plan','w').write('description \"refresh ssh.any known_hosts for '+ip+'\"'+chr(10)+'ssh.any:trust_host_key key=\"'+line+'\" ip=\"'+ip+'\"'+chr(10))"
 python3 test_serv/submit.py --server http://localhost:8080 --wait 20 "$RUNPY_WORKDIR/refresh_known_hosts_custom.plan"
 ```
 
@@ -355,7 +357,7 @@ Test (max 2 min):
 
 ```
 delay ms=8000
-ssh.any:exec command="ip -4 -o addr show dev eth0; uname -a" ip="172.25.0.115"
+ssh.any:exec command="ip -4 -o addr show dev eth0; uname -a" ip="{{BOARD_IP}}"
 mark tag=ssh_smoke
 ```
 
