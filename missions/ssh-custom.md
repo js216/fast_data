@@ -310,8 +310,8 @@ mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="Password:" timeout_ms=5000
 mp135.custom:uart_write data="root\r"
 mp135.custom:uart_expect sentinel="# " timeout_ms=10000
-mp135.custom:uart_write data="ip -4 -o addr show dev eth0\r"
-mp135.custom:uart_expect sentinel="inet 172.25.0." timeout_ms=10000
+mp135.custom:uart_write data="/usr/sbin/wait-ip\r"
+mp135.custom:uart_expect sentinel="inet 172.25.0." timeout_ms=45000
 mp135.custom:uart_expect sentinel="# " timeout_ms=5000
 mp135.custom:uart_close
 mark tag=boot_linux

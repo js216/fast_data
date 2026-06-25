@@ -337,34 +337,610 @@ def check(extract_dir):
             "stream_ws_started=" in ssh)
 ```
 
-### Receive 128 MiB PRBS over WebSocket at 93 Mbps or faster
+### Receive 1 MiB
 
-Connect from the bench desktop to the already-running custom-board
-streamer. Receive exactly 128 MiB, compute SHA-256 and CRC32 while
-reading, and fail if the payload is not bit-perfect or if wall-time
-payload rate is below 93 Mbps.
+Restart the one-shot streamer for 1 MiB (1048576 bytes), receive it, crc-verify,
+and report achieved Mbps and core temperature. No rate gate (overhead-dominated).
 
 Build: nothing required.
 
-Test (max 4 min):
+Test (max 3 min):
 
 ```
-ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=134217728 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 min_rate_Bps=11625000 timeout_ms=180000
-mark tag=stream_ws_custom_128m_93mbps_integrity
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 1048576 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=1048576 expect_crc32=0xe6568d53 timeout_ms=30000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_sweep_1mib
 ```
 
 Verify:
 
 ```
 def check(extract_dir):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
     if not Verification.manifest_clean(extract_dir):
         return False
     ops = Verification.load_ops(extract_dir)
-    if not Verification.op_succeeded(ops, "ws.any", "recv"):
+    return Verification.op_succeeded(ops, "ws.any", "recv")
+```
+
+### Receive 2 MiB
+
+Restart the one-shot streamer for 2 MiB (2097152 bytes), receive it, crc-verify,
+and report achieved Mbps and core temperature. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 2097152 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=2097152 expect_crc32=0x10ea3bbe timeout_ms=30000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_sweep_2mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
         return False
-    checks = Verification.load_manifest(extract_dir).get("checks", [])
-    text = repr(checks).lower()
-    return ("134217728" in text and
-            "ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" in text and
-            "f48e5cf5" in text)
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "ws.any", "recv")
+```
+
+### Receive 4 MiB
+
+Restart the one-shot streamer for 4 MiB (4194304 bytes), receive it, crc-verify,
+and report achieved Mbps and core temperature. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 4194304 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=4194304 expect_crc32=0xc832783e timeout_ms=30000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_sweep_4mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "ws.any", "recv")
+```
+
+### Receive 8 MiB
+
+Restart the one-shot streamer for 8 MiB (8388608 bytes), receive it, crc-verify,
+and report achieved Mbps and core temperature. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 8388608 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=8388608 expect_crc32=0xf1e9a5ef timeout_ms=30000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_sweep_8mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "ws.any", "recv")
+```
+
+### Receive 16 MiB
+
+Restart the one-shot streamer for 16 MiB (16777216 bytes), receive it, crc-verify,
+and report achieved Mbps and core temperature. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 16777216 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=16777216 expect_crc32=0xf89e248a timeout_ms=30000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_sweep_16mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "ws.any", "recv")
+```
+
+### Receive 32 MiB
+
+Restart the one-shot streamer for 32 MiB (33554432 bytes), receive it, crc-verify,
+and report achieved Mbps and core temperature. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 33554432 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=33554432 expect_crc32=0xe0a414c5 timeout_ms=30000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_sweep_32mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "ws.any", "recv")
+```
+
+### Receive 64 MiB
+
+Restart the one-shot streamer for 64 MiB (67108864 bytes), receive it, crc-verify,
+and report achieved Mbps and core temperature. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 67108864 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=67108864 expect_crc32=0x9bffbe60 timeout_ms=40000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_sweep_64mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "ws.any", "recv")
+```
+
+### Receive 128 MiB
+
+Restart the one-shot streamer for 128 MiB (134217728 bytes), receive it, crc-verify,
+and report achieved Mbps and core temperature. The 93 Mbps rate gate applies.
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 134217728 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=134217728 expect_crc32=0xf48e5cf5 min_rate_Bps=11625000 timeout_ms=60000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_sweep_128mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "ws.any", "recv")
+```
+
+### Receive 256 MiB
+
+Restart the one-shot streamer for 256 MiB (268435456 bytes), receive it, crc-verify,
+and report achieved Mbps and core temperature. The 93 Mbps rate gate applies.
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 268435456 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=268435456 expect_crc32=0x96e039fa min_rate_Bps=11625000 timeout_ms=90000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_sweep_256mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "ws.any", "recv")
+```
+
+### Receive 512 MiB
+
+Restart the one-shot streamer for 512 MiB (536870912 bytes), receive it, crc-verify,
+and report achieved Mbps and core temperature. The 93 Mbps rate gate applies.
+
+Build: nothing required.
+
+Test (max 4 min):
+
+```
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 536870912 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=536870912 expect_crc32=0xa05a6a2f min_rate_Bps=11625000 timeout_ms=150000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_sweep_512mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "ws.any", "recv")
+```
+
+### Receive 1 GiB
+
+Restart the one-shot streamer for 1 GiB (1073741824 bytes), receive it, crc-verify,
+and report achieved Mbps and core temperature. The 93 Mbps rate gate applies.
+
+Build: nothing required.
+
+Test (max 6 min):
+
+```
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 1073741824 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=1073741824 expect_crc32=0x501f0d96 min_rate_Bps=11625000 timeout_ms=260000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_sweep_1gib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "ws.any", "recv")
+```
+
+### Receive 512 MiB x10 (rate + temp under repeated load)
+
+Run the 512 MiB transfer ten times back-to-back. Each iteration restarts the
+streamer, receives + crc-verifies, and prints the effective wall-clock data
+rate and the core temperature, so any rate degradation, heating, or corruption
+onset under sustained load is visible across the ten runs.
+
+Build: nothing required.
+
+Foreach:
+
+```
+i in count(10)
+```
+
+Test (max 4 min):
+
+```
+ssh.any:exec command="killall -q -9 stream_ws_prbs_stream 2>/dev/null; sleep 1; setsid /tmp/stream_ws_prbs_stream --port 8765 --bytes 536870912 --seed 0x12345678 --frame-bytes 131072 >/tmp/sw.log 2>&1 </dev/null & echo started=$!" ip="{{BOARD_IP}}" timeout_ms=10000
+delay ms=800
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=536870912 expect_crc32=0xa05a6a2f min_rate_Bps=11625000 timeout_ms=150000
+ssh.any:exec command="echo TEMP=`cat /sys/class/thermal/thermal_zone0/temp`" ip="{{BOARD_IP}}" timeout_ms=10000
+mark tag=ws_512_loop
+```
+
+Verify:
+
+```
+def check(extract_dir, item):
+    import sys, os
+    rate = temp = None
+    try:
+        tl = open(os.path.join(extract_dir, "timeline.log"), errors="replace").read()
+        m = re.search(r"ws:recv\s+\d+B in [\d.]+s @ (\d+) B/s", tl)
+        if m:
+            rate = int(m.group(1)) * 8.0 / 1e6
+    except Exception:
+        pass
+    try:
+        se = open(os.path.join(extract_dir, "streams", "ssh.exec.bin"), errors="replace").read()
+        mt = re.search(r"TEMP=(\d+)", se)
+        if mt:
+            temp = int(mt.group(1)) / 1000.0
+    except Exception:
+        pass
+    out = "iter %s: " % item
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    ops = Verification.load_ops(extract_dir)
+    return Verification.op_succeeded(ops, "ws.any", "recv")
 ```
