@@ -285,6 +285,8 @@ mp135.custom:uart_write data="echo PID_$(cat /sys/kernel/config/usb_gadget/usbtm
 mp135.custom:uart_expect sentinel="PID_0x571e" timeout_ms=5000
 mp135.custom:uart_write data="echo UDC_STATE_$(cat /sys/class/udc/*/state)\r"
 mp135.custom:uart_expect sentinel="UDC_STATE_configured" timeout_ms=5000
+mp135.custom:uart_write data="stty -echo; echo STTYDONE\r"
+mp135.custom:uart_expect sentinel="STTYDONE" timeout_ms=4000
 mp135.custom:uart_close
 delay ms=8000
 inventory refresh=true verify=false
@@ -359,14 +361,15 @@ def check(extract_dir):
     )
 ```
 
-### Custom Board USBTMC Command And Data Parity
+### Custom Board USBTMC Command Parity
 
-Run the completed USBTMC command behavior, binary integrity, and
-sustained throughput checks on the already-booted custom board.
+Run the USBTMC/USB488 command-behavior checks on the already-booted custom
+board, before the payload-size sweep. Binary integrity and sustained
+throughput are covered by the size sweep and foreach that follow.
 
 Build: nothing required.
 
-Test (reuse the booted custom Linux USBTMC gadget; max 4 min):
+Test (reuse the booted custom Linux USBTMC gadget; max 1 min):
 
 ```
 delay ms=1500
@@ -379,22 +382,13 @@ usbtmc.any:query serial="custom-linux-usbtmc-0001" data="*STB?" length=32 timeou
 usbtmc.any:write serial="custom-linux-usbtmc-0001" data="*CLS" timeout_ms=2000
 usbtmc.any:query serial="custom-linux-usbtmc-0001" data="UNKNOWN:HDR?" length=128 timeout_ms=2000
 usbtmc.any:query serial="custom-linux-usbtmc-0001" data="SYST:ERR?" length=128 timeout_ms=2000
-usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 1000003\n" timeout_ms=5000
-usbtmc.any:read serial="custom-linux-usbtmc-0001" length=1000003 exact=true expect_sha256="d474ed987bc11c4635d8b45acbe0ef3d819cf408b93e9274ed783661affac1c4" expect_crc32=0x2feeb619 timeout_ms=30000
-usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 134217728\n" timeout_ms=5000
-usbtmc.any:read serial="custom-linux-usbtmc-0001" length=134217728 exact=true min_rate_Bps=11250000 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 timeout_ms=120000
-mark tag=usbtmc_custom_data_parity
+mark tag=usbtmc_custom_command_parity
 ```
 
 Verify: the custom board (addressed by serial, never by `/dev/usbtmcN`
 index) identifies and answers the USB488 common commands deterministically
-(`*OPC?`->1, `*TST?`->0, `*STB?`->0), an unknown header is reported via
-`SYST:ERR?`, a 1,000,003-byte payload (exercises USBTMC 4-byte alignment
-padding) and a 128 MiB payload are streamed host-side and verified
-bit-perfect (SHA-256 + CRC32 vs the `_prbs.py` seed 0x12345678 reference,
-hashed on the fly and discarded by `usbtmc:read`), and the 128 MiB transfer
-sustains at least 90 Mbps (the op enforces `min_rate_Bps` and exactness and
-records each integrity check):
+(`*OPC?`->1, `*TST?`->0, `*STB?`->0), and an unknown header is reported via
+`SYST:ERR?`:
 
 ```
 def check(extract_dir):
@@ -407,9 +401,6 @@ def check(extract_dir):
     if "STM32MP135-USBTMC" not in idn:
         return False
 
-    # USB488 common-command responses (concatenated in usbtmc.query):
-    # *OPC?->1, *TST?->0, *STB?->0, then an unknown header records a
-    # controlled error that SYST:ERR? reports back.
     cmds = Verification.load_stream_text(extract_dir, "usbtmc.query")
     if "1\n0\n0\n" not in cmds:
         return False
@@ -417,15 +408,874 @@ def check(extract_dir):
         return False
 
     devices = json.loads(Verification.load_stream_text(extract_dir, "usbtmc.list"))
-    if not any(d.get("serial") == "custom-linux-usbtmc-0001" for d in devices):
-        return False
+    return any(d.get("serial") == "custom-linux-usbtmc-0001" for d in devices)
+```
 
-    # The two usbtmc:read transfers (1,000,003 B + 128 MiB) each record a
-    # host-side SHA-256 and CRC32 streaming-verify check; all must hit.
-    checks = Verification.load_manifest(extract_dir).get("checks", [])
-    sha = [c for c in checks if c.get("kind") == "usbtmc_read_sha256"]
-    crc = [c for c in checks if c.get("kind") == "usbtmc_read_crc32"]
-    if len(sha) < 2 or len(crc) < 2:
+### Receive 1 MiB over USBTMC
+
+Request a fresh 1 MiB (1048576 bytes) PRBS payload over USBTMC while recording the
+board console on UART throughout the transfer, read it host-side with streaming
+CRC32 verification, and report achieved Mbps and core temperature. The console
+must carry nothing but the temperature: the Verify permits only the bare temp
+number before its sentinel, so any kernel message or Oops fails the section and
+is dumped. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 1048576\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=1048576 exact=true expect_crc32=0xe6568d53 timeout_ms=30000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_sweep_1mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
         return False
-    return all(c.get("status") == "hit" for c in sha + crc)
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
+```
+
+### Receive 2 MiB over USBTMC
+
+Request a fresh 2 MiB (2097152 bytes) PRBS payload over USBTMC while recording the
+board console on UART throughout the transfer, read it host-side with streaming
+CRC32 verification, and report achieved Mbps and core temperature. The console
+must carry nothing but the temperature: the Verify permits only the bare temp
+number before its sentinel, so any kernel message or Oops fails the section and
+is dumped. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 2097152\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=2097152 exact=true expect_crc32=0x10ea3bbe timeout_ms=30000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_sweep_2mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
+```
+
+### Receive 4 MiB over USBTMC
+
+Request a fresh 4 MiB (4194304 bytes) PRBS payload over USBTMC while recording the
+board console on UART throughout the transfer, read it host-side with streaming
+CRC32 verification, and report achieved Mbps and core temperature. The console
+must carry nothing but the temperature: the Verify permits only the bare temp
+number before its sentinel, so any kernel message or Oops fails the section and
+is dumped. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 4194304\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=4194304 exact=true expect_crc32=0xc832783e timeout_ms=30000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_sweep_4mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
+```
+
+### Receive 8 MiB over USBTMC
+
+Request a fresh 8 MiB (8388608 bytes) PRBS payload over USBTMC while recording the
+board console on UART throughout the transfer, read it host-side with streaming
+CRC32 verification, and report achieved Mbps and core temperature. The console
+must carry nothing but the temperature: the Verify permits only the bare temp
+number before its sentinel, so any kernel message or Oops fails the section and
+is dumped. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 8388608\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=8388608 exact=true expect_crc32=0xf1e9a5ef timeout_ms=30000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_sweep_8mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
+```
+
+### Receive 16 MiB over USBTMC
+
+Request a fresh 16 MiB (16777216 bytes) PRBS payload over USBTMC while recording the
+board console on UART throughout the transfer, read it host-side with streaming
+CRC32 verification, and report achieved Mbps and core temperature. The console
+must carry nothing but the temperature: the Verify permits only the bare temp
+number before its sentinel, so any kernel message or Oops fails the section and
+is dumped. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 16777216\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=16777216 exact=true expect_crc32=0xf89e248a timeout_ms=30000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_sweep_16mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
+```
+
+### Receive 32 MiB over USBTMC
+
+Request a fresh 32 MiB (33554432 bytes) PRBS payload over USBTMC while recording the
+board console on UART throughout the transfer, read it host-side with streaming
+CRC32 verification, and report achieved Mbps and core temperature. The console
+must carry nothing but the temperature: the Verify permits only the bare temp
+number before its sentinel, so any kernel message or Oops fails the section and
+is dumped. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 33554432\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=33554432 exact=true expect_crc32=0xe0a414c5 timeout_ms=30000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_sweep_32mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
+```
+
+### Receive 64 MiB over USBTMC
+
+Request a fresh 64 MiB (67108864 bytes) PRBS payload over USBTMC while recording the
+board console on UART throughout the transfer, read it host-side with streaming
+CRC32 verification, and report achieved Mbps and core temperature. The console
+must carry nothing but the temperature: the Verify permits only the bare temp
+number before its sentinel, so any kernel message or Oops fails the section and
+is dumped. No rate gate (overhead-dominated).
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 67108864\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=67108864 exact=true expect_crc32=0x9bffbe60 timeout_ms=30000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_sweep_64mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
+```
+
+### Receive 128 MiB over USBTMC
+
+Request a fresh 128 MiB (134217728 bytes) PRBS payload over USBTMC while recording the
+board console on UART throughout the transfer, read it host-side with streaming
+CRC32 verification, and report achieved Mbps and core temperature. The console
+must carry nothing but the temperature: the Verify permits only the bare temp
+number before its sentinel, so any kernel message or Oops fails the section and
+is dumped. The 90 Mbps rate gate applies.
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 134217728\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=134217728 exact=true expect_crc32=0xf48e5cf5 min_rate_Bps=11250000 timeout_ms=60000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_sweep_128mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
+```
+
+### Receive 256 MiB over USBTMC
+
+Request a fresh 256 MiB (268435456 bytes) PRBS payload over USBTMC while recording the
+board console on UART throughout the transfer, read it host-side with streaming
+CRC32 verification, and report achieved Mbps and core temperature. The console
+must carry nothing but the temperature: the Verify permits only the bare temp
+number before its sentinel, so any kernel message or Oops fails the section and
+is dumped. The 90 Mbps rate gate applies.
+
+Build: nothing required.
+
+Test (max 3 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 268435456\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=268435456 exact=true expect_crc32=0x96e039fa min_rate_Bps=11250000 timeout_ms=90000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_sweep_256mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
+```
+
+### Receive 512 MiB over USBTMC
+
+Request a fresh 512 MiB (536870912 bytes) PRBS payload over USBTMC while recording the
+board console on UART throughout the transfer, read it host-side with streaming
+CRC32 verification, and report achieved Mbps and core temperature. The console
+must carry nothing but the temperature: the Verify permits only the bare temp
+number before its sentinel, so any kernel message or Oops fails the section and
+is dumped. The 90 Mbps rate gate applies.
+
+Build: nothing required.
+
+Test (max 4 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 536870912\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=536870912 exact=true expect_crc32=0xa05a6a2f min_rate_Bps=11250000 timeout_ms=150000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_sweep_512mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
+```
+
+### Receive 1024 MiB over USBTMC
+
+Request a fresh 1024 MiB (1073741824 bytes) PRBS payload over USBTMC while recording the
+board console on UART throughout the transfer, read it host-side with streaming
+CRC32 verification, and report achieved Mbps and core temperature. The console
+must carry nothing but the temperature: the Verify permits only the bare temp
+number before its sentinel, so any kernel message or Oops fails the section and
+is dumped. The 90 Mbps rate gate applies.
+
+Build: nothing required.
+
+Test (max 6 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 1073741824\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=1073741824 exact=true expect_crc32=0x501f0d96 min_rate_Bps=11250000 timeout_ms=240000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_sweep_1024mib
+```
+
+Verify:
+
+```
+def check(extract_dir):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = ""
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
+```
+
+### Receive 512 MiB x10 over USBTMC (rate + temp, console must stay clean)
+
+Request and read the 512 MiB PRBS payload ten times back-to-back over USBTMC, with
+the console recorded on UART throughout every iteration. Each iteration CRC32-
+verifies the payload, reports rate and core temperature, and permits only the bare
+temperature on the console -- so corruption or a kernel Oops under sustained USB
+load is caught and dumped across the ten runs. The 90 Mbps gate applies.
+
+Build: nothing required.
+
+Foreach:
+
+```
+i in count(10)
+```
+
+Test (max 4 min):
+
+```
+mp135.custom:uart_open
+delay ms=300
+usbtmc.any:write serial="custom-linux-usbtmc-0001" data="DATA:PRBS? 536870912\n" timeout_ms=5000
+usbtmc.any:read serial="custom-linux-usbtmc-0001" length=536870912 exact=true expect_crc32=0xa05a6a2f min_rate_Bps=11250000 timeout_ms=150000
+delay ms=500
+mp135.custom:uart_write data="cat /sys/class/thermal/thermal_zone0/temp; echo ENDOFTEMP\r"
+mp135.custom:uart_expect sentinel="ENDOFTEMP" timeout_ms=4000
+mp135.custom:uart_close
+mark tag=usbtmc_512_loop
+```
+
+Verify:
+
+```
+def check(extract_dir, item):
+    import sys
+    rate = temp = None
+    try:
+        crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+                if c.get("kind") == "usbtmc_read_crc32"]
+        if crcs:
+            ev = crcs[-1].get("evidence") or {}
+            b, el = ev.get("bytes"), ev.get("elapsed_s")
+            if b and el:
+                rate = b * 8.0 / el / 1e6
+    except Exception:
+        pass
+    uart = ""
+    try:
+        uart = Verification.load_stream_text(extract_dir, "mp135.uart")
+    except Exception:
+        pass
+    # Shell echo is off, so everything on the console before the ENDOFTEMP
+    # sentinel must be ONLY the bare temperature (a number). Empty is allowed
+    # (temp simply not captured); anything else -- a kernel message or Oops --
+    # is non-numeric, fails the section, and is dumped verbatim.
+    pre = uart.split("ENDOFTEMP")[0].strip()
+    clean = (pre == "" or pre.isdigit())
+    if pre.isdigit():
+        temp = int(pre) / 1000.0
+    out = "iter %s: " % item
+    if rate is not None:
+        out += "%.1fMbps " % rate
+    if temp is not None:
+        out += "%.1fC " % temp
+    if not clean:
+        out += "UART-UNEXPECTED[%dB] %s " % (len(pre), repr(pre[:220]))
+    if out:
+        sys.stderr.write(out); sys.stderr.flush()
+    if not Verification.manifest_clean(extract_dir):
+        return False
+    if not clean:
+        return False
+    crcs = [c for c in Verification.load_manifest(extract_dir).get("checks", [])
+            if c.get("kind") == "usbtmc_read_crc32"]
+    return len(crcs) >= 1 and all(c.get("status") == "hit" for c in crcs)
 ```

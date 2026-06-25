@@ -163,6 +163,12 @@ mp257.evb-uart1:uart_close
 mark tag=net
 ```
 
+Capture:
+
+```
+BOARD_IP = mp257.evb-uart1.uart /inet (172\.25\.\d+\.\d+)/
+```
+
 Verify:
 
 ```
@@ -178,8 +184,8 @@ def check(extract_dir):
 
 Inherits the network-up board. Build `fft_cpu`, copy it over SSH, start it
 detached, and confirm the process reports its DRM connector. The image contains
-the pinned Dropbear host key and bench public key; `ip=` targets the board's
-current DHCP lease.
+the pinned Dropbear host key and bench public key; `ip=` targets `{{BOARD_IP}}`
+captured from the network-verify section's `ip a` output.
 
 Build:
 
@@ -202,9 +208,9 @@ stm32mp257_test_board/tools/build/fft_cpu
 Test (max 30 s):
 
 ```
-ssh.any:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH7w8Lo6ZZnmCgaHoE8IUnEgupawdkSdh0rfPmhyjjjV mp257-fft" ip="172.25.0.159"
-ssh.any:put data=@fft_cpu path="/usr/bin/fft_cpu" ip="172.25.0.159"
-ssh.any:exec command="chmod +x /usr/bin/fft_cpu; setsid /usr/bin/fft_cpu >/tmp/fft_cpu.log 2>&1 </dev/null & sleep 3; uname -a; echo FFTPID=$(pidof fft_cpu); echo SSH_LOGIN_OK; head -8 /tmp/fft_cpu.log" ip="172.25.0.159" timeout_ms=15000
+ssh.any:trust_host_key key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH7w8Lo6ZZnmCgaHoE8IUnEgupawdkSdh0rfPmhyjjjV mp257-fft" ip="{{BOARD_IP}}"
+ssh.any:put data=@fft_cpu path="/usr/bin/fft_cpu" ip="{{BOARD_IP}}"
+ssh.any:exec command="chmod +x /usr/bin/fft_cpu; setsid /usr/bin/fft_cpu >/tmp/fft_cpu.log 2>&1 </dev/null & sleep 3; uname -a; echo FFTPID=$(pidof fft_cpu); echo SSH_LOGIN_OK; head -8 /tmp/fft_cpu.log" ip="{{BOARD_IP}}" timeout_ms=15000
 mark tag=ssh_fft
 ```
 

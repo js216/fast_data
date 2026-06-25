@@ -119,12 +119,11 @@ class Verification:
 class Runner:
     """Parses a regression-plan .md file and drives Build (shell
     commands), Test (submit a plan via test_serv), and Verify (exec
-    the inline check) for each `### ` section. Cross-section lease
-    plumbing: any `{{LEASE_TOKEN}}` placeholder in a section's plan is
-    substituted with the token produced by the most recent prior
-    section that ran `lease:claim`; sections that want device hold
-    across submissions must spell out `lease:claim` / `lease:resume` /
-    `lease:release` in the mission file."""
+    the inline check) for each `### ` section. Cross-section
+    variables: a section's `Capture:` block declares
+    `NAME = <stream> /<regex>/` lines; after the section runs, regex
+    group 1 from streams/<stream>.bin is stored and substituted for
+    any `{{NAME}}` placeholder in later sections' plans."""
 
     FAST_DATA = Path(__file__).resolve().parent
     SUBMIT_PY = FAST_DATA / 'test_serv' / 'submit.py'
@@ -134,9 +133,7 @@ class Runner:
     INFLIGHT_FALLBACK_S = 60         # bound missing/stale /inflight data
     BUSY_RETRY_DEADLINE_S = WAIT_S   # bound zero-op lease/busy retries
     LONG_BUSY_RETRY_DEADLINE_S = 3600
-    FAILED_ATTEMPT_LEASE_RELEASE_WAIT_S = 300
     LONG_BUSY_RETRY_MISSIONS = {'nand-flash.md'}
-    LEASE_PLACEHOLDER = '{{LEASE_TOKEN}}'
     # Directory holding the per-invocation workdir and lease-state
     # file. Each run.py creates a unique subdir under here keyed by
     # PID + nanosecond timestamp so two run.py invocations can drive
@@ -161,76 +158,15 @@ class Runner:
         tag = f'{os.getpid()}-{time.time_ns()}'
         self.workdir = self.WORKDIR_PARENT / f'workdir-{tag}'
         self.workdir.mkdir(parents=True)
-        self.lease_state_file = self.WORKDIR_PARENT / f'.runpy_lease-{tag}'
         self.log_path = Path.cwd() / 'tmp/log.txt'
         self.log_fh = None
         self.user = getpass.getuser()
         self.busy_retry_deadline_s = self._busy_retry_deadline_for_md(
             self.md_path)
-        self.failed_attempt_lease_tokens = set()
-        # Most recent lease token captured from a section's
-        # manifest.json, used to substitute {{LEASE_TOKEN}} in
-        # subsequent sections. Cleared when a section's plan contains
-        # lease:release.
-        self.lease_token = None
-        # Defensive ghost-lease cleanup: scan for lease-state files
-        # left over from prior crashed runs (PID no longer alive) and
-        # release each. Per-PID workdirs from those runs aren't
-        # touched -- they're kept for post-mortem.
-        self._cleanup_orphan_leases()
-
-    def _cleanup_orphan_leases(self):
-        for path in sorted(self.WORKDIR_PARENT.glob('.runpy_lease-*')):
-            if path == self.lease_state_file:
-                continue
-            name = path.name[len('.runpy_lease-'):]
-            try:
-                pid = int(name.split('-', 1)[0])
-            except ValueError:
-                continue
-            # If the owning PID is still alive, leave it alone --
-            # another run.py is using it.
-            try:
-                os.kill(pid, 0)
-                continue
-            except ProcessLookupError:
-                pass
-            except PermissionError:
-                # Different uid -- not ours to clean up.
-                continue
-            try:
-                ghost = path.read_text().strip()
-            except OSError:
-                ghost = ''
-            if ghost:
-                print(f'releasing ghost lease {ghost} from prior run (pid {pid})')
-                self._release_ghost(ghost)
-            try:
-                path.unlink()
-            except OSError:
-                pass
-
-    def _release_ghost(self, token, wait_s=30):
-        """Best-effort release of a stale lease token left over from a
-        prior run. Submits the canonical resume+release pair; failures
-        are swallowed (the lease may have already expired)."""
-        section = self.workdir / f'_ghost_release_{time.time_ns()}'
-        section.mkdir()
-        plan_path = section / 'plan.txt'
-        plan_path.write_text(
-            f'# runpy {time.time_ns()}\n'
-            f'lease:resume token="{token}"\n'
-            f'description "ghost lease cleanup"\n'
-            f'lease:release token="{token}"\n')
-        log = section / 'run.log'
-        cmd = ['python3', str(self.SUBMIT_PY),
-               '--server', self.SERVER,
-               '--wait', str(int(wait_s)),
-               str(plan_path)]
-        with log.open('wb') as f:
-            result = subprocess.run(cmd, cwd=self.FAST_DATA, stdout=f,
-                                    stderr=subprocess.STDOUT)
-        return result.returncode == 0
+        # Mission-defined variables captured from a section's artefact
+        # streams (see `Capture:` blocks / apply_captures), substituted
+        # for {{NAME}} placeholders in later sections' plans.
+        self.vars = {}
 
     UNITS = {'s': 1, 'sec': 1, 'min': 60, 'm': 60, 'h': 3600}
 
@@ -247,7 +183,8 @@ class Runner:
 
     def parse_md(self):
         """Yield (title, build, artifacts, test, verify, local_test,
-        inputs, expect, test_max_s, foreach) per '### ' section.
+        inputs, expect, test_max_s, foreach, capture) per '### '
+        section.
         ``test_max_s`` is set from a per-block specifier like
         ``Test (max 5 min):``; None when omitted. ``foreach`` is the
         raw text of an optional Foreach block (parsed lazily by
@@ -260,7 +197,8 @@ class Runner:
             blocks = {}
             specs = {}
             for label in ('Build', 'Artifacts', 'Test', 'Verify',
-                          'Foreach', 'Local test', 'Inputs', 'Expect'):
+                          'Foreach', 'Local test', 'Inputs', 'Expect',
+                          'Capture'):
                 key = label.lower().replace(' ', '_')
                 m = re.search(
                     rf'^{label}\s*(?:\(([^)]+)\))?\s*:\s*\n+```\n(.*?)^```',
@@ -276,7 +214,7 @@ class Runner:
                    blocks['local_test'], blocks['inputs'],
                    blocks['expect'],
                    self.parse_max(specs['test']),
-                   blocks['foreach'])
+                   blocks['foreach'], blocks['capture'])
 
     @staticmethod
     def is_no_hardware_test(test):
@@ -345,8 +283,10 @@ class Runner:
             return True
         env = dict(os.environ)
         env['RUNPY_WORKDIR'] = str(self.workdir)
-        if self.lease_token:
-            env['RUNPY_LEASE_TOKEN'] = self.lease_token
+        # Expose mission-captured variables to build shells as
+        # RUNPY_<NAME> so a build step can use e.g. "$RUNPY_BOARD_IP".
+        for k, v in self.vars.items():
+            env[f'RUNPY_{k}'] = v
         build = re.sub(r'\\\n[ \t]*', ' ', build)
         for line in build.splitlines():
             if not line.strip():
@@ -441,11 +381,10 @@ class Runner:
 
     def submit_plan(self, plan_text, artifacts, extract_dir, log,
                     description, max_s=None, line_prefix=None):
-        """Resolve @blob refs from per-test Artifacts, substitute the
-        `{{LEASE_TOKEN}}` placeholder against ``self.lease_token``, and
-        submit. Inserts `description "..."` and a unique runpy comment;
-        if the plan body's first op is `lease:resume`, description goes
-        AFTER that op so prescan still binds the token. Returns
+        """Resolve @blob refs from per-test Artifacts, substitute any
+        `{{NAME}}` placeholders against mission-captured ``self.vars``,
+        and submit. Inserts `description "..."` and a unique runpy
+        comment at the top of the plan. Returns
         ``(rc, digest)``. When ``max_s`` is set, X-Test-Runtime caps the
         bench session at that budget; the agent backstops with a
         slightly larger subprocess timeout in case the bench fails to
@@ -454,26 +393,17 @@ class Runner:
         countdown against ``max_s`` while submit.py runs."""
         nonce = time.time_ns()
         description = f'{self.user}: {description} [{nonce}]'
-        if self.LEASE_PLACEHOLDER in plan_text:
-            if not self.lease_token:
-                raise RuntimeError(
-                    f'plan references {self.LEASE_PLACEHOLDER} but no '
-                    f'lease has been claimed yet')
-            plan_text = plan_text.replace(
-                self.LEASE_PLACEHOLDER, self.lease_token)
+        for name, val in self.vars.items():
+            plan_text = plan_text.replace('{{' + name + '}}', val)
+        missing = re.findall(r'\{\{(\w+)\}\}', plan_text)
+        if missing:
+            raise RuntimeError(
+                f'plan references undefined variable(s): '
+                f'{sorted(set(missing))}')
         plan_path = extract_dir.parent / 'plan.txt'
         lines = plan_text.splitlines()
-        i = 0
-        while i < len(lines) and (
-                not lines[i].strip() or lines[i].lstrip().startswith('#')):
-            i += 1
-        if i < len(lines) and lines[i].lstrip().startswith('lease:resume'):
-            head = lines[:i + 1]
-            tail = lines[i + 1:]
-        else:
-            head, tail = [], lines
-        body = (head + [f'description "{description}"',
-                        f'# runpy {nonce}'] + tail)
+        body = ([f'description "{description}"',
+                 f'# runpy {nonce}'] + lines)
         plan_path.write_text('\n'.join(body) + '\n')
         blob_args = []
         for name in sorted(artifacts):
@@ -759,28 +689,32 @@ class Runner:
                     return 0.0
         return None
 
-    def capture_lease_token(self, extract_dir, plan_text):
-        """Refresh ``self.lease_token`` from this section's artefact.
-        Looks at the LAST lease op in the section's plan to decide
-        whether the section ended with an active lease (claim/resume)
-        or not (release). A section that does claim/release/claim is
-        fine -- the final claim's token (in manifest.json) is
-        captured; the intermediate release does NOT clobber it.
-        Mirror the active token into ``lease_state_file`` so a crashed
-        next-section can be recovered on the following startup."""
-        manifest = extract_dir / 'manifest.json'
-        lease_ops = re.findall(r'^\s*lease:(\w+)\b', plan_text, re.M)
-        last_op = lease_ops[-1] if lease_ops else None
-        if last_op == 'release':
-            self.lease_token = None
-            if self.lease_state_file.exists():
-                self.lease_state_file.unlink()
-            return
-        if last_op in ('claim', 'resume') and manifest.exists():
-            tok = json.loads(manifest.read_text()).get('lease_token')
-            if tok:
-                self.lease_token = tok
-                self.lease_state_file.write_text(tok)
+    def apply_captures(self, capture_text, extract_dir):
+        """Mission-defined variable capture. Each non-blank, non-comment
+        line of a section's ``Capture:`` block is
+        ``NAME = <stream> /<regex>/``; the last match of group 1 from
+        ``streams/<stream>.bin`` (decoded utf-8) is stored in
+        ``self.vars[NAME]`` for ``{{NAME}}`` substitution in later
+        sections. A pattern that matches nothing is a hard failure so a
+        broken capture surfaces immediately rather than as a confusing
+        downstream substitution error."""
+        for raw in (capture_text or '').splitlines():
+            line = raw.strip()
+            if not line or line.startswith('#'):
+                continue
+            m = re.match(r'(\w+)\s*=\s*(\S+)\s+/(.*)/\s*$', line)
+            if not m:
+                raise RuntimeError(f'invalid Capture line: {line!r}')
+            name, stream, pat = m.group(1), m.group(2), m.group(3)
+            f = extract_dir / 'streams' / f'{stream}.bin'
+            text = (f.read_bytes().decode('utf-8', 'replace')
+                    if f.exists() else '')
+            hits = re.findall(pat, text)
+            if not hits:
+                raise RuntimeError(
+                    f'Capture {name}: pattern /{pat}/ not found in '
+                    f'stream {stream}')
+            self.vars[name] = hits[-1]
 
     def _find_active_job_digest(self, description):
         """Return the submitted/running job digest matching a description."""
@@ -951,10 +885,6 @@ class Runner:
             busy_before_ops = self._failed_before_ops_due_to_busy(extract)
             if rc != 0:
                 last_reason = f'   submit.py rc={rc}'
-                self._release_failed_attempt_lease(extract, test)
-                if (self._lease_released_in_attempt(extract)
-                        and self.LEASE_PLACEHOLDER in test):
-                    break
                 if busy_before_ops:
                     retry, busy_started, busy_retries, busy_reason = (
                         self._retry_after_busy_before_ops(
@@ -969,14 +899,9 @@ class Runner:
                 ok = self.run_verify(verify, artifacts, extract, item)
             except HardFail as e:
                 last_reason = f'   {e}'
-                self._release_failed_attempt_lease(extract, test)
                 break
             except Exception as e:
                 last_reason = f'   verify {type(e).__name__}: {e}'
-                self._release_failed_attempt_lease(extract, test)
-                if (self._lease_released_in_attempt(extract)
-                        and self.LEASE_PLACEHOLDER in test):
-                    break
                 if busy_before_ops:
                     retry, busy_started, busy_retries, busy_reason = (
                         self._retry_after_busy_before_ops(
@@ -998,10 +923,6 @@ class Runner:
                 last_reason = (
                     '   verify check() returned False' if not ok else
                     '   verify check() True but manifest reports op errors')
-                self._release_failed_attempt_lease(extract, test)
-                if (self._lease_released_in_attempt(extract)
-                        and self.LEASE_PLACEHOLDER in test):
-                    break
                 if busy_before_ops:
                     retry, busy_started, busy_retries, busy_reason = (
                         self._retry_after_busy_before_ops(
@@ -1021,38 +942,6 @@ class Runner:
                                      busy_retries):
         """Retry zero-op lease/busy rejects until a wall-clock deadline."""
         holder = self._busy_lease_holder(extract_dir)
-        if self._is_failed_attempt_lease_token(holder):
-            if self._release_failed_attempt_lease_token(holder):
-                return True, busy_started, busy_retries, None
-            reason = (
-                f'   bench busy on unreleased failed-attempt lease '
-                f'{holder[:8]}')
-            return False, busy_started, busy_retries, reason
-
-        # If the busy holder is the lease we captured from the prior
-        # section (which used `lease:claim` without `lease:release`),
-        # the next section's fresh `lease:claim` will deadlock until
-        # the 1-hour duration expires. Release it ourselves so the
-        # next attempt can claim cleanly. Also release if the holder
-        # is unknown to us (a prior section may have used
-        # `auto_release_on_session_end=true` which clears
-        # self.lease_token even though the bench still tracks the
-        # token until the device is freed): we own this run's session,
-        # so any zero-op busy lease left holding our devices is ours
-        # to release. We track each token in
-        # `failed_attempt_lease_tokens` so a foreign user's lease
-        # rejected against our claim isn't repeatedly fired at.
-        if holder and (holder == self.lease_token
-                       or not self._other_user_job_running()):
-            if self._release_ghost(
-                    holder, wait_s=self.FAILED_ATTEMPT_LEASE_RELEASE_WAIT_S):
-                if holder == self.lease_token:
-                    self.lease_token = None
-                if self.lease_state_file.exists():
-                    self.lease_state_file.unlink()
-                self._failed_attempt_lease_token_set().add(holder)
-                return True, busy_started, busy_retries, None
-
         now = time.monotonic()
         prior_holder = getattr(self, '_busy_retry_holder', None)
         other_user_active = self._other_user_job_running()
@@ -1140,68 +1029,15 @@ class Runner:
         match = re.search(r" is leased to '([^']+)'", text)
         return match.group(1) if match else None
 
-    def _failed_attempt_lease_token_set(self):
-        tokens = getattr(self, 'failed_attempt_lease_tokens', None)
-        if tokens is None:
-            tokens = set()
-            self.failed_attempt_lease_tokens = tokens
-        return tokens
-
-    def _is_failed_attempt_lease_token(self, token):
-        return bool(token and token in self._failed_attempt_lease_token_set())
-
-    def _release_failed_attempt_lease_token(self, token):
-        tokens = self._failed_attempt_lease_token_set()
-        tokens.add(token)
-        ok = self._release_ghost(
-            token, wait_s=self.FAILED_ATTEMPT_LEASE_RELEASE_WAIT_S)
-        if ok:
-            tokens.discard(token)
-        return ok
-
-    def _lease_released_in_attempt(self, extract_dir):
-        """Return True if the attempt consumed its lease token."""
-        ops = extract_dir / 'ops.jsonl'
-        if not ops.exists():
-            return False
-        try:
-            for line in ops.read_text(errors='replace').splitlines():
-                op = json.loads(line)
-                if (op.get('device') == 'lease'
-                        and op.get('verb') == 'release'
-                        and op.get('status') == 'ok'):
-                    self.lease_token = None
-                    if self.lease_state_file.exists():
-                        self.lease_state_file.unlink()
-                    return True
-        except Exception:
-            return False
-        return False
-
-    def _release_failed_attempt_lease(self, extract_dir, plan_text):
-        """Release a freshly claimed lease from a failed retry attempt."""
-        if 'lease:claim' not in plan_text or 'lease:release' in plan_text:
-            return
-        manifest = extract_dir / 'manifest.json'
-        if not manifest.exists():
-            return
-        try:
-            token = json.loads(manifest.read_text()).get('lease_token')
-        except Exception:
-            return
-        if token:
-            self._release_failed_attempt_lease_token(token)
-
     def run_all(self):
         """Iterate sections in order. Per test prints
         `[i/N] [HH:MM:SS] title (+Ts)` on success, or
         `[i/N] [HH:MM:SS] title FAIL|SKIP (+Ts)` otherwise. T is the
         actual elapsed. A green `PASS` is printed once at the very end
         when no section failed. Halts on first
-        FAIL after dumping the per-test log + any errors.log. Lease
-        lifecycle is the mission's responsibility (sections write their
-        own lease:claim / lease:resume / lease:release ops); run.py
-        only threads the issued token through `{{LEASE_TOKEN}}`. Sends
+        FAIL after dumping the per-test log + any errors.log. A
+        section's `Capture:` block stores `{{NAME}}` variables for use
+        in later sections. Sends
         DELETE /outputs/<digest> on PASS to cleanup the dashboard.
         Returns 0 on full pass."""
         print(f'workdir: {self.workdir}')
@@ -1274,7 +1110,8 @@ class Runner:
             skipped = 0
             for i, (title, build, artifacts_text, test, verify,
                     local_test, inputs, expect,
-                    test_max_s, foreach_text) in enumerate(sections, 1):
+                    test_max_s, foreach_text, capture_text) in enumerate(
+                        sections, 1):
                 slug = re.sub(r'[^a-z0-9]+', '_', title.lower()).strip('_')
                 section_dir = self.workdir / slug
                 section_dir.mkdir()
@@ -1370,7 +1207,7 @@ class Runner:
                     if fail_log is not None:
                         dump(fail_log, fail_extract)
                     return 1
-                self.capture_lease_token(fail_extract, test)
+                self.apply_captures(capture_text, fail_extract)
                 self.delete_outputs(digest)
                 if not pass_or_timeout_excluding_wait(
                         i, title, started, budget, test_max_s, el(),
@@ -1389,11 +1226,6 @@ class Runner:
                 # FAIL paths leave it on disk for post-mortem.
                 try:
                     shutil.rmtree(self.workdir)
-                except OSError:
-                    pass
-                try:
-                    if self.lease_state_file.exists():
-                        self.lease_state_file.unlink()
                 except OSError:
                     pass
 

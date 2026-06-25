@@ -283,12 +283,18 @@ mp135.evb:uart_expect sentinel="# " timeout_ms=15000
 mp135.evb:uart_write data="dmesg -n 1 2>/dev/null; true\r"
 mp135.evb:uart_expect sentinel="# " timeout_ms=3000
 delay ms=5000
-mp135.evb:uart_write data="killall -q -9 stream_ws_prbs_stream; ip -4 addr show dev eth0; ip route; uname -a\r"
-mp135.evb:uart_expect sentinel="172.25.0.115" timeout_ms=5000
+mp135.evb:uart_write data="killall -q -9 stream_ws_prbs_stream; ip -4 -o addr show dev eth0; ip route; uname -a\r"
+mp135.evb:uart_expect sentinel="inet 172.25.0." timeout_ms=5000
 mp135.evb:uart_close
 ssh.evb:put data=@stream_ws_prbs_stream path="/tmp/stream_ws_prbs_stream" timeout_ms=20000
 ssh.evb:exec command="chmod +x /tmp/stream_ws_prbs_stream; killall -q -9 stream_ws_prbs_stream; /tmp/stream_ws_prbs_stream --port 8765 --bytes 134217728 --seed 0x12345678 --frame-bytes 131072 >/tmp/stream_ws_prbs_stream.log 2>&1 & echo stream_ws_started=$!" timeout_ms=10000
 mark tag=stream_ws_boot_started
+```
+
+Capture:
+
+```
+BOARD_IP = mp135.uart /inet (172\.25\.0\.\d+)/
 ```
 
 Verify:
@@ -305,7 +311,7 @@ def check(extract_dir):
     return ("Copying 1 blocks" in uart and
             "DDR addr 0xC4000000" in uart and
             "Linux version" in uart and
-            "172.25.0.115" in uart and
+            "inet 172.25.0." in uart and
             Verification.op_succeeded(ops, "ssh.evb", "put") and
             Verification.op_succeeded(ops, "ssh.evb", "exec") and
             "stream_ws_started=" in ssh)
@@ -323,7 +329,7 @@ Build: nothing required.
 Test (max 4 min):
 
 ```
-ws.any:recv url="ws://172.25.0.115:8765/" bytes=134217728 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 min_rate_Bps=11625000 timeout_ms=180000
+ws.any:recv url="ws://{{BOARD_IP}}:8765/" bytes=134217728 expect_sha256="ecc7e89ae3b56a33d68ba75ba15639498192d90f0a21bc63ccd88830cb148b7b" expect_crc32=0xf48e5cf5 min_rate_Bps=11625000 timeout_ms=180000
 mark tag=stream_ws_128m_93mbps_integrity
 ```
 
