@@ -5,11 +5,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=32U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_128b.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=32U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir1x1_128b.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -17,7 +18,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_1x1/sport_bidir_1x1.bin
-adsp2156/sport_fpga_bidir/build/bidir1x1_128b.ldr
+adsp2156/sport/build/bidir1x1_128b.ldr
 ```
 
 Test (max 6 min):
@@ -66,10 +67,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -107,11 +150,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=262144U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_1mib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=262144U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir1x1_1mib.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 262144 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 262144 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -119,7 +163,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_1x1/sport_bidir_1x1.bin
-adsp2156/sport_fpga_bidir/build/bidir1x1_1mib.ldr
+adsp2156/sport/build/bidir1x1_1mib.ldr
 ```
 
 Test (max 6 min):
@@ -168,10 +212,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -209,11 +295,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=16777216U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_64mib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=16777216U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir1x1_64mib.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 16777216 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 16777216 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -221,7 +308,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_1x1/sport_bidir_1x1.bin
-adsp2156/sport_fpga_bidir/build/bidir1x1_64mib.ldr
+adsp2156/sport/build/bidir1x1_64mib.ldr
 ```
 
 Test (max 8 min):
@@ -270,10 +357,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -311,11 +440,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=67108864U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_256mib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=67108864U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir1x1_256mib.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 67108864 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 67108864 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -323,7 +453,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_1x1/sport_bidir_1x1.bin
-adsp2156/sport_fpga_bidir/build/bidir1x1_256mib.ldr
+adsp2156/sport/build/bidir1x1_256mib.ldr
 ```
 
 Test (max 8 min):
@@ -372,10 +502,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -417,11 +589,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=134217728U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_512mib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=134217728U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir1x1_512mib.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 134217728 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 134217728 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -429,7 +602,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_1x1/sport_bidir_1x1.bin
-adsp2156/sport_fpga_bidir/build/bidir1x1_512mib.ldr
+adsp2156/sport/build/bidir1x1_512mib.ldr
 ```
 
 Test (max 10 min):
@@ -478,10 +651,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -523,11 +738,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=268435456U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_1gib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=268435456U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir1x1_1gib.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 268435456 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 268435456 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -535,7 +751,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_1x1/sport_bidir_1x1.bin
-adsp2156/sport_fpga_bidir/build/bidir1x1_1gib.ldr
+adsp2156/sport/build/bidir1x1_1gib.ldr
 ```
 
 Test (max 14 min):
@@ -584,10 +800,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -629,11 +887,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=536870912U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_2gib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=536870912U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir1x1_2gib.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -641,7 +900,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_1x1/sport_bidir_1x1.bin
-adsp2156/sport_fpga_bidir/build/bidir1x1_2gib.ldr
+adsp2156/sport/build/bidir1x1_2gib.ldr
 ```
 
 Test (max 18 min):
@@ -690,10 +949,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -735,11 +1036,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=1073741824U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_4gib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=1073741824U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir1x1_4gib.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 1073741824 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 1073741824 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -747,7 +1049,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_1x1/sport_bidir_1x1.bin
-adsp2156/sport_fpga_bidir/build/bidir1x1_4gib.ldr
+adsp2156/sport/build/bidir1x1_4gib.ldr
 ```
 
 Test (max 18 min):
@@ -796,10 +1098,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
