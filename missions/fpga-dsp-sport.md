@@ -4,14 +4,14 @@ Directions and required per-lane SPORT bit clocks:
 
 | Direction | FPGA-originated lanes | DSP-originated lanes | OK? |
 | --------- | --------------------: | -------------------: | --- |
-| D-F       |                     - |             56+ Mbps | x   |
-| DD-FF     |                     - |             56+ Mbps | x   |
-| DDDD-FFFF |                     - |             56+ Mbps | x   |
-| F-D       |              56+ Mbps |                    - | x   |
-| FF-DD     |              56+ Mbps |                    - | x   |
-| FFFF-DDDD |              56+ Mbps |                    - | x   |
-| FD-DF     |              56+ Mbps |             56+ Mbps | x   |
-| FFDD-DDFF |              56+ Mbps |             56+ Mbps | x   |
+| D-F       |                     - |           59.375 MHz | x   |
+| DD-FF     |                     - |            57.29 MHz | x   |
+| DDDD-FFFF |                     - |            57.29 MHz | x   |
+| F-D       |            59.375 MHz |                    - | x   |
+| FF-DD     |             57.29 MHz |                    - | x   |
+| FFFF-DDDD |             57.29 MHz |                    - | x   |
+| FD-DF     |            59.375 MHz |           59.375 MHz | x   |
+| FFDD-DDFF |             57.29 MHz |            57.29 MHz | x   |
 
 Every lane in every direction runs from the one DSP-programmed SPORT
 clock, configured at 59.375 MHz (CGU MSEL=57, 95% of the 62.5 MHz
@@ -42,19 +42,20 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-mkdir -p fpga/build/sport_rx1
-cd fpga && yosys -q -p "read_verilog verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 1 -set MIN_DONE_WORDS 536870912 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx1/s.json --pcf verilog/sport_rx1_hx8k.pcf --asc build/sport_rx1/s.asc --freq 65 --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx1/s.asc build/sport_rx1/sport_rx1.bin
-make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=1U -DN_WORDS=536870912U -DDATA_INDEP_FS=1 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=59375000U"
-cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_2gib.ldr
+make -C fpga sport-verilog
+mkdir -p fpga/build/sport_bidir_1x1
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set FROM_DSP_EN 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=0U -DTX_N=1U -DTOTAL_WORDS=536870912U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/dma_2gib.ldr
 ```
 
 Artifacts:
 
 ```
 fpga/build/blinky/hx8k/blinky.bin
-fpga/build/sport_rx1/sport_rx1.bin
-adsp2156/sport_fpga_rx/build/dma_2gib.ldr
+fpga/build/sport_bidir_1x1/sport_bidir_1x1.bin
+adsp2156/sport/build/dma_2gib.ldr
 ```
 
 Test (max 18 min):
@@ -62,7 +63,7 @@ Test (max 18 min):
 ```
 delay ms=3000
 dsp:reset
-fpga.hx8k:program bin=@sport_rx1.bin
+fpga.hx8k:program bin=@sport_bidir_1x1.bin
 fpga.hx8k:uart_open
 dsp:uart_open
 dsp:boot ldr=@dma_2gib.ldr timeout_ms=15000
@@ -613,10 +614,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'fpga.uart')
@@ -649,19 +692,20 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-mkdir -p fpga/build/sport_rx2
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 2 -set MIN_DONE_WORDS 536870912 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx2/s.json --pcf verilog/sport_rx_hx8k.pcf --asc build/sport_rx2/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx2/s.asc build/sport_rx2/sport_rx2.bin
-make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=2U -DN_WORDS=536870976U -DDATA_INDEP_FS=0 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=59375000U"
-cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_2gib.ldr
+make -C fpga sport-verilog
+mkdir -p fpga/build/sport_bidir_2x2
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 2 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set FROM_DSP_EN 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_2x2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_2x2/s.json --pcf verilog/sport_bidir_2x2_hx8k.pcf --asc build/sport_bidir_2x2/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_2x2/s.asc build/sport_bidir_2x2/sport_bidir_2x2.bin
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=0U -DTX_N=2U -DTOTAL_WORDS=536870976U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/dma_2gib.ldr
 ```
 
 Artifacts:
 
 ```
 fpga/build/blinky/hx8k/blinky.bin
-fpga/build/sport_rx2/sport_rx2.bin
-adsp2156/sport_fpga_rx/build/dma_2gib.ldr
+fpga/build/sport_bidir_2x2/sport_bidir_2x2.bin
+adsp2156/sport/build/dma_2gib.ldr
 ```
 
 Test (max 21 min):
@@ -669,7 +713,7 @@ Test (max 21 min):
 ```
 delay ms=3000
 dsp:reset
-fpga.hx8k:program bin=@sport_rx2.bin
+fpga.hx8k:program bin=@sport_bidir_2x2.bin
 fpga.hx8k:uart_open
 dsp:uart_open
 dsp:boot ldr=@dma_2gib.ldr timeout_ms=15000
@@ -709,10 +753,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'fpga.uart')
@@ -741,19 +827,20 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-mkdir -p fpga/build/sport_rx4
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_rx.v verilog/uart_tx.v; chparam -set N 4 -set MIN_DONE_WORDS 536870912 -set RESYNC 1 sport_rx; synth_ice40 -top sport_rx -json build/sport_rx4/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_rx4/s.json --pcf verilog/sport_rx4_hx8k.pcf --asc build/sport_rx4/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_rx4/s.asc build/sport_rx4/sport_rx4.bin
-make -C adsp2156/sport_fpga_rx clean
-make -j -C adsp2156/sport_fpga_rx CFLAGS_EXTRA="-DNCH=4U -DN_WORDS=536870976U -DDATA_INDEP_FS=0 -DHALF_WORDS=65536U -DSPORT_SCLK_HZ=59375000U"
-cp adsp2156/sport_fpga_rx/build/main.ldr adsp2156/sport_fpga_rx/build/dma_2gib.ldr
+make -C fpga sport-verilog
+mkdir -p fpga/build/sport_bidir_4xrx
+cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 4 -set SYNC_TX 1 -set NOPLL 1 -set FROM_DSP_EN 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_4xrx/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_4xrx/s.json --pcf verilog/sport_bidir_4xrx_hx8k.pcf --asc build/sport_bidir_4xrx/s.asc --freq 75 --timing-allow-fail --seed 20 -q --pcf-allow-unconstrained && icepack build/sport_bidir_4xrx/s.asc build/sport_bidir_4xrx/sport_bidir_4xrx.bin
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=0U -DTX_N=4U -DTOTAL_WORDS=536870976U -DTX_FIRST -DSPORT_SCLK_HZ=59375000U -DSPORT_CLKDIV=0U"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/dma_2gib.ldr
 ```
 
 Artifacts:
 
 ```
 fpga/build/blinky/hx8k/blinky.bin
-fpga/build/sport_rx4/sport_rx4.bin
-adsp2156/sport_fpga_rx/build/dma_2gib.ldr
+fpga/build/sport_bidir_4xrx/sport_bidir_4xrx.bin
+adsp2156/sport/build/dma_2gib.ldr
 ```
 
 Test (max 21 min):
@@ -761,7 +848,7 @@ Test (max 21 min):
 ```
 delay ms=3000
 dsp:reset
-fpga.hx8k:program bin=@sport_rx4.bin
+fpga.hx8k:program bin=@sport_bidir_4xrx.bin
 fpga.hx8k:uart_open
 dsp:uart_open
 dsp:boot ldr=@dma_2gib.ldr timeout_ms=15000
@@ -801,10 +888,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     text = Verification.load_stream_text(extract_dir, 'fpga.uart')
@@ -833,11 +962,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=536870912U -DTX_FIRST"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_2gib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=536870912U -DTX_FIRST"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir1x1_2gib.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -845,7 +975,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_1x1/sport_bidir_1x1.bin
-adsp2156/sport_fpga_bidir/build/bidir1x1_2gib.ldr
+adsp2156/sport/build/bidir1x1_2gib.ldr
 ```
 
 Test (max 18 min):
@@ -894,10 +1024,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -939,11 +1111,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=2U -DTX_N=2U -DTOTAL_WORDS=536870912U -DTX_FIRST"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir2x2_2gib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=2U -DTX_N=2U -DTOTAL_WORDS=536870912U -DTX_FIRST"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir2x2_2gib.ldr
 mkdir -p fpga/build/sport_bidir_2x2
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 2 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_2x2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_2x2/s.json --pcf verilog/sport_bidir_2x2_hx8k.pcf --asc build/sport_bidir_2x2/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_2x2/s.asc build/sport_bidir_2x2/sport_bidir_2x2.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 2 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_2x2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_2x2/s.json --pcf verilog/sport_bidir_2x2_hx8k.pcf --asc build/sport_bidir_2x2/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_2x2/s.asc build/sport_bidir_2x2/sport_bidir_2x2.bin
 ```
 
 Artifacts:
@@ -951,7 +1124,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_2x2/sport_bidir_2x2.bin
-adsp2156/sport_fpga_bidir/build/bidir2x2_2gib.ldr
+adsp2156/sport/build/bidir2x2_2gib.ldr
 ```
 
 Test (max 18 min):
@@ -1000,10 +1173,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -1045,11 +1260,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=4U -DTX_N=2U -DTOTAL_WORDS=536870912U -DTX_NO_REFILL"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/ffff2gib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=4U -DTX_N=2U -DTOTAL_WORDS=536870912U -DTX_NO_REFILL"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/ffff2gib.ldr
 mkdir -p fpga/build/sport_bidir_4x
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 4 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set SHARE_PAIRS 1 -set FROM_DSP_EN 0 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_4x/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_4x/s.json --pcf verilog/sport_bidir_4x_hx8k.pcf --asc build/sport_bidir_4x/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_4x/s.asc build/sport_bidir_4x/sport_bidir_4x.bin
+cd fpga && yosys -q -p "read_verilog -D SHARE_COPIES verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 4 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set SHARE_PAIRS 1 -set FROM_DSP_EN 0 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_4x/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_4x/s.json --pcf verilog/sport_bidir_4x_hx8k.pcf --asc build/sport_bidir_4x/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_4x/s.asc build/sport_bidir_4x/sport_bidir_4x.bin
 ```
 
 Artifacts:
@@ -1057,7 +1273,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_4x/sport_bidir_4x.bin
-adsp2156/sport_fpga_bidir/build/ffff2gib.ldr
+adsp2156/sport/build/ffff2gib.ldr
 ```
 
 Test (max 20 min):
@@ -1105,10 +1321,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -1128,108 +1386,18 @@ def check(extract_dir):
     raise HardFail(f'FFFF-DDDD: errors={errs} ov={ov} words={words}')
 ```
 
-#### (stale open-loop design, superseded by the pair-shared recipe) FFFF-DDDD 4GiB
-
-Build:
-
-```
-make -C fpga build/blinky/hx8k/blinky.bin
-mkdir -p fpga/build/sport4x
-cd fpga && yosys -q -p "read_verilog -D SPORT_TX_POSEDGE_OUT verilog/sport_tx_from_dsp_clk.v; chparam -set N 4 sport_tx_from_dsp_clk; synth_ice40 -top sport_tx_from_dsp_clk -json build/sport4x/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport4x/s.json --pcf verilog/sport_tx_prbs_multi_4x_hx8k.pcf --asc build/sport4x/s.asc --freq 40 -q --pcf-allow-unconstrained && icepack build/sport4x/s.asc build/sport4x/sport4x.bin
-make -C adsp2156/sport_fpga_4x clean
-make -j -C adsp2156/sport_fpga_4x CFLAGS_EXTRA="-DTOTAL_WORDS=1073741824U"
-cp adsp2156/sport_fpga_4x/build/main.ldr adsp2156/sport_fpga_4x/build/m4x_4gib.ldr
-```
-
-Artifacts:
-
-```
-fpga/build/blinky/hx8k/blinky.bin
-fpga/build/sport4x/sport4x.bin
-adsp2156/sport_fpga_4x/build/m4x_4gib.ldr
-```
-
-Test (max 28 min):
-
-```
-delay ms=3000
-dsp:reset
-fpga.hx8k:program bin=@blinky.bin
-fpga.hx8k:program bin=@sport4x.bin
-dsp:uart_open
-dsp:boot ldr=@m4x_4gib.ldr timeout_ms=15000
-dsp:uart_expect sentinel="sport_4x agg_bytes=" timeout_ms=1410000
-delay ms=200
-scope:capture chans="C2"
-dsp:uart_close
-fpga.hx8k:program bin=@blinky.bin
-mark tag=ffff_dddd_4gib
-```
-
-Verify:
-
-```
-def _corruption_gate(extract_dir):
-    # Any received-data error is a deterministic FAIL (jk 2026-06-11):
-    # a corrupted word is a real defect, never a bench transient, so
-    # retrying would only hide it. Scans the raw streams so it fires
-    # even when the op timed out before the final report line.
-    import sys
-    for stream, pats in (
-            ('dsp.uart', (r'rx h=\d+ e=(\d+)', r'rx_errors=(\d+)')),
-            ('fpga.uart', (r'rx w=[0-9a-f]+ e=([0-9a-f]+)',
-                           r'errors_hex=([0-9a-f]+)', r'(ERR) w='))):
-        try:
-            txt = Verification.load_stream_text(extract_dir, stream)
-        except Exception:
-            continue
-        for pat in pats:
-            for m in re.finditer(pat, txt):
-                v = m.group(1)
-                if v == 'ERR' or int(v, 16) != 0:
-                    sys.stderr.write('\033[1;31mDATA CORRUPTION\033[0m '
-                                     + stream + ': ' + m.group(0) + '\n')
-                    raise HardFail('data corruption: '
-                                   + stream + ' ' + m.group(0))
-
-
-def check(extract_dir):
-    import sys
-    Verification.dsp_fault_gate(extract_dir)
-    _corruption_gate(extract_dir)
-    if not Verification.manifest_clean(extract_dir):
-        return False
-    text = Verification.load_stream_text(extract_dir, 'dsp.uart')
-    m = re.search(r'sport_4x agg_bytes=(\d+) per_ch_bytes=(\d+) errors0=(\d+) errors1=(\d+) errors2=(\d+) errors3=(\d+).*? timeouts=(\d+) overruns=(\d+) (PASS|FAIL)', text)
-    if not m:
-        raise HardFail('no sport_4x report')
-    agg, pc, e0, e1, e2, e3, to, ov = (int(x) for x in m.groups()[:8])
-    ops = Verification.load_ops(extract_dir)
-    boots = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'boot']
-    expects = [op for op in ops if op.get('device') == 'dsp' and op.get('verb') == 'uart_expect']
-    if not boots or not expects:
-        return False
-    elapsed = expects[0]['t_end'] - boots[0]['t_start']
-    rate = int(pc * 8 / elapsed) if elapsed > 0 else 0
-    sys.stderr.write(f'{rate/1e6:.1f}Mbps '); sys.stderr.flush()
-    if rate < 56250000:
-        raise HardFail(f'rate {rate} < 30000000')
-    if (pc >= 4294967296 and e0 == e1 == e2 == e3 == 0 and to == 0 and ov == 0 and m.group(9) == 'PASS'):
-        return True
-    raise HardFail(f'FAIL: per_ch={pc} errors=({e0},{e1},{e2},{e3}) timeouts={to}')
-```
-
 ### FD-DF 2GiB
 
 Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=536870912U -DTX_FIRST"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir1x1_2gib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=1U -DTX_N=1U -DTOTAL_WORDS=536870912U -DTX_FIRST"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir1x1_2gib.ldr
 mkdir -p fpga/build/sport_bidir_1x1
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 1 -set RX_FROM_DSP_N 1 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_1x1/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_1x1/s.json --pcf verilog/sport_bidir_1x1_hx8k.pcf --asc build/sport_bidir_1x1/s.asc --freq 65 -q --pcf-allow-unconstrained && icepack build/sport_bidir_1x1/s.asc build/sport_bidir_1x1/sport_bidir_1x1.bin
 ```
 
 Artifacts:
@@ -1237,7 +1405,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_1x1/sport_bidir_1x1.bin
-adsp2156/sport_fpga_bidir/build/bidir1x1_2gib.ldr
+adsp2156/sport/build/bidir1x1_2gib.ldr
 ```
 
 Test (max 18 min):
@@ -1286,10 +1454,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -1331,11 +1541,12 @@ Build:
 
 ```
 make -C fpga build/blinky/hx8k/blinky.bin
-make -C adsp2156/sport_fpga_bidir clean
-make -j -C adsp2156/sport_fpga_bidir CFLAGS_EXTRA="-DRX_N=2U -DTX_N=2U -DTOTAL_WORDS=536870912U -DTX_FIRST"
-cp adsp2156/sport_fpga_bidir/build/main.ldr adsp2156/sport_fpga_bidir/build/bidir2x2_2gib.ldr
+make -C fpga sport-verilog
+make -C adsp2156/sport clean
+make -j -C adsp2156/sport CFLAGS_EXTRA="-DRX_N=2U -DTX_N=2U -DTOTAL_WORDS=536870912U -DTX_FIRST"
+cp adsp2156/sport/build/main.ldr adsp2156/sport/build/bidir2x2_2gib.ldr
 mkdir -p fpga/build/sport_bidir_2x2
-cd fpga && yosys -q -p "read_verilog -D EYE_DELAY verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 2 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir -json build/sport_bidir_2x2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_2x2/s.json --pcf verilog/sport_bidir_2x2_hx8k.pcf --asc build/sport_bidir_2x2/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_2x2/s.asc build/sport_bidir_2x2/sport_bidir_2x2.bin
+cd fpga && yosys -q -p "read_verilog verilog/sport_tx_sync_nopll.v verilog/sport_tx_prbs_ser.v verilog/sport_rx.v verilog/sport_bidir.v verilog/uart_tx.v; chparam -set TX_TO_DSP_N 2 -set RX_FROM_DSP_N 2 -set SYNC_TX 1 -set NOPLL 1 -set REPORT_LANE0 0 -set MIN_DONE_WORDS 536870912 sport_bidir; synth_ice40 -top sport_bidir; setattr -unset src; write_json build/sport_bidir_2x2/s.json" && nextpnr-ice40 --hx8k --package ct256 --json build/sport_bidir_2x2/s.json --pcf verilog/sport_bidir_2x2_hx8k.pcf --asc build/sport_bidir_2x2/s.asc --freq 62 --seed 9 -q --pcf-allow-unconstrained && icepack build/sport_bidir_2x2/s.asc build/sport_bidir_2x2/sport_bidir_2x2.bin
 ```
 
 Artifacts:
@@ -1343,7 +1554,7 @@ Artifacts:
 ```
 fpga/build/blinky/hx8k/blinky.bin
 fpga/build/sport_bidir_2x2/sport_bidir_2x2.bin
-adsp2156/sport_fpga_bidir/build/bidir2x2_2gib.ldr
+adsp2156/sport/build/bidir2x2_2gib.ldr
 ```
 
 Test (max 18 min):
@@ -1392,10 +1603,52 @@ def _corruption_gate(extract_dir):
                                    + stream + ' ' + m.group(0))
 
 
+def _liveness_gate(extract_dir):
+    # jk: HARD fail (no retry) if any heartbeat is >5 s late -- a >5 s GAP in the
+    # live heartbeat stream while the transfer runs. Heartbeats (tx h=, rx h=,
+    # rx w=) fire every 8 MiB, so a sub-8 MiB transfer emits none and is fine as
+    # long as it completed (final report present); no heartbeats AND no report is
+    # a dead link.
+    import os
+    try:
+        _tl = open(os.path.join(extract_dir, 'timeline.log'),
+                   encoding='ascii', errors='replace').read().splitlines()
+    except OSError:
+        raise HardFail('liveness: no timeline.log to verify heartbeats')
+    _hb = re.compile(r'(?:tx h=\d+|rx h=\d+|rx w=[0-9a-fA-F]+)')
+    _rep = re.compile(r'sport_rx lanes=|sport_bidir rx_lanes=')
+    _row = re.compile(r'^\S+\s+([0-9]+\.[0-9]+)\s+>\s+STREAM\s+(?:dsp|fpga)\.uart')
+    _hbs = []
+    _rt = None
+    for _ln in _tl:
+        _m = _row.match(_ln)
+        if not _m:
+            continue
+        _t = float(_m.group(1))
+        if _hb.search(_ln):
+            _hbs.append(_t)
+        if _rt is None and _rep.search(_ln):
+            _rt = _t
+    _hbs.sort()
+    for _a, _b in zip(_hbs, _hbs[1:]):
+        if _b - _a > 5.0:
+            raise HardFail('liveness: heartbeat gap %.1fs > 5.0s (stall near t=%.1fs)'
+                           % (_b - _a, _a))
+    if _hbs:
+        if _rt is None:
+            raise HardFail('liveness: heartbeats stopped with no completion report -- stalled')
+        if _rt - _hbs[-1] > 5.0:
+            raise HardFail('liveness: %.1fs from last heartbeat to report > 5.0s -- stalled near end'
+                           % (_rt - _hbs[-1]))
+    elif _rt is None:
+        raise HardFail('liveness: no heartbeats and no completion report -- link never came alive')
+
+
 def check(extract_dir):
     import sys
     Verification.dsp_fault_gate(extract_dir)
     _corruption_gate(extract_dir)
+    _liveness_gate(extract_dir)
     if not Verification.manifest_clean(extract_dir):
         return False
     dtxt = Verification.load_stream_text(extract_dir, 'dsp.uart')
@@ -1431,102 +1684,163 @@ def check(extract_dir):
     raise HardFail(f'FAIL: rx_words={rx_words} rx_errors={rx_errors} slips={slips}')
 ```
 
-# Plan: unified sport firmware + striped PRBS + cleanup (one re-prove pass)
+## Cleanup notes (agent1 code review, 2026-06-09 — no changes applied yet)
 
-Goal: integrate three workstreams so the expensive part — re-proving all
-8 directions at 2 GiB/lane — happens ONCE, at the end, against one new
-codebase instead of three times against moving targets.
+Review of all fpga/verilog SPORT RTL and adsp2156 SPORT firmware, prompted by
+the suspicion that the code is more complicated than simple PRBS shifting
+needs. Verdict: the *live* data paths are sound (ping-pong DMA TX/RX is the
+documented fix for polled underruns; the no-PLL bidir transmitter is already
+minimal), but roughly half the source volume is dead experiments, copy-paste,
+and diagnostics with no build. FPGA cleanups are gated on placement risk:
+proven bitstreams are placement-sensitive, so each item is tagged
+**safe** (not elaborated into any mission netlist; verify by rebuilding each
+proven config and bin-diffing) or **re-place** (changes a proven netlist;
+needs a scheduled re-prove pass at 2 GB — per-direction proofs, not the small
+debug cases).
 
-Workstreams folded together:
-  A. One-PRBS-across-lanes (striping, WORD-round-robin): a single
-     PRBS-31 sequence dealt word-by-word across N lanes, so N lanes
-     carry one logical stream at N x lane rate. Catches lane
-     shorts/swaps/aliasing that today's identical-pattern lanes cannot.
-     Aggregate rate numbers become true single-stream throughput.
-  B. Firmware merge: one adsp2156/sport app replacing sport_fpga_rx,
-     sport_fpga_tx, sport_fpga_bidir. Every direction = a
-     (TX_N, RX_N, flags) build point of the same source.
-  C. Cleanup notes from missions/fpga-dsp-sport.md (the "## Cleanup
-     notes" section): safe-tier deletions, the done_aclk latent bug,
-     helper dedup, dead-app removal.
+#### Timeout sizing rule (applied 2026-06-09)
 
-Why together: A changes the on-wire pattern (invalidates proofs), B
-changes the binaries (invalidates proofs), C's consolidation tier also
-rebuilds binaries. Any one alone forces the same 8-direction re-prove.
+transfer_s = N_WORDS * 32 / bit_clk per lane. uart_expect timeout_ms >=
+1.25 * transfer + 30 s. Case budget >= build (~40 s) + 2 * (bench overhead
+~30 s + 1.15 * transfer) + one 30 s retry backoff, rounded up to whole
+minutes — one transient bench flake must not fail a 2 GB proof. (Observed
+flake: fpga.uart emitted ~200 garbage bytes during a 2.3 s dsp:reset and the
+FPGA never reported; retry passed cleanly.)
 
----
+#### FPGA (fpga/verilog) — delete first, all "safe" tier (~450 lines)
 
-## Phase 1 — pure deletions (safe tier, ~30 min, no re-prove needed)
-From the cleanup notes, items with zero behavior impact on missions:
-- FPGA: sport_tx_sync.v, sport_tx_prbs.v, sport_tx_prbs_multi.v (+ their
-  orphan pcfs), sport_tx_from_dsp_clk_1 wrapper, dead DIAG forest except
-  DIAG_WORDS + DIAG_STATE (keep the tracer infra), literate-source
-  Makefile clobber rule fix.
-- DSP: sport_fpga_bidir_2x2/, sport_fpga_rx4/, sport_fpga_lb/,
-  sport_install_external_loopback, dma_oneshot_config/dma_done,
-  -DTX_FIRST warts in mission files, dead knobs (VOLATILE_TXBUF etc).
-- Gate: bitstream/ldr bin-diff for the three LIVE apps before/after
-  (deletions must not change live binaries). If bin-identical: no bench
-  time needed. Run one smoke case (D-F 1 MiB) anyway.
+- `sport_tx_sync.v`: dead + violates the no-PLL criterion. Not on any mission
+  read_verilog line; only referenced by the never-elaborated `withpll` branch
+  in sport_bidir.v:51-61 (mission always sets NOPLL=1). Its PH_PATTERN path
+  also rotted (transmits a counter, lfsr regs feed nothing). Delete file +
+  `withpll` branch + `SYNC_PH` param + unused `s_ad0/s_aclk/s_afs` wires.
+- `sport_tx_prbs.v`: dead, PLL-based, superseded. Its namesake pcf
+  (sport_tx_prbs_hx8k.pcf) no longer even matches its ports — the pcf now
+  serves sport_tx_from_dsp_clk. Delete file + `BOARDS_sport_tx_prbs` Makefile
+  row.
+- `sport_tx_prbs_multi.v`: dead, PLL-based. The "multi" pcfs are used with
+  sport_tx_from_dsp_clk as top. Delete.
+- `sport_tx_prbs_ser.v`: read by both bidir recipes but never instantiated
+  (SYNC_TX=1 makes the `free_tx` branch dead); yosys drops it at hierarchy.
+  Deleting it requires touching the two mission build lines — do as one
+  commit with bin-diff check, or leave (costs nothing at synth).
+- `sport_rx.v` `RESYNC` parameter: declared/forwarded at 4 sites, set to 1 by
+  sport_bidir.v:82, but NO logic reads it — so proven bitstreams contain no
+  resync (criteria factually met) while the source *claims* a forbidden
+  mechanism. Delete the parameter at all 4 sites (safe: drives nothing).
+- `sport_tx_from_dsp_clk.v`: `sport_tx_from_dsp_clk_1` wrapper (143-158)
+  never used as a top — delete (safe). `SPORT_TX_FORCE_ZERO/ONE` ifdefs are
+  dead but their removal is re-place tier.
+- Stale literate sources can clobber proven RTL: fpga/Makefile rule
+  `verilog/%.v: src/%.nw` + outdated `src/sport_rx.nw` / `src/sport_tx_prbs.nw`
+  (2026-05-22, pre-mission) will silently regenerate and REPLACE the proven
+  667-line sport_rx.v (and two pcfs) if the .nw ever looks newer. Delete the
+  stale .nw files (or re-tangle them from the current .v). Safe; removes a
+  real hazard.
 
-## Phase 2 — the unified app: adsp2156/sport (design + build, no bench)
-One main.c, parameterized:
-  TX_N      0..4   DSP->FPGA lanes (SPORT4A,0A,5A,1A; clock masters)
-  RX_N      0..4   FPGA->DSP lanes (SPORT5B,1B,4B,0B; pair-shared clk/fs)
-  TX_NO_REFILL     TX rings free-run as pure clock/FS masters
-  TOTAL_WORDS, HALF sizes, SCLK
-F-D MIGRATES onto the source-synchronous to_dsp chain here (bidir-style,
-~62 Mbps vs the old open-loop 31 Mbps); the open-loop clocking path
-retires with sport_fpga_tx.
-Carries over (the proven recipe, single copy of each):
-  - RUN choreography: low 60 ms at boot, high 500 us before enables,
-    trailing 1 ms clock after the last word, low at end.
-  - Table-driven PRBS (prbs8_init/prbs31_word_fast) for fills AND checks.
-  - tx h= heartbeats (from sport_fpga_rx) on the TX side, now for ALL
-    directions; per-lane error fields e0..e3 in the report (from bidir).
-  - Expect-chain generator script: emits the per-heartbeat uart_expect
-    blocks (hundreds of literal lines per large case) when mission
-    cases are (re)generated.
-  - Stream pad (+64 words) so the receiver's last counted word flushes.
-  - Wrap-flag DMA tracking.
-Consolidations from cleanup notes land here for free: single put_str/
-put_u32/put_u64, single prbs implementation, dma_which_half/
-dma_still_on_half into common/dma.c. sport_fpga_2x/4x die unreferenced.
-FPGA side: sport_rx.v + sport_bidir.v stay, with:
-  - done_aclk clear bug fixed (cleanup notes, "REAL BUG" item).
-  - RESYNC dangling-param note resolved (it is now real logic; update note).
-  - PRBS step dedup into a `prbs31_next` include/function.
-One report format for every direction (superset line), so all Verify
-blocks share one regex.
+#### FPGA — re-place tier (schedule with a 2 GB re-prove pass)
 
-## Phase 3 — striping (A) on top of the unified app
-- TX fill: one sequential PRBS pass dealt round-robin to lane buffers
-  (replaces SHARED_TXBUF identical-fill).
-- FPGA RX chan: parameter STRIDE_N; expected-LFSR does its 32-bit
-  advance per word plus a constant 32*(N-1)-bit jump at word boundary
-  (precomputed XOR network; the jump-by-k map is linear).
-- FPGA nopll TX: same boundary jump, per-lane start offset = 32*k bits.
-- DSP RX check: per-lane LFSR state with table-stepped stride jumps.
-- N=1 degenerates to today's behavior exactly (jump = identity), so
-  D-F/F-D are regression-safe by construction.
-- Verify lines gain stripe=N so a misconfigured build cannot
-  silently pass as striped.
+- `sport_rx.v` DIAG forest: only `DIAG_WORDS` is used (D-F 10 words case).
+  Dead defines: DIAG_RAW, DIAG_FORCE_REPORT, DIAG_FORCE_LIVE, DIAG_FIRST,
+  DIAG_MISMATCH, DIAG_INDEX, DIAG_WINDOW_START, SAMPLE_POS/NEG, NO_IOREG —
+  plus 13 constant-zero 32-bit ports per lane (first_rx/first_exp/first_idx,
+  diag0..9) threaded through arrays and instantiations. ~200 of 667 lines.
+  Netlist should be bit-identical after strip (all ifdef-d out or
+  constant-trimmed) — gate on bin-diff of every proven config.
+- REAL BUG, sport_rx.v:113: the only `done_aclk` clear is inside
+  `if (!run && !done_aclk && !started)` — unreachable once done_aclk is set.
+  After a spurious done (stale pre-boot SPORT activity with RUN stuck high
+  from a wedged DSP), a fresh RUN cycle re-arms shifting with stale
+  lfsr/wcount but the one-shot report can never fire again until the FPGA is
+  reprogrammed. Fix: clear done_aclk (and clk12-side done_r/reported) on a
+  RUN rising edge. Only bites standalone RX configs (bidir ties run=1).
+  Schedule as its own change + re-prove, not inside a cleanup commit.
+- PCFs: keep the subset-duplicated rx pcfs (nextpnr errors on unknown ports;
+  merging changes the flow). The three `sport_tx_prbs*_hx8k.pcf` names are
+  fossils (they constrain sport_tx_from_dsp_clk tops) — rename only in
+  lockstep with the mission build lines, or just comment.
+- PRBS-31 step is duplicated in each surviving module (~2 lines each);
+  factoring would touch three proven netlists for no payoff — leave.
 
-## Phase 4 — the single re-prove pass (bench, ~2.5 h)
-Order: 1 MiB smoke per direction first (8 x ~2 min, catches gross
-breakage cheaply), then the 8 ladders WITH the 128-byte steps restored
-(the RUN gate + real handshake should make them viable; park again only
-on misbehavior), then the main mission file end-to-end.
-Rules: one direction at a time; on failure, fix forward only if the
-cause is obvious within ~2 cycles, else fall back to the Phase-0
-baseline for that direction and continue (mission must never be
-un-runnable). x marks in the table stay untouched (they describe the
-criteria, which striping still satisfies: PRBS-31 on every lane).
+#### DSP (adsp2156) — pure deletions, zero behavior change
 
-## Phase 5 — retire the old apps + mission file swap
-- Point all mission files at adsp2156/sport; delete sport_fpga_rx,
-  sport_fpga_tx, sport_fpga_bidir, sport_fpga_2x, sport_fpga_4x.
-- Update the Cleanup notes section: mark items done, leave the
-  not-undertaken ones explicitly listed.
-- Re-run the main mission file one final time (the "passes completely
-  after cleanup" gate).
+- `sport_fpga_bidir_2x2/`: 4-line #include wrapper; mission builds 2x2 from
+  sport_fpga_bidir with -DRX_N=2 -DTX_N=2. Delete dir.
+- `sport_fpga_rx4/`: obsolete polled predecessor (the documented ~51 Mbit/s
+  underrunning one). Referenced nowhere. Delete dir.
+- `sport_fpga_lb/`: internal SRU loopback demo, not in any mission. Delete
+  (it is the only caller of sport_rx_ready and one of two of
+  sport_install_internal_loopback).
+- `common/sport.c`: `sport_install_external_loopback` (0 callers) and
+  `sport_route_rx_master_a_to_pins` (only caller is a never-enabled ifdef in
+  sport_fpga_2x) — delete both + sport.h decls (~75 lines).
+- `common/dma.c`: `dma_oneshot_config` + `dma_done` have 0 callers anywhere.
+  Delete (+ dma.h decls).
+- Mission-file wart: `-DTX_FIRST` is passed to all four bidir builds but
+  TX_FIRST appears nowhere in the firmware source — no-op flag (historical;
+  the old .ldr-size lore about TX_FIRST is stale). Drop from the build lines
+  when next touching them.
+
+#### DSP — duplication worth consolidating (~400-450 lines; rebuilt .ldr, same behavior; re-prove 2 GB per affected direction after)
+
+- `put_str`/`put_u32` x7, `put_i32` x3, `put_u64` x3 (two different
+  implementations), `put_hex*` x4 across the main.c files → common/print.h.
+  Side benefit: assert.c could drop printf (the printf varargs bug is then
+  unreachable; note that bug lives in adsp2156/sport/ and sport_dma/ demos,
+  NOT in any mission dir — mission firmware never calls printf).
+- `prbs31_word` x5 in 2 implementations (unrolled-macro and table-driven;
+  same x^31+x^28+1 stream, seed 0x7fffffff, MSB-first) → common/prbs.h.
+- `dma_which_half`/`dma_still_on_half` x4 near-identical → common/dma.c.
+- `sport_fpga_2x` vs `sport_fpga_4x`: ~80% identical (opposite-direction
+  counterpart of sport_fpga_rx); could merge into one NCH-parameterized
+  DSP-RX app. 2x also carries dead pin-variant tables (USE_SPORT5_0 etc.),
+  a dead 92.1875 MHz clocks block, dead RX_SHIFT_* alignment branches,
+  PINPOINT/ACTIVE/CHECK_MASK knobs, and trace prints — ~572 -> ~250 lines
+  before merging.
+- Dead knobs in used dirs (no build passes them): VOLATILE_TXBUF,
+  TXBUF_DEFAULT_SECTION, DIAG (sport_fpga_rx); DIAG_FIRST_WORDS, dbg_got/
+  dbg_exp written-never-printed, wrap_misses never incremented, vestigial
+  `locked` (sport_fpga_tx); RX_PRBS_SKIP_WORDS, START_TIMEOUT/_WAIT_LOOPS,
+  DIAG_FIRST (sport_fpga_bidir).
+- Constraint for ALL firmware cleanups: every Verify regex anchors on the
+  final report line (prefixes `sport_rx`, `sport_fpga_tx_prbs_long`,
+  `sport_2x agg_bytes=`, `sport_4x`, `sport_bidir rx_lanes=`); keep those
+  lines byte-compatible. Boot banners and step-trace prints are unmatched
+  and freely deletable.
+
+## Reliable-rate campaign (2026-06-17/18, agent1)
+
+The two lane-clock columns above now record the **highest per-lane SPORT clock
+proven perfectly reliable** = >=10 consecutive per-direction 2 GiB proofs, all
+errors=0, 0 retries, all-in transfer rate measured report-minus-`xfer`-marker
+(one-time FPGA boot-load excluded, as the pre-boot program already is).
+
+- **2-lane + bidir-2x2 + all 4-lane D->F:** 57.29 MHz (CGU MSEL=55). 59.375 was
+  data-marginal multi-lane; 57.29 is the highest clean rung.
+- **1-lane + bidir-1x1:** 59.375 MHz (MSEL=57), full margin.
+- 10/10-clean directions: DD-FF, FF-DD, FFDD-DDFF, F-D. Directions DDDD-FFFF
+  (8/10), D-F (7/10), FD-DF (9/10) are **data-clean at the listed rate** (every
+  passing rep errors=0); the sub-10 scores are NOT bench-harness bugs:
+  * D-F/FD-DF (1-lane) never got the boot-on-blinky fix (only multi-lane did), so a
+    rare contended-boot glitch can stall the report -- a firmware/sequence gap on
+    OUR side, fixable by extending boot-on-blinky to the 1-lane builds. (The d_f
+    "no artefact" reps were a too-short `timeout` in the agent's throwaway test
+    driver killing submit.py mid-wait, not a bench fault -- the bench always writes
+    an artefact.)
+  * The occasional `dsp:boot` upload stall (e.g. 11264/22528) is a DUT/USB transient
+    during the .ldr SPI load -- before any firmware runs -- which the bench correctly
+    REPORTS (full artefact + timeout). Reporting a stuck DUT is the bench doing its
+    job, not a flake to fix. run.py's mission-level retry already absorbs it.
+- **(note 2) FFFF-DDDD (4-lane F->D): SOLVED at 57.29 MHz (9/10; the 1 sub-10 was
+  a transient retry -- DUT/USB, not data corruption).** Was 0/3 -- lanes 0,2 (even) ~100% corrupt
+  at every rate (45-59 MHz) while lanes 1,3 (odd) clean. Root cause: the `to_dsp`
+  forwarder for the lanes-0,2 pair launched from the bad SRU clock copy
+  `dsp_aclk2_in`=P10 (the SPT4A "shield" tap on DAI1_04, adjacent to RUN/R10 -- not
+  a usable forwarding clock). Proven by swapping the two 4x-pcf copies (the failure
+  flipped to lanes 1,3). FIX (fpga/src/sport.nw, `fwd_aclk` mux under `ifdef
+  SHARE_COPIES`): both 4-lane pairs now launch from the good copy `dsp_aclk3_in`=T8;
+  P10 abandoned (still DSP-driven as a shield). 4-lane-F->D-only -- only the
+  ffff_dddd build passes `read_verilog -D SHARE_COPIES`, so the other 7 directions'
+  bitstreams are byte-identical (strip-src).
+- Prose below ("configured at 59.375 MHz") predates this and is now stale for
+  multi-lane -- left for jk to reword (criteria prose is jk's).
