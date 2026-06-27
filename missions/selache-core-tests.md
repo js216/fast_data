@@ -17,13 +17,13 @@ Each promoted case must carry both:
 Build:
 
 ```
-cd selache && CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target cargo build --release
-cd selache && CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target cargo test --all-targets
-cd selache && CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target cargo clippy --all-targets --release -- -D warnings
-CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target make -C selache/xtest clean
-CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target make -C selache/xtest gcc -j$(nproc)
-CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target make -C selache/xtest clang -j$(nproc)
-CARGO_TARGET_DIR=/home/agent1/fast_data/tmp/cargo-target make -C selache/xtest sel -j$(nproc)
+cd selache && CARGO_TARGET_DIR=$HOME/fast_data/tmp/cargo-target cargo build --release
+cd selache && CARGO_TARGET_DIR=$HOME/fast_data/tmp/cargo-target cargo test --all-targets
+cd selache && CARGO_TARGET_DIR=$HOME/fast_data/tmp/cargo-target cargo clippy --all-targets --release -- -D warnings
+CARGO_TARGET_DIR=$HOME/fast_data/tmp/cargo-target make -C selache/xtest clean
+CARGO_TARGET_DIR=$HOME/fast_data/tmp/cargo-target make -C selache/xtest gcc -j$(nproc)
+CARGO_TARGET_DIR=$HOME/fast_data/tmp/cargo-target make -C selache/xtest clang -j$(nproc)
+CARGO_TARGET_DIR=$HOME/fast_data/tmp/cargo-target make -C selache/xtest sel -j$(nproc)
 ```
 
 Foreach:
@@ -56,7 +56,7 @@ def check(extract_dir, ldr):
     m = re.match(r'(cctest_.*)\.(0x[0-9a-fA-F]+)\.ldr$', name)
     if not m:
         return False
-    source = '/home/agent1/fast_data/selache/xtest/cases/' + m.group(1) + '.c'
+    source = extract_dir.split('/fast_data/')[0] + '/fast_data/selache/xtest/cases/' + m.group(1) + '.c'
     with open(source) as f:
         src = f.read()
     em = re.search(r'@expect\s+(0x[0-9a-fA-F]+|[0-9]+)', src)

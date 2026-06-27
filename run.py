@@ -682,7 +682,8 @@ class Runner:
         for event in inflight_entry.get('events') or ():
             if (event.get('kind') == 'LOCK'
                     and event.get('source') == 'session'
-                    and event.get('msg') == 'acquired; running ops'):
+                    and (event.get('msg') or '').startswith(
+                        'acquired; running ops')):
                 try:
                     return float(event.get('t'))
                 except (TypeError, ValueError):
